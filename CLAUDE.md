@@ -8,8 +8,8 @@
 |---|---|
 | `scheme-fee.md` | Scheme Fee（卡组/品牌手续费）方案分析 |
 | `RS-cash.md` | RS 毛利返现计算逻辑 |
-| `FB-channel-fees/` | FB 渠道费率（bb, l2c, ql, sl）|
-| `OCDD/` | OCDD 年度评审 SQL |
+| `fb-channel-fees/` | FB 渠道费率（bb, l2c, ql, sl）|
+| `ocdd/` | OCDD 年度评审 SQL |
 | `config-links/` | 配置相关链接/SQL |
 | `data-cleaning/` | 数据清洗脚本 |
 | `qbit-card-cost-cleaning/` | 量子卡成本清洗（多个子目录） |
