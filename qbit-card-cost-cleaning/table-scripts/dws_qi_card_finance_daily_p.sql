@@ -1,0 +1,46 @@
+CREATE TABLE "public"."dws_qi_card_finance_daily_p" (
+  "id" int8 NOT NULL,
+  "report_date" date NOT NULL,
+  "account_id" varchar(36) COLLATE "pg_catalog"."default" NOT NULL,
+  "version" int4 DEFAULT 1,
+  "remarks" varchar(255) COLLATE "pg_catalog"."default",
+  "create_time" timestamp(6) NOT NULL DEFAULT now(),
+  "update_time" timestamp(6) NOT NULL DEFAULT now(),
+  "delete_time" timestamp(6),
+  "cost_reimbursement_vol" numeric(20,4) DEFAULT 0,
+  "cost_service_vol" numeric(20,4) DEFAULT 0,
+  "cost_acs_regular_count" int4 DEFAULT 0,
+  "cost_acs_vip_count" int4 DEFAULT 0,
+  "cost_vrm_count" int4 DEFAULT 0,
+  "rebate_interchange_vol" numeric(20,4) DEFAULT 0,
+  "rebate_incentive_vol" numeric(20,4) DEFAULT 0,
+  CONSTRAINT "dws_qi_daily_pkey" PRIMARY KEY ("id", "report_date")
+)
+PARTITION BY RANGE (
+  "report_date" "pg_catalog"."date_ops"
+)
+;
+
+ALTER TABLE "public"."dws_qi_card_finance_daily_p"
+  OWNER TO "qbit_admin";
+
+-- 字段备注
+COMMENT ON COLUMN "public"."dws_qi_card_finance_daily_p"."id" IS '唯一标识 (2+YYYYMMDD+hash账户ID)';
+COMMENT ON COLUMN "public"."dws_qi_card_finance_daily_p"."report_date" IS '报表日期-分区键';
+COMMENT ON COLUMN "public"."dws_qi_card_finance_daily_p"."account_id" IS '账户ID';
+COMMENT ON COLUMN "public"."dws_qi_card_finance_daily_p"."version" IS '乐观锁版本';
+COMMENT ON COLUMN "public"."dws_qi_card_finance_daily_p"."remarks" IS '备注';
+COMMENT ON COLUMN "public"."dws_qi_card_finance_daily_p"."create_time" IS '记录创建时间';
+COMMENT ON COLUMN "public"."dws_qi_card_finance_daily_p"."update_time" IS '记录更新时间';
+COMMENT ON COLUMN "public"."dws_qi_card_finance_daily_p"."delete_time" IS '逻辑删除时间';
+COMMENT ON COLUMN "public"."dws_qi_card_finance_daily_p"."cost_reimbursement_vol" IS 'Reimbursement费用基数 (非港净消费额)';
+COMMENT ON COLUMN "public"."dws_qi_card_finance_daily_p"."cost_service_vol" IS 'Service Fee费用基数 (非港净消费额)';
+COMMENT ON COLUMN "public"."dws_qi_card_finance_daily_p"."cost_acs_regular_count" IS 'ACS普通笔数';
+COMMENT ON COLUMN "public"."dws_qi_card_finance_daily_p"."cost_acs_vip_count" IS 'ACS VIP笔数';
+COMMENT ON COLUMN "public"."dws_qi_card_finance_daily_p"."cost_vrm_count" IS 'VRM验证笔数';
+COMMENT ON COLUMN "public"."dws_qi_card_finance_daily_p"."rebate_interchange_vol" IS 'Interchange返现基数 (全球净消费额)';
+COMMENT ON COLUMN "public"."dws_qi_card_finance_daily_p"."rebate_incentive_vol" IS 'Incentive返现基数 (全球净消费额)';
+COMMENT ON TABLE "public"."dws_qi_card_finance_daily_p" IS 'QI渠道财务汇总日表-按年分区';
+
+-- 2026 年分区
+ALTER TABLE "public"."dws_qi_card_finance_daily_p" ATTACH PARTITION "public"."dws_qi_daily_2026" FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');

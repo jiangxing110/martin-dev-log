@@ -1,0 +1,29 @@
+BEGIN;
+
+TRUNCATE TABLE
+ods_sale_am_transaction_2026,
+dws_qbit_card_wallet_transaction_2026,
+dws_qbit_card_transaction_2026,
+dws_qbit_card_transaction_extend_2026,
+dws_qbit_card_group_transaction_2026,
+dws_transfer_2026,
+dws_transfer_extend_2026,
+dws_crypto_assets_transfers_2026,
+ods_fund_profits_2026,
+ods_qbit_card_2026,
+dws_open_card_2026,
+dws_physical_card_2026,
+dws_sale_card_wallet_transaction_2026,
+dws_sale_card_transaction_2026,
+dws_sale_card_transaction_extend_2026,
+dws_sale_card_group_transaction_2026,
+dws_sale_transfer_2026,
+dws_sale_transfer_extend_2026,
+dws_sale_crypto_assets_transfers_2026,
+ods_sale_fund_profits_2026,
+ods_sale_qbit_card_2026,
+dws_sale_open_card_2026,
+dws_sale_physical_card_2026
+RESTART IDENTITY CASCADE;
+
+COMMIT;
