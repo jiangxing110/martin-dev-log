@@ -1,0 +1,115 @@
+量子账户openAPi 可见交易类型
+Transaction type mapping:
+0 - External recharge to account
+1 - Card issuance fee
+2 - Transfer out from group to infinity account
+3 - Transfer out from card to infinity account
+4 - Transfer in to infinity account
+5 - Transfer out from infinity account
+6 - Transfer out to virtual USD (cryptocurrency)
+7 - Transfer in from particle financing
+8 - Transfer in from cryptocurrency USD wallet
+9 - Transfer in from interlace USD wallet
+10 - Recharge to group
+11 - Recharge to card
+12 - Transfer in from global account
+13 - Transfer out to global account
+14 - Transfer in from master account (master to sub-account)
+15 - Transfer out to master account (sub-account to master)
+16 - Transfer in from cryptocurrency to infinity account wallet
+17 - Liquidation fee
+18 - Infinity account monthly bill deduction
+
+PrepaidCard openAPi 可见交易类型
+Transaction type: Values: 
+0:Credit, 1:Consumption, 2:TransferIn, 3:TransferOut, 9:Fee_Consumption, 10:Declined_Fee, 14:Reversal, 15:System_Fee
+
+BudgetCard openAPi 可见交易类型
+Transaction type: 
+0:TransferIn, 1:TransferOut, 2:CreateCardFee, 3:Consumption, 4:Refund, 5:FeeCredit, 6:Fee_Consumption, 7:Declined_Fee, 8:Reversal
+
+Fee Type: 
+0:Platform Settlement Fee, 1:Apple Pay Fee, 2:ATM Withdrawal Fee, 3:Reversal Fee, 4:Refund Fee
+
+DailyStatementTxType 我看了一下这个类得用 最后到excel得英文的 不要有下_
+
+InfinityAccountHandler 里 getQuantumBalance不对
+可以直接查询balance walletType='QbitCardWallet'
+
+        Balance balance = getQuantumBalance(accountId);
+这个就是查询他和他的子户的量子账户的可用用钱包汇总
+
+PrepaidCardHandler 这个在处理余额的时候可以直接 qbitCard lEFT JOIN balance
+
+BudgetCardHandler 这个在处理余额的时候可以直接 qbitGroup lEFT JOIN balance
+
+直接算钱 这样可以简化getBalanceSummary方法
+
+
+
+我现在在jx/26/PD-194/open-api-doc-daily 分支要对日账单的API文档进行改动
+我想吧之前写的DailyStatementController 这个加进去要怎么写呢
+参考之前的接口文档,但是我需要
+
+@Slf4j
+@Validated
+@RestController
+@RequestMapping("open-api/v3/statements")
+@Tag(name = "日账单", description = "子账户日账单查询与导出")
+public class DailyStatementController {
+
+    @Resource
+    private DailyStatementService dailyStatementService;
+
+    @GetMapping("/xlsx")
+    @Operation(summary = "导出 XLSX（余额汇总+交易流水双 Sheet）", operationId = "exportXlsx")
+    @NoAuth(NoAuth.OPENAPI)
+    public ApiResult<String> exportXlsx(@ParameterObject @Valid StatementExportReqDTO dto) {
+        if (!dailyStatementService.hasTransactions(dto.getAccountId(), dto.getDate())) {
+            return ApiResult.fail("10003", "no transactions on the specified date");
+        }
+        String fileUrl = dailyStatementService.exportXlsx(dto.getAccountId(), dto.getDate());
+        return ApiResult.ok(fileUrl);
+    }
+
+    @PostMapping("/{accountId}/{date}/regenerate")
+    @Operation(summary = "异步重新生成账单", operationId = "regenerateStatement")
+    @NoAuth(NoAuth.OPENAPI)
+    public ApiResult<Map<String, String>> regenerate(
+            @PathVariable String accountId,
+            @PathVariable String date,
+            @RequestBody(required = false) Map<String, Boolean> body) {
+        Boolean notify = body != null ? body.getOrDefault("notify", false) : false;
+        String taskId = dailyStatementService.regenerate(accountId, date, notify);
+        Map<String, String> result = new HashMap<>();
+        result.put("task_id", taskId);
+        result.put("status", "processing");
+        return ApiResult.ok(result);
+    }
+
+    @GetMapping("/tasks/{taskId}")
+    @Operation(summary = "重新生成进度查询", operationId = "getRegenerateProgress")
+    @NoAuth(NoAuth.OPENAPI)
+    public ApiResult<TaskProgressRespVO> getRegenerateProgress(@PathVariable String taskId) {
+        TaskProgressRespVO result = dailyStatementService.getRegenerateProgress(taskId);
+        return ApiResult.ok(result);
+    }
+}
+其实我就是改这几个接口呀
+我也不需要那么复杂参考AccountController
+
+
+ if (isDistributor) {
+            // Distributor：为每个子账户并行生成独立 XLSX
+            LambdaQueryWrapper<AccountRelation> lambdaQueryWrapper = new LambdaQueryWrapper<>();
+            lambdaQueryWrapper.eq(AccountRelation::getRootId, accountId);
+            List<AccountRelation> subRelations = accountRelationMapper.selectList(lambdaQueryWrapper);
+            List<CompletableFuture<SubAccountResult>> subFutures = subRelations.stream()
+                    .map(rel -> CompletableFutureUtils.reportSupplyAsync(
+                            () -> processSubAccount(rel, date)))
+                    .toList();
+            try {
+                CompletableFutureUtils.reportAllOf(subFutures.toArray(new CompletableFuture[0]));
+            } catch (Exception e) {
+                log.warn("Distributor 子账户并行处理异常: accountId={}", accountId, e);
+            }

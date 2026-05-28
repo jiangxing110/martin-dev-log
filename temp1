@@ -1,0 +1,174 @@
+- D日出D-1日资金对账单 and 明细 -  东八区凌晨五点数据出来
+- 历史数据允许下载 2026 年5 月 1 日至上线前即可；
+建议 3 个月有效期，admin 支持重新生成历史日/月账单；
+- api模式下载规则：mor下载 all. ；gateway 主+子；dist 按 master维度下载多个；
+   @DataScopeSubAccount()
+
+有下面的改动   
+1.D日出D-1日资金对账单 and 明细 要求(东八区凌晨五点数据出来)
+2.历史数据允许下载 2026 年5 月 1 日至上线前即可；3 个月有效期(三个月以后不支持下载)，admin 支持重新生成历史日账单的接口
+3.- api模式下载规则：mor下载 all. ；gateway 主+子；dist 按 master维度下载多个；
+mor:模式就是查询自己的交易
+gateway:查询自己和自己下面子客户的交易
+dist: 因为dist自己不发生交易:那就是查询 他的下面master客户的excel 生成一个新的压缩包
+AccountExtend 下区分模式
+@TableField(value = "\"access_type\"")
+private ApiAccessTypeEnum accessType;
+不管是那个业务线都要保证这个 使用我感觉不能直接用LambdaQueryWrapper 原生selectList了 ，最后可以参考一下之前的@DataScopeSubAccount()注解虽然不能直接用但是思路值得参考
+4.我看现在查询都是单线程串行能不能 改成多线程并行查询，提升查询效率，尤其是历史数据量大的情况下。
+5.我们对余额统计其实缺少一个汇总的维度:
+就是业务类型是汇总，对所以钱包的出入金 期初期末都要进行 汇总成USD的金额，方便后续对账和分析。可以参考
+
+
+
+if (isDistributor) {
+// Distributor：为每个子账户并行生成独立 XLSX
+} else {
+byte[] xlsx = generateXlsxBytes(handlers, account, date);        
+}
+你这个地方改的其实是有问题的
+mor: 就自己一个人 
+gateway 主+子；
+dist 按 master维度下载多个:（每一个master 要包含他的子户）
+这个master可以理解成gateway的主账户，master下面还有多个子账户
+在查余额，和交易的时候都要覆盖上面的这些点
+所以我是说   @DataScopeSubAccount()得参考这个 
+但是目前看到的是 
+generateXlsxBytes 就是查自己
+
+
+不是的 
+1.mor 或者是纯粹的apiClientCustomer 查询自己一个账户的交易数据
+mor 在AccountExtend 下 accessType 是 ApiAccessTypeEnum.MOR
+纯粹的apiClientCustomer 在api_account_relation表里是account_id!=parent_account_id!=root_id的关系
+
+2.gateway和master 查询自己和自己下面子客户的交易数据
+gateway 在AccountExtend 下 accessType 是 ApiAccessTypeEnum.GATEWAY
+master 在api_account_relation表里是account_id=parent_account_id parent_account_id!=root_id的关系
+
+3.dist 查询他的下面master（内部数据是子+子户）客户的excel 生成一个新的压缩包
+dist 在AccountExtend 下 accessType 是 ApiAccessTypeEnum.DiSTRIBUTOR
+
+我是想在把查询余额 交易 的地方都覆盖上这些点，保证查询的正确性和完整性
+
+InfinityAccountHandler，PrepaidCardHandler，BudgetCardHandler先改
+
+还有一点是我们得查询从库即@DS("slave")不管是余额还是交易都要
+
+我们能不能@DataScopeSubAccount()搞一个专门针对api 日账单的注解给我们日账单使用
+
+现在产品的要求是这部分要 同一时间段内只能有一种生效，
+就是QI毛利返现在1月到5月 那消费返现就不能出现在这段时间呢
+
+ <select id="getRsSchemeFeeFromCardTransaction" resultType="java.math.BigDecimal">
+        SELECT
+        COALESCE(SUM(
+        COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'schemeSettleFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'issuerCardServiceFeesIntFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'issuerTransactionFeesByAuthIntFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'issuerTransactionFeesSettlementIntFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'visaRiskManagerIntFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'verificationFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'schemeRefundFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'schemeReversalFee', '')::NUMERIC, 0)
+        ), 0)
+        FROM "qbitCardTransaction" as tr
+        LEFT JOIN account ON tr."accountId"::UUID=account.id::UUID
+        LEFT JOIN api_account_relation aar ON aar.account_id = account.id
+        <where>
+            tr."deleteTime" IS NULL and tr.status='Closed'
+            AND (
+            COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'schemeSettleFee', '')::NUMERIC, 0) != 0
+            OR COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'issuerCardServiceFeesIntFee', '')::NUMERIC, 0) != 0
+            OR COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'issuerTransactionFeesByAuthIntFee', '')::NUMERIC, 0) !=
+            0
+            OR COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'issuerTransactionFeesSettlementIntFee', '')::NUMERIC, 0)
+            != 0
+            OR COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'visaRiskManagerIntFee', '')::NUMERIC, 0) != 0
+            OR COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'verificationFee', '')::NUMERIC, 0) != 0
+            OR COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'schemeRefundFee', '')::NUMERIC, 0) != 0
+            OR COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'schemeReversalFee', '')::NUMERIC, 0) != 0
+            )
+            <include refid="defaultCompleteTimeSearch"/>
+            <include refid="defaultProvidersWhereSql"/>
+            <if test="entity.accountId != null and entity.accountId != ''">
+                AND EXISTS (
+                SELECT 1 FROM "account" a
+                LEFT JOIN api_account_relation aar ON a.id = aar.account_id
+                WHERE a.id = tr."accountId"::UUID
+                AND (
+                a.id = #{entity.accountId}::UUID
+                OR a."parentAccountId" = #{entity.accountId}::UUID
+                OR aar.root_id = #{entity.accountId}::UUID )
+                )
+            </if>
+        </where>
+    </select>
+
+    <select id="getRsSchemeFeeFromApiClientTransaction" resultType="java.math.BigDecimal">
+        SELECT
+        COALESCE(SUM((fee_item->>'amount')::NUMERIC), 0)
+        FROM api_client_transaction act
+        CROSS JOIN LATERAL jsonb_array_elements(act.fees::jsonb) fee_item
+        <where>
+            act.delete_time IS NULL
+            AND act.status = 'Closed'
+            AND act.business_module = 'quantum'
+            AND fee_item->>'type' IN (
+         
+            )
+            <if test="entity.startTime != null and entity.startTime != ''">
+                <![CDATA[AND act.complete_time >= #{entity.startTime}]]>
+            </if>
+            <if test="entity.endTime != null and entity.endTime != ''">
+                <![CDATA[AND act.complete_time <= #{entity.endTime}]]>
+            </if>
+            <if test="providers != null and providers.size > 0">
+                AND act.provider IN
+                <foreach item="item" collection="providers" open="(" separator="," close=")">
+                    #{item}
+                </foreach>
+            </if>
+            <if test="entity.accountId != null and entity.accountId != ''">
+                AND EXISTS (
+                SELECT 1 FROM "account" a
+                LEFT JOIN api_account_relation aar ON a.id = aar.account_id
+                WHERE a.id = act.account_id::UUID
+                AND (
+                a.id = #{entity.accountId}::UUID
+                OR a."parentAccountId" = #{entity.accountId}::UUID
+                OR aar.root_id = #{entity.accountId}::UUID
+                )
+                )
+            </if>
+        </where>
+    </select>
+
+'schemeSettleFee'
+'issuerCardServiceFeesIntFee'
+'issuerTransactionFeesByAuthIntFee'
+'issuerTransactionFeesSettlementIntFee'
+'visaRiskManagerIntFee'
+'verificationFee'
+
+
+
+'issuerCardServiceIntFee',
+'issuerCardServiceDomFee',
+'issuerTransactionAuthIntFee',
+'issuerTransactionAuthDomFee',
+'issuerTransactionSettlementIntFee',
+'issuerTransactionSettlementDomFee',
+'visaRiskManagerIntFee',
+'visaRiskManagerDomFee',
+'schemeVerificationIntFee',
+'schemeVerificationDomFee',
+
+
+
+
+verificationFee
+ 'schemeVerificationIntFee',
+'schemeVerificationDomFee',
+
+ntId=d07c05df-4b88-491e-9299-89589c319872, date=2026-05-27, fileUrl=https://qbitnetwork-test.oss-cn-hangzhou.aliyuncs.com/export/3.0/daily-statement-d07c05df-4b88-491e-9299-89589c319872-2026-05-27-20260528150306696.zip

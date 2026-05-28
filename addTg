@@ -1,0 +1,14 @@
+关联/Users/martinjiang/IdeaProjects/qbit-assets 1.海外版注册 添加tg 字段
+telegram 2.新用户全量信息添加 tg
+https://circle-test.qbitnetwork.com/api/admin/account/list
+3.crm 线索迟也得加
+https://circle-test.qbitnetwork.com/api/admin/crm/clue-pool/page
+新增 "telegram": "3ssd22tg",
+
+注册加tg 落 user
+其他的保存不变吧
+
+ALTER TABLE "user"
+ADD COLUMN IF NOT EXISTS "telegram" varchar;
+
+COMMENT ON COLUMN "user"."telegram" IS 'Telegram账号';

@@ -1,0 +1,20 @@
+1.日账单的客户ID查询需要改（我们管自动生成的部分）:
+1.昨天有交易的
+SELECT COUNT(DISTINCT aar.root_id) as customer_count
+FROM api_account_relation aar
+INNER JOIN "Transaction" t ON aar.account_id = t."accountId"
+WHERE aar.relation_type = 'api'
+  AND aar.delete_time IS NULL
+  AND t."transactionTime" BETWEEN '2026-05-27 00:00:00' AND '2026-05-28 00:00:00'
+2.打标的母户一般户让他自己和自己的子户
+SELECT "accountId" FROM "accountExtend" WHERE access_type is null
+要包含上面两部分的 机遇dw查数仓
+2.账单执行
+public void processDailySettle(String settleDate, String accountId) {
+ while (true) {
+ 本质还是for 循环一个一个的执行 我想能不能改成多个一起        
+ }
+}
+3.我想对 查询交易的 和判断交易的那些sql 迁移到 DailyStatementTransactionMapper 宝库
+
+我看了一下一个客户可能预估15s 左右 现在哟 261 个昨天 预计多长时间弄完
