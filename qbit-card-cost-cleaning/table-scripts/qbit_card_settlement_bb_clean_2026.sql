@@ -99,3 +99,21 @@ COMMENT ON TABLE "public"."qbit_card_settlement_bb_clean_2026" IS 'BB通道结�
 -- 已存在的月分区
 ALTER TABLE "public"."qbit_card_settlement_bb_clean_2026" ATTACH PARTITION "public"."qbit_card_settlement_bb_clean_2026_m03" FOR VALUES FROM ('2026-03-01 00:00:00+08') TO ('2026-04-01 00:00:00+08');
 ALTER TABLE "public"."qbit_card_settlement_bb_clean_2026" ATTACH PARTITION "public"."qbit_card_settlement_bb_clean_2026_m04" FOR VALUES FROM ('2026-04-01 00:00:00+08') TO ('2026-05-01 00:00:00+08');
+
+ALTER TABLE "public"."qbit_card_settlement_bb_clean_2026" ATTACH PARTITION "public"."qbit_card_settlement_bb_clean_2026_m05" FOR VALUES FROM ('2026-05-01 00:00:00+08') TO ('2026-06-01 00:00:00+08');
+
+ALTER TABLE "public"."qbit_card_settlement_bb_clean_2026" ATTACH PARTITION "public"."qbit_card_settlement_bb_clean_2026_m06" FOR VALUES FROM ('2026-06-01 00:00:00+08') TO ('2026-07-01 00:00:00+08');
+
+ALTER TABLE "public"."qbit_card_settlement_bb_clean_2026" ATTACH PARTITION "public"."qbit_card_settlement_bb_clean_2026_m07" FOR VALUES FROM ('2026-07-01 00:00:00+08') TO ('2026-08-01 00:00:00+08');
+
+ALTER TABLE "public"."qbit_card_settlement_bb_clean_2026" ATTACH PARTITION "public"."qbit_card_settlement_bb_clean_2026_m08" FOR VALUES FROM ('2026-08-01 00:00:00+08') TO ('2026-09-01 00:00:00+08');
+
+ALTER TABLE "public"."qbit_card_settlement_bb_clean_2026" ATTACH PARTITION "public"."qbit_card_settlement_bb_clean_2026_m09" FOR VALUES FROM ('2026-09-01 00:00:00+08') TO ('2026-10-01 00:00:00+08');
+
+ALTER TABLE "public"."qbit_card_settlement_bb_clean_2026" ATTACH PARTITION "public"."qbit_card_settlement_bb_clean_2026_m10" FOR VALUES FROM ('2026-10-01 00:00:00+08') TO ('2026-11-01 00:00:00+08');
+
+ALTER TABLE "public"."qbit_card_settlement_bb_clean_2026" ATTACH PARTITION "public"."qbit_card_settlement_bb_clean_2026_m11" FOR VALUES FROM ('2026-11-01 00:00:00+08') TO ('2026-12-01 00:00:00+08');
+
+ALTER TABLE "public"."qbit_card_settlement_bb_clean_2026" ATTACH PARTITION "public"."qbit_card_settlement_bb_clean_2026_m12" FOR VALUES FROM ('2026-12-01 00:00:00+08') TO ('2027-01-01 00:00:00+08');
+
+

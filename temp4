@@ -18,3 +18,10 @@ public void processDailySettle(String settleDate, String accountId) {
 3.我想对 查询交易的 和判断交易的那些sql 迁移到 DailyStatementTransactionMapper 宝库
 
 我看了一下一个客户可能预估15s 左右 现在哟 261 个昨天 预计多长时间弄完
+
+
+/Users/martinjiang/Documents/superpower 下面的
+2026-05-15-daily-statement-api-design.md
+2026-05-17-daily-statement-snapshot-refactor.md
+余额快照与期初期末计算.md 
+三个开发文档
