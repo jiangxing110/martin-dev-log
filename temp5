@@ -1,0 +1,59 @@
+调用superpowers
+关联/Users/martinjiang/WebstormProjects/u-app(白标商户端)项目
+/Users/martinjiang/WebstormProjects/u-app-admin(白标admin端)项目
+分析下面的需求
+支持白标Admin重置Sumsub
+1）重新细化了一下KYC各个状态的定义：
+KYC状态 KYC Status
+未提交/ Not Submitted-未提交KYC信息至Sumsub
+校验中/Verifying-还有Sumsub的机会未用完（如2次未通过，还有1次机会重新校验，属于审核中状态）
+已通过/ Approved-已通过Sumsub校验
+已拒绝/ Rejected-3次Sumsub都未通过
+
+支持筛选
+目前Admin端的状态筛选框是有问题的（我们是直接基于底层sdk 的状态来的）
+
+2）针对【已拒绝】状态，该用户详情内展示【KYC校验重试】/Retry KYC Verification按钮，点击后KYC状态流转至【校验中】，该按钮消失
+
+C端获得一次重新提交Sumsub的机会，KYC跳转至以下页面
+
+3）客户用完所有Sumsub机会（包含初始3次机会用完被拒绝，或admin为客户新增重试的一次机会也用完被拒绝），跳转到以下页面，红框文案修改：
+多次审核未通过，请联系客服协助处理
+Verification failed multiple times. Please contact customer support for assistance.
+之前 有限制拒绝 且提交次数>3次就永久拒绝了,现在 要加KYC校验重试
+
+那制定计划吧
+我们重新建分支开始
+新增assets ，u-app，u-app-admin 分支 jx/26/sprint-09/PD-41/sumsub-kyc
+
+All 9 tasks are complete. Here's the summary of changes across all 4 repos:
+
+qbit-assets
+
+- ResetApplicantDTO.java — DTO for Sumsub PATCH request
+- SumsubSdkServiceImpl.java — PATCH /resources/applicants/{id}/status/pending
+- SumsubController.java — POST /api/ss/internal/resetApplicant (internal auth)
+
+white-label-server
+
+- AccountExtend.java — new kycRetryQuota field
+- AccountPageVO.java — added kycRetryQuota, simpleKycStatus
+- AccountRepository.java — SELECT with kycRetryQuota, simpleKycStatus filter
+- AccountServiceImpl.java — mapSimpleKycStatus() mapping 16 statuses → 4 business states
+- CddKycServiceImpl.java — adminResetKyc() with totalQuota = 3 + kycRetryQuota check
+- KycAdminController.java — POST /admin/api/v1/kyc/reset
+- v1.0.2_add_kyc_retry_quota.sql — migration
+
+u-app-admin
+
+- \_map/index.tsx — SimpleKycStatusMap/SimpleKycStatusEnMap with 4 states
+- useUserList.tsx — filter by simpleKycStatus, passes KYC data to detail page
+- detail/index.tsx — KYC info block + retry button with confirmation dialog
+- Locale files — KYC section translations
+
+u-app (merchant)
+
+- kyc/result/index.tsx — threshold changed from 3 to 3 + kycRetryQuota, BLACKLISTED → permanent rejection
+- kyc/index.tsx — redirect guard uses 3 + kycRetryQuota, BLACKLISTED → redirect to result
+- use-kyc-modal/index.tsx — BLACKLISTED treated same as CANCELED
+- (tabs)/index/index.tsx — BLACKLISTED shows same KYC status block as CANCELED
