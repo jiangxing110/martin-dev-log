@@ -34,3 +34,11 @@ https://qbitnetwork-test.oss-cn-hangzhou.aliyuncs.com/export/3.0/daily-statement
 
 --香港創鑫互動有限公司
 https://qbitnetwork-test.oss-cn-hangzhou.aliyuncs.com/export/3.0/daily-statement-791d41b4-cdc6-4dae-8c22-c4e05bd68fd8-2026-06-02-20260603121453559.zip
+
+
+https://qbitnetwork-test.oss-cn-hangzhou.aliyuncs.com/export/3.0/daily-statement-451fb6b9-54b7-4e6b-b690-cbe4f77670ed-2026-06-02-20260603115712525.zip
+
+我觉得现在的逻辑是有问题的 我不是要非distributor是两个sheet的xlsl ,dist是一个zip 包 
+我要的是全部都是zip 包 只不过dist的zip 包是多个xlsl
+dailyStatementService.exportXlsx("5ce9647c-d3b3-488c-a595-20a273554039", "2026-06-05", "12306"); xlsx
+dailySettleJob.processDailySettle("2026-06-02", "451fb6b9-54b7-4e6b-b690-cbe4f77670ed"); zip
