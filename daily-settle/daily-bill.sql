@@ -42,3 +42,13 @@ https://qbitnetwork-test.oss-cn-hangzhou.aliyuncs.com/export/3.0/daily-statement
 我要的是全部都是zip 包 只不过dist的zip 包是多个xlsl
 dailyStatementService.exportXlsx("5ce9647c-d3b3-488c-a595-20a273554039", "2026-06-05", "12306"); xlsx
 dailySettleJob.processDailySettle("2026-06-02", "451fb6b9-54b7-4e6b-b690-cbe4f77670ed"); zip
+
+
+-- mor
+https://qbitnetwork-test.oss-cn-hangzhou.aliyuncs.com/export/3.0/daily-statement-95d362d7-56fe-4f50-82cb-f97a51afc263-2026-06-02-20260610141718952.zip
+
+-- Distributor
+https://qbitnetwork-test.oss-cn-hangzhou.aliyuncs.com/export/3.0/daily-statement-451fb6b9-54b7-4e6b-b690-cbe4f77670ed-2026-06-02-20260610142058489.zip
+
+--Gateway
+https://qbitnetwork-test.oss-cn-hangzhou.aliyuncs.com/export/3.0/daily-statement-d2de18e4-5bc7-40dc-a299-3c7d02d5ef1b-2026-06-02-20260610142448056.zip
