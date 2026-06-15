@@ -1,0 +1,50 @@
+dwm_ls_card_finance_daily_p  ls卡成本表
+字段名称
+数据类型
+字段含义（业务解释）
+备注
+id
+int8
+主键 ID
+
+createTime
+
+创建时间
+
+updateTIme
+
+更新时间
+
+createDate
+
+date
+报表日期 / 统计日期
+("rawData"->>'date')::date 
+account_id
+varchar(36)
+用户 ID / 账户 ID
+
+rebate_base
+
+返现基数
+"qbitCardSettlement"表，provider like '%Slash%'
+("rawData"->>'date')::date  筛选时间
+sum("billingAmount")
+rebate_amt
+
+返现金额
+ 获取国家"rawData"->'merchantData'->'location'->>'country'  ， 
+country='US' , rebate_base * 0.02
+country!='US' , rebate_base * 0.005
+cost_fixed
+
+LS固定成本
+LS卡交易手续费 ， 取当月bi_month_tag  ,  provider ='LS' ,  tag='量子卡-渠道固定成本'  ,  根据返现基数均摊
+sale
+
+销售经理id
+需要匹配实时的BD
+am
+
+大客户经理id
+需要匹配实时的大客户经理
