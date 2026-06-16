@@ -3,10 +3,9 @@
 -- Created Time:   2026-06-16
 -- Description:    总渠道成本 DWS 批量初始化/回刷
 -- Notes:
---   1. 当前先汇总 quantum_cost
---   2. quantum_cost = BB + QI + SL + finance_quantum_channel_cost
---   3. BB/QI/SL 不进入 dwm_finance_quantum_channel_cost_p，直接作为本任务来源
---   4. acquiring_cost/business_cost/crypto_cost 预留为 0，后续接入对应 DWS
+--   1. BB/QI/SL 作为量子卡卡渠道成本来源
+--   2. dwm_finance_channel_cost_p 承载所有产品线金融渠道成本
+--   3. 金融渠道成本按 product_line 分别进入 acquiring/business/quantum/crypto 成本桶
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
@@ -105,10 +104,11 @@ CREATE TEMPORARY TABLE source_dws_sl_card_finance_daily_p (
     'scan.fetch-size' = '5000'
 );
 
-CREATE TEMPORARY TABLE source_dwm_finance_quantum_channel_cost_p (
+CREATE TEMPORARY TABLE source_dwm_finance_channel_cost_p (
     id               BIGINT,
     report_date      DATE,
     account_id       STRING,
+    product_line      STRING,
     provider         STRING,
     cost_type        STRING,
     cost_amount      DECIMAL(20, 4),
@@ -119,19 +119,20 @@ CREATE TEMPORARY TABLE source_dwm_finance_quantum_channel_cost_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public.dwm_finance_quantum_channel_cost_p',
+    'table-name' = 'public.dwm_finance_channel_cost_p',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
     'scan.fetch-size' = '5000'
 );
 
-CREATE TEMPORARY VIEW v_quantum_cost_source AS
+CREATE TEMPORARY VIEW v_channel_cost_source AS
 SELECT
     report_date,
     account_id,
     sale_id,
     am_id,
+    'QUANTUM_CARD' AS product_line,
     'BB' AS cost_source,
     CAST(
         COALESCE(m_dom_auth_count, 0) * 0.1090
@@ -165,6 +166,7 @@ SELECT
     account_id,
     sale_id,
     am_id,
+    'QUANTUM_CARD' AS product_line,
     'QI' AS cost_source,
     CAST(
         COALESCE(cost_reimbursement_vol, CAST(0 AS DECIMAL(20, 4)))
@@ -185,6 +187,7 @@ SELECT
     account_id,
     sale_id,
     am_id,
+    'QUANTUM_CARD' AS product_line,
     'SL' AS cost_source,
     CAST(COALESCE(cost_fixed_fee, CAST(0 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS cost_amount
 FROM source_dws_sl_card_finance_daily_p
@@ -197,9 +200,10 @@ SELECT
     account_id,
     sale_id,
     am_id,
-    'FINANCE_QUANTUM' AS cost_source,
+    product_line,
+    CONCAT('FINANCE:', COALESCE(provider, ''), ':', COALESCE(cost_type, '')) AS cost_source,
     CAST(COALESCE(cost_amount, CAST(0 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS cost_amount
-FROM source_dwm_finance_quantum_channel_cost_p
+FROM source_dwm_finance_channel_cost_p
 WHERE delete_time IS NULL;
 
 CREATE TEMPORARY VIEW v_total_channel_cost_daily AS
@@ -209,17 +213,17 @@ SELECT
     account_id,
     sale_id,
     am_id,
-    CAST(0 AS DECIMAL(20, 4)) AS acquiring_cost,
-    CAST(0 AS DECIMAL(20, 4)) AS business_cost,
-    CAST(SUM(cost_amount) AS DECIMAL(20, 4)) AS quantum_cost,
-    CAST(0 AS DECIMAL(20, 4)) AS crypto_cost,
+    CAST(SUM(CASE WHEN product_line = 'ACQUIRING' THEN cost_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS acquiring_cost,
+    CAST(SUM(CASE WHEN product_line = 'GLOBAL_ACCOUNT' THEN cost_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS business_cost,
+    CAST(SUM(CASE WHEN product_line = 'QUANTUM_CARD' THEN cost_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS quantum_cost,
+    CAST(SUM(CASE WHEN product_line = 'CRYPTO_ASSET' THEN cost_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS crypto_cost,
     CAST(SUM(cost_amount) AS DECIMAL(20, 4)) AS total_channel_cost,
     1 AS version,
     CAST(NULL AS STRING) AS remarks,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
-FROM v_quantum_cost_source
+FROM v_channel_cost_source
 GROUP BY report_date, account_id, sale_id, am_id;
 
 CREATE TEMPORARY TABLE sink_dws_total_channel_cost_daily_p (
