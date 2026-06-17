@@ -94,7 +94,7 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public.dim_sale_account_relation_p',
+    'table-name' = 'dim.dim_sale_account_relation_p',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -129,7 +129,9 @@ INNER JOIN source_qbit_card_transaction t
    AND t.`deleteTime` IS NULL
 WHERE s.`deleteTime` IS NULL
   AND s.provider LIKE '%Slash%'
-  AND JSON_VALUE(s.`rawData`, '$.date') IS NOT NULL;
+  AND JSON_VALUE(s.`rawData`, '$.date') IS NOT NULL
+  AND s.`createTime` >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP)
+  AND s.`createTime` < CAST(CURRENT_DATE AS TIMESTAMP);
 
 CREATE TEMPORARY VIEW v_sl_direct_sale_relation AS
 SELECT tx_id, sale_id, am_id

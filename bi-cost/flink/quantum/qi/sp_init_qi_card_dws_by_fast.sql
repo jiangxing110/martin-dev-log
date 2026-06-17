@@ -40,7 +40,7 @@ CREATE TEMPORARY TABLE source_dwm_qi_card_transaction_detail_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public.dwm_qi_card_transaction_detail_p',
+    'table-name' = 'dwm.dwm_qi_card_transaction_detail_p',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -116,7 +116,7 @@ CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = 'public.dws_qi_card_finance_daily_p',
+    'table-name' = 'dws.dws_qi_card_finance_daily_p',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

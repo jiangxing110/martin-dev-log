@@ -50,7 +50,7 @@ CREATE TEMPORARY TABLE source_dws_bb_card_finance_daily_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public.dws_bb_card_finance_daily_p',
+    'table-name' = 'dws.dws_bb_card_finance_daily_p',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -76,7 +76,7 @@ CREATE TEMPORARY TABLE source_dws_qi_card_finance_daily_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public.dws_qi_card_finance_daily_p',
+    'table-name' = 'dws.dws_qi_card_finance_daily_p',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -97,7 +97,7 @@ CREATE TEMPORARY TABLE source_dws_sl_card_finance_daily_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public.dws_sl_card_finance_daily_p',
+    'table-name' = 'dws.dws_sl_card_finance_daily_p',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -119,7 +119,7 @@ CREATE TEMPORARY TABLE source_dwm_finance_channel_cost_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public.dwm_finance_channel_cost_p',
+    'table-name' = 'dwm.dwm_finance_channel_cost_p',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -246,7 +246,7 @@ CREATE TEMPORARY TABLE sink_dws_total_channel_cost_daily_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = 'public.dws_total_channel_cost_daily_p',
+    'table-name' = 'dws.dws_total_channel_cost_daily_p',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

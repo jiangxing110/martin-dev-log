@@ -118,7 +118,7 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public.dim_sale_account_relation_p',
+    'table-name' = 'dim.dim_sale_account_relation_p',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -311,7 +311,7 @@ CREATE TEMPORARY TABLE sink_dwm_bb_card_transaction_detail_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public.dwm_bb_card_transaction_detail_p',
+    'table-name' = 'dwm.dwm_bb_card_transaction_detail_p',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

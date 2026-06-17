@@ -9,14 +9,23 @@
 --   4. 按 settlement_date 回刷 DWM 分区数据
 --********************************************************************--
 
-SET 'parallelism.default' = '1';
+SET 'parallelism.default' = '2';
+SET 'sink.parallelism' = '2';
 SET 'table.dml-sync' = 'true';
+SET 'pipeline.operator-chaining' = 'false';
+SET 'execution.checkpointing.interval' = '10s';
+SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
+SET 'execution.checkpointing.timeout' = '30min';
+SET 'table.exec.mini-batch.enabled' = 'false';
+SET 'table.optimizer.reuse-source-enabled' = 'true';
+SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 
 -- 回刷窗口示例:
--- WHERE settlement_date >= DATE '2026-01-01' AND settlement_date < DATE '2026-02-01'
+-- AND s.`createTime` >= TIMESTAMP '${start_time}'
+-- AND s.`createTime` < TIMESTAMP '${end_time}'
 
 CREATE TEMPORARY TABLE source_qbit_card_settlement (
     id                        STRING,
@@ -89,7 +98,7 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public.dim_sale_account_relation_p',
+    'table-name' = 'dim.dim_sale_account_relation_p',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -124,7 +133,9 @@ INNER JOIN source_qbit_card_transaction t
    AND t.`deleteTime` IS NULL
 WHERE s.`deleteTime` IS NULL
   AND s.provider LIKE '%Slash%'
-  AND JSON_VALUE(s.`rawData`, '$.date') IS NOT NULL;
+  AND JSON_VALUE(s.`rawData`, '$.date') IS NOT NULL
+  AND s.`createTime` >= TIMESTAMP '${start_time}'
+  AND s.`createTime` < TIMESTAMP '${end_time}';
 
 CREATE TEMPORARY VIEW v_sl_direct_sale_relation AS
 SELECT tx_id, sale_id, am_id
@@ -229,14 +240,15 @@ CREATE TEMPORARY TABLE sink_dwm_sl_card_transaction_detail_p (
     etl_time                   TIMESTAMP(6),
     PRIMARY KEY (id, settlement_date) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
+    'connector' = 'adbpg',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'dwm.dwm_sl_card_transaction_detail_p',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'targetSchema' = 'dwm',
+    'tableName' = 'dwm_sl_card_transaction_detail_p',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'sink.buffer-flush.max-rows' = '2000',
-    'sink.buffer-flush.interval' = '3000'
+    'writeMode' = 'upsert',
+    'batchSize' = '200',
+    'retryWaitTime' = '5000'
 );
 
 INSERT INTO sink_dwm_sl_card_transaction_detail_p
