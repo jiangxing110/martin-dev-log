@@ -9,10 +9,15 @@
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
-SET 'table.dml-sync' = 'true';
-SET 'restart-strategy.type' = 'fixed-delay';
-SET 'restart-strategy.fixed-delay.attempts' = '3';
-SET 'restart-strategy.fixed-delay.delay' = '60s';
+SET 'execution.checkpointing.interval' = '10s';
+SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
+SET 'pipeline.operator-chaining' = 'false';
+SET 'table.exec.mini-batch.enabled' = 'false';
+SET 'execution.checkpointing.timeout' = '30min';
+
+SET 'table.exec.mini-batch.allow-latency' = '5s';
+SET 'table.exec.mini-batch.size' = '5000';
+
 
 CREATE TEMPORARY TABLE source_sales_account_relation (
     id                   STRING,
@@ -27,13 +32,12 @@ CREATE TEMPORARY TABLE source_sales_account_relation (
     version              INT,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public."salesAccountRelation"',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'salesAccountRelation',
+    'targetSchema' = 'public',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
 CREATE TEMPORARY VIEW v_dim_sale_account_relation AS
@@ -69,14 +73,15 @@ CREATE TEMPORARY TABLE sink_dim_sale_account_relation_p (
     delete_time           TIMESTAMP(6),
     PRIMARY KEY (id, relation_start_time) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'dim.dim_sale_account_relation_p',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'sink.buffer-flush.max-rows' = '2000',
-    'sink.buffer-flush.interval' = '3000'
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'dim_sale_account_relation_p',
+    'targetSchema' = 'dim',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
+),
+    'writeMode' = 'upsert',
+    'batchSize' = '2000'
 );
 
 INSERT INTO sink_dim_sale_account_relation_p

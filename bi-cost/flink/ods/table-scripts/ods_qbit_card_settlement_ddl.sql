@@ -1,5 +1,5 @@
 --********************************************************************--
--- Author:         martin-dev-log
+-- Author:         martin-dev-log aa
 -- Created Time:   2026-06-17
 -- 功能：ADBPG ODS目标表 ods_qbit_card_settlement DDL | 按dt日期分区
 -- 说明：先执行建表，再跑 Flink 同步作业

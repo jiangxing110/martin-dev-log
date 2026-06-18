@@ -18,39 +18,43 @@ SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
 SET 'execution.checkpointing.timeout' = '30min';
 SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'table.optimizer.reuse-source-enabled' = 'true';
+
+SET 'table.exec.mini-batch.enabled' = 'true';
+SET 'table.exec.mini-batch.allow-latency' = '5s';
+SET 'table.exec.mini-batch.size' = '5000';
+
 SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 
 -- 回刷窗口示例:
--- AND s.`createTime` >= TIMESTAMP '${start_time}'
--- AND s.`createTime` < TIMESTAMP '${end_time}'
+-- AND s.create_time >= TIMESTAMP '${start_time}'
+-- AND s.create_time < TIMESTAMP '${end_time}'
 
 CREATE TEMPORARY TABLE source_qbit_card_settlement (
     id                        STRING,
-    `transactionId`           STRING,
-    `qbitCardTransactionId`   STRING,
+    transaction_id            STRING,
+    qbit_card_transaction_id  STRING,
     provider                  STRING,
-    `billingAmount`           DECIMAL(38, 18),
-    `billingCurrencyCode`     STRING,
-    `transactionAmount`       DECIMAL(38, 18),
-    `transactionCurrencyCode` STRING,
-    `rawData`                 STRING,
-    `createTime`              TIMESTAMP(6),
-    `updateTime`              TIMESTAMP(6),
-    `deleteTime`              TIMESTAMP(6),
+    billing_amount            STRING,
+    billing_currency_code     STRING,
+    transaction_amount        STRING,
+    transaction_currency_code STRING,
+    raw_data                  STRING,
+    create_time               TIMESTAMP(6),
+    update_time               TIMESTAMP(6),
+    delete_time               TIMESTAMP(6),
     remarks                   STRING,
     version                   INT,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public."qbitCardSettlement"',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'ods_qbit_card_settlement_sl',
+    'targetSchema' = 'ods',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
 CREATE TEMPORARY TABLE source_qbit_card_transaction (
@@ -61,13 +65,12 @@ CREATE TEMPORARY TABLE source_qbit_card_transaction (
     `deleteTime`      TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public.qbit_card_transaction',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'qbit_card_transaction',
+    'targetSchema' = 'public',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
 CREATE TEMPORARY TABLE source_api_account_relation (
@@ -76,13 +79,12 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     delete_time TIMESTAMP(6),
     PRIMARY KEY (account_id) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public.api_account_relation',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'ods_api_account_relation',
+    'targetSchema' = 'ods',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
 CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
@@ -96,13 +98,12 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     delete_time           TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'dim.dim_sale_account_relation_p',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'dim_sale_account_relation_p',
+    'targetSchema' = 'dim',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
 CREATE TEMPORARY VIEW v_sl_base AS
@@ -111,31 +112,31 @@ SELECT
     t.`accountId` AS account_id,
     COALESCE(s.version, 1) AS version,
     s.remarks,
-    s.`createTime` AS create_time,
-    COALESCE(s.`updateTime`, s.`createTime`) AS update_time,
-    s.`deleteTime` AS delete_time,
-    CAST(JSON_VALUE(s.`rawData`, '$.date') AS DATE) AS settlement_date,
-    s.`transactionId` AS settlement_transaction_id,
-    s.`qbitCardTransactionId` AS qbit_card_transaction_id,
+    s.create_time AS create_time,
+    COALESCE(s.update_time, s.create_time) AS update_time,
+    s.delete_time AS delete_time,
+    CAST(JSON_VALUE(s.raw_data, '$.date') AS DATE) AS settlement_date,
+    s.transaction_id AS settlement_transaction_id,
+    s.qbit_card_transaction_id AS qbit_card_transaction_id,
     t.`transactionId` AS qbit_transaction_id,
     s.provider,
-    CAST(COALESCE(s.`billingAmount`, CAST(0 AS DECIMAL(38, 18))) AS DECIMAL(20, 4)) AS billing_amount,
-    s.`billingCurrencyCode` AS billing_currency_code,
-    CAST(COALESCE(s.`transactionAmount`, CAST(0 AS DECIMAL(38, 18))) AS DECIMAL(20, 4)) AS transaction_amount,
-    s.`transactionCurrencyCode` AS transaction_currency_code,
-    JSON_VALUE(s.`rawData`, '$.merchantData.location.country') AS country,
-    COALESCE(t.`transactionTime`, s.`createTime`) AS sale_match_time,
-    s.`rawData` AS raw_data,
+    CAST(COALESCE(s.billing_amount, CAST(0 AS DECIMAL(38, 18))) AS DECIMAL(20, 4)) AS billing_amount,
+    s.billing_currency_code AS billing_currency_code,
+    CAST(COALESCE(s.transaction_amount, CAST(0 AS DECIMAL(38, 18))) AS DECIMAL(20, 4)) AS transaction_amount,
+    s.transaction_currency_code AS transaction_currency_code,
+    JSON_VALUE(s.raw_data, '$.merchantData.location.country') AS country,
+    COALESCE(t.`transactionTime`, s.create_time) AS sale_match_time,
+    s.raw_data,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS etl_time
 FROM source_qbit_card_settlement s
 INNER JOIN source_qbit_card_transaction t
-    ON t.id = s.`qbitCardTransactionId`
+    ON t.id = s.qbit_card_transaction_id
    AND t.`deleteTime` IS NULL
-WHERE s.`deleteTime` IS NULL
+WHERE s.delete_time IS NULL
   AND s.provider LIKE '%Slash%'
-  AND JSON_VALUE(s.`rawData`, '$.date') IS NOT NULL
-  AND s.`createTime` >= TIMESTAMP '${start_time}'
-  AND s.`createTime` < TIMESTAMP '${end_time}';
+  AND JSON_VALUE(s.raw_data, '$.date') IS NOT NULL
+  AND s.create_time >= TIMESTAMP '${start_time}'
+  AND s.create_time < TIMESTAMP '${end_time}';
 
 CREATE TEMPORARY VIEW v_sl_direct_sale_relation AS
 SELECT tx_id, sale_id, am_id

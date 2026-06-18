@@ -14,6 +14,17 @@ SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 
+SET 'execution.checkpointing.interval' = '10s';
+SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
+SET 'pipeline.operator-chaining' = 'false';
+SET 'table.exec.mini-batch.enabled' = 'false';
+SET 'execution.checkpointing.timeout' = '30min';
+
+SET 'table.exec.mini-batch.enabled' = 'true';
+SET 'table.exec.mini-batch.allow-latency' = '5s';
+SET 'table.exec.mini-batch.size' = '5000';
+
+
 CREATE TEMPORARY TABLE source_qbit_card_transaction (
     id                  STRING,
     `transactionId`     STRING,
@@ -33,11 +44,11 @@ CREATE TEMPORARY TABLE source_qbit_card_transaction (
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'postgres-cdc',
-    'hostname' = '${secret_values.PG_PAY_PROD_HOST_TEST}',
-    'port' = '${secret_values.PG_PAY_PROD_PORT_TEST}',
-    'username' = '${secret_values.PG_PAY_PROD_USERNAME_TEST}',
-    'password' = '${secret_values.PG_PAY_PROD_PWD_TEST}',
-    'database-name' = '${secret_values.PG_PAY_PROD_DATABASE_TEST}',
+    'hostname' = '${secret_values.PG_TEST_HOST}',
+    'port' = '${secret_values.PG_TEST_PORT1}',
+    'username' = '${secret_values.PG_TEST_USERNAME}',
+    'password' = '${secret_values.PG_TEST_PASSWORD}',
+    'database-name' = '${secret_values.PG_TEST_DATABASE}',
     'schema-name' = 'public',
     'table-name' = 'qbit_card_transaction',
     'slot.name' = 'flink_slot_qbit_card_transaction_bb_dwm',
@@ -62,11 +73,11 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement (
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'postgres-cdc',
-    'hostname' = '${secret_values.PG_PAY_PROD_HOST_TEST}',
-    'port' = '${secret_values.PG_PAY_PROD_PORT_TEST}',
-    'username' = '${secret_values.PG_PAY_PROD_USERNAME_TEST}',
-    'password' = '${secret_values.PG_PAY_PROD_PWD_TEST}',
-    'database-name' = '${secret_values.PG_PAY_PROD_DATABASE_TEST}',
+    'hostname' = '${secret_values.PG_TEST_HOST}',
+    'port' = '${secret_values.PG_TEST_PORT1}',
+    'username' = '${secret_values.PG_TEST_USERNAME}',
+    'password' = '${secret_values.PG_TEST_PASSWORD}',
+    'database-name' = '${secret_values.PG_TEST_DATABASE}',
     'schema-name' = 'public',
     'table-name' = 'qbitCardSettlement',
     'slot.name' = 'flink_slot_qbit_card_settlement_bb_dwm',
@@ -83,26 +94,24 @@ CREATE TEMPORARY TABLE source_qbit_card (
     `type` STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public."qbitCard"',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'qbitCard',
+    'targetSchema' = 'public',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
 CREATE TEMPORARY TABLE source_card_bin (
     system_provider STRING,
     brand           STRING
 ) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public.card_bin',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'card_bin',
+    'targetSchema' = 'public',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
 CREATE TEMPORARY TABLE source_api_account_relation (
@@ -111,13 +120,12 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     delete_time TIMESTAMP(6),
     PRIMARY KEY (account_id) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'public.api_account_relation',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'api_account_relation',
+    'targetSchema' = 'public',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
 CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
@@ -131,13 +139,12 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     delete_time           TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'dim.dim_sale_account_relation_p',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'dim_sale_account_relation_p',
+    'targetSchema' = 'dim',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
 CREATE TEMPORARY VIEW v_bb_base AS
@@ -320,14 +327,15 @@ CREATE TEMPORARY TABLE sink_dwm_bb_card_transaction_detail_p (
     am_id               STRING,
     PRIMARY KEY (id, transaction_time) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'dwm.dwm_bb_card_transaction_detail_p',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'sink.buffer-flush.max-rows' = '2000',
-    'sink.buffer-flush.interval' = '3000'
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'dwm_bb_card_transaction_detail_p',
+    'targetSchema' = 'dwm',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
+),
+    'writeMode' = 'upsert',
+    'batchSize' = '2000'
 );
 
 INSERT INTO sink_dwm_bb_card_transaction_detail_p

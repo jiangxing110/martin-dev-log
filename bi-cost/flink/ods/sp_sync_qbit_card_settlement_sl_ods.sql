@@ -73,7 +73,7 @@ CREATE TEMPORARY TABLE flink_source_qbit_card_settlement (
     'schema-name' = 'public',
     'table-name' = 'qbitCardSettlement',
 
-    'slot.name' = 'flink_slot_qbit_card_settlement_ods_v1',
+    'slot.name' = 'flink_slot_qbit_card_settlement_sl_ods_v1',
     'decoding.plugin.name' = 'pgoutput',
     'debezium.publication.name' = 'flink_cdc_publication',
     'debezium.connector.pgout.publication.autocreate' = 'false',
@@ -134,7 +134,7 @@ CREATE TEMPORARY TABLE flink_sink_ods_qbit_card_settlement (
 ) WITH (
     'connector' = 'adbpg',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'ods_qbit_card_settlement',
+    'tableName' = 'ods_qbit_card_settlement_sl',
     'targetSchema' = 'ods',
     'userName' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
@@ -192,6 +192,7 @@ SELECT
     wallet,
     mcc
 FROM flink_source_qbit_card_settlement
-WHERE createTime > '2026-06-1'
+WHERE "createTime" >'2026-05-01 00:00:00' and "createTime" <'2026-06-01 00:00:00'
+and provider in('SlashCard43612081')
 ;
 END;

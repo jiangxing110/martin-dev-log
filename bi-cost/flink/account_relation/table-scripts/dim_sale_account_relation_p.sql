@@ -1,6 +1,6 @@
 CREATE TABLE "dim"."dim_sale_account_relation_p" (
-  "id" uuid NOT NULL,
-  "relation_account_id" uuid NOT NULL,
+  "id" varchar(64) NOT NULL,
+  "relation_account_id" varchar(64) NOT NULL,
   "sale_id" varchar(64) COLLATE "pg_catalog"."default",
   "am_id" varchar(64) COLLATE "pg_catalog"."default",
   "operation_manager_id" varchar(64) COLLATE "pg_catalog"."default",
@@ -35,7 +35,7 @@ COMMENT ON COLUMN "dim"."dim_sale_account_relation_p"."update_time" IS '记录�
 COMMENT ON COLUMN "dim"."dim_sale_account_relation_p"."delete_time" IS '逻辑删除时间';
 
 CREATE INDEX "idx_dim_sale_relation_account_time" ON "dim"."dim_sale_account_relation_p" USING btree (
-  "relation_account_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "relation_account_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
   "relation_start_time" "pg_catalog"."timestamp_ops" ASC NULLS LAST,
   "relation_end_time" "pg_catalog"."timestamp_ops" ASC NULLS LAST
 );

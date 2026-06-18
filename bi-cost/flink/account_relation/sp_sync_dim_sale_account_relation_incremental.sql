@@ -14,6 +14,16 @@ SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 
+SET 'execution.checkpointing.interval' = '10s';
+SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
+SET 'pipeline.operator-chaining' = 'false';
+SET 'table.exec.mini-batch.enabled' = 'false';
+SET 'execution.checkpointing.timeout' = '30min';
+
+SET 'table.exec.mini-batch.allow-latency' = '5s';
+SET 'table.exec.mini-batch.size' = '5000';
+
+
 CREATE TEMPORARY TABLE source_sales_account_relation (
     id                   STRING,
     `accountId`          STRING,
@@ -28,11 +38,11 @@ CREATE TEMPORARY TABLE source_sales_account_relation (
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'postgres-cdc',
-    'hostname' = '${secret_values.PG_PAY_PROD_HOST_TEST}',
-    'port' = '${secret_values.PG_PAY_PROD_PORT_TEST}',
-    'username' = '${secret_values.PG_PAY_PROD_USERNAME_TEST}',
-    'password' = '${secret_values.PG_PAY_PROD_PWD_TEST}',
-    'database-name' = '${secret_values.PG_PAY_PROD_DATABASE_TEST}',
+    'hostname' = '${secret_values.PG_TEST_HOST}',
+    'port' = '${secret_values.PG_TEST_PORT1}',
+    'username' = '${secret_values.PG_TEST_USERNAME}',
+    'password' = '${secret_values.PG_TEST_PASSWORD}',
+    'database-name' = '${secret_values.PG_TEST_DATABASE}',
     'schema-name' = 'public',
     'table-name' = 'salesAccountRelation',
     'slot.name' = 'flink_slot_sales_account_relation_dim',
@@ -76,14 +86,14 @@ CREATE TEMPORARY TABLE sink_dim_sale_account_relation_p (
     delete_time           TIMESTAMP(6),
     PRIMARY KEY (id, relation_start_time) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'dim.dim_sale_account_relation_p',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'dim_sale_account_relation_p',
+    'targetSchema' = 'dim',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'sink.buffer-flush.max-rows' = '2000',
-    'sink.buffer-flush.interval' = '3000'
+    'writeMode' = 'upsert',
+    'batchSize' = '200'
 );
 
 INSERT INTO sink_dim_sale_account_relation_p

@@ -14,6 +14,17 @@ SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 
+SET 'execution.checkpointing.interval' = '10s';
+SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
+SET 'pipeline.operator-chaining' = 'false';
+SET 'table.exec.mini-batch.enabled' = 'false';
+SET 'execution.checkpointing.timeout' = '30min';
+
+SET 'table.exec.mini-batch.enabled' = 'true';
+SET 'table.exec.mini-batch.allow-latency' = '5s';
+SET 'table.exec.mini-batch.size' = '5000';
+
+
 CREATE TEMPORARY TABLE source_dwm_qi_card_transaction_detail_p (
     id                    STRING,
     transaction_id        STRING,
@@ -38,13 +49,12 @@ CREATE TEMPORARY TABLE source_dwm_qi_card_transaction_detail_p (
     am_id                 STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'dwm.dwm_qi_card_transaction_detail_p',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'dwm_qi_card_transaction_detail_p',
+    'targetSchema' = 'dwm',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
 CREATE TEMPORARY VIEW v_dws_qi_daily_base AS
@@ -114,14 +124,15 @@ CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_p (
     cost_fixed_fee            DECIMAL(20, 4),
     PRIMARY KEY (id, report_date) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
+    'connector' = 'adbpg',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = 'dws.dws_qi_card_finance_daily_p',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'sink.buffer-flush.max-rows' = '2000',
-    'sink.buffer-flush.interval' = '3000'
+    'tableName' = 'dws_qi_card_finance_daily_p',
+    'targetSchema' = 'dws',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
+),
+    'writeMode' = 'upsert',
+    'batchSize' = '2000'
 );
 
 INSERT INTO sink_dws_qi_card_finance_daily_p

@@ -38,13 +38,12 @@ CREATE TEMPORARY TABLE source_dwm_sl_card_transaction_detail_p (
     etl_time                   TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = 'dwm.dwm_sl_card_transaction_detail_p',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'dwm_sl_card_transaction_detail_p',
+    'targetSchema' = 'dwm',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
 CREATE TEMPORARY VIEW v_dws_sl_daily_base AS
@@ -87,14 +86,15 @@ CREATE TEMPORARY TABLE sink_dws_sl_card_finance_daily_p (
     cost_fixed_fee  DECIMAL(20, 4),
     PRIMARY KEY (id, report_date) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
+    'connector' = 'adbpg',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = 'dws.dws_sl_card_finance_daily_p',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'sink.buffer-flush.max-rows' = '2000',
-    'sink.buffer-flush.interval' = '3000'
+    'tableName' = 'dws_sl_card_finance_daily_p',
+    'targetSchema' = 'dws',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
+),
+    'writeMode' = 'upsert',
+    'batchSize' = '2000'
 );
 
 INSERT INTO sink_dws_sl_card_finance_daily_p
