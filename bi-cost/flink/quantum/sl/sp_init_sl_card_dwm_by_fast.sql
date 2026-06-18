@@ -4,8 +4,8 @@
 -- Description:    Quantum SL DWM 批量初始化/回刷
 -- Notes:
 --   1. Batch 主源: qbitCardSettlement
---   2. qbitCardSettlement.qbitCardTransactionId 关联 qbit_card_transaction
---   3. 按 qbit_card_transaction.transactionTime 匹配 dim_sale_account_relation_p
+--   2. qbitCardSettlement.qbitCardTransactionId 仅用于补 account_id / qbit_transaction_id
+--   3. 按 ods_qbit_card_settlement_sl.create_time 匹配销售关系
 --   4. 按 settlement_date 回刷 DWM 分区数据
 --********************************************************************--
 
@@ -49,12 +49,22 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement (
     version                   INT,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'ods_qbit_card_settlement_sl',
-    'targetSchema' = 'ods',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'connector' = 'postgres-cdc',
+    'hostname' = '${secret_values.ADB_PG_VPC_HOSTNAME}',
+    'port' = '${secret_values.ADB_PG_VPC_PORT}',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'database-name' = '${secret_values.ADB_PG_DATABASE}',
+    'schema-name' = 'ods',
+    'table-name' = 'ods_qbit_card_settlement_sl',
+    'slot.name' = 'flink_slot_sl_ods_qbit_card_settlement_init',
+    'decoding.plugin.name' = 'pgoutput',
+    'debezium.publication.name' = 'flink_cdc_publication',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'scan.startup.mode' = 'initial',
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096',
+    'debezium.field.name.adjustment.mode' = 'none'
 );
 
 CREATE TEMPORARY TABLE source_qbit_card_transaction (
@@ -65,12 +75,22 @@ CREATE TEMPORARY TABLE source_qbit_card_transaction (
     `deleteTime`      TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'qbit_card_transaction',
-    'targetSchema' = 'public',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'connector' = 'postgres-cdc',
+    'hostname' = '${secret_values.ADB_PG_VPC_HOSTNAME}',
+    'port' = '${secret_values.ADB_PG_VPC_PORT}',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'database-name' = '${secret_values.ADB_PG_DATABASE}',
+    'schema-name' = 'public',
+    'table-name' = 'qbit_card_transaction',
+    'slot.name' = 'flink_slot_sl_qbit_card_tx_init',
+    'decoding.plugin.name' = 'pgoutput',
+    'debezium.publication.name' = 'flink_cdc_publication',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'scan.startup.mode' = 'initial',
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096',
+    'debezium.field.name.adjustment.mode' = 'none'
 );
 
 CREATE TEMPORARY TABLE source_api_account_relation (
@@ -79,12 +99,22 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     delete_time TIMESTAMP(6),
     PRIMARY KEY (account_id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'ods_api_account_relation',
-    'targetSchema' = 'ods',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'connector' = 'postgres-cdc',
+    'hostname' = '${secret_values.ADB_PG_VPC_HOSTNAME}',
+    'port' = '${secret_values.ADB_PG_VPC_PORT}',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'database-name' = '${secret_values.ADB_PG_DATABASE}',
+    'schema-name' = 'ods',
+    'table-name' = 'ods_api_account_relation',
+    'slot.name' = 'flink_slot_sl_api_account_relation_init',
+    'decoding.plugin.name' = 'pgoutput',
+    'debezium.publication.name' = 'flink_cdc_publication',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'scan.startup.mode' = 'initial',
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096',
+    'debezium.field.name.adjustment.mode' = 'none'
 );
 
 CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
@@ -98,12 +128,22 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     delete_time           TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dim_sale_account_relation_p',
-    'targetSchema' = 'dim',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'connector' = 'postgres-cdc',
+    'hostname' = '${secret_values.ADB_PG_VPC_HOSTNAME}',
+    'port' = '${secret_values.ADB_PG_VPC_PORT}',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'database-name' = '${secret_values.ADB_PG_DATABASE}',
+    'schema-name' = 'dim',
+    'table-name' = 'dim_sale_account_relation_p',
+    'slot.name' = 'flink_slot_sl_sale_relation_dim_init',
+    'decoding.plugin.name' = 'pgoutput',
+    'debezium.publication.name' = 'flink_cdc_publication',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'scan.startup.mode' = 'initial',
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096',
+    'debezium.field.name.adjustment.mode' = 'none'
 );
 
 CREATE TEMPORARY VIEW v_sl_base AS
@@ -125,7 +165,7 @@ SELECT
     CAST(COALESCE(s.transaction_amount, CAST(0 AS DECIMAL(38, 18))) AS DECIMAL(20, 4)) AS transaction_amount,
     s.transaction_currency_code AS transaction_currency_code,
     JSON_VALUE(s.raw_data, '$.merchantData.location.country') AS country,
-    COALESCE(t.`transactionTime`, s.create_time) AS sale_match_time,
+    s.create_time AS sale_match_time,
     s.raw_data,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS etl_time
 FROM source_qbit_card_settlement s
@@ -133,7 +173,6 @@ INNER JOIN source_qbit_card_transaction t
     ON t.id = s.qbit_card_transaction_id
    AND t.`deleteTime` IS NULL
 WHERE s.delete_time IS NULL
-  AND s.provider LIKE '%Slash%'
   AND JSON_VALUE(s.raw_data, '$.date') IS NOT NULL
   AND s.create_time >= TIMESTAMP '${start_time}'
   AND s.create_time < TIMESTAMP '${end_time}';

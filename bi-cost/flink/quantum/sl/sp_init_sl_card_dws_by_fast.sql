@@ -38,12 +38,22 @@ CREATE TEMPORARY TABLE source_dwm_sl_card_transaction_detail_p (
     etl_time                   TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dwm_sl_card_transaction_detail_p',
-    'targetSchema' = 'dwm',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'connector' = 'postgres-cdc',
+    'hostname' = '${secret_values.ADB_PG_VPC_HOSTNAME}',
+    'port' = '${secret_values.ADB_PG_VPC_PORT}',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'database-name' = '${secret_values.ADB_PG_DATABASE}',
+    'schema-name' = 'dwm',
+    'table-name' = 'dwm_sl_card_transaction_detail_p',
+    'slot.name' = 'flink_slot_sl_dwm_to_dws_init',
+    'decoding.plugin.name' = 'pgoutput',
+    'debezium.publication.name' = 'flink_cdc_publication',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'scan.startup.mode' = 'initial',
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096',
+    'debezium.field.name.adjustment.mode' = 'none'
 );
 
 CREATE TEMPORARY VIEW v_dws_sl_daily_base AS
