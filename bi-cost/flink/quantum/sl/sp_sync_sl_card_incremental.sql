@@ -31,9 +31,9 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement (
     transaction_id            STRING,
     qbit_card_transaction_id  STRING,
     provider                  STRING,
-    billing_amount            STRING,
+    billing_amount            DOUBLE,
     billing_currency_code     STRING,
-    transaction_amount        STRING,
+    transaction_amount        DOUBLE,
     transaction_currency_code STRING,
     raw_data                  STRING,
     create_time               TIMESTAMP(6),
@@ -43,48 +43,30 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement (
     version                   INT,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'postgres-cdc',
-    'hostname' = '${secret_values.ADB_PG_VPC_HOSTNAME}',
-    'port' = '${secret_values.ADB_PG_VPC_PORT}',
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = 'ods.ods_qbit_card_settlement_sl',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'database-name' = '${secret_values.ADB_PG_DATABASE}',
-    'schema-name' = 'ods',
-    'table-name' = 'ods_qbit_card_settlement_sl',
-    'slot.name' = 'flink_slot_sl_ods_qbit_card_settlement_sync',
-    'decoding.plugin.name' = 'pgoutput',
-    'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.connector.pgout.publication.autocreate' = 'false',
-    'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'true',
-    'scan.snapshot.fetch.size' = '4096',
-    'debezium.field.name.adjustment.mode' = 'none'
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_qbit_card_transaction (
     id                STRING,
-    `accountId`       STRING,
-    `transactionId`   STRING,
-    `transactionTime` TIMESTAMP(6),
-    `deleteTime`      TIMESTAMP(6),
+    account_id        STRING,
+    transaction_id    STRING,
+    transaction_time  TIMESTAMP(6),
+    delete_time       TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'postgres-cdc',
-    'hostname' = '${secret_values.ADB_PG_VPC_HOSTNAME}',
-    'port' = '${secret_values.ADB_PG_VPC_PORT}',
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = 'ods.ods_qbit_card_transaction',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'database-name' = '${secret_values.ADB_PG_DATABASE}',
-    'schema-name' = 'public',
-    'table-name' = 'qbit_card_transaction',
-    'slot.name' = 'flink_slot_sl_qbit_card_tx_sync',
-    'decoding.plugin.name' = 'pgoutput',
-    'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.connector.pgout.publication.autocreate' = 'false',
-    'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'true',
-    'scan.snapshot.fetch.size' = '4096',
-    'debezium.field.name.adjustment.mode' = 'none'
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_api_account_relation (
@@ -93,22 +75,13 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     delete_time TIMESTAMP(6),
     PRIMARY KEY (account_id) NOT ENFORCED
 ) WITH (
-    'connector' = 'postgres-cdc',
-    'hostname' = '${secret_values.ADB_PG_VPC_HOSTNAME}',
-    'port' = '${secret_values.ADB_PG_VPC_PORT}',
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = 'ods.ods_api_account_relation',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'database-name' = '${secret_values.ADB_PG_DATABASE}',
-    'schema-name' = 'ods',
-    'table-name' = 'ods_api_account_relation',
-    'slot.name' = 'flink_slot_sl_api_account_relation_sync',
-    'decoding.plugin.name' = 'pgoutput',
-    'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.connector.pgout.publication.autocreate' = 'false',
-    'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'true',
-    'scan.snapshot.fetch.size' = '4096',
-    'debezium.field.name.adjustment.mode' = 'none'
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
@@ -122,28 +95,19 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     delete_time           TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'postgres-cdc',
-    'hostname' = '${secret_values.ADB_PG_VPC_HOSTNAME}',
-    'port' = '${secret_values.ADB_PG_VPC_PORT}',
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = 'dim.dim_sale_account_relation_p',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'database-name' = '${secret_values.ADB_PG_DATABASE}',
-    'schema-name' = 'dim',
-    'table-name' = 'dim_sale_account_relation_p',
-    'slot.name' = 'flink_slot_sl_sale_relation_dim_sync',
-    'decoding.plugin.name' = 'pgoutput',
-    'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.connector.pgout.publication.autocreate' = 'false',
-    'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'true',
-    'scan.snapshot.fetch.size' = '4096',
-    'debezium.field.name.adjustment.mode' = 'none'
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY VIEW v_sl_base AS
 SELECT
     s.id,
-    t.`accountId` AS account_id,
+    t.account_id AS account_id,
     COALESCE(s.version, 1) AS version,
     s.remarks,
     s.create_time AS create_time,
@@ -152,11 +116,11 @@ SELECT
     CAST(JSON_VALUE(s.raw_data, '$.date') AS DATE) AS settlement_date,
     s.transaction_id AS settlement_transaction_id,
     s.qbit_card_transaction_id AS qbit_card_transaction_id,
-    t.`transactionId` AS qbit_transaction_id,
+    t.transaction_id AS qbit_transaction_id,
     s.provider,
-    CAST(COALESCE(s.billing_amount, CAST(0 AS DECIMAL(38, 18))) AS DECIMAL(20, 4)) AS billing_amount,
+    CAST(COALESCE(s.billing_amount, CAST(0 AS DOUBLE)) AS DECIMAL(20, 4)) AS billing_amount,
     s.billing_currency_code AS billing_currency_code,
-    CAST(COALESCE(s.transaction_amount, CAST(0 AS DECIMAL(38, 18))) AS DECIMAL(20, 4)) AS transaction_amount,
+    CAST(COALESCE(s.transaction_amount, CAST(0 AS DOUBLE)) AS DECIMAL(20, 4)) AS transaction_amount,
     s.transaction_currency_code AS transaction_currency_code,
     JSON_VALUE(s.raw_data, '$.merchantData.location.country') AS country,
     s.create_time AS sale_match_time,
@@ -165,7 +129,7 @@ SELECT
 FROM source_qbit_card_settlement s
 INNER JOIN source_qbit_card_transaction t
     ON t.id = s.qbit_card_transaction_id
-   AND t.`deleteTime` IS NULL
+   AND t.delete_time IS NULL
 WHERE s.delete_time IS NULL
   AND JSON_VALUE(s.raw_data, '$.date') IS NOT NULL
   AND s.create_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP)
@@ -275,14 +239,14 @@ CREATE TEMPORARY TABLE sink_dwm_sl_card_transaction_detail_p (
     PRIMARY KEY (id, settlement_date) NOT ENFORCED
 ) WITH (
     'connector' = 'adbpg',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dwm_sl_card_transaction_detail_p',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'targetSchema' = 'dwm',
+    'tableName' = 'dwm_sl_card_transaction_detail_p',
     'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
-),
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
     'writeMode' = 'upsert',
-    'batchSize' = '2000'
+    'batchSize' = '200',
+    'retryWaitTime' = '5000'
 );
 
 INSERT INTO sink_dwm_sl_card_transaction_detail_p

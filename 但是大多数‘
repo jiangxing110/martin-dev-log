@@ -14,3 +14,5 @@ sp_init_sl_card_dwm_by_fast,sp_init_sl_card_dws_by_fast,sp_sync_sl_card_incremen
     'scan.snapshot.fetch.size' = '4096',
     'debezium.field.name.adjustment.mode' = 'none'
 );这些都要加上去
+
+Source: source_qbit_card_transaction[1331]
