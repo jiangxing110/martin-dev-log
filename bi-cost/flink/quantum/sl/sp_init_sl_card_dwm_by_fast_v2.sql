@@ -62,10 +62,29 @@ CREATE TEMPORARY TABLE source_sl_joined_base (
     'scan.fetch-size' = '1000'
 );
 
+CREATE TEMPORARY TABLE source_dim_account (
+    id                STRING,
+    account_type      STRING,
+    account_category  STRING,
+    system_type       STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT id, account_type, type AS account_category, system_type FROM dim.dim_account) AS dim_account_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000'
+);
+
 CREATE TEMPORARY VIEW v_sl_base AS
 SELECT
     s.id,
     s.account_id,
+    da.account_type,
+    da.account_category,
+    da.system_type,
     s.version,
     s.remarks,
     s.create_time,
@@ -84,12 +103,16 @@ SELECT
     s.create_time AS sale_match_time,
     CAST(NULL AS STRING) AS raw_data,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS etl_time
-FROM source_sl_joined_base s;
+FROM source_sl_joined_base s
+LEFT JOIN source_dim_account da ON da.id = s.account_id;
 
 CREATE TEMPORARY VIEW v_dwm_sl_card_transaction_detail AS
 SELECT
     b.id,
     b.account_id,
+    b.account_type,
+    b.account_category,
+    b.system_type,
     b.version,
     b.remarks,
     b.create_time,
@@ -115,6 +138,9 @@ FROM v_sl_base b
 CREATE TEMPORARY TABLE sink_dwm_sl_card_transaction_detail_p (
     id                         STRING,
     account_id                 STRING,
+    account_type               STRING,
+    account_category           STRING,
+    system_type                STRING,
     version                    INT,
     remarks                    STRING,
     create_time                TIMESTAMP(6),
@@ -151,6 +177,9 @@ INSERT INTO sink_dwm_sl_card_transaction_detail_p
 SELECT
     id,
     account_id,
+    account_type,
+    account_category,
+    system_type,
     version,
     remarks,
     create_time,
@@ -171,5 +200,3 @@ SELECT
     raw_data,
     etl_time
 FROM v_dwm_sl_card_transaction_detail;
-jswh6523911
-234239

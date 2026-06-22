@@ -26,9 +26,6 @@ SET 'sql-client.execution.result-mode' = 'tableau';
 CREATE TEMPORARY TABLE source_dwm_sl_card_transaction_detail_p (
     id                         STRING,
     account_id                 STRING,
-    account_type               STRING,
-    account_category           STRING,
-    system_type                STRING,
     version                    INT,
     remarks                    STRING,
     create_time                TIMESTAMP(6),
@@ -59,32 +56,49 @@ CREATE TEMPORARY TABLE source_dwm_sl_card_transaction_detail_p (
     'scan.fetch-size' = '1000'
 );
 
+CREATE TEMPORARY TABLE source_dim_account (
+    id                STRING,
+    account_type      STRING,
+    account_category  STRING,
+    system_type       STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT id, account_type, type AS account_category, system_type FROM dim.dim_account) AS dim_account_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000'
+);
+
 CREATE TEMPORARY VIEW v_dws_sl_daily_base AS
 SELECT
-    CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(settlement_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', COALESCE(sale_id, ''), ':', COALESCE(am_id, '')))) AS BIGINT) AS id,
-    settlement_date AS report_date,
-    account_id,
-    account_type,
-    account_category,
-    system_type,
+    CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(s.settlement_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', s.account_id, ':', COALESCE(s.sale_id, ''), ':', COALESCE(s.am_id, '')))) AS BIGINT) AS id,
+    s.settlement_date AS report_date,
+    s.account_id,
+    da.account_type,
+    da.account_category,
+    da.system_type,
     1 AS version,
     CAST(NULL AS STRING) AS remarks,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time,
-    sale_id,
-    am_id,
-    CAST(SUM(COALESCE(billing_amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS rebate_base,
+    s.sale_id,
+    s.am_id,
+    CAST(SUM(COALESCE(s.billing_amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS rebate_base,
     CAST(SUM(
         CASE
-            WHEN country = 'US' THEN COALESCE(billing_amount, CAST(0 AS DECIMAL(20, 4))) * CAST(0.02 AS DECIMAL(20, 4))
-            ELSE COALESCE(billing_amount, CAST(0 AS DECIMAL(20, 4))) * CAST(0.005 AS DECIMAL(20, 4))
+            WHEN s.country = 'US' THEN COALESCE(s.billing_amount, CAST(0 AS DECIMAL(20, 4))) * CAST(0.02 AS DECIMAL(20, 4))
+            ELSE COALESCE(s.billing_amount, CAST(0 AS DECIMAL(20, 4))) * CAST(0.005 AS DECIMAL(20, 4))
         END
     ) AS DECIMAL(20, 4)) AS rebate_amt,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee
-FROM source_dwm_sl_card_transaction_detail_p
-WHERE delete_time IS NULL
-GROUP BY settlement_date, account_id, account_type, account_category, system_type, sale_id, am_id;
+FROM source_dwm_sl_card_transaction_detail_p s
+LEFT JOIN source_dim_account da ON da.id = s.account_id
+WHERE s.delete_time IS NULL
+GROUP BY s.settlement_date, s.account_id, da.account_type, da.account_category, da.system_type, s.sale_id, s.am_id;
 
 CREATE TEMPORARY TABLE sink_dws_sl_card_finance_daily_p (
     id              BIGINT,

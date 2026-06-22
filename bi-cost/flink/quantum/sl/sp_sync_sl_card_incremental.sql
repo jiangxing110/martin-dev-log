@@ -77,10 +77,29 @@ CREATE TEMPORARY TABLE source_qbit_card_transaction (
     'scan.fetch-size' = '1000'
 );
 
+CREATE TEMPORARY TABLE source_dim_account (
+    id                STRING,
+    account_type      STRING,
+    account_category  STRING,
+    system_type       STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT id, account_type, type AS account_category, system_type FROM dim.dim_account) AS dim_account_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000'
+);
+
 CREATE TEMPORARY VIEW v_sl_base AS
 SELECT
     s.id,
     t.account_id AS account_id,
+    da.account_type,
+    da.account_category,
+    da.system_type,
     COALESCE(s.version, 1) AS version,
     s.remarks,
     s.create_time AS create_time,
@@ -103,6 +122,8 @@ FROM source_qbit_card_settlement s
 INNER JOIN source_qbit_card_transaction t
     ON t.id = s.qbit_card_transaction_id
    AND t.delete_time IS NULL
+LEFT JOIN source_dim_account da
+    ON da.id = t.account_id
 WHERE s.delete_time IS NULL
   AND s.create_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP)
   AND s.create_time < CAST(CURRENT_DATE AS TIMESTAMP);
@@ -111,6 +132,9 @@ CREATE TEMPORARY VIEW v_dwm_sl_card_transaction_detail AS
 SELECT
     b.id,
     b.account_id,
+    b.account_type,
+    b.account_category,
+    b.system_type,
     b.version,
     b.remarks,
     b.create_time,
@@ -136,6 +160,9 @@ FROM v_sl_base b
 CREATE TEMPORARY TABLE sink_dwm_sl_card_transaction_detail_p (
     id                         STRING,
     account_id                 STRING,
+    account_type               STRING,
+    account_category           STRING,
+    system_type                STRING,
     version                    INT,
     remarks                    STRING,
     create_time                TIMESTAMP(6),
@@ -172,6 +199,9 @@ INSERT INTO sink_dwm_sl_card_transaction_detail_p
 SELECT
     id,
     account_id,
+    account_type,
+    account_category,
+    system_type,
     version,
     remarks,
     create_time,
