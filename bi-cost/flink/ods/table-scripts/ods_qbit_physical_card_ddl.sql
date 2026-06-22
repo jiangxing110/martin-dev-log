@@ -55,6 +55,8 @@ COMMENT ON TABLE "ods"."ods_qbit_physical_card" IS 'ODS层：qbitPhysicalCard �
 -- ==============================================
 -- 按年分区 (dt)
 -- ==============================================
+CREATE TABLE "ods"."ods_qbit_physical_card_2023" PARTITION OF "ods"."ods_qbit_physical_card"
+  FOR VALUES FROM ('2023-01-01') TO ('2024-01-01');
 CREATE TABLE "ods"."ods_qbit_physical_card_2024" PARTITION OF "ods"."ods_qbit_physical_card"
   FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
 CREATE TABLE "ods"."ods_qbit_physical_card_2025" PARTITION OF "ods"."ods_qbit_physical_card"
