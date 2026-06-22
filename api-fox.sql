@@ -28,3 +28,6 @@ WHERE tenant_id = 489789;
 SELECT * FROM card WHERE account_id='419354504246943744';
 
 ORDER BY create_time desc
+
+
+CREATE MATERIALIZED VIEW "dws"."dws_revenue_summary_daily_mv"

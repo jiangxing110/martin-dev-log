@@ -28,6 +28,9 @@ SET 'table.exec.mini-batch.size' = '5000';
 CREATE TEMPORARY TABLE source_dwm_bb_card_transaction_detail_p (
     id                  STRING,
     account_id          STRING,
+    account_type        STRING,
+    account_category    STRING,
+    system_type         STRING,
     card_id             STRING,
     transaction_time    TIMESTAMP(6),
     third_complete_time TIMESTAMP(6),
@@ -67,6 +70,9 @@ SELECT
     CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(transaction_time, 'yyyyMMdd'), ':', account_id, ':', COALESCE(sale_id, ''), ':', COALESCE(am_id, '')))) AS BIGINT) AS id,
     CAST(transaction_time AS DATE) AS report_date,
     account_id,
+    account_type,
+    account_category,
+    system_type,
     CAST(SUM(CASE WHEN business_type = 'Consumption' AND card_org = 'Master' AND is_dom = TRUE AND resp_code = 'APPROVE' AND (is_clearing = TRUE OR is_reversal = TRUE) THEN 1 ELSE 0 END) AS INT) AS m_dom_auth_count,
     CAST(SUM(CASE WHEN business_type = 'Consumption' AND card_org = 'Master' AND is_dom = FALSE AND resp_code = 'APPROVE' AND (is_clearing = TRUE OR is_reversal = TRUE) THEN 1 ELSE 0 END) AS INT) AS m_int_auth_count,
     CAST(SUM(CASE WHEN business_type = 'Consumption' AND card_org = 'VISA' AND is_dom = TRUE AND resp_code = 'APPROVE' AND (is_clearing = TRUE OR is_reversal = TRUE) THEN 1 ELSE 0 END) AS INT) AS v_dom_auth_count,
@@ -101,12 +107,15 @@ SELECT
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM source_dwm_bb_card_transaction_detail_p
 WHERE delete_time IS NULL
-GROUP BY CAST(transaction_time AS DATE), account_id, sale_id, am_id;
+GROUP BY CAST(transaction_time AS DATE), account_id, account_type, account_category, system_type, sale_id, am_id;
 
 CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_p (
     id                       BIGINT,
     report_date              DATE,
     account_id               STRING,
+    account_type             STRING,
+    account_category         STRING,
+    system_type              STRING,
     m_dom_auth_count         INT,
     m_int_auth_count         INT,
     v_dom_auth_count         INT,

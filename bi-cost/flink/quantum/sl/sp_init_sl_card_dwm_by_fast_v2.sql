@@ -3,8 +3,8 @@
 -- Created Time:   2026-06-15
 -- Description:    Quantum SL DWM 批量初始化/回刷
 -- Notes:
---   1. Batch 主源: qbitCardSettlement
---   2. qbitCardSettlement.qbitCardTransactionId 仅用于补 account_id / qbit_transaction_id
+--   1. Batch 主源: PostgreSQL 侧先完成 settlement + qbit_transaction join
+--   2. Flink 只消费 join 后的基础结果，减少 TaskManager 内部 hash join 压力
 --   3. 当前版本先不挂销售归属，sale_id / am_id 先写空
 --   4. 按 settlement_date 回刷 DWM 分区数据
 --   5. init 脚本用于历史回刷，必须传入 start_time / end_time
@@ -33,62 +33,29 @@ SET 'sql-client.execution.result-mode' = 'tableau';
 -- 1. start_time / end_time 必传
 -- 2. 建议按自然月回刷，以便 PostgreSQL 更充分利用 dt 分区裁剪
 
-CREATE TEMPORARY TABLE source_qbit_card_settlement (
+CREATE TEMPORARY TABLE source_sl_joined_base (
     id                        STRING,
-    dt                        DATE,
-    transaction_id            STRING,
-    qbit_card_transaction_id  STRING,
-    provider                  STRING,
-    billing_amount            DOUBLE,
-    billing_currency_code     STRING,
-    transaction_amount        DOUBLE,
-    transaction_currency_code STRING,
-    settlement_day            STRING,
-    country                   STRING,
-    merchant_country          STRING,
+    account_id                STRING,
+    version                   INT,
+    remarks                   STRING,
     create_time               TIMESTAMP(6),
     update_time               TIMESTAMP(6),
     delete_time               TIMESTAMP(6),
-    remarks                   STRING,
-    version                   INT,
+    settlement_date           DATE,
+    settlement_transaction_id STRING,
+    qbit_card_transaction_id  STRING,
+    qbit_transaction_id       STRING,
+    provider                  STRING,
+    billing_amount            DECIMAL(20, 4),
+    billing_currency_code     STRING,
+    transaction_amount        DECIMAL(20, 4),
+    transaction_currency_code STRING,
+    country                   STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, dt, transaction_id, qbit_card_transaction_id, provider, billing_amount, billing_currency_code, transaction_amount, transaction_currency_code, settlement_day, country, merchant_country, create_time, update_time, delete_time, remarks, version FROM ods.ods_qbit_card_settlement_sl WHERE dt >= CAST(''${start_time}'' AS DATE) AND dt < CAST(''${end_time}'' AS DATE) AND create_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND create_time < CAST(''${end_time}'' AS TIMESTAMP(6))) AS ods_qbit_card_settlement_sl_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
-
-CREATE TEMPORARY TABLE source_qbit_card_transaction (
-    id                STRING,
-    account_id        STRING,
-    transaction_id    STRING,
-    transaction_time  TIMESTAMP(6),
-    delete_time       TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_id, transaction_id, transaction_time, delete_time FROM ods.ods_qbit_card_transaction WHERE dt >= CAST(''${start_time}'' AS DATE) AND dt < CAST(''${end_time}'' AS DATE)) AS ods_qbit_card_transaction_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
-
-CREATE TEMPORARY TABLE source_dim_account (
-    id                STRING,
-    account_type      STRING,
-    account_category  STRING,
-    system_type       STRING,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_type, type AS account_category, system_type FROM dim.dim_account) AS dim_account_f',
+    'table-name' = '(SELECT s.id, t.account_id, COALESCE(s.version, 1) AS version, s.remarks, s.create_time, COALESCE(s.update_time, s.create_time) AS update_time, s.delete_time, CAST(s.settlement_day AS DATE) AS settlement_date, s.transaction_id AS settlement_transaction_id, s.qbit_card_transaction_id, t.transaction_id AS qbit_transaction_id, s.provider, CAST(COALESCE(s.billing_amount, 0) AS DECIMAL(20,4)) AS billing_amount, s.billing_currency_code, CAST(COALESCE(s.transaction_amount, 0) AS DECIMAL(20,4)) AS transaction_amount, s.transaction_currency_code, COALESCE(s.merchant_country, s.country) AS country FROM ods.ods_qbit_card_settlement_sl s INNER JOIN ods.ods_qbit_card_transaction t ON t.id = s.qbit_card_transaction_id AND t.delete_time IS NULL WHERE s.dt >= CAST(''${start_time}'' AS DATE) AND s.dt < CAST(''${end_time}'' AS DATE) AND s.create_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND s.create_time < CAST(''${end_time}'' AS TIMESTAMP(6)) AND s.delete_time IS NULL) AS sl_joined_base_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -98,45 +65,31 @@ CREATE TEMPORARY TABLE source_dim_account (
 CREATE TEMPORARY VIEW v_sl_base AS
 SELECT
     s.id,
-    t.account_id AS account_id,
-    da.account_type,
-    da.account_category,
-    da.system_type,
-    COALESCE(s.version, 1) AS version,
+    s.account_id,
+    s.version,
     s.remarks,
-    s.create_time AS create_time,
-    COALESCE(s.update_time, s.create_time) AS update_time,
-    s.delete_time AS delete_time,
-    CAST(s.settlement_day AS DATE) AS settlement_date,
-    s.transaction_id AS settlement_transaction_id,
-    s.qbit_card_transaction_id AS qbit_card_transaction_id,
-    t.transaction_id AS qbit_transaction_id,
+    s.create_time,
+    s.update_time,
+    s.delete_time,
+    s.settlement_date,
+    s.settlement_transaction_id,
+    s.qbit_card_transaction_id,
+    s.qbit_transaction_id,
     s.provider,
-    CAST(COALESCE(s.billing_amount, CAST(0 AS DOUBLE)) AS DECIMAL(20, 4)) AS billing_amount,
-    s.billing_currency_code AS billing_currency_code,
-    CAST(COALESCE(s.transaction_amount, CAST(0 AS DOUBLE)) AS DECIMAL(20, 4)) AS transaction_amount,
-    s.transaction_currency_code AS transaction_currency_code,
-    COALESCE(s.merchant_country, s.country) AS country,
+    s.billing_amount,
+    s.billing_currency_code,
+    s.transaction_amount,
+    s.transaction_currency_code,
+    s.country,
     s.create_time AS sale_match_time,
     CAST(NULL AS STRING) AS raw_data,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS etl_time
-FROM source_qbit_card_settlement s
-INNER JOIN source_qbit_card_transaction t
-    ON t.id = s.qbit_card_transaction_id
-   AND t.delete_time IS NULL
-LEFT JOIN source_dim_account da
-    ON da.id = t.account_id
-WHERE s.delete_time IS NULL
-  AND s.create_time >= CAST('${start_time}' AS TIMESTAMP(6))
-  AND s.create_time < CAST('${end_time}' AS TIMESTAMP(6));
+FROM source_sl_joined_base s;
 
 CREATE TEMPORARY VIEW v_dwm_sl_card_transaction_detail AS
 SELECT
     b.id,
     b.account_id,
-    b.account_type,
-    b.account_category,
-    b.system_type,
     b.version,
     b.remarks,
     b.create_time,
@@ -162,9 +115,6 @@ FROM v_sl_base b
 CREATE TEMPORARY TABLE sink_dwm_sl_card_transaction_detail_p (
     id                         STRING,
     account_id                 STRING,
-    account_type               STRING,
-    account_category           STRING,
-    system_type                STRING,
     version                    INT,
     remarks                    STRING,
     create_time                TIMESTAMP(6),
@@ -201,9 +151,6 @@ INSERT INTO sink_dwm_sl_card_transaction_detail_p
 SELECT
     id,
     account_id,
-    account_type,
-    account_category,
-    system_type,
     version,
     remarks,
     create_time,
@@ -224,3 +171,5 @@ SELECT
     raw_data,
     etl_time
 FROM v_dwm_sl_card_transaction_detail;
+jswh6523911
+234239

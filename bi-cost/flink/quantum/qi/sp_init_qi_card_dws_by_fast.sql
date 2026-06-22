@@ -29,6 +29,9 @@ CREATE TEMPORARY TABLE source_dwm_qi_card_transaction_detail_p (
     id                    STRING,
     transaction_id        STRING,
     account_id            STRING,
+    account_type          STRING,
+    account_category      STRING,
+    system_type           STRING,
     status                STRING,
     transaction_time      TIMESTAMP(6),
     version               INT,
@@ -62,6 +65,9 @@ SELECT
     CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(transaction_time, 'yyyyMMdd'), ':', account_id, ':', COALESCE(sale_id, ''), ':', COALESCE(am_id, '')))) AS BIGINT) AS id,
     CAST(transaction_time AS DATE) AS report_date,
     account_id,
+    account_type,
+    account_category,
+    system_type,
     1 AS version,
     CAST(NULL AS STRING) AS remarks,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
@@ -101,12 +107,15 @@ SELECT
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee
 FROM source_dwm_qi_card_transaction_detail_p
 WHERE delete_time IS NULL
-GROUP BY CAST(transaction_time AS DATE), account_id, sale_id, am_id;
+GROUP BY CAST(transaction_time AS DATE), account_id, account_type, account_category, system_type, sale_id, am_id;
 
 CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_p (
     id                        BIGINT,
     report_date               DATE,
     account_id                STRING,
+    account_type              STRING,
+    account_category          STRING,
+    system_type               STRING,
     version                   INT,
     remarks                   STRING,
     create_time               TIMESTAMP(6),

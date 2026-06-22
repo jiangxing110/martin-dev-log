@@ -91,6 +91,21 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
+CREATE TEMPORARY TABLE source_dim_account (
+    id                STRING,
+    account_type      STRING,
+    `type`            STRING,
+    system_type       STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'dim_account',
+    'targetSchema' = 'dim',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
+);
+
 CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     id                    STRING,
     relation_account_id   STRING,
@@ -115,6 +130,9 @@ SELECT
     t.id,
     t.`transactionId` AS transaction_id,
     t.`accountId` AS account_id,
+    da.account_type,
+    da.`type` AS account_category,
+    da.system_type,
     t.status,
     t.`transactionTime` AS transaction_time,
     COALESCE(t.version, 1) AS version,
@@ -139,6 +157,8 @@ INNER JOIN source_card_bin b
    AND b.brand = 'QbitIssuing'
 LEFT JOIN source_quantum_card_transaction_extend e
     ON e.transaction_id = t.`transactionId`
+LEFT JOIN source_dim_account da
+    ON da.id = t.`accountId`
 WHERE t.`deleteTime` IS NULL;
 
 CREATE TEMPORARY VIEW v_qi_direct_sale_relation AS
@@ -195,6 +215,9 @@ SELECT
     b.id,
     b.transaction_id,
     b.account_id,
+    b.account_type,
+    b.account_category,
+    b.system_type,
     b.status,
     b.transaction_time,
     b.version,
@@ -224,6 +247,9 @@ CREATE TEMPORARY TABLE sink_dwm_qi_card_transaction_detail_p (
     id                    STRING,
     transaction_id        STRING,
     account_id            STRING,
+    account_type          STRING,
+    account_category      STRING,
+    system_type           STRING,
     status                STRING,
     transaction_time      TIMESTAMP(6),
     version               INT,

@@ -111,6 +111,21 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
+CREATE TEMPORARY TABLE source_dim_account (
+    id                STRING,
+    account_type      STRING,
+    `type`            STRING,
+    system_type       STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'dim_account',
+    'targetSchema' = 'dim',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
+);
+
 CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     id                    STRING,
     relation_account_id   STRING,
@@ -175,6 +190,9 @@ latest_settle AS (
 SELECT
     t.id,
     t.`accountId` AS account_id,
+    da.account_type,
+    da.`type` AS account_category,
+    da.system_type,
     t.`cardId` AS card_id,
     COALESCE(t.`transactionTime`, t.`createTime`) AS transaction_time,
     t.`thirdCompleteTime` AS third_complete_time,
@@ -199,7 +217,9 @@ SELECT
     JSON_VALUE(t.`specialSourceData`, '$.country') AS tx_country
 FROM bb_tx t
 LEFT JOIN latest_settle s
-    ON s.tx_uuid = t.id;
+    ON s.tx_uuid = t.id
+LEFT JOIN source_dim_account da
+    ON da.id = t.`accountId`;
 
 CREATE TEMPORARY VIEW v_bb_direct_sale_relation AS
 SELECT tx_id, sale_id, am_id
@@ -254,6 +274,9 @@ CREATE TEMPORARY VIEW v_dwm_bb_card_transaction_detail AS
 SELECT
     b.id,
     b.account_id,
+    b.account_type,
+    b.account_category,
+    b.system_type,
     b.card_id,
     b.transaction_time,
     b.third_complete_time,
@@ -288,6 +311,9 @@ LEFT JOIN v_bb_root_sale_relation r
 CREATE TEMPORARY TABLE sink_dwm_bb_card_transaction_detail_p (
     id                  STRING,
     account_id          STRING,
+    account_type        STRING,
+    account_category    STRING,
+    system_type         STRING,
     card_id             STRING,
     transaction_time    TIMESTAMP(6),
     third_complete_time TIMESTAMP(6),

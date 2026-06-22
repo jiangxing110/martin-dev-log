@@ -2,6 +2,9 @@ CREATE TABLE "dwm"."dwm_finance_channel_cost_p" (
   "id" int8 NOT NULL,
   "report_date" date NOT NULL,
   "account_id" varchar(36) COLLATE "pg_catalog"."default" NOT NULL,
+  "account_type" varchar(30) COLLATE "pg_catalog"."default",
+  "account_category" varchar(50) COLLATE "pg_catalog"."default",
+  "system_type" varchar(64) COLLATE "pg_catalog"."default",
   "sale_id" varchar(64) COLLATE "pg_catalog"."default",
   "am_id" varchar(64) COLLATE "pg_catalog"."default",
   "product_line" varchar(50) COLLATE "pg_catalog"."default" NOT NULL,
@@ -35,6 +38,9 @@ COMMENT ON TABLE "dwm"."dwm_finance_channel_cost_p" IS '金融渠道成本归因
 COMMENT ON COLUMN "dwm"."dwm_finance_channel_cost_p"."id" IS '主键: 日期+账户+产品线+provider+cost_type+source_month+销售+AM业务指纹';
 COMMENT ON COLUMN "dwm"."dwm_finance_channel_cost_p"."report_date" IS '成本归属日期-分区键；月度成本按规则展开到当月每日，交易/KYC类成本按业务发生日归属';
 COMMENT ON COLUMN "dwm"."dwm_finance_channel_cost_p"."account_id" IS '账户ID';
+COMMENT ON COLUMN "dwm"."dwm_finance_channel_cost_p"."account_type" IS '账户类型，来源 dim_account.account_type';
+COMMENT ON COLUMN "dwm"."dwm_finance_channel_cost_p"."account_category" IS '账户分类，来源 dim_account.type';
+COMMENT ON COLUMN "dwm"."dwm_finance_channel_cost_p"."system_type" IS '系统类型，来源 dim_account.system_type';
 COMMENT ON COLUMN "dwm"."dwm_finance_channel_cost_p"."sale_id" IS '销售ID';
 COMMENT ON COLUMN "dwm"."dwm_finance_channel_cost_p"."am_id" IS 'AM ID';
 COMMENT ON COLUMN "dwm"."dwm_finance_channel_cost_p"."product_line" IS '产品线，如QUANTUM_CARD/GLOBAL_ACCOUNT/CRYPTO_ASSET/ACQUIRING';
@@ -61,6 +67,13 @@ CREATE INDEX "idx_dwm_finance_channel_cost_acc_sale_am" ON "dwm"."dwm_finance_ch
   "account_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
   "sale_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
   "am_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+CREATE INDEX "idx_dwm_finance_channel_cost_account_dim" ON "dwm"."dwm_finance_channel_cost_p" USING btree (
+  "report_date" "pg_catalog"."date_ops" ASC NULLS LAST,
+  "account_type" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "account_category" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "system_type" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
 );
 
 CREATE INDEX "idx_dwm_finance_channel_cost_provider_type" ON "dwm"."dwm_finance_channel_cost_p" USING btree (
