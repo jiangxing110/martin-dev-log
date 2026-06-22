@@ -1,26 +1,17 @@
 --********************************************************************--
 -- Author:         martinJiang
--- Created Time:   2026-06-16
--- Description:    金融渠道成本 DWM 批量初始化/回刷
+-- Created Time:   2026-06-22
+-- Description:    金融渠道成本 DWM 批量初始化/回刷 V2（一次处理全部）
 -- Notes:
---   1. 本作业只做 batch，不做 CDC。
---   2. 金额来源统一取 bi_month_tag.amount。
---   3. 业务表只用于计算分摊对象、分摊权重和 report_date。
---   4. 调度参数:
---        ${source_month}: YYYY-MM-01，例如 2026-04-01
---        ${next_month}:   YYYY-MM-01，例如 2026-05-01
---        ${product_line}: QUANTUM_CARD/GLOBAL_ACCOUNT/CRYPTO_ASSET/ACQUIRING
---        ${provider}:     BPC/Sumsub/IDEMIA/HZ_BANK/BZ/CL/TH/Cregis/TZ-wire/TZ-usdt/TZ-usdc/Safeheron/BS/OD/WP
---        ${source_tag}:   CHANNEL_COST/CARD_CUSTOMIZATION_FEE/OTHER
---        ${cost_type}:    ACTIVE_CARD_COST/KYC_FEE/CARD_PRODUCTION_FEE/...
---   5. 调度执行本 Flink SQL 前，先在 PostgreSQL 执行幂等清理:
---        UPDATE public.dwm_finance_channel_cost_p
+--   1. V2 与 V1 的核心区别：不依赖调度参数，一次运行处理当月全部 bi_month_tag 数据。
+--   2. v_param 只保留 source_month / next_month，不再有 product_line/provider/source_tag/cost_type。
+--   3. v_bi_month_tag_cost 通过 CROSS JOIN v_cost_basis 的 DISTINCT (product_line, provider, cost_type)
+--      自动为每条 bi_month_tag 记录匹配对应的 cost_type。
+--   4. v_allocated_cost_base 不再冗余 join v_param。
+--   5. 执行本 Flink SQL 前，先在 PostgreSQL 执行幂等清理:
+--        UPDATE dwm.dwm_finance_channel_cost_p
 --        SET delete_time = NOW(), update_time = NOW()
---        WHERE source_month = '${source_month}'::date
---          AND product_line = '${product_line}'
---          AND provider = '${provider}'
---          AND source_tag = '${source_tag}'
---          AND cost_type = '${cost_type}'
+--        WHERE source_month = '2026-05-01'::date
 --          AND delete_time IS NULL;
 --********************************************************************--
 
@@ -42,18 +33,14 @@ SET 'table.exec.mini-batch.size' = '5000';
 
 
 -- ====================================================================
--- 1. 参数
+-- 1. 参数（V2: 只传月份，不传 product_line/provider/source_tag/cost_type）
 -- ====================================================================
 
 CREATE TEMPORARY VIEW v_param AS
 SELECT
-    CAST('${source_month}' AS DATE) AS source_month,
-    CAST('${next_month}' AS DATE) AS next_month,
-    '${product_line}' AS product_line,
-    '${provider}' AS provider,
-    '${source_tag}' AS source_tag,
-    '${cost_type}' AS cost_type,
-    DATEDIFF(CAST('${next_month}' AS DATE), CAST('${source_month}' AS DATE)) AS month_day_count;
+    CAST('2026-05-01' AS DATE) AS source_month,
+    CAST('2026-06-01' AS DATE) AS next_month,
+    DATEDIFF(CAST('2026-06-01' AS DATE), CAST('2026-05-01' AS DATE)) AS month_day_count;
 
 CREATE TEMPORARY VIEW v_day_numbers AS
 SELECT *
@@ -300,31 +287,7 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
 );
 
 -- ====================================================================
--- 3. bi_month_tag 月度金额
--- ====================================================================
-
-CREATE TEMPORARY VIEW v_bi_month_tag_cost AS
-SELECT
-    p.product_line,
-    p.provider,
-    p.source_tag,
-    p.cost_type,
-    p.source_month,
-    p.next_month,
-    p.month_day_count,
-    CAST(SUM(COALESCE(t.amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS source_amount
-FROM v_param p
-INNER JOIN source_bi_month_tag t
-    ON t.product_line = p.product_line
-   AND t.provider = p.provider
-   AND t.tag = p.source_tag
-   AND t.delete_time IS NULL
-   AND CAST(t.statistics_time AS DATE) >= p.source_month
-   AND CAST(t.statistics_time AS DATE) < p.next_month
-GROUP BY p.product_line, p.provider, p.source_tag, p.cost_type, p.source_month, p.next_month, p.month_day_count;
-
--- ====================================================================
--- 4. 各渠道分摊基础数据
+-- 3. 各渠道分摊基础数据（必须先于 v_bi_month_tag_cost 定义）
 -- ====================================================================
 
 -- BPC: QI 活跃卡客户数，按天均摊
@@ -840,7 +803,31 @@ UNION ALL SELECT * FROM v_orenda_basis
 UNION ALL SELECT * FROM v_wp_basis;
 
 -- ====================================================================
--- 5. 金额分摊
+-- 4. bi_month_tag 月度金额（V2: 在 v_cost_basis 之后，自动匹配 cost_type）
+-- ====================================================================
+
+CREATE TEMPORARY VIEW v_bi_month_tag_cost AS
+SELECT
+    t.product_line,
+    t.provider,
+    t.tag AS source_tag,
+    cb.cost_type,
+    p.source_month,
+    p.next_month,
+    p.month_day_count,
+    CAST(SUM(COALESCE(t.amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS source_amount
+FROM v_param p
+CROSS JOIN source_bi_month_tag t
+INNER JOIN (SELECT DISTINCT product_line, provider, cost_type FROM v_cost_basis) cb
+    ON cb.product_line = t.product_line
+   AND cb.provider = t.provider
+WHERE t.delete_time IS NULL
+  AND CAST(t.statistics_time AS DATE) >= p.source_month
+  AND CAST(t.statistics_time AS DATE) < p.next_month
+GROUP BY t.product_line, t.provider, t.tag, cb.cost_type, p.source_month, p.next_month, p.month_day_count;
+
+-- ====================================================================
+-- 5. 金额分摊（V2: 不再冗余 join v_param）
 -- ====================================================================
 
 CREATE TEMPORARY VIEW v_allocated_cost_base AS
@@ -887,10 +874,6 @@ INNER JOIN v_bi_month_tag_cost mt
     ON mt.product_line = b.product_line
    AND mt.provider = b.provider
    AND mt.cost_type = b.cost_type
-INNER JOIN v_param p
-    ON p.product_line = b.product_line
-   AND p.provider = b.provider
-   AND p.cost_type = b.cost_type
 WHERE mt.source_amount <> CAST(0 AS DECIMAL(20, 4));
 
 -- ====================================================================
@@ -983,7 +966,7 @@ SELECT
     b.allocation_rate,
     b.cost_amount,
     1 AS version,
-    CAST('finance_channel_cost_batch' AS STRING) AS remarks,
+    CAST('finance_channel_cost_batch_v2' AS STRING) AS remarks,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
@@ -1036,8 +1019,7 @@ CREATE TEMPORARY TABLE sink_dwm_finance_channel_cost_p (
     'tableName' = 'dwm_finance_channel_cost_p',
     'targetSchema' = 'dwm',
     'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
-),
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
     'writeMode' = 'upsert',
     'batchSize' = '2000'
 );

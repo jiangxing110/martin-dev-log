@@ -58,23 +58,7 @@ CREATE TEMPORARY TABLE source_sl_joined_base (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT s.id, t.account_id, COALESCE(s.version, 1) AS version, s.remarks, s.create_time, COALESCE(s.update_time, s.create_time) AS update_time, s.delete_time, CAST(s.settlement_day AS DATE) AS settlement_date, s.transaction_id AS settlement_transaction_id, s.qbit_card_transaction_id, t.transaction_id AS qbit_transaction_id, s.provider, CAST(COALESCE(s.billing_amount, 0) AS DECIMAL(20,4)) AS billing_amount, s.billing_currency_code, CAST(COALESCE(s.transaction_amount, 0) AS DECIMAL(20,4)) AS transaction_amount, s.transaction_currency_code, (s.raw_data::json->''merchantData''->''location''->>''country'') AS country FROM ods.ods_qbit_card_settlement_sl s INNER JOIN ods.ods_qbit_card_transaction t ON t.id = s.qbit_card_transaction_id AND t.delete_time IS NULL WHERE s.dt >= CAST(''${start_time}'' AS DATE) AND s.dt < CAST(''${end_time}'' AS DATE) AND s.create_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND s.create_time < CAST(''${end_time}'' AS TIMESTAMP(6)) AND s.delete_time IS NULL) AS sl_joined_base_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
-
-CREATE TEMPORARY TABLE source_dim_account (
-    id                STRING,
-    account_type      STRING,
-    account_category  STRING,
-    system_type       STRING,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_type, type AS account_category, system_type FROM dim.dim_account) AS dim_account_f',
+    'table-name' = '(SELECT s.id, t.account_id, da.account_type, da.type AS account_category, da.system_type, COALESCE(s.version, 1) AS version, s.remarks, s.create_time, COALESCE(s.update_time, s.create_time) AS update_time, s.delete_time, CAST(s.settlement_day AS DATE) AS settlement_date, s.transaction_id AS settlement_transaction_id, s.qbit_card_transaction_id, t.transaction_id AS qbit_transaction_id, s.provider, CAST(COALESCE(s.billing_amount, 0) AS DECIMAL(20,4)) AS billing_amount, s.billing_currency_code, CAST(COALESCE(s.transaction_amount, 0) AS DECIMAL(20,4)) AS transaction_amount, s.transaction_currency_code, (s.raw_data::json->''merchantData''->''location''->>''country'') AS country FROM ods.ods_qbit_card_settlement_sl s INNER JOIN ods.ods_qbit_card_transaction t ON t.id = s.qbit_card_transaction_id AND t.delete_time IS NULL LEFT JOIN dim.dim_account da ON da.id = t.account_id WHERE s.dt >= CAST(''${start_time}'' AS DATE) AND s.dt < CAST(''${end_time}'' AS DATE) AND s.create_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND s.create_time < CAST(''${end_time}'' AS TIMESTAMP(6)) AND s.delete_time IS NULL) AS sl_joined_base_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -120,9 +104,9 @@ CREATE TEMPORARY VIEW v_sl_base AS
 SELECT
     s.id,
     s.account_id,
-    da.account_type,
-    da.account_category,
-    da.system_type,
+    s.account_type,
+    s.account_category,
+    s.system_type,
     s.version,
     s.remarks,
     s.create_time,
@@ -141,8 +125,7 @@ SELECT
     s.create_time AS sale_match_time,
     CAST(NULL AS STRING) AS raw_data,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS etl_time
-FROM source_sl_joined_base s
-LEFT JOIN source_dim_account da ON da.id = s.account_id;
+FROM source_sl_joined_base s;
 
 CREATE TEMPORARY VIEW v_sl_direct_sale_relation AS
 SELECT tx_id, sale_id, am_id
