@@ -1,39 +1,25 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-22
--- 功能：public.payment_transaction_record 批量初始化到 ODS 层 ods_payment_transaction_record
--- 模式：全量 + 按月回刷 | JDBC 批处理
--- 说明：
---   1. 源表 public.payment_transaction_record 已在 ADBPG，无 CDC 需求时走 JDBC batch
---   2. submit_time 取 create_time 作为提交时间
---   3. dt 取 create_time::DATE
---   4. 支持传入 start_time / end_time 控制回刷范围
---********************************************************************--
+-- 功能：PG业务表 payment_transaction_record 实时同步到 ODS层 ods_payment_transaction_record
+-- 模式：全量初始化 + 增量实时同步 | 支持 Upsert/Delete
+----------------------------------------------------------------------
 
 SET 'parallelism.default' = '1';
-SET 'sink.parallelism' = '1';
-SET 'table.dml-sync' = 'true';
-SET 'pipeline.operator-chaining' = 'true';
-SET 'execution.checkpointing.interval' = '5min';
+SET 'execution.checkpointing.interval' = '10s';
 SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
-SET 'execution.checkpointing.timeout' = '30min';
+SET 'pipeline.operator-chaining' = 'true';
 SET 'table.exec.mini-batch.enabled' = 'false';
-SET 'table.optimizer.reuse-source-enabled' = 'true';
-SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
-SET 'restart-strategy.type' = 'fixed-delay';
-SET 'restart-strategy.fixed-delay.attempts' = '1';
-SET 'restart-strategy.fixed-delay.delay' = '60s';
-SET 'sql-client.execution.result-mode' = 'tableau';
+SET 'execution.checkpointing.timeout' = '30min';
 
--- 传参示例:
--- start_time = 2024-01-01 00:00:00
--- end_time   = 2026-07-01 00:00:00
+SET 'table.exec.mini-batch.enabled' = 'true';
+SET 'table.exec.mini-batch.allow-latency' = '5s';
+SET 'table.exec.mini-batch.size' = '5000';
 
--- ====================================================================
--- 1. Source: public.payment_transaction_record
--- ====================================================================
-
-CREATE TEMPORARY TABLE source_payment_transaction_record (
+-- ==============================================
+-- 1. 【临时表】PG CDC 源表
+-- ==============================================
+CREATE TEMPORARY TABLE flink_source_payment_transaction_record (
     id                       BIGINT,
     create_time              TIMESTAMP(6),
     update_time              TIMESTAMP(6),
@@ -70,20 +56,29 @@ CREATE TEMPORARY TABLE source_payment_transaction_record (
     extra                    STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, create_time, update_time, delete_time, version, remarks, source_transaction_id, inquiry_id, business_type, account_id::text, status, channel, third_party_payment_id, from_amount, from_currency, to_amount, to_currency, settle_amount, rate, payee_id, parent_id, same_name_payment, balance_id, settle_currency, fee, balance_channel, payout_direction_type, third_party_reason, refund_amount, refund_rate, transaction_display_id, webhook_status, payout_mode, extra::text FROM public.payment_transaction_record WHERE create_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND create_time < CAST(''${end_time}'' AS TIMESTAMP(6))) AS ptr_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
+    'connector' = 'postgres-cdc',
+    'hostname' = '${secret_values.PG_TEST_HOST}',
+    'port' = '${secret_values.PG_TEST_PORT1}',
+    'username' = '${secret_values.PG_TEST_USERNAME}',
+    'password' = '${secret_values.PG_TEST_PASSWORD}',
+    'database-name' = '${secret_values.PG_TEST_DATABASE}',
+    'schema-name' = 'public',
+    'table-name' = 'payment_transaction_record',
+
+    'slot.name' = 'flink_slot_payment_transaction_record_ods_v1',
+    'decoding.plugin.name' = 'pgoutput',
+    'debezium.publication.name' = 'flink_cdc_publication',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'scan.startup.mode' = 'initial',
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096',
+    'debezium.field.name.adjustment.mode' = 'none'
 );
 
--- ====================================================================
--- 2. Sink: ods.ods_payment_transaction_record
--- ====================================================================
-
-CREATE TEMPORARY TABLE sink_ods_payment_transaction_record (
+-- ==============================================
+-- 2. 【临时表】ADBPG 目标表 ods.ods_payment_transaction_record
+-- ==============================================
+CREATE TEMPORARY TABLE flink_sink_ods_payment_transaction_record (
     id                       STRING,
     dt                       DATE,
     create_time              TIMESTAMP(6),
@@ -132,11 +127,10 @@ CREATE TEMPORARY TABLE sink_ods_payment_transaction_record (
     'batchSize' = '200'
 );
 
--- ====================================================================
--- 3. INSERT: 全量同步，submit_time = create_time
--- ====================================================================
-
-INSERT INTO sink_ods_payment_transaction_record
+-- ==============================================
+-- 3. 数据同步: submit_time = create_time, dt = create_time::DATE
+-- ==============================================
+INSERT INTO flink_sink_ods_payment_transaction_record
 SELECT
     CAST(id AS STRING) AS id,
     CAST(create_time AS DATE) AS dt,
@@ -174,4 +168,4 @@ SELECT
     payout_mode,
     extra,
     create_time AS submit_time
-FROM source_payment_transaction_record;
+FROM flink_source_payment_transaction_record;
