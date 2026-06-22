@@ -79,7 +79,7 @@
 
 路径建议：
 
-- `/api/admin/profit`
+- `/api/admin/bi/v2/report-profit`
 
 ### 3.2 查询入参
 
@@ -160,7 +160,7 @@
 
 接口：
 
-- `GET /api/admin/profit/stat-gross-profit-summary`
+- `GET /api/admin/bi/v2/report-profit/stat-gross-profit-summary`
 
 用途：
 
@@ -188,7 +188,7 @@
 
 接口：
 
-- `GET /api/admin/profit/trend-revenue-vs-profit`
+- `GET /api/admin/bi/v2/report-profit/trend-revenue-vs-profit`
 
 用途：
 
@@ -213,7 +213,7 @@
 
 接口：
 
-- `GET /api/admin/profit/product-income-profit-cogs`
+- `GET /api/admin/bi/v2/report-profit/product-income-profit-cogs`
 
 用途：
 
@@ -240,7 +240,7 @@
 
 接口：
 
-- `GET /api/admin/profit/product-fee-rate-margin`
+- `GET /api/admin/bi/v2/report-profit/product-fee-rate-margin`
 
 用途：
 
@@ -266,7 +266,7 @@
 
 接口：
 
-- `GET /api/admin/profit/top-profit-accounts`
+- `GET /api/admin/bi/v2/report-profit/top-profit-accounts`
 
 用途：
 
