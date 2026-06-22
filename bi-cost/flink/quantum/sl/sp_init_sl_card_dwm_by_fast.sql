@@ -5,7 +5,7 @@
 -- Notes:
 --   1. Batch 主源: qbitCardSettlement
 --   2. qbitCardSettlement.qbitCardTransactionId 仅用于补 account_id / qbit_transaction_id
---   3. 当前版本先不挂销售归属，sale_id / am_id 先写空
+--   3. sale_id / am_id 通过 dim_sale_account_relation_p 按 account_id + 时间窗口匹配
 --   4. 按 settlement_date 回刷 DWM 分区数据
 --   5. init 脚本用于历史回刷，必须传入 start_time / end_time
 --   6. 通过父表 + dt 条件触发 PostgreSQL 分区裁剪
@@ -94,6 +94,41 @@ CREATE TEMPORARY TABLE source_dim_account (
     'scan.fetch-size' = '1000'
 );
 
+CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
+    id                    STRING,
+    relation_account_id   STRING,
+    sale_id               STRING,
+    am_id                 STRING,
+    operation_manager_id  STRING,
+    relation_start_time   TIMESTAMP(6),
+    relation_end_time     TIMESTAMP(6),
+    delete_time           TIMESTAMP(6),
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = 'dim.dim_sale_account_relation_p',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000'
+);
+
+CREATE TEMPORARY TABLE source_api_account_relation (
+    account_id  STRING,
+    root_id     STRING,
+    delete_time TIMESTAMP(6),
+    PRIMARY KEY (account_id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = 'ods.ods_api_account_relation',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000'
+);
+
 CREATE TEMPORARY VIEW v_sl_base AS
 SELECT
     s.id,
@@ -129,6 +164,49 @@ WHERE s.delete_time IS NULL
   AND s.create_time >= CAST('${start_time}' AS TIMESTAMP(6))
   AND s.create_time < CAST('${end_time}' AS TIMESTAMP(6));
 
+CREATE TEMPORARY VIEW v_sl_direct_sale_relation AS
+SELECT tx_id, sale_id, am_id
+FROM (
+    SELECT
+        b.id AS tx_id,
+        sr.sale_id,
+        sr.am_id,
+        ROW_NUMBER() OVER (
+            PARTITION BY b.id
+            ORDER BY sr.relation_start_time DESC
+        ) AS rn
+    FROM v_sl_base b
+    INNER JOIN source_dim_sale_account_relation_p sr
+        ON sr.relation_account_id = b.account_id
+       AND sr.delete_time IS NULL
+       AND b.sale_match_time >= sr.relation_start_time
+       AND (b.sale_match_time < sr.relation_end_time OR sr.relation_end_time IS NULL)
+) ranked_direct
+WHERE rn = 1;
+
+CREATE TEMPORARY VIEW v_sl_root_sale_relation AS
+SELECT tx_id, sale_id, am_id
+FROM (
+    SELECT
+        b.id AS tx_id,
+        sr.sale_id,
+        sr.am_id,
+        ROW_NUMBER() OVER (
+            PARTITION BY b.id
+            ORDER BY sr.relation_start_time DESC
+        ) AS rn
+    FROM v_sl_base b
+    INNER JOIN source_api_account_relation aar
+        ON aar.account_id = b.account_id
+       AND aar.delete_time IS NULL
+    INNER JOIN source_dim_sale_account_relation_p sr
+        ON sr.relation_account_id = aar.root_id
+       AND sr.delete_time IS NULL
+       AND b.sale_match_time >= sr.relation_start_time
+       AND (b.sale_match_time < sr.relation_end_time OR sr.relation_end_time IS NULL)
+) ranked_root
+WHERE rn = 1;
+
 CREATE TEMPORARY VIEW v_dwm_sl_card_transaction_detail AS
 SELECT
     b.id,
@@ -151,11 +229,13 @@ SELECT
     b.transaction_amount,
     b.transaction_currency_code,
     b.country,
-    CAST(NULL AS STRING) AS sale_id,
-    CAST(NULL AS STRING) AS am_id,
+    COALESCE(d.sale_id, r.sale_id) AS sale_id,
+    COALESCE(d.am_id, r.am_id) AS am_id,
     b.raw_data,
     b.etl_time
 FROM v_sl_base b
+LEFT JOIN v_sl_direct_sale_relation d ON d.tx_id = b.id
+LEFT JOIN v_sl_root_sale_relation r ON r.tx_id = b.id AND d.tx_id IS NULL
 ;
 
 CREATE TEMPORARY TABLE sink_dwm_sl_card_transaction_detail_p (
