@@ -17,7 +17,7 @@ CREATE TABLE "dwm"."dwm_finance_channel_cost_p" (
   "basis_count" numeric(20,4) DEFAULT 0,
   "month_basis_count" numeric(20,4) DEFAULT 0,
   "basis_amount" numeric(20,4) DEFAULT 0,
-  "month_basis_amount" numeric(20,4) DEFAULT 0,
+  "month_basis_amount" numeric(20,4) DEFAULT 0,`
   "allocation_rate" numeric(20,10) DEFAULT 0,
   "cost_amount" numeric(20,4) DEFAULT 0,
   "version" int4 DEFAULT 1,
