@@ -43,7 +43,6 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement (
     transaction_currency_code STRING,
     settlement_day            STRING,
     country                   STRING,
-    merchant_country          STRING,
     create_time               TIMESTAMP(6),
     update_time               TIMESTAMP(6),
     delete_time               TIMESTAMP(6),
@@ -53,7 +52,7 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, dt, transaction_id, qbit_card_transaction_id, provider, billing_amount, billing_currency_code, transaction_amount, transaction_currency_code, settlement_day, country, merchant_country, create_time, update_time, delete_time, remarks, version FROM ods.ods_qbit_card_settlement_sl WHERE dt = CURRENT_DATE - INTERVAL ''1 day'' AND create_time >= CAST(CURRENT_DATE - INTERVAL ''1 day'' AS TIMESTAMP(6)) AND create_time < CAST(CURRENT_DATE AS TIMESTAMP(6))) AS ods_qbit_card_settlement_sl_f',
+    'table-name' = '(SELECT id, dt, transaction_id, qbit_card_transaction_id, provider, billing_amount, billing_currency_code, transaction_amount, transaction_currency_code, settlement_day, (raw_data::json->''merchantData''->''location''->>''country'') AS country, create_time, update_time, delete_time, remarks, version FROM ods.ods_qbit_card_settlement_sl WHERE dt = CURRENT_DATE - INTERVAL ''1 day'' AND create_time >= CAST(CURRENT_DATE - INTERVAL ''1 day'' AS TIMESTAMP(6)) AND create_time < CAST(CURRENT_DATE AS TIMESTAMP(6))) AS ods_qbit_card_settlement_sl_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -114,7 +113,7 @@ SELECT
     s.billing_currency_code AS billing_currency_code,
     CAST(COALESCE(s.transaction_amount, CAST(0 AS DOUBLE)) AS DECIMAL(20, 4)) AS transaction_amount,
     s.transaction_currency_code AS transaction_currency_code,
-    COALESCE(s.merchant_country, s.country) AS country,
+    s.country AS country,
     s.create_time AS sale_match_time,
     CAST(NULL AS STRING) AS raw_data,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS etl_time
