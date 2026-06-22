@@ -14,3 +14,183 @@ bi_month_tag涉及那些类型吗
 1、sl 渠道成本以完成
 2、页面毛利部分接口及前端对接已完成
 3、金融渠道成本编写60%
+ods_crypto_blockchain_transfers
+
+ods_crypto_assets_addresses
+CREATE TABLE "public"."crypto_assets_addresses" (
+"id" uuid NOT NULL,
+"create_time" timestamptz(6) NOT NULL,
+"update_time" timestamptz(6) NOT NULL,
+"delete_time" timestamptz(6),
+"version" int4 NOT NULL DEFAULT 1,
+"account_id" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
+"wallet_id" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
+"chain" varchar(20) COLLATE "pg_catalog"."default" NOT NULL,
+"currency" varchar(30) COLLATE "pg_catalog"."default" NOT NULL,
+"address" varchar(100) COLLATE "pg_catalog"."default" NOT NULL,
+"address_tag" varchar(255) COLLATE "pg_catalog"."default",
+"remarks" varchar COLLATE "pg_catalog"."default",
+"enable" bool NOT NULL DEFAULT true,
+"selected" bool NOT NULL DEFAULT true,
+"platform" varchar(64) COLLATE "pg_catalog"."default",
+"account_key" varchar(255) COLLATE "pg_catalog"."default",
+CONSTRAINT "crypto_assets_wallets_copy1_pkey" PRIMARY KEY ("id")
+)
+;
+
+ALTER TABLE "public"."crypto_assets_addresses"
+OWNER TO "qbit_admin";
+
+CREATE INDEX "crypto_assets_addresses_currency_address_idx" ON "public"."crypto_assets_addresses" USING btree (
+"currency" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
+"address" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+CREATE INDEX "idx_5733dba1fd021e73" ON "public"."crypto_assets_addresses" USING btree (
+"wallet_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+CREATE INDEX "idx_698cfaeee655761b" ON "public"."crypto_assets_addresses" USING btree (
+"account_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
+"wallet_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
+"address" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+CREATE INDEX "idx_83c55c6ea6e011c2" ON "public"."crypto_assets_addresses" USING btree (
+"address" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+CREATE INDEX "idx_85b4157b8715bbde" ON "public"."crypto_assets_addresses" USING btree (
+"account_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."id" IS '主键';
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."create_time" IS '交易时间(和三方交易时间同步)';
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."update_time" IS '数据更新时间';
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."delete_time" IS '删除时间';
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."version" IS '乐观锁';
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."account_id" IS 'account_id';
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."wallet_id" IS '三方钱包id';
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."chain" IS '链';
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."currency" IS '币种';
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."address" IS '钱包地址';
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."address_tag" IS 'address tag';
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."remarks" IS '备注';
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."enable" IS '钱包地址是否启用';
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."selected" IS '是否在前端启用';
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."platform" IS '地址平台';
+
+COMMENT ON COLUMN "public"."crypto_assets_addresses"."account_key" IS '关联的三方账号key';
+
+ods_global_sub_account
+CREATE TABLE "public"."globalSubAccount" (
+"id" uuid NOT NULL DEFAULT uuid_generate_v4(),
+"remarks" varchar COLLATE "pg_catalog"."default" DEFAULT ''::character varying,
+"createTime" timestamptz(6) NOT NULL DEFAULT now(),
+"updateTime" timestamptz(6) NOT NULL DEFAULT now(),
+"deleteTime" timestamptz(6),
+"version" int4 NOT NULL,
+"accountId" uuid NOT NULL,
+"holderId" uuid NOT NULL,
+"nickname" varchar COLLATE "pg_catalog"."default" NOT NULL DEFAULT ''::character varying,
+"purpose" varchar COLLATE "pg_catalog"."default" NOT NULL DEFAULT ''::character varying,
+"currency" varchar COLLATE "pg_catalog"."default" NOT NULL,
+"isEnabled" bool NOT NULL DEFAULT false,
+"ccBalanceRelationId" uuid NOT NULL,
+"subAccountId" varchar COLLATE "pg_catalog"."default" NOT NULL,
+"balanceId" uuid NOT NULL,
+"status" varchar COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'Active'::character varying,
+"openTime" timestamptz(6),
+"isFree" bool,
+"provider" varchar COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'CurrencyCloud'::character varying,
+"extraData" json,
+"originAccountId" uuid,
+"isMasterAccount" bool,
+"vrnEnable" bool DEFAULT false,
+CONSTRAINT "PK_e5f3eb13dcf00753ce57c5fb742" PRIMARY KEY ("id")
+)
+;
+
+ALTER TABLE "public"."globalSubAccount"
+OWNER TO "qbit_admin";
+
+CREATE UNIQUE INDEX "IDX_36869a7f96fd661d7de34c6a0d" ON "public"."globalSubAccount" USING btree (
+"ccBalanceRelationId" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+
+CREATE INDEX "IDX_c2354e781e551dd64067c5f58c" ON "public"."globalSubAccount" USING btree (
+"createTime" "pg_catalog"."timestamptz_ops" ASC NULLS LAST
+);
+
+COMMENT ON COLUMN "public"."globalSubAccount"."remarks" IS '备注';
+
+COMMENT ON COLUMN "public"."globalSubAccount"."accountId" IS '创建subAccount的 accountId';
+
+COMMENT ON COLUMN "public"."globalSubAccount"."holderId" IS '持有人ID > 子账户 的 accountId';
+
+COMMENT ON COLUMN "public"."globalSubAccount"."nickname" IS '账户昵称';
+
+COMMENT ON COLUMN "public"."globalSubAccount"."purpose" IS '账户用途';
+
+COMMENT ON COLUMN "public"."globalSubAccount"."currency" IS '币种';
+
+COMMENT ON COLUMN "public"."globalSubAccount"."isEnabled" IS '是否启用';
+
+COMMENT ON COLUMN "public"."globalSubAccount"."ccBalanceRelationId" IS '关系表ID';
+
+COMMENT ON COLUMN "public"."globalSubAccount"."subAccountId" IS '三方账户Id';
+
+COMMENT ON COLUMN "public"."globalSubAccount"."balanceId" IS '我方钱包ID';
+
+COMMENT ON COLUMN "public"."globalSubAccount"."status" IS '状态';
+
+COMMENT ON COLUMN "public"."globalSubAccount"."provider" IS '生产者';
+
+COMMENT ON COLUMN "public"."globalSubAccount"."originAccountId" IS '当前账户为子账号/子域等等，指向的是globalSubAccount的Id';
+
+COMMENT ON COLUMN "public"."globalSubAccount"."isMasterAccount" IS '是否是主账户,目前针对column，其他渠道默认为null';
+
+COMMENT ON COLUMN "public"."globalSubAccount"."vrnEnable" IS 'VRN是否可用';
+
+ods_idv_channel_request_record
+CREATE TABLE "public"."idv_channel_request_record" (
+"id" int8 NOT NULL,
+"remarks" varchar COLLATE "pg_catalog"."default" DEFAULT ''::character varying,
+"create_time" timestamp(6) NOT NULL DEFAULT now(),
+"update_time" timestamp(6) NOT NULL DEFAULT now(),
+"delete_time" timestamp(6),
+"version" int4 NOT NULL DEFAULT 1,
+"request_channel" varchar COLLATE "pg_catalog"."default",
+"request_type" varchar COLLATE "pg_catalog"."default",
+"request_url" varchar COLLATE "pg_catalog"."default",
+"request_status" varchar COLLATE "pg_catalog"."default",
+"request_time" timestamptz(6),
+"account_request_id" varchar COLLATE "pg_catalog"."default",
+"type" varchar COLLATE "pg_catalog"."default",
+"source_id" varchar COLLATE "pg_catalog"."default",
+"x_trace_id" varchar COLLATE "pg_catalog"."default",
+"account_id" varchar COLLATE "pg_catalog"."default",
+"sub_account_id" varchar COLLATE "pg_catalog"."default",
+"ext_data1" varchar COLLATE "pg_catalog"."default",
+"ext_data2" varchar COLLATE "pg_catalog"."default",
+"ext_data3" varchar COLLATE "pg_catalog"."default",
+CONSTRAINT "idv_channel_request_record_pkey" PRIMARY KEY ("id")
+)
+;
+
+ALTER TABLE "public"."idv_channel_request_record"
+OWNER TO "qbit_admin";
