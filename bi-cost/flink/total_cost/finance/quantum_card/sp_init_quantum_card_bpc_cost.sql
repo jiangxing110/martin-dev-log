@@ -30,37 +30,8 @@ SET 'sql-client.execution.result-mode' = 'tableau';
 -- 降低 sort-shuffle 最小 buffer 量：并行度 1，数据量小，2048 buffer/分区 过于浪费
 SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
 
-SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_PIPELINED';
-
 -- ====================================================================
--- 1. 参数
--- ====================================================================
-
-CREATE TEMPORARY VIEW v_param AS
-SELECT
-    CAST('2026-05-01' AS DATE) AS source_month,
-    CAST('2026-06-01' AS DATE) AS next_month,
-    DATEDIFF(CAST('2026-06-01' AS DATE), CAST('2026-05-01' AS DATE)) AS month_day_count;
-
-CREATE TEMPORARY VIEW v_day_numbers AS
-SELECT *
-FROM (
-    VALUES
-        (1), (2), (3), (4), (5), (6), (7), (8), (9), (10),
-        (11), (12), (13), (14), (15), (16), (17), (18), (19), (20),
-        (21), (22), (23), (24), (25), (26), (27), (28), (29), (30), (31)
-) AS t(day_no);
-
-CREATE TEMPORARY VIEW v_month_days AS
-SELECT
-    DATE_ADD(p.source_month, d.day_no - 1) AS report_date,
-    p.month_day_count
-FROM v_param p
-INNER JOIN v_day_numbers d
-    ON d.day_no <= p.month_day_count;
-
--- ====================================================================
--- 2. Source 表
+-- 1. Source 表
 -- ====================================================================
 
 CREATE TEMPORARY TABLE source_bi_month_tag (
@@ -150,16 +121,30 @@ CREATE TEMPORARY TABLE source_qbit_card (
     'scan.fetch-size' = '1000'
 );
 
+CREATE TEMPORARY TABLE source_month_days (
+    report_date     DATE,
+    month_day_count INT,
+    PRIMARY KEY (report_date) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT d::date AS report_date, 31 AS month_day_count FROM generate_series(''2026-05-01''::date, ''2026-05-31''::date, ''1 day'') AS d) AS month_days',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '100'
+);
+
 -- ====================================================================
--- 3. 分摊基础明细
+-- 2. 分摊基础明细
 -- ====================================================================
 
 -- BPC: QI 活跃卡客户
 CREATE TEMPORARY VIEW v_bpc_accounts AS
 SELECT q.account_id
-FROM source_qbit_card q, v_param p
+FROM source_qbit_card q
 WHERE q.provider LIKE '%Qbit%'
-  AND (q.delete_card_time > CAST(p.source_month AS TIMESTAMP(6)) OR q.delete_card_time IS NULL)
+  AND (q.delete_card_time > CAST('2026-05-01' AS TIMESTAMP(6)) OR q.delete_card_time IS NULL)
 GROUP BY q.account_id;
 
 CREATE TEMPORARY VIEW v_bpc_basis AS
@@ -173,7 +158,7 @@ SELECT
     CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
     d.month_day_count
 FROM v_bpc_accounts a
-CROSS JOIN v_month_days d;
+CROSS JOIN source_month_days d;
 
 -- ====================================================================
 -- 4. 合并分摊明细 + 月汇总
@@ -226,19 +211,16 @@ SELECT
     t.provider,
     t.tag AS source_tag,
     cb.cost_type,
-    p.source_month,
-    p.next_month,
-    p.month_day_count,
+    CAST('2026-05-01' AS DATE) AS source_month,
     CAST(SUM(COALESCE(t.amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS source_amount
-FROM v_param p
-CROSS JOIN source_bi_month_tag t
+FROM source_bi_month_tag t
 INNER JOIN (SELECT DISTINCT product_line, provider, cost_type FROM v_cost_basis) cb
     ON cb.product_line = t.product_line
    AND cb.provider = t.provider
 WHERE t.delete_time IS NULL
-  AND CAST(t.statistics_time AS DATE) >= p.source_month
-  AND CAST(t.statistics_time AS DATE) < p.next_month
-GROUP BY t.product_line, t.provider, t.tag, cb.cost_type, p.source_month, p.next_month, p.month_day_count;
+  AND CAST(t.statistics_time AS DATE) >= CAST('2026-05-01' AS DATE)
+  AND CAST(t.statistics_time AS DATE) < CAST('2026-06-01' AS DATE)
+GROUP BY t.product_line, t.provider, t.tag, cb.cost_type;
 
 -- ====================================================================
 -- 6. 金额分摊

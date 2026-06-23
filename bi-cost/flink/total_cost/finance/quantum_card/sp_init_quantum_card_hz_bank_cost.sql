@@ -30,37 +30,8 @@ SET 'sql-client.execution.result-mode' = 'tableau';
 -- 降低 sort-shuffle 最小 buffer 量：并行度 1，数据量小，2048 buffer/分区 过于浪费
 SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
 
-SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_PIPELINED';
-
 -- ====================================================================
--- 1. 参数
--- ====================================================================
-
-CREATE TEMPORARY VIEW v_param AS
-SELECT
-    CAST('2026-05-01' AS DATE) AS source_month,
-    CAST('2026-06-01' AS DATE) AS next_month,
-    DATEDIFF(CAST('2026-06-01' AS DATE), CAST('2026-05-01' AS DATE)) AS month_day_count;
-
-CREATE TEMPORARY VIEW v_day_numbers AS
-SELECT *
-FROM (
-    VALUES
-        (1), (2), (3), (4), (5), (6), (7), (8), (9), (10),
-        (11), (12), (13), (14), (15), (16), (17), (18), (19), (20),
-        (21), (22), (23), (24), (25), (26), (27), (28), (29), (30), (31)
-) AS t(day_no);
-
-CREATE TEMPORARY VIEW v_month_days AS
-SELECT
-    DATE_ADD(p.source_month, d.day_no - 1) AS report_date,
-    p.month_day_count
-FROM v_param p
-INNER JOIN v_day_numbers d
-    ON d.day_no <= p.month_day_count;
-
--- ====================================================================
--- 2. Source 表
+-- 1. Source 表
 -- ====================================================================
 
 CREATE TEMPORARY TABLE source_bi_month_tag (
@@ -174,12 +145,11 @@ SELECT
     ) AS basis_amount,
     CAST(0 AS INT) AS month_day_count
 FROM source_qbit_card_transaction tr
-INNER JOIN v_param p
-    ON tr.transaction_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND tr.transaction_time < CAST(p.next_month AS TIMESTAMP(6))
 WHERE tr.delete_time IS NULL
   AND tr.provider LIKE '%Qbit%'
   AND tr.business_type IN ('Credit', 'Consumption', 'Reversal')
+  AND tr.transaction_time >= CAST('2026-05-01' AS TIMESTAMP(6))
+  AND tr.transaction_time < CAST('2026-06-01' AS TIMESTAMP(6))
 GROUP BY tr.account_id, CAST(tr.transaction_time AS DATE)
 HAVING CAST(
     SUM(CASE WHEN tr.business_type = 'Consumption' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
@@ -239,19 +209,16 @@ SELECT
     t.provider,
     t.tag AS source_tag,
     cb.cost_type,
-    p.source_month,
-    p.next_month,
-    p.month_day_count,
+    CAST('2026-05-01' AS DATE) AS source_month,
     CAST(SUM(COALESCE(t.amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS source_amount
-FROM v_param p
-CROSS JOIN source_bi_month_tag t
+FROM source_bi_month_tag t
 INNER JOIN (SELECT DISTINCT product_line, provider, cost_type FROM v_cost_basis) cb
     ON cb.product_line = t.product_line
    AND cb.provider = t.provider
 WHERE t.delete_time IS NULL
-  AND CAST(t.statistics_time AS DATE) >= p.source_month
-  AND CAST(t.statistics_time AS DATE) < p.next_month
-GROUP BY t.product_line, t.provider, t.tag, cb.cost_type, p.source_month, p.next_month, p.month_day_count;
+  AND CAST(t.statistics_time AS DATE) >= CAST('2026-05-01' AS DATE)
+  AND CAST(t.statistics_time AS DATE) < CAST('2026-06-01' AS DATE)
+GROUP BY t.product_line, t.provider, t.tag, cb.cost_type;
 
 -- ====================================================================
 -- 6. 金额分摊
