@@ -1,22 +1,15 @@
 --********************************************************************--
 -- Author:         martinJiang
--- Created Time:   2026-06-22
--- Description:    金融渠道成本 DWM 批量初始化/回刷 V2（一次处理全部）
--- Notes:
---   1. V2 与 V1 的核心区别：不依赖调度参数，一次运行处理当月全部 bi_month_tag 数据。
---   2. v_param 只保留 source_month / next_month，不再有 product_line/provider/source_tag/cost_type。
---   3. v_bi_month_tag_cost 通过 CROSS JOIN v_cost_basis 的 DISTINCT (product_line, provider, cost_type)
---      自动为每条 bi_month_tag 记录匹配对应的 cost_type。
---   4. v_allocated_cost_base 不再冗余 join v_param。
---   5. 执行本 Flink SQL 前，先在 PostgreSQL 执行幂等清理:
---        UPDATE dwm.dwm_finance_channel_cost_p
---        SET delete_time = NOW(), update_time = NOW()
---        WHERE source_month = '2026-05-01'::date
---          AND delete_time IS NULL;
---   6. 2026-06-23: 修复列名 camelCase → snake_case（ODS 表统一使用 snake_case）
---      修复网络缓冲区不足: SET table.exec.batch-shuffle-mode = ALL_EXCHANGES_PIPELINED
---      原因: sort-shuffle 模式下每个 blocking result partition 预分配 2048 buffers，
---      多路 fan-out 导致 TM 上 buffer 耗尽。pipelined mode 按需分配，避免预分配耗尽。
+-- Created Time:   2026-06-23
+-- Description:    金融渠道成本 DWM 批量初始化 - QUANTUM_CARD
+-- Providers:      BPC / Sumsub / IDEMIA / HZ_BANK
+-- 说明：按渠道拆分，每个作业只加载自己需要的 source 表
+-- 执行前置：
+--   UPDATE dwm.dwm_finance_channel_cost_p
+--   SET delete_time = NOW(), update_time = NOW()
+--   WHERE source_month = '2026-05-01'::date
+--     AND product_line = 'QUANTUM_CARD'
+--     AND delete_time IS NULL;
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
@@ -36,9 +29,8 @@ SET 'restart-strategy.fixed-delay.attempts' = '1';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'sql-client.execution.result-mode' = 'tableau';
 
-
 -- ====================================================================
--- 1. 参数（V2: 只传月份，不传 product_line/provider/source_tag/cost_type）
+-- 1. 参数
 -- ====================================================================
 
 CREATE TEMPORARY VIEW v_param AS
@@ -159,116 +151,6 @@ CREATE TEMPORARY TABLE source_qbit_card_transaction (
     'scan.fetch-size' = '1000'
 );
 
-CREATE TEMPORARY TABLE source_payment_transaction_record (
-    id                       STRING,
-    account_id               STRING,
-    channel                  STRING,
-    payout_direction_type    STRING,
-    status                   STRING,
-    settle_amount            DECIMAL(20, 4),
-    extra                    STRING,
-    submit_time              TIMESTAMP(6),
-    delete_time              TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_id, channel, payout_direction_type, status, settle_amount, extra, submit_time, delete_time FROM ods.ods_payment_transaction_record WHERE delete_time IS NULL) AS payment_transaction_record_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
-
-CREATE TEMPORARY TABLE source_global_sub_account (
-    id          STRING,
-    account_id  STRING,
-    provider    STRING,
-    status      STRING,
-    delete_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_id, provider, status, delete_time FROM ods.ods_global_sub_account WHERE delete_time IS NULL) AS global_sub_account_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
-
-CREATE TEMPORARY TABLE source_crypto_assets_transfers (
-    id             STRING,
-    account_id     STRING,
-    recipient_type STRING,
-    status         STRING,
-    action         STRING,
-    currency       STRING,
-    origin_amount  DECIMAL(20, 4),
-    usd_rate       DECIMAL(20, 8),
-    extend_field   STRING,
-    create_time    TIMESTAMP(6),
-    delete_time    TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_id, recipient_type, status, action, currency, origin_amount, usd_rate, extend_field, create_time, delete_time FROM ods.ods_crypto_assets_transfers WHERE delete_time IS NULL) AS crypto_assets_transfers_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
-
-CREATE TEMPORARY TABLE source_crypto_assets_addresses (
-    id          STRING,
-    account_id  STRING,
-    platform    STRING,
-    enable      BOOLEAN,
-    delete_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_id, platform, enable, delete_time FROM ods.ods_crypto_assets_addresses WHERE delete_time IS NULL) AS crypto_assets_addresses_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
-
-CREATE TEMPORARY TABLE source_crypto_blockchain_transfers (
-    account_id  STRING,
-    action      STRING,
-    create_time TIMESTAMP(6),
-    status      STRING,
-    platform    STRING
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT account_id, action, create_time, status, platform FROM ods.view_crypto_assets_blockchain_transfers) AS crypto_blockchain_transfers_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
-
-CREATE TEMPORARY TABLE source_dwm_acquiring_clearing (
-    account_id                   STRING,
-    create_date                  DATE,
-    amount_type                  STRING,
-    acquiring_usd_amount_total   DECIMAL(20, 3),
-    delete_time                  TIMESTAMP(6)
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT account_id, create_date, amount_type, acquiring_usd_amount_total, delete_time FROM dwm.dwm_acquiring_clearing WHERE delete_time IS NULL) AS acquiring_clearing_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
-
 CREATE TEMPORARY TABLE source_api_account_relation (
     account_id  STRING,
     root_id     STRING,
@@ -304,8 +186,23 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     'scan.fetch-size' = '1000'
 );
 
+CREATE TEMPORARY TABLE source_dim_account (
+    id                  VARCHAR,
+    account_type        STRING,
+    account_category    STRING,
+    system_type         STRING
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT id, account_type, type AS account_category, system_type FROM dim.dim_account) AS dim_account_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000'
+);
+
 -- ====================================================================
--- 3. 各渠道分摊基础明细（只输出 detail 列，不含 month_basis_count / month_basis_amount）
+-- 3. 分摊基础明细
 -- ====================================================================
 
 -- BPC: QI 活跃卡客户
@@ -329,7 +226,7 @@ SELECT
 FROM v_bpc_accounts a
 CROSS JOIN v_month_days d;
 
--- Sumsub: KYC 记录数，按 KYC 发生日归属
+-- Sumsub: KYC 记录数
 CREATE TEMPORARY VIEW v_sumsub_basis AS
 SELECT
     CAST(r.create_time AS DATE) AS report_date,
@@ -372,7 +269,7 @@ SELECT
 FROM v_idemia_accounts a
 CROSS JOIN v_month_days d;
 
--- HZ_BANK: QI 净消费量，按消费日加权
+-- HZ_BANK: QI 净消费量
 CREATE TEMPORARY VIEW v_hz_bank_basis AS
 SELECT
     CAST(tr.transaction_time AS DATE) AS report_date,
@@ -403,298 +300,15 @@ HAVING CAST(
   AS DECIMAL(20, 4)
 ) <> CAST(0 AS DECIMAL(20, 4));
 
--- BZ/ZB: Payout 金额，按 submitTime 日加权
-CREATE TEMPORARY VIEW v_bz_basis AS
-SELECT
-    CAST(ptr.submit_time AS DATE) AS report_date,
-    ptr.account_id,
-    'GLOBAL_ACCOUNT' AS product_line,
-    'BZ' AS provider,
-    'PAYOUT_FEE' AS cost_type,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(SUM(COALESCE(ptr.settle_amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS basis_amount,
-    CAST(0 AS INT) AS month_day_count
-FROM source_payment_transaction_record ptr
-INNER JOIN v_param p
-    ON ptr.submit_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND ptr.submit_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE ptr.channel = 'ZB'
-  AND ptr.payout_direction_type = 'SubToPayee'
-  AND ptr.status = 'Closed'
-  AND ptr.delete_time IS NULL
-GROUP BY ptr.account_id, CAST(ptr.submit_time AS DATE)
-HAVING CAST(SUM(COALESCE(ptr.settle_amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) <> CAST(0 AS DECIMAL(20, 4));
-
--- CL: 活跃子账户客户数
-CREATE TEMPORARY VIEW v_cl_accounts AS
-SELECT g.account_id
-FROM source_global_sub_account g
-WHERE g.provider = 'Column'
-  AND g.status = 'Active'
-  AND g.delete_time IS NULL
-GROUP BY g.account_id;
-
-CREATE TEMPORARY VIEW v_cl_basis AS
-SELECT
-    d.report_date,
-    a.account_id,
-    'GLOBAL_ACCOUNT' AS product_line,
-    'CL' AS provider,
-    'ACTIVE_SUB_ACCOUNT_COST' AS cost_type,
-    CAST(1 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
-    d.month_day_count
-FROM v_cl_accounts a
-CROSS JOIN v_month_days d;
-
--- Thunes wire 手续费: 按代付发生日金额加权
-CREATE TEMPORARY VIEW v_th_wire_fee_basis AS
-SELECT
-    CAST(t.create_time AS DATE) AS report_date,
-    t.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    'TH' AS provider,
-    'WIRE_BANK_FEE' AS cost_type,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) AS basis_amount,
-    CAST(0 AS INT) AS month_day_count
-FROM source_crypto_assets_transfers t
-INNER JOIN v_param p
-    ON t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE t.recipient_type = 'wire'
-  AND t.status = 'Closed'
-  AND t.delete_time IS NULL
-  AND JSON_VALUE(t.extend_field, '$.platform') = 'THUNES'
-GROUP BY t.account_id, CAST(t.create_time AS DATE)
-HAVING CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) <> CAST(0 AS DECIMAL(20, 4));
-
--- Thunes 固定成本: 用过 Thunes wire 的客户
-CREATE TEMPORARY VIEW v_th_fixed_accounts AS
-SELECT t.account_id
-FROM source_crypto_assets_transfers t
-INNER JOIN v_param p
-    ON t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE t.recipient_type = 'wire'
-  AND t.status = 'Closed'
-  AND t.delete_time IS NULL
-  AND JSON_VALUE(t.extend_field, '$.platform') = 'THUNES'
-GROUP BY t.account_id;
-
-CREATE TEMPORARY VIEW v_th_fixed_fee_basis AS
-SELECT
-    d.report_date,
-    a.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    'TH' AS provider,
-    'FIXED_FEE' AS cost_type,
-    CAST(1 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
-    d.month_day_count
-FROM v_th_fixed_accounts a
-CROSS JOIN v_month_days d;
-
--- Cregis 固定成本: 有 Cregis 地址客户
-CREATE TEMPORARY VIEW v_cregis_accounts AS
-SELECT ca.account_id
-FROM source_crypto_assets_addresses ca
-WHERE ca.platform = 'CREGIS'
-  AND ca.enable = TRUE
-  AND ca.delete_time IS NULL
-GROUP BY ca.account_id;
-
-CREATE TEMPORARY VIEW v_cregis_basis AS
-SELECT
-    d.report_date,
-    a.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    'Cregis' AS provider,
-    'FIXED_FEE' AS cost_type,
-    CAST(1 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
-    d.month_day_count
-FROM v_cregis_accounts a
-CROSS JOIN v_month_days d;
-
--- TZ-wire 手续费: 按代付金额加权
-CREATE TEMPORARY VIEW v_tz_wire_fee_basis AS
-SELECT
-    CAST(t.create_time AS DATE) AS report_date,
-    t.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    'TZ-wire' AS provider,
-    'WIRE_FEE' AS cost_type,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) AS basis_amount,
-    CAST(0 AS INT) AS month_day_count
-FROM source_crypto_assets_transfers t
-INNER JOIN v_param p
-    ON t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE t.recipient_type = 'wire'
-  AND t.status = 'Closed'
-  AND t.delete_time IS NULL
-  AND JSON_VALUE(t.extend_field, '$.platform') = 'TZ'
-GROUP BY t.account_id, CAST(t.create_time AS DATE)
-HAVING CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) <> CAST(0 AS DECIMAL(20, 4));
-
--- TZ-wire 固定成本: 用过 TZ wire 的客户
-CREATE TEMPORARY VIEW v_tz_wire_fixed_accounts AS
-SELECT t.account_id
-FROM source_crypto_assets_transfers t
-INNER JOIN v_param p
-    ON t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE t.recipient_type = 'wire'
-  AND t.status = 'Closed'
-  AND t.delete_time IS NULL
-  AND JSON_VALUE(t.extend_field, '$.platform') = 'TZ'
-GROUP BY t.account_id;
-
-CREATE TEMPORARY VIEW v_tz_wire_fixed_basis AS
-SELECT
-    d.report_date,
-    a.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    'TZ-wire' AS provider,
-    'FIXED_FEE' AS cost_type,
-    CAST(1 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
-    d.month_day_count
-FROM v_tz_wire_fixed_accounts a
-CROSS JOIN v_month_days d;
-
--- TZ-sell: USDT/USDC 换汇费，按承兑量加权
-CREATE TEMPORARY VIEW v_tz_sell_basis AS
-SELECT
-    CAST(t.create_time AS DATE) AS report_date,
-    t.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    CASE WHEN t.currency = 'USDT' THEN 'TZ-usdt' ELSE 'TZ-usdc' END AS provider,
-    'FX_FEE' AS cost_type,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) AS basis_amount,
-    CAST(0 AS INT) AS month_day_count
-FROM source_crypto_assets_transfers t
-INNER JOIN v_param p
-    ON t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE t.action = 'sell'
-  AND t.status = 'Closed'
-  AND t.delete_time IS NULL
-  AND t.currency IN ('USDT', 'USDC')
-GROUP BY t.account_id, t.currency, CAST(t.create_time AS DATE)
-HAVING CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) <> CAST(0 AS DECIMAL(20, 4));
-
--- Safeheron 固定成本: 用过 Safeheron 出账的客户
-CREATE TEMPORARY VIEW v_safeheron_fixed_accounts AS
-SELECT bt.account_id
-FROM source_crypto_blockchain_transfers bt
-INNER JOIN v_param p
-    ON bt.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND bt.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE bt.action = 'out'
-  AND bt.status = 'Closed'
-  AND bt.platform = 'SAFEHERON'
-GROUP BY bt.account_id;
-
-CREATE TEMPORARY VIEW v_safeheron_fixed_basis AS
-SELECT
-    d.report_date,
-    a.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    'Safeheron' AS provider,
-    'FIXED_FEE' AS cost_type,
-    CAST(1 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
-    d.month_day_count
-FROM v_safeheron_fixed_accounts a
-CROSS JOIN v_month_days d;
-
--- Bitstamp: 按加密承兑量加权
-CREATE TEMPORARY VIEW v_bitstamp_basis AS
-SELECT
-    CAST(t.create_time AS DATE) AS report_date,
-    t.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    'BS' AS provider,
-    'TRADING_FEE' AS cost_type,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) AS basis_amount,
-    CAST(0 AS INT) AS month_day_count
-FROM source_crypto_assets_transfers t
-INNER JOIN v_param p
-    ON t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE t.action = 'sell'
-  AND t.status = 'Closed'
-  AND t.delete_time IS NULL
-  AND t.currency = 'USDT'
-GROUP BY t.account_id, CAST(t.create_time AS DATE)
-HAVING CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) <> CAST(0 AS DECIMAL(20, 4));
-
--- Orenda: raw_cost = acquiring_usd_amount * 0.0025，按 raw cost 占比缩放到账单金额
-CREATE TEMPORARY VIEW v_orenda_basis AS
-SELECT
-    ac.create_date AS report_date,
-    ac.account_id,
-    'ACQUIRING' AS product_line,
-    'OD' AS provider,
-    'ACQUIRING_FEE' AS cost_type,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(SUM(COALESCE(ac.acquiring_usd_amount_total, CAST(0 AS DECIMAL(20, 3))) * CAST(0.0025 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS basis_amount,
-    CAST(0 AS INT) AS month_day_count
-FROM source_dwm_acquiring_clearing ac
-INNER JOIN v_param p
-    ON ac.create_date >= p.source_month
-   AND ac.create_date < p.next_month
-WHERE ac.amount_type = 'income'
-  AND ac.delete_time IS NULL
-GROUP BY ac.account_id, ac.create_date
-HAVING CAST(SUM(COALESCE(ac.acquiring_usd_amount_total, CAST(0 AS DECIMAL(20, 3))) * CAST(0.0025 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) <> CAST(0 AS DECIMAL(20, 4));
-
--- World Pay: 按收单金额加权
-CREATE TEMPORARY VIEW v_wp_basis AS
-SELECT
-    ac.create_date AS report_date,
-    ac.account_id,
-    'ACQUIRING' AS product_line,
-    'WP' AS provider,
-    'ACQUIRING_FEE' AS cost_type,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(SUM(COALESCE(ac.acquiring_usd_amount_total, CAST(0 AS DECIMAL(20, 3)))) AS DECIMAL(20, 4)) AS basis_amount,
-    CAST(0 AS INT) AS month_day_count
-FROM source_dwm_acquiring_clearing ac
-INNER JOIN v_param p
-    ON ac.create_date >= p.source_month
-   AND ac.create_date < p.next_month
-WHERE ac.amount_type = 'cost'
-  AND ac.delete_time IS NULL
-GROUP BY ac.account_id, ac.create_date
-HAVING CAST(SUM(COALESCE(ac.acquiring_usd_amount_total, CAST(0 AS DECIMAL(20, 3)))) AS DECIMAL(20, 4)) <> CAST(0 AS DECIMAL(20, 4));
-
 -- ====================================================================
--- 3b. 合并分摊明细 + 月汇总
+-- 4. 合并分摊明细 + 月汇总
 -- ====================================================================
 
 CREATE TEMPORARY VIEW v_cost_basis_detail AS
 SELECT * FROM v_bpc_basis
 UNION ALL SELECT * FROM v_sumsub_basis
 UNION ALL SELECT * FROM v_idemia_basis
-UNION ALL SELECT * FROM v_hz_bank_basis
-UNION ALL SELECT * FROM v_bz_basis
-UNION ALL SELECT * FROM v_cl_basis
-UNION ALL SELECT * FROM v_th_wire_fee_basis
-UNION ALL SELECT * FROM v_th_fixed_fee_basis
-UNION ALL SELECT * FROM v_cregis_basis
-UNION ALL SELECT * FROM v_tz_wire_fee_basis
-UNION ALL SELECT * FROM v_tz_wire_fixed_basis
-UNION ALL SELECT * FROM v_tz_sell_basis
-UNION ALL SELECT * FROM v_safeheron_fixed_basis
-UNION ALL SELECT * FROM v_bitstamp_basis
-UNION ALL SELECT * FROM v_orenda_basis
-UNION ALL SELECT * FROM v_wp_basis;
+UNION ALL SELECT * FROM v_hz_bank_basis;
 
 CREATE TEMPORARY VIEW v_cost_basis_month_total AS
 SELECT
@@ -731,7 +345,7 @@ INNER JOIN v_cost_basis_month_total t
    AND t.cost_type = d.cost_type;
 
 -- ====================================================================
--- 4. bi_month_tag 月度金额（V2: 在 v_cost_basis 之后，自动匹配 cost_type）
+-- 5. bi_month_tag 月度金额
 -- ====================================================================
 
 CREATE TEMPORARY VIEW v_bi_month_tag_cost AS
@@ -755,7 +369,7 @@ WHERE t.delete_time IS NULL
 GROUP BY t.product_line, t.provider, t.tag, cb.cost_type, p.source_month, p.next_month, p.month_day_count;
 
 -- ====================================================================
--- 5. 金额分摊（V2: 不再冗余 join v_param）
+-- 6. 金额分摊
 -- ====================================================================
 
 CREATE TEMPORARY VIEW v_allocated_cost_base AS
@@ -805,7 +419,7 @@ INNER JOIN v_bi_month_tag_cost mt
 WHERE mt.source_amount <> CAST(0 AS DECIMAL(20, 4));
 
 -- ====================================================================
--- 6. 销售关系
+-- 7. 销售关系
 -- ====================================================================
 
 CREATE TEMPORARY VIEW v_direct_sale_relation AS
@@ -878,6 +492,9 @@ SELECT
     ))) AS BIGINT) AS id,
     b.report_date,
     b.account_id,
+    da.account_type,
+    da.account_category,
+    da.system_type,
     COALESCE(d.sale_id, r.sale_id) AS sale_id,
     COALESCE(d.am_id, r.am_id) AS am_id,
     b.product_line,
@@ -894,11 +511,12 @@ SELECT
     b.allocation_rate,
     b.cost_amount,
     1 AS version,
-    CAST('finance_channel_cost_batch_v2' AS STRING) AS remarks,
+    CAST('quantum_card_batch' AS STRING) AS remarks,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM v_allocated_cost_base b
+LEFT JOIN source_dim_account da ON da.id = b.account_id
 LEFT JOIN v_direct_sale_relation d
     ON d.cost_key = CONCAT(
         DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
@@ -913,13 +531,16 @@ LEFT JOIN v_root_sale_relation r
 WHERE b.cost_amount <> CAST(0 AS DECIMAL(20, 4));
 
 -- ====================================================================
--- 7. Sink
+-- 8. Sink
 -- ====================================================================
 
 CREATE TEMPORARY TABLE sink_dwm_finance_channel_cost_p (
     id                   BIGINT,
     report_date          DATE,
     account_id           STRING,
+    account_type         STRING,
+    account_category     STRING,
+    system_type          STRING,
     sale_id              STRING,
     am_id                STRING,
     product_line         STRING,
@@ -948,7 +569,7 @@ CREATE TEMPORARY TABLE sink_dwm_finance_channel_cost_p (
     'targetSchema' = 'dwm',
     'userName' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'writeMode' = 'upsert',
+    'writeMode' = 'insert',
     'batchSize' = '2000'
 );
 

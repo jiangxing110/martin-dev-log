@@ -105,7 +105,7 @@ CREATE TEMPORARY TABLE flink_sink_ods_crypto_assets_transactions (
     'userName' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'writeMode' = 'upsert',
-    'batchSize' = '200'
+    'batchSize' = '2000'
 );
 
 -- ==============================================
