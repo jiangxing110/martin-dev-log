@@ -44,6 +44,10 @@ COMMENT ON TABLE "ods"."ods_global_sub_account" IS 'ODS层：globalSubAccount �
 -- ==============================================
 -- 按年分区 (dt)
 -- ==============================================
+CREATE TABLE "ods"."ods_global_sub_account_2021" PARTITION OF "ods"."ods_global_sub_account"
+  FOR VALUES FROM ('2021-01-01') TO ('2022-01-01');
+CREATE TABLE "ods"."ods_global_sub_account_2022" PARTITION OF "ods"."ods_global_sub_account"
+  FOR VALUES FROM ('2022-01-01') TO ('2023-01-01');
 CREATE TABLE "ods"."ods_global_sub_account_2023" PARTITION OF "ods"."ods_global_sub_account"
   FOR VALUES FROM ('2023-01-01') TO ('2024-01-01');
 CREATE TABLE "ods"."ods_global_sub_account_2024" PARTITION OF "ods"."ods_global_sub_account"
