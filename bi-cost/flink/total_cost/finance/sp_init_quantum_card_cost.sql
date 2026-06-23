@@ -28,6 +28,8 @@ SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '1';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'sql-client.execution.result-mode' = 'tableau';
+-- 降低 sort-shuffle 最小 buffer 量：并行度 1，数据量小，2048 buffer/分区 过于浪费
+SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
 
 -- ====================================================================
 -- 1. 参数

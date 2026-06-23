@@ -2,13 +2,12 @@
 -- Author:         martinJiang
 -- Created Time:   2026-06-23
 -- Description:    金融渠道成本 DWM 批量初始化 - QUANTUM_CARD / HZ_BANK
--- 说明：按渠道拆分，每个作业只加载自己需要的 source 表
+-- 说明：按底层 provider 拆分，每个作业只加载自己需要的 source 表
 -- 执行前置：
 --   UPDATE dwm.dwm_finance_channel_cost_p
 --   SET delete_time = NOW(), update_time = NOW()
 --   WHERE source_month = '2026-05-01'::date
 --     AND product_line = 'QUANTUM_CARD'
---     AND provider = 'HZ_BANK'
 --     AND delete_time IS NULL;
 --********************************************************************--
 
@@ -23,11 +22,14 @@ SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'table.optimizer.reuse-source-enabled' = 'true';
 SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
 SET 'table.optimizer.broadcast.join.enabled' = 'false';
-SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_PIPELINED';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '1';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'sql-client.execution.result-mode' = 'tableau';
+-- 降低 sort-shuffle 最小 buffer 量：并行度 1，数据量小，2048 buffer/分区 过于浪费
+SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
+
+SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_PIPELINED';
 
 -- ====================================================================
 -- 1. 参数
@@ -80,26 +82,6 @@ CREATE TEMPORARY TABLE source_bi_month_tag (
     'scan.fetch-size' = '1000'
 );
 
-CREATE TEMPORARY TABLE source_qbit_card_transaction (
-    id               STRING,
-    account_id       STRING,
-    provider         STRING,
-    business_type    STRING,
-    status           STRING,
-    settle_amount    DECIMAL(20, 4),
-    transaction_time TIMESTAMP(6),
-    delete_time      TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_id, provider, business_type, status, settle_amount, transaction_time, delete_time FROM ods.ods_qbit_card_transaction WHERE delete_time IS NULL) AS qbit_card_transaction_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
-
 CREATE TEMPORARY TABLE source_api_account_relation (
     account_id  STRING,
     root_id     STRING,
@@ -144,6 +126,26 @@ CREATE TEMPORARY TABLE source_dim_account (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(SELECT id, account_type, type AS account_category, system_type FROM dim.dim_account) AS dim_account_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000'
+);
+
+CREATE TEMPORARY TABLE source_qbit_card_transaction (
+    id               STRING,
+    account_id       STRING,
+    provider         STRING,
+    business_type    STRING,
+    status           STRING,
+    settle_amount    DECIMAL(20, 4),
+    transaction_time TIMESTAMP(6),
+    delete_time      TIMESTAMP(6),
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT id, account_id, provider, business_type, status, settle_amount, transaction_time, delete_time FROM ods.ods_qbit_card_transaction WHERE delete_time IS NULL) AS qbit_card_transaction_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -359,6 +361,7 @@ FROM (
 ) ranked_root
 WHERE rn = 1;
 
+
 CREATE TEMPORARY VIEW v_dwm_finance_channel_cost AS
 SELECT
     CAST(ABS(HASH_CODE(CONCAT(
@@ -457,3 +460,4 @@ CREATE TEMPORARY TABLE sink_dwm_finance_channel_cost_p (
 
 INSERT INTO sink_dwm_finance_channel_cost_p
 SELECT * FROM v_dwm_finance_channel_cost;
+
