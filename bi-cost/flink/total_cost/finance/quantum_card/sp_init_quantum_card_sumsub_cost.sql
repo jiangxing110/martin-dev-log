@@ -1,14 +1,14 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-23
--- Description:    金融渠道成本 DWM 批量初始化 - CRYPTO_ASSET
--- Providers:      TH / Cregis / TZ-wire / TZ-sell / Safeheron / BS
+-- Description:    金融渠道成本 DWM 批量初始化 - QUANTUM_CARD / Sumsub
 -- 说明：按渠道拆分，每个作业只加载自己需要的 source 表
 -- 执行前置：
 --   UPDATE dwm.dwm_finance_channel_cost_p
 --   SET delete_time = NOW(), update_time = NOW()
 --   WHERE source_month = '2026-05-01'::date
---     AND product_line = 'CRYPTO_ASSET'
+--     AND product_line = 'QUANTUM_CARD'
+--     AND provider = 'Sumsub'
 --     AND delete_time IS NULL;
 --********************************************************************--
 
@@ -23,12 +23,11 @@ SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'table.optimizer.reuse-source-enabled' = 'true';
 SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
 SET 'table.optimizer.broadcast.join.enabled' = 'false';
+SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_PIPELINED';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '1';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'sql-client.execution.result-mode' = 'tableau';
--- 降低 sort-shuffle 最小 buffer 量：并行度 1，数据量小，2048 buffer/分区 过于浪费
-SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
 
 -- ====================================================================
 -- 1. 参数
@@ -81,56 +80,18 @@ CREATE TEMPORARY TABLE source_bi_month_tag (
     'scan.fetch-size' = '1000'
 );
 
-CREATE TEMPORARY TABLE source_crypto_assets_transfers (
-    id             STRING,
-    account_id     STRING,
-    recipient_type STRING,
-    status         STRING,
-    action         STRING,
-    currency       STRING,
-    origin_amount  DECIMAL(20, 4),
-    usd_rate       DECIMAL(20, 8),
-    extend_field   STRING,
-    create_time    TIMESTAMP(6),
-    delete_time    TIMESTAMP(6),
+CREATE TEMPORARY TABLE source_idv_channel_request_record (
+    id              STRING,
+    account_id      STRING,
+    request_channel STRING,
+    request_type    STRING,
+    create_time     TIMESTAMP(6),
+    delete_time     TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_id, recipient_type, status, action, currency, origin_amount, usd_rate, extend_field, create_time, delete_time FROM ods.ods_crypto_assets_transfers WHERE delete_time IS NULL) AS crypto_assets_transfers_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
-
-CREATE TEMPORARY TABLE source_crypto_assets_addresses (
-    id          STRING,
-    account_id  STRING,
-    platform    STRING,
-    enable      BOOLEAN,
-    delete_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_id, platform, enable, delete_time FROM ods.ods_crypto_assets_addresses WHERE delete_time IS NULL) AS crypto_assets_addresses_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
-
-CREATE TEMPORARY TABLE source_crypto_blockchain_transfers (
-    account_id  STRING,
-    action      STRING,
-    create_time TIMESTAMP(6),
-    status      STRING,
-    platform    STRING
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT account_id, action, create_time, status, platform FROM ods.view_crypto_assets_blockchain_transfers) AS crypto_blockchain_transfers_f',
+    'table-name' = '(SELECT id, account_id, request_channel, request_type, create_time, delete_time FROM ods.ods_idv_channel_request_record WHERE delete_time IS NULL) AS idv_channel_request_record_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -191,206 +152,32 @@ CREATE TEMPORARY TABLE source_dim_account (
 -- 3. 分摊基础明细
 -- ====================================================================
 
--- Thunes wire 手续费: 按代付金额加权
-CREATE TEMPORARY VIEW v_th_wire_fee_basis AS
+-- Sumsub: KYC 记录数
+CREATE TEMPORARY VIEW v_sumsub_basis AS
 SELECT
-    CAST(t.create_time AS DATE) AS report_date,
-    t.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    'TH' AS provider,
-    'WIRE_BANK_FEE' AS cost_type,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) AS basis_amount,
-    CAST(0 AS INT) AS month_day_count
-FROM source_crypto_assets_transfers t
-INNER JOIN v_param p
-    ON t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE t.recipient_type = 'wire'
-  AND t.status = 'Closed'
-  AND t.delete_time IS NULL
-  AND JSON_VALUE(t.extend_field, '$.platform') = 'THUNES'
-GROUP BY t.account_id, CAST(t.create_time AS DATE)
-HAVING CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) <> CAST(0 AS DECIMAL(20, 4));
-
--- Thunes 固定成本: 用过 Thunes wire 的客户
-CREATE TEMPORARY VIEW v_th_fixed_accounts AS
-SELECT t.account_id
-FROM source_crypto_assets_transfers t
-INNER JOIN v_param p
-    ON t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE t.recipient_type = 'wire'
-  AND t.status = 'Closed'
-  AND t.delete_time IS NULL
-  AND JSON_VALUE(t.extend_field, '$.platform') = 'THUNES'
-GROUP BY t.account_id;
-
-CREATE TEMPORARY VIEW v_th_fixed_fee_basis AS
-SELECT
-    d.report_date,
-    a.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    'TH' AS provider,
-    'FIXED_FEE' AS cost_type,
-    CAST(1 AS DECIMAL(20, 4)) AS basis_count,
+    CAST(r.create_time AS DATE) AS report_date,
+    r.account_id,
+    'QUANTUM_CARD' AS product_line,
+    'Sumsub' AS provider,
+    'KYC_FEE' AS cost_type,
+    CAST(COUNT(*) AS DECIMAL(20, 4)) AS basis_count,
     CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
-    d.month_day_count
-FROM v_th_fixed_accounts a
-CROSS JOIN v_month_days d;
-
--- Cregis 固定成本: 有 Cregis 地址客户
-CREATE TEMPORARY VIEW v_cregis_accounts AS
-SELECT ca.account_id
-FROM source_crypto_assets_addresses ca
-WHERE ca.platform = 'CREGIS'
-  AND ca.enable = TRUE
-  AND ca.delete_time IS NULL
-GROUP BY ca.account_id;
-
-CREATE TEMPORARY VIEW v_cregis_basis AS
-SELECT
-    d.report_date,
-    a.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    'Cregis' AS provider,
-    'FIXED_FEE' AS cost_type,
-    CAST(1 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
-    d.month_day_count
-FROM v_cregis_accounts a
-CROSS JOIN v_month_days d;
-
--- TZ-wire 手续费: 按代付金额加权
-CREATE TEMPORARY VIEW v_tz_wire_fee_basis AS
-SELECT
-    CAST(t.create_time AS DATE) AS report_date,
-    t.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    'TZ-wire' AS provider,
-    'WIRE_FEE' AS cost_type,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) AS basis_amount,
     CAST(0 AS INT) AS month_day_count
-FROM source_crypto_assets_transfers t
+FROM source_idv_channel_request_record r
 INNER JOIN v_param p
-    ON t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE t.recipient_type = 'wire'
-  AND t.status = 'Closed'
-  AND t.delete_time IS NULL
-  AND JSON_VALUE(t.extend_field, '$.platform') = 'TZ'
-GROUP BY t.account_id, CAST(t.create_time AS DATE)
-HAVING CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) <> CAST(0 AS DECIMAL(20, 4));
-
--- TZ-wire 固定成本: 用过 TZ wire 的客户
-CREATE TEMPORARY VIEW v_tz_wire_fixed_accounts AS
-SELECT t.account_id
-FROM source_crypto_assets_transfers t
-INNER JOIN v_param p
-    ON t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE t.recipient_type = 'wire'
-  AND t.status = 'Closed'
-  AND t.delete_time IS NULL
-  AND JSON_VALUE(t.extend_field, '$.platform') = 'TZ'
-GROUP BY t.account_id;
-
-CREATE TEMPORARY VIEW v_tz_wire_fixed_basis AS
-SELECT
-    d.report_date,
-    a.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    'TZ-wire' AS provider,
-    'FIXED_FEE' AS cost_type,
-    CAST(1 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
-    d.month_day_count
-FROM v_tz_wire_fixed_accounts a
-CROSS JOIN v_month_days d;
-
--- TZ-sell: USDT/USDC 换汇费
-CREATE TEMPORARY VIEW v_tz_sell_basis AS
-SELECT
-    CAST(t.create_time AS DATE) AS report_date,
-    t.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    CASE WHEN t.currency = 'USDT' THEN 'TZ-usdt' ELSE 'TZ-usdc' END AS provider,
-    'FX_FEE' AS cost_type,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) AS basis_amount,
-    CAST(0 AS INT) AS month_day_count
-FROM source_crypto_assets_transfers t
-INNER JOIN v_param p
-    ON t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE t.action = 'sell'
-  AND t.status = 'Closed'
-  AND t.delete_time IS NULL
-  AND t.currency IN ('USDT', 'USDC')
-GROUP BY t.account_id, t.currency, CAST(t.create_time AS DATE)
-HAVING CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) <> CAST(0 AS DECIMAL(20, 4));
-
--- Safeheron 固定成本: 用过 Safeheron 出账的客户
-CREATE TEMPORARY VIEW v_safeheron_fixed_accounts AS
-SELECT bt.account_id
-FROM source_crypto_blockchain_transfers bt
-INNER JOIN v_param p
-    ON bt.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND bt.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE bt.action = 'out'
-  AND bt.status = 'Closed'
-  AND bt.platform = 'SAFEHERON'
-GROUP BY bt.account_id;
-
-CREATE TEMPORARY VIEW v_safeheron_fixed_basis AS
-SELECT
-    d.report_date,
-    a.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    'Safeheron' AS provider,
-    'FIXED_FEE' AS cost_type,
-    CAST(1 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
-    d.month_day_count
-FROM v_safeheron_fixed_accounts a
-CROSS JOIN v_month_days d;
-
--- Bitstamp: 按加密承兑量加权
-CREATE TEMPORARY VIEW v_bitstamp_basis AS
-SELECT
-    CAST(t.create_time AS DATE) AS report_date,
-    t.account_id,
-    'CRYPTO_ASSET' AS product_line,
-    'BS' AS provider,
-    'TRADING_FEE' AS cost_type,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) AS basis_amount,
-    CAST(0 AS INT) AS month_day_count
-FROM source_crypto_assets_transfers t
-INNER JOIN v_param p
-    ON t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE t.action = 'sell'
-  AND t.status = 'Closed'
-  AND t.delete_time IS NULL
-  AND t.currency = 'USDT'
-GROUP BY t.account_id, CAST(t.create_time AS DATE)
-HAVING CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) <> CAST(0 AS DECIMAL(20, 4));
+    ON r.create_time >= CAST(p.source_month AS TIMESTAMP(6))
+   AND r.create_time < CAST(p.next_month AS TIMESTAMP(6))
+WHERE r.request_channel = 'sumsub'
+  AND r.request_type = 'POST'
+  AND r.delete_time IS NULL
+GROUP BY r.account_id, CAST(r.create_time AS DATE);
 
 -- ====================================================================
 -- 4. 合并分摊明细 + 月汇总
 -- ====================================================================
 
 CREATE TEMPORARY VIEW v_cost_basis_detail AS
-SELECT * FROM v_th_wire_fee_basis
-UNION ALL SELECT * FROM v_th_fixed_fee_basis
-UNION ALL SELECT * FROM v_cregis_basis
-UNION ALL SELECT * FROM v_tz_wire_fee_basis
-UNION ALL SELECT * FROM v_tz_wire_fixed_basis
-UNION ALL SELECT * FROM v_tz_sell_basis
-UNION ALL SELECT * FROM v_safeheron_fixed_basis
-UNION ALL SELECT * FROM v_bitstamp_basis;
+SELECT * FROM v_sumsub_basis;
 
 CREATE TEMPORARY VIEW v_cost_basis_month_total AS
 SELECT
@@ -593,7 +380,7 @@ SELECT
     b.allocation_rate,
     b.cost_amount,
     1 AS version,
-    CAST('crypto_asset_batch' AS STRING) AS remarks,
+    CAST('quantum_card_sumsub_batch' AS STRING) AS remarks,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
