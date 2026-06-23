@@ -240,7 +240,7 @@ CREATE TEMPORARY TABLE source_crypto_blockchain_transfers (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT account_id, "action", create_time, status, platform FROM ods.ods_crypto_blockchain_transfers) AS crypto_blockchain_transfers_f',
+    'table-name' = '(SELECT account_id, "action", create_time, status, platform FROM ods.view_crypto_assets_blockchain_transfers) AS crypto_blockchain_transfers_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

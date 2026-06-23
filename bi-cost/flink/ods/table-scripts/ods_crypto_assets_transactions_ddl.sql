@@ -45,6 +45,8 @@ COMMENT ON TABLE "ods"."ods_crypto_assets_transactions" IS 'ODS层：crypto_asse
 -- ==============================================
 -- 按年分区 (dt)
 -- ==============================================
+CREATE TABLE "ods"."ods_crypto_assets_transactions_1970" PARTITION OF "ods"."ods_crypto_assets_transactions"
+  FOR VALUES FROM ('1970-01-01') TO ('1971-01-01');
 CREATE TABLE "ods"."ods_crypto_assets_transactions_2021" PARTITION OF "ods"."ods_crypto_assets_transactions"
   FOR VALUES FROM ('2021-01-01') TO ('2022-01-01');
 CREATE TABLE "ods"."ods_crypto_assets_transactions_2022" PARTITION OF "ods"."ods_crypto_assets_transactions"
