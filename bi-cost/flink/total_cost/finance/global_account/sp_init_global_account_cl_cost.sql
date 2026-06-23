@@ -1,14 +1,13 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-23
--- Description:    金融渠道成本 DWM 批量初始化 - QUANTUM_CARD
--- Providers:      BPC / Sumsub / IDEMIA / HZ_BANK
--- 说明：按渠道拆分，每个作业只加载自己需要的 source 表
+-- Description:    金融渠道成本 DWM 批量初始化 - GLOBAL_ACCOUNT / CL (Column)
+-- 说明：按底层 provider 拆分，每个作业只加载自己需要的 source 表
 -- 执行前置：
 --   UPDATE dwm.dwm_finance_channel_cost_p
 --   SET delete_time = NOW(), update_time = NOW()
 --   WHERE source_month = '2026-05-01'::date
---     AND product_line = 'QUANTUM_CARD'
+--     AND product_line = 'GLOBAL_ACCOUNT'
 --     AND delete_time IS NULL;
 --********************************************************************--
 -- 作业类型：批处理 (BATCH)
@@ -24,13 +23,12 @@ SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'table.optimizer.reuse-source-enabled' = 'true';
 SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
 SET 'table.optimizer.broadcast.join.enabled' = 'false';
-SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_PIPELINED';
+SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_BLOCKING';
+SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '1';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'sql-client.execution.result-mode' = 'tableau';
--- 降低 sort-shuffle 最小 buffer 量：并行度 1，数据量小，2048 buffer/分区 过于浪费
-SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
 
 -- ====================================================================
 -- 1. 参数
@@ -83,71 +81,17 @@ CREATE TEMPORARY TABLE source_bi_month_tag (
     'scan.fetch-size' = '1000'
 );
 
-CREATE TEMPORARY TABLE source_qbit_card (
-    id               STRING,
-    account_id       STRING,
-    provider         STRING,
-    delete_card_time TIMESTAMP(6),
-    delete_time      TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_id, provider, delete_card_time, delete_time FROM ods.ods_qbit_card WHERE delete_time IS NULL) AS qbit_card_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
-
-CREATE TEMPORARY TABLE source_idv_channel_request_record (
-    id              STRING,
-    account_id      STRING,
-    request_channel STRING,
-    request_type    STRING,
-    create_time     TIMESTAMP(6),
-    delete_time     TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_id, request_channel, request_type, create_time, delete_time FROM ods.ods_idv_channel_request_record WHERE delete_time IS NULL) AS idv_channel_request_record_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
-
-CREATE TEMPORARY TABLE source_qbit_physical_card (
+CREATE TEMPORARY TABLE source_global_sub_account (
     id          STRING,
     account_id  STRING,
-    create_time TIMESTAMP(6),
+    provider    STRING,
+    status      STRING,
     delete_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_id, create_time, delete_time FROM ods.ods_qbit_physical_card WHERE delete_time IS NULL) AS qbit_physical_card_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
-
-CREATE TEMPORARY TABLE source_qbit_card_transaction (
-    id               STRING,
-    account_id       STRING,
-    provider         STRING,
-    business_type    STRING,
-    status           STRING,
-    settle_amount    DECIMAL(20, 4),
-    transaction_time TIMESTAMP(6),
-    delete_time      TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_id, provider, business_type, status, settle_amount, transaction_time, delete_time FROM ods.ods_qbit_card_transaction WHERE delete_time IS NULL) AS qbit_card_transaction_f',
+    'table-name' = '(SELECT id, account_id, provider, status, delete_time FROM ods.ods_global_sub_account WHERE delete_time IS NULL) AS global_sub_account_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -205,113 +149,36 @@ CREATE TEMPORARY TABLE source_dim_account (
 );
 
 -- ====================================================================
--- 3. 分摊基础明细
+-- 3. 分摊基础明细 - CL: 活跃子账户客户数
 -- ====================================================================
 
--- BPC: QI 活跃卡客户
-CREATE TEMPORARY VIEW v_bpc_accounts AS
-SELECT q.account_id
-FROM source_qbit_card q, v_param p
-WHERE q.provider LIKE '%Qbit%'
-  AND (q.delete_card_time > CAST(p.source_month AS TIMESTAMP(6)) OR q.delete_card_time IS NULL)
-GROUP BY q.account_id;
+CREATE TEMPORARY VIEW v_cl_accounts AS
+SELECT g.account_id
+FROM source_global_sub_account g
+WHERE g.provider = 'Column'
+  AND g.status = 'Active'
+  AND g.delete_time IS NULL
+GROUP BY g.account_id;
 
-CREATE TEMPORARY VIEW v_bpc_basis AS
+CREATE TEMPORARY VIEW v_cl_basis AS
 SELECT
     d.report_date,
     a.account_id,
-    'QUANTUM_CARD' AS product_line,
-    'BPC' AS provider,
-    'ACTIVE_CARD_COST' AS cost_type,
+    'GLOBAL_ACCOUNT' AS product_line,
+    'CL' AS provider,
+    'ACTIVE_SUB_ACCOUNT_COST' AS cost_type,
     CAST(1 AS DECIMAL(20, 4)) AS basis_count,
     CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
     d.month_day_count
-FROM v_bpc_accounts a
+FROM v_cl_accounts a
 CROSS JOIN v_month_days d;
-
--- Sumsub: KYC 记录数
-CREATE TEMPORARY VIEW v_sumsub_basis AS
-SELECT
-    CAST(r.create_time AS DATE) AS report_date,
-    r.account_id,
-    'QUANTUM_CARD' AS product_line,
-    'Sumsub' AS provider,
-    'KYC_FEE' AS cost_type,
-    CAST(COUNT(*) AS DECIMAL(20, 4)) AS basis_count,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
-    CAST(0 AS INT) AS month_day_count
-FROM source_idv_channel_request_record r
-INNER JOIN v_param p
-    ON r.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND r.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE r.request_channel = 'sumsub'
-  AND r.request_type = 'POST'
-  AND r.delete_time IS NULL
-GROUP BY r.account_id, CAST(r.create_time AS DATE);
-
--- IDEMIA: 实体卡数
-CREATE TEMPORARY VIEW v_idemia_accounts AS
-SELECT pc.account_id, COUNT(*) AS physical_card_count
-FROM source_qbit_physical_card pc
-INNER JOIN v_param p
-    ON pc.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND pc.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE pc.delete_time IS NULL
-GROUP BY pc.account_id;
-
-CREATE TEMPORARY VIEW v_idemia_basis AS
-SELECT
-    d.report_date,
-    a.account_id,
-    'QUANTUM_CARD' AS product_line,
-    'IDEMIA' AS provider,
-    'CARD_PRODUCTION_FEE' AS cost_type,
-    CAST(a.physical_card_count AS DECIMAL(20, 4)) AS basis_count,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
-    d.month_day_count
-FROM v_idemia_accounts a
-CROSS JOIN v_month_days d;
-
--- HZ_BANK: QI 净消费量
-CREATE TEMPORARY VIEW v_hz_bank_basis AS
-SELECT
-    CAST(tr.transaction_time AS DATE) AS report_date,
-    tr.account_id,
-    'QUANTUM_CARD' AS product_line,
-    'HZ_BANK' AS provider,
-    'CONSUME_BANK_FEE' AS cost_type,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(
-        SUM(CASE WHEN tr.business_type = 'Consumption' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-      - SUM(CASE WHEN tr.business_type = 'Reversal' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-      - SUM(CASE WHEN tr.business_type = 'Credit' AND tr.status = 'Closed' THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-      AS DECIMAL(20, 4)
-    ) AS basis_amount,
-    CAST(0 AS INT) AS month_day_count
-FROM source_qbit_card_transaction tr
-INNER JOIN v_param p
-    ON tr.transaction_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND tr.transaction_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE tr.delete_time IS NULL
-  AND tr.provider LIKE '%Qbit%'
-  AND tr.business_type IN ('Credit', 'Consumption', 'Reversal')
-GROUP BY tr.account_id, CAST(tr.transaction_time AS DATE)
-HAVING CAST(
-    SUM(CASE WHEN tr.business_type = 'Consumption' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-  - SUM(CASE WHEN tr.business_type = 'Reversal' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-  - SUM(CASE WHEN tr.business_type = 'Credit' AND tr.status = 'Closed' THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-  AS DECIMAL(20, 4)
-) <> CAST(0 AS DECIMAL(20, 4));
 
 -- ====================================================================
 -- 4. 合并分摊明细 + 月汇总
 -- ====================================================================
 
 CREATE TEMPORARY VIEW v_cost_basis_detail AS
-SELECT * FROM v_bpc_basis
-UNION ALL SELECT * FROM v_sumsub_basis
-UNION ALL SELECT * FROM v_idemia_basis
-UNION ALL SELECT * FROM v_hz_bank_basis;
+SELECT * FROM v_cl_basis;
 
 CREATE TEMPORARY VIEW v_cost_basis_month_total AS
 SELECT
@@ -514,7 +381,7 @@ SELECT
     b.allocation_rate,
     b.cost_amount,
     1 AS version,
-    CAST('quantum_card_batch' AS STRING) AS remarks,
+    CAST('global_account_batch' AS STRING) AS remarks,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time

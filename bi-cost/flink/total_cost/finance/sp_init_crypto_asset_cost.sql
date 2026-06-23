@@ -11,6 +11,7 @@
 --     AND product_line = 'CRYPTO_ASSET'
 --     AND delete_time IS NULL;
 --********************************************************************--
+-- 作业类型：批处理 (BATCH)
 
 SET 'parallelism.default' = '1';
 SET 'sink.parallelism' = '1';
