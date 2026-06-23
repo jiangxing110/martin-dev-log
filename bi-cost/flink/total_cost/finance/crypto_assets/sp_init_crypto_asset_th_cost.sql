@@ -176,7 +176,7 @@ SELECT t.account_id
 FROM source_crypto_assets_transfers t
 WHERE t.create_time >= CAST('2026-05-01' AS TIMESTAMP(6))
   AND t.create_time < CAST('2026-06-01' AS TIMESTAMP(6))
-WHERE t.recipient_type = 'wire'
+  AND t.recipient_type = 'wire'
   AND t.status = 'Closed'
   AND t.delete_time IS NULL
   AND JSON_VALUE(t.extend_field, '$.platform') = 'THUNES'

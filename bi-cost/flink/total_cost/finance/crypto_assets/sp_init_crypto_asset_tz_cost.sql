@@ -29,22 +29,9 @@ SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'sql-client.execution.result-mode' = 'tableau';
 -- 降低 sort-shuffle 最小 buffer 量：并行度 1，数据量小，2048 buffer/分区 过于浪费
 SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
--- 降低 floating-buffers-per-gate：默认 256 × N 个 consumer 超出 TM buffer 池
-SET 'taskmanager.network.memory.floating-buffers-per-gate' = '64';
 
 -- ====================================================================
--- 1. 参数
--- ====================================================================
-
-CREATE TEMPORARY VIEW v_param AS
-SELECT
-    CAST('2026-05-01' AS DATE) AS source_month,
-    CAST('2026-06-01' AS DATE) AS next_month,
-    DATEDIFF(CAST('2026-06-01' AS DATE), CAST('2026-05-01' AS DATE)) AS month_day_count;
-
-
--- ====================================================================
--- 2. Source 表
+-- 1. Source 表
 -- ====================================================================
 
 CREATE TEMPORARY TABLE source_bi_month_tag (
@@ -155,7 +142,7 @@ CREATE TEMPORARY TABLE source_month_days (
 );
 
 -- ====================================================================
--- 3. 分摊基础明细
+-- 2. 分摊基础明细
 -- ====================================================================
 
 -- TZ-wire 手续费: 按代付金额加权
@@ -170,10 +157,9 @@ SELECT
     CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) AS basis_amount,
     CAST(0 AS INT) AS month_day_count
 FROM source_crypto_assets_transfers t
-INNER JOIN v_param p
-    ON t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE t.recipient_type = 'wire'
+WHERE t.create_time >= CAST('2026-05-01' AS TIMESTAMP(6))
+  AND t.create_time < CAST('2026-06-01' AS TIMESTAMP(6))
+  AND t.recipient_type = 'wire'
   AND t.status = 'Closed'
   AND t.delete_time IS NULL
   AND JSON_VALUE(t.extend_field, '$.platform') = 'TZ'
@@ -184,10 +170,9 @@ HAVING CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(
 CREATE TEMPORARY VIEW v_tz_wire_fixed_accounts AS
 SELECT t.account_id
 FROM source_crypto_assets_transfers t
-INNER JOIN v_param p
-    ON t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE t.recipient_type = 'wire'
+WHERE t.create_time >= CAST('2026-05-01' AS TIMESTAMP(6))
+  AND t.create_time < CAST('2026-06-01' AS TIMESTAMP(6))
+  AND t.recipient_type = 'wire'
   AND t.status = 'Closed'
   AND t.delete_time IS NULL
   AND JSON_VALUE(t.extend_field, '$.platform') = 'TZ'
@@ -218,10 +203,9 @@ SELECT
     CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) AS basis_amount,
     CAST(0 AS INT) AS month_day_count
 FROM source_crypto_assets_transfers t
-INNER JOIN v_param p
-    ON t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE t.action = 'sell'
+WHERE t.create_time >= CAST('2026-05-01' AS TIMESTAMP(6))
+  AND t.create_time < CAST('2026-06-01' AS TIMESTAMP(6))
+  AND t.action = 'sell'
   AND t.status = 'Closed'
   AND t.delete_time IS NULL
   AND t.currency IN ('USDT', 'USDC')
@@ -281,19 +265,18 @@ SELECT
     t.provider,
     t.tag AS source_tag,
     cb.cost_type,
-    p.source_month,
-    p.next_month,
-    p.month_day_count,
+    CAST('2026-05-01' AS DATE) AS source_month,
+    CAST('2026-06-01' AS DATE) AS next_month,
+    31 AS month_day_count,
     CAST(SUM(COALESCE(t.amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS source_amount
-FROM v_param p
-CROSS JOIN source_bi_month_tag t
+FROM source_bi_month_tag t
 INNER JOIN (SELECT DISTINCT product_line, provider, cost_type FROM v_cost_basis) cb
     ON cb.product_line = t.product_line
    AND cb.provider = t.provider
 WHERE t.delete_time IS NULL
-  AND CAST(t.statistics_time AS DATE) >= p.source_month
-  AND CAST(t.statistics_time AS DATE) < p.next_month
-GROUP BY t.product_line, t.provider, t.tag, cb.cost_type, p.source_month, p.next_month, p.month_day_count;
+  AND CAST(t.statistics_time AS DATE) >= CAST('2026-05-01' AS DATE)
+  AND CAST(t.statistics_time AS DATE) < CAST('2026-06-01' AS DATE)
+GROUP BY t.product_line, t.provider, t.tag, cb.cost_type;
 
 -- ====================================================================
 -- 6. 金额分摊
