@@ -29,8 +29,8 @@ SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'sql-client.execution.result-mode' = 'tableau';
 -- 降低 sort-shuffle 最小 buffer 量：并行度 1，数据量小，2048 buffer/分区 过于浪费
 SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
--- 强制 blocking shuffle：VALUES broadcast + 多 consumer 场景需要大量 network buffer，pipelined 模式下 buffer 不足报错
-SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_BLOCKING';
+-- 降低 floating-buffers-per-gate：默认 256 × N 个 consumer 超出 TM buffer 池
+SET 'taskmanager.network.memory.floating-buffers-per-gate' = '64';
 
 -- ====================================================================
 -- 1. 参数
@@ -42,22 +42,6 @@ SELECT
     CAST('2026-06-01' AS DATE) AS next_month,
     DATEDIFF(CAST('2026-06-01' AS DATE), CAST('2026-05-01' AS DATE)) AS month_day_count;
 
-CREATE TEMPORARY VIEW v_day_numbers AS
-SELECT *
-FROM (
-    VALUES
-        (1), (2), (3), (4), (5), (6), (7), (8), (9), (10),
-        (11), (12), (13), (14), (15), (16), (17), (18), (19), (20),
-        (21), (22), (23), (24), (25), (26), (27), (28), (29), (30), (31)
-) AS t(day_no);
-
-CREATE TEMPORARY VIEW v_month_days AS
-SELECT
-    DATE_ADD(p.source_month, d.day_no - 1) AS report_date,
-    p.month_day_count
-FROM v_param p
-INNER JOIN v_day_numbers d
-    ON d.day_no <= p.month_day_count;
 
 -- ====================================================================
 -- 2. Source 表
@@ -156,6 +140,20 @@ CREATE TEMPORARY TABLE source_crypto_assets_transfers (
     'scan.fetch-size' = '1000'
 );
 
+CREATE TEMPORARY TABLE source_month_days (
+    report_date     DATE,
+    month_day_count INT,
+    PRIMARY KEY (report_date) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT d::date AS report_date, 31 AS month_day_count FROM generate_series(''2026-05-01''::date, ''2026-05-31''::date, ''1 day'') AS d) AS month_days',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '100'
+);
+
 -- ====================================================================
 -- 3. 分摊基础明细
 -- ====================================================================
@@ -206,7 +204,7 @@ SELECT
     CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
     d.month_day_count
 FROM v_tz_wire_fixed_accounts a
-CROSS JOIN v_month_days d;
+CROSS JOIN source_month_days d;
 
 -- TZ-sell: USDT/USDC 换汇费
 CREATE TEMPORARY VIEW v_tz_sell_basis AS
