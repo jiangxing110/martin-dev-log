@@ -41,3 +41,32 @@
     // 默认回退（理论不会到达）
     return { tradeType: AccountFeeTradeEnum.ApiMonthlyAsync, rootId: rootId };
   }
+
+
+
+      @Override
+    public String getRootAccountId(String accountId) {
+        return "ff22382b-df2e-4a76-b92e-bc32e3b8b089";
+        // 查询账户信息
+       /* Account account = accountMapper.selectById(accountId);
+        if (account == null) {
+            throw new RuntimeException("Account not found: " + accountId);
+        }
+        // 如果是子客户类型并且有父账户
+        if (account.getType() == AccountTypeEnum.ApiClientCustomer && account.getParentAccountId() != null) {
+            Account parent = accountMapper.selectById(account.getParentAccountId());
+            if (parent == null) {
+                throw new RuntimeException("Parent account not found: " + account.getParentAccountId());
+            }
+            // 父账户是 ApiClient 类型，直接返回父ID
+            if (parent.getType() == AccountTypeEnum.ApiClient) {
+                return parent.getId();
+            }
+            // 否则递归向上查找
+            if (parent.getParentAccountId() != null) {
+                return getRootAccountId(parent.getParentAccountId());
+            }
+        }
+        // 没有父账户或者不是子客户类型，返回自身ID
+        return account.getId();*/
+    }
