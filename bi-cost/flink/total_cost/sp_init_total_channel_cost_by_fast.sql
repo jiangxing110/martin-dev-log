@@ -256,8 +256,7 @@ CREATE TEMPORARY TABLE sink_dws_total_channel_cost_daily_p (
     'tableName' = 'dws_total_channel_cost_daily_p',
     'targetSchema' = 'dws',
     'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
-),
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
     'writeMode' = 'upsert',
     'batchSize' = '2000'
 );
