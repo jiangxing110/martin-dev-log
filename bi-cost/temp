@@ -194,3 +194,6 @@ CONSTRAINT "idv_channel_request_record_pkey" PRIMARY KEY ("id")
 
 ALTER TABLE "public"."idv_channel_request_record"
 OWNER TO "qbit_admin";
+
+
+dws_bb_card_finance_daily_p
