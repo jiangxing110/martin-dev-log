@@ -1,0 +1,17 @@
+  private List<ApiClientFeeDTO> systemFeeByProvider(QbitCardTransaction data) {
+        QbitCardOnlineProviderEnum providerEnum = this.resolveOnlineProvider(data.getProvider());
+        if (providerEnum == QbitCardOnlineProviderEnum.IQ) {
+            if (data.getBusinessType() == QbitCardTransactionTypeEnum.System_Fee) {
+                return this.systemFee(data);
+            }
+            return List.of();
+        }
+        if (providerEnum == QbitCardOnlineProviderEnum.BZ) {
+            return this.bzSchemeFee(data);
+        }
+        return List.of();
+    }
+
+      return this.systemFee(data);方法和
+bzSchemeFee里的this.systemFee(data);
+都不对你现在这种写法都直接为0 了肯定是要去accountFee里去查的和其他方法一样
