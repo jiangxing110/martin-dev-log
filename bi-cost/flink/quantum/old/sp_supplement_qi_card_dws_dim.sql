@@ -21,24 +21,18 @@ CREATE TEMPORARY TABLE source_dws_qi_card_finance_daily_p (
     id                        BIGINT,
     report_date               DATE,
     account_id                STRING,
-    account_type              STRING,
-    account_category          STRING,
-    system_type               STRING,
     version                   INT,
     remarks                   STRING,
     create_time               TIMESTAMP(6),
     update_time               TIMESTAMP(6),
     delete_time               TIMESTAMP(6),
-    sale_id                   STRING,
-    am_id                     STRING,
     cost_reimbursement_vol    DECIMAL(20, 4),
     cost_service_vol          DECIMAL(20, 4),
     cost_acs_regular_count    INT,
     cost_acs_vip_count        INT,
     cost_vrm_count            INT,
     rebate_interchange_vol    DECIMAL(20, 4),
-    rebate_incentive_vol      DECIMAL(20, 4),
-    cost_fixed_fee            DECIMAL(20, 4)
+    rebate_incentive_vol      DECIMAL(20, 4)
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADBPG_OLD_DW_POST}:${secret_values.ADBPG_OLD_DW_PORT}/${secret_values.ADBPG_OLD_DW_DATABASE}?stringtype=unspecified',
@@ -111,16 +105,16 @@ SELECT
     d.id,
     d.report_date,
     d.account_id,
-    COALESCE(d.account_type, da.account_type) AS account_type,
-    COALESCE(d.account_category, da.account_category) AS account_category,
-    COALESCE(d.system_type, da.system_type) AS system_type,
+    da.account_type,
+    da.account_category,
+    da.system_type,
     d.version,
     d.remarks,
     d.create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     d.delete_time,
-    COALESCE(d.sale_id, sr.sale_id) AS sale_id,
-    COALESCE(d.am_id, sr.am_id) AS am_id,
+    sr.sale_id,
+    sr.am_id,
     d.cost_reimbursement_vol,
     d.cost_service_vol,
     d.cost_acs_regular_count,
@@ -128,7 +122,7 @@ SELECT
     d.cost_vrm_count,
     d.rebate_interchange_vol,
     d.rebate_incentive_vol,
-    d.cost_fixed_fee
+    CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee
 FROM source_dws_qi_card_finance_daily_p d
 LEFT JOIN source_dim_account da
     ON da.id = d.account_id
