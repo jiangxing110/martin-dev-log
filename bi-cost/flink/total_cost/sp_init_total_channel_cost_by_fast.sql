@@ -56,15 +56,16 @@ CREATE TEMPORARY TABLE source_dws_bb_card_finance_daily_p (
     cost_fixed_fee           DECIMAL(20, 4),
     sale_id                  STRING,
     am_id                    STRING,
-    delete_time              TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
+    delete_time              TIMESTAMP(6)
 ) WITH (
-    'connector' = 'adbpg',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dws_bb_card_finance_daily_p',
-    'targetSchema' = 'dws',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT * FROM dws.dws_bb_card_finance_daily_p) AS dws_bb_card_finance_daily_p_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '20000',
+    'scan.auto-commit' = 'false'
 );
 
 CREATE TEMPORARY TABLE source_dws_qi_card_finance_daily_p (
@@ -81,15 +82,16 @@ CREATE TEMPORARY TABLE source_dws_qi_card_finance_daily_p (
     rebate_interchange_vol    DECIMAL(20, 4),
     rebate_incentive_vol      DECIMAL(20, 4),
     cost_fixed_fee            DECIMAL(20, 4),
-    delete_time               TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
+    delete_time               TIMESTAMP(6)
 ) WITH (
-    'connector' = 'adbpg',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dws_qi_card_finance_daily_p',
-    'targetSchema' = 'dws',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT * FROM dws.dws_qi_card_finance_daily_p) AS dws_qi_card_finance_daily_p_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '20000',
+    'scan.auto-commit' = 'false'
 );
 
 CREATE TEMPORARY TABLE source_dws_sl_card_finance_daily_p (
@@ -101,15 +103,16 @@ CREATE TEMPORARY TABLE source_dws_sl_card_finance_daily_p (
     rebate_base     DECIMAL(20, 4),
     rebate_amt      DECIMAL(20, 4),
     cost_fixed_fee  DECIMAL(20, 4),
-    delete_time     TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
+    delete_time     TIMESTAMP(6)
 ) WITH (
-    'connector' = 'adbpg',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dws_sl_card_finance_daily_p',
-    'targetSchema' = 'dws',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT * FROM dws.dws_sl_card_finance_daily_p) AS dws_sl_card_finance_daily_p_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '20000',
+    'scan.auto-commit' = 'false'
 );
 
 CREATE TEMPORARY TABLE source_dwm_finance_channel_cost_p (
@@ -122,15 +125,16 @@ CREATE TEMPORARY TABLE source_dwm_finance_channel_cost_p (
     cost_amount      DECIMAL(20, 4),
     sale_id          STRING,
     am_id            STRING,
-    delete_time      TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
+    delete_time      TIMESTAMP(6)
 ) WITH (
-    'connector' = 'adbpg',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dwm_finance_channel_cost_p',
-    'targetSchema' = 'dwm',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT * FROM dwm.dwm_finance_channel_cost_p) AS dwm_finance_channel_cost_p_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '20000',
+    'scan.auto-commit' = 'false'
 );
 
 CREATE TEMPORARY VIEW v_channel_cost_source AS
@@ -257,7 +261,7 @@ CREATE TEMPORARY TABLE sink_dws_total_channel_cost_daily_p (
     'targetSchema' = 'dws',
     'userName' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'writeMode' = 'upsert',
+    'writeMode' = 'insert',
     'batchSize' = '2000'
 );
 
