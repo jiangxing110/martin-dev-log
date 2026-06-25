@@ -42,8 +42,6 @@ CREATE TABLE "ods"."ods_crypto_assets_transactions" (
 )
 PARTITION BY RANGE ("dt");
 
-ALTER TABLE "ods"."ods_crypto_assets_transactions"
-    OWNER TO "qbit_admin";
 
 COMMENT ON TABLE "ods"."ods_crypto_assets_transactions" IS 'ODS层：crypto_assets_transactions 同步表';
 

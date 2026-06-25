@@ -34,7 +34,6 @@ PARTITION BY RANGE (
   "settlement_date" "pg_catalog"."date_ops"
 );
 
-ALTER TABLE "dwm"."dwm_sl_card_transaction_detail_p" OWNER TO "qbit_admin";
 
 COMMENT ON TABLE "dwm"."dwm_sl_card_transaction_detail_p" IS 'SL渠道DWM结算明细表-基于qbitCardSettlement挂销售归属';
 COMMENT ON COLUMN "dwm"."dwm_sl_card_transaction_detail_p"."id" IS '主键ID，沿用qbitCardSettlement.id';

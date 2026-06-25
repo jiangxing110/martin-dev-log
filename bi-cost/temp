@@ -3,3 +3,13 @@
 1.对所有的脚本加备注区分 批处理 还是流处理
 2.对有添加了运行参数的脚本 给我输出来
 3.ods都需要实现原始数据库的表改变了ods的数据要变更dim的也要改变
+
+有些问题 我不知道是怎么处理的
+类似于ods_qbit_card_transaction 
+2026-05-01 交易有 20 笔closed ,10笔 pending ,10 笔 fail
+2026-05-02 交易有 25 笔closed ,0笔 pending ,15 笔 fail
+那我涉及的dwm dws 要怎么处理呢
+
+ff22382b-df2e-4a76-b92e-bc32e3b8b089
+f67cd913-4d76-47bf-b6f6-02c7531a2a69
+

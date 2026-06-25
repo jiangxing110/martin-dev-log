@@ -26,7 +26,6 @@ PARTITION BY RANGE (
   "report_date" "pg_catalog"."date_ops"
 );
 
-ALTER TABLE "dws"."dws_sl_card_finance_daily_p" OWNER TO "qbit_admin";
 
 COMMENT ON TABLE "dws"."dws_sl_card_finance_daily_p" IS 'SL渠道财务汇总日表-按年分区';
 COMMENT ON COLUMN "dws"."dws_sl_card_finance_daily_p"."id" IS '主键: 业务指纹';

@@ -48,8 +48,7 @@ PARTITION BY RANGE (
   "report_date" "pg_catalog"."date_ops"
 );
 
-ALTER TABLE "dws"."dws_bb_card_finance_daily_p"
-  OWNER TO "qbit_admin";
+
 
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_p"."id" IS '主键: 日期+账户+销售+AM业务指纹';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_p"."report_date" IS '统计日期: 以交易北京时间为准';

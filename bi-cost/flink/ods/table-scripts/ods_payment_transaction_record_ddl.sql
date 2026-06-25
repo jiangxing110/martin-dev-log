@@ -52,8 +52,6 @@ CREATE TABLE "ods"."ods_payment_transaction_record" (
 )
 PARTITION BY RANGE ("dt");
 
-ALTER TABLE "ods"."ods_payment_transaction_record"
-    OWNER TO "qbit_admin";
 
 COMMENT ON TABLE "ods"."ods_payment_transaction_record" IS 'ODS层：payment_transaction_record 同步表';
 

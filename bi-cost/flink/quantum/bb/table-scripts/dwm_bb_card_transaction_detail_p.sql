@@ -39,8 +39,7 @@ PARTITION BY RANGE (
   "transaction_time" "pg_catalog"."timestamptz_ops"
 );
 
-ALTER TABLE "dwm"."dwm_bb_card_transaction_detail_p"
-  OWNER TO "qbit_admin";
+
 
 COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_p"."id" IS '主键ID-对应ODS层交易ID';
 COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_p"."account_id" IS '账户ID';

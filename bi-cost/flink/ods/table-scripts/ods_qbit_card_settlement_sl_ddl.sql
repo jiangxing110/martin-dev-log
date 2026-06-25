@@ -59,8 +59,7 @@ CREATE TABLE "ods"."ods_qbit_card_settlement_sl" (
 )
 PARTITION BY RANGE ("dt");
 
-ALTER TABLE "ods"."ods_qbit_card_settlement_sl"
-    OWNER TO "qbit_admin";
+
 
 COMMENT ON TABLE "ods"."ods_qbit_card_settlement_sl" IS 'ODS层：sl qbitCardSettlement 实时同步表';
 

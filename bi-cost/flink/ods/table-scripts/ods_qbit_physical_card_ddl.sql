@@ -52,8 +52,7 @@ CREATE TABLE "ods"."ods_qbit_physical_card" (
 )
 PARTITION BY RANGE ("dt");
 
-ALTER TABLE "ods"."ods_qbit_physical_card"
-    OWNER TO "qbit_admin";
+
 
 COMMENT ON TABLE "ods"."ods_qbit_physical_card" IS 'ODS层：qbitPhysicalCard 同步表';
 

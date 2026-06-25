@@ -22,7 +22,7 @@ CREATE TABLE "dwm"."dwm_finance_channel_cost_p" (
   "basis_count" numeric(20,4) DEFAULT 0,
   "month_basis_count" numeric(20,4) DEFAULT 0,
   "basis_amount" numeric(20,4) DEFAULT 0,
-  "month_basis_amount" numeric(20,4) DEFAULT 0,`
+  "month_basis_amount" numeric(20,4) DEFAULT 0,
   "allocation_rate" numeric(20,10) DEFAULT 0,
   "cost_amount" numeric(20,4) DEFAULT 0,
   "version" int4 DEFAULT 1,
@@ -36,8 +36,6 @@ PARTITION BY RANGE (
   "report_date" "pg_catalog"."date_ops"
 );
 
-ALTER TABLE "dwm"."dwm_finance_channel_cost_p"
-  OWNER TO "qbit_admin";
 
 COMMENT ON TABLE "dwm"."dwm_finance_channel_cost_p" IS '金融渠道成本归因明细表，承载量子卡、全球账户、加密账户、收单账户的金融渠道成本';
 COMMENT ON COLUMN "dwm"."dwm_finance_channel_cost_p"."id" IS '主键: 日期+账户+产品线+provider+cost_type+source_month+销售+AM业务指纹';

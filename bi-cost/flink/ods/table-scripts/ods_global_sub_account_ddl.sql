@@ -41,8 +41,6 @@ CREATE TABLE "ods"."ods_global_sub_account" (
 )
 PARTITION BY RANGE ("dt");
 
-ALTER TABLE "ods"."ods_global_sub_account"
-    OWNER TO "qbit_admin";
 
 COMMENT ON TABLE "ods"."ods_global_sub_account" IS 'ODS层：globalSubAccount 同步表';
 

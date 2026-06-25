@@ -38,8 +38,7 @@ CREATE TABLE "ods"."ods_idv_channel_request_record" (
 )
 PARTITION BY RANGE ("dt");
 
-ALTER TABLE "ods"."ods_idv_channel_request_record"
-    OWNER TO "qbit_admin";
+
 
 COMMENT ON TABLE "ods"."ods_idv_channel_request_record" IS 'ODS层：idv_channel_request_record 同步表';
 

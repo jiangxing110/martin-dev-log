@@ -28,8 +28,7 @@ PARTITION BY RANGE (
   "report_date" "pg_catalog"."date_ops"
 );
 
-ALTER TABLE "dws"."dws_total_channel_cost_daily_p"
-  OWNER TO "qbit_admin";
+
 
 COMMENT ON TABLE "dws"."dws_total_channel_cost_daily_p" IS '客户总渠道成本日汇总表';
 COMMENT ON COLUMN "dws"."dws_total_channel_cost_daily_p"."id" IS '主键: 日期+账户+销售+AM业务指纹';
