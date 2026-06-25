@@ -198,7 +198,7 @@ SELECT
     wallet,
     mcc
 FROM flink_source_qbit_card_settlement
-WHERE "createTime" >'2026-05-01 00:00:00' and "createTime" <'2026-06-01 00:00:00'
+WHERE "createTime" >'2026-01-01 00:00:00' and "createTime" <'2026-06-25 00:00:00'
 and provider in('SlashCard43612081')
 ;
 END;
