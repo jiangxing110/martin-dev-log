@@ -1,11 +1,12 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-16
+-- 历史名称：sp_init_finance_channel_cost_by_fast.sql
 -- Description:    金融渠道成本 DWM 批量初始化/回刷
 -- 作业元信息：
 --   作业类型：批处理
 --   运行方式：一次性初始化/回刷或调度执行
---   运行参数：source_month, next_month, product_line, provider, source_tag, cost_type
+--   运行参数：source_month, next_month, product_line, provider, source_tag, cost_type, start_date, end_date
 --   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
 -- Notes:
 --   1. 本作业只做 batch，不做 CDC。

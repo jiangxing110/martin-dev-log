@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-15
+-- 历史名称：sp_sync_qi_card_incremental.sql
 -- Description:    Quantum QI CDC 增量同步: qbit_card_transaction -> DWM
 -- 作业元信息：
 --   作业类型：流处理 CDC

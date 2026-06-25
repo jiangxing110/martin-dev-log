@@ -1,11 +1,12 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-15
+-- 历史名称：sp_init_qi_card_dws_by_fast.sql
 -- Description:    Quantum QI DWS 批量初始化/回刷
 -- 作业元信息：
 --   作业类型：批处理
 --   运行方式：一次性初始化/回刷或调度执行
---   运行参数：无
+--   运行参数：start_date, end_date
 --   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
 -- Notes:
 --   1. 主链路: DWM -> DWS
@@ -151,3 +152,4 @@ CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_p (
 
 INSERT INTO sink_dws_qi_card_finance_daily_p
 SELECT * FROM v_dws_qi_daily_base;
+

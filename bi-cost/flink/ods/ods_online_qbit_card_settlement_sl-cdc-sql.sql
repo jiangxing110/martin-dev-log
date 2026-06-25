@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martin-dev-log
 -- Created Time:   2026-06-16
+-- 历史名称：sp_sync_qbit_card_settlement_sl_ods.sql
 -- 功能：PG业务表 qbitCardSettlement 实时同步到 ODS层 ods_qbit_card_settlement
 -- 作业元信息：
 --   作业类型：流处理 CDC

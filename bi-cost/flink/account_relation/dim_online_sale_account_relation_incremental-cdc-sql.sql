@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-16
+-- 历史名称：sp_sync_dim_sale_account_relation_incremental.sql
 -- Description:    销售关系 DIM CDC 增量同步
 -- 作业元信息：
 --   作业类型：流处理 CDC

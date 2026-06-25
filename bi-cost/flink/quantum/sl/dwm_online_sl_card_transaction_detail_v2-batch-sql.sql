@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-15
+-- 历史名称：sp_init_sl_card_dwm_by_fast_v2.sql
 -- Description:    Quantum SL DWM 批量初始化/回刷
 -- 作业元信息：
 --   作业类型：批处理

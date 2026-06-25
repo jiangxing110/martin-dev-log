@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-22
+-- 历史名称：sp_init_idv_channel_request_record_ods.sql
 -- 功能：PG业务表 idv_channel_request_record 实时同步到 ODS层 ods_idv_channel_request_record
 -- 作业元信息：
 --   作业类型：流处理 CDC

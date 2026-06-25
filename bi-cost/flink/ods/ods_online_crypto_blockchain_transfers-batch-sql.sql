@@ -1,11 +1,12 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-22
+-- 历史名称：sp_init_crypto_blockchain_transfers_ods.sql
 -- 功能：PG视图 view_crypto_assets_blockchain_transfers 同步到 ODS层 ods_crypto_blockchain_transfers
 -- 作业元信息：
 --   作业类型：批处理
 --   运行方式：调度执行
---   运行参数：无
+--   运行参数：start_date, end_date
 --   源库变更响应：源为派生视图 view_crypto_assets_blockchain_transfers，不能直接 CDC；源数据变化需依赖上游 ODS/MV 刷新后重跑。
 --   ODS说明：本脚本同步派生视图结果；原始表变更需先进入上游 ODS/MV，再调度重跑本脚本。
 -- 模式：JDBC 批读（视图不支持 CDC），全量刷新
@@ -133,3 +134,4 @@ SELECT
     fees,
     CURRENT_TIMESTAMP AS submit_time
 FROM source_view_crypto_blockchain_transfers;
+

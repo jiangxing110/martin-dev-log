@@ -1,11 +1,12 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-15
+-- 历史名称：sp_init_bb_card_dwm_by_fast.sql
 -- Description:    Quantum BB DWM 批量初始化/回刷
 -- 作业元信息：
 --   作业类型：批处理
 --   运行方式：一次性初始化/回刷或调度执行
---   运行参数：无
+--   运行参数：start_time, end_time
 --   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
 -- Notes:
 --   1. Batch 主源: qbit_card_transaction
@@ -30,6 +31,10 @@ SET 'table.exec.mini-batch.enabled' = 'true';
 SET 'table.exec.mini-batch.allow-latency' = '5s';
 SET 'table.exec.mini-batch.size' = '5000';
 
+-- 传参示例:
+-- start_time = 2026-06-01 00:00:00
+-- end_time   = 2026-07-01 00:00:00
+-- 建议按自然月回刷，以便 PostgreSQL 更充分利用 transaction_time 分区裁剪
 
 CREATE TEMPORARY TABLE source_qbit_card_transaction (
     id                  STRING,
@@ -357,4 +362,7 @@ CREATE TEMPORARY TABLE sink_dwm_bb_card_transaction_detail_p (
 );
 
 INSERT INTO sink_dwm_bb_card_transaction_detail_p
-SELECT * FROM v_dwm_bb_card_transaction_detail;
+SELECT * FROM v_dwm_bb_card_transaction_detail
+WHERE transaction_time >= CAST('${start_time}' AS TIMESTAMP(6))
+  AND transaction_time < CAST('${end_time}' AS TIMESTAMP(6));
+

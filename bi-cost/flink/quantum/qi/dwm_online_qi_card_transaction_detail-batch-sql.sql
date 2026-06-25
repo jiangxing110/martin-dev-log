@@ -1,11 +1,12 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-15
+-- 历史名称：sp_init_qi_card_dwm_by_fast.sql
 -- Description:    Quantum QI DWM 批量初始化/回刷
 -- 作业元信息：
 --   作业类型：批处理
 --   运行方式：一次性初始化/回刷或调度执行
---   运行参数：无
+--   运行参数：start_time, end_time
 --   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
 -- Notes:
 --   1. Batch 主源: qbit_card_transaction
@@ -287,4 +288,7 @@ CREATE TEMPORARY TABLE sink_dwm_qi_card_transaction_detail_p (
 );
 
 INSERT INTO sink_dwm_qi_card_transaction_detail_p
-SELECT * FROM v_dwm_qi_card_transaction_detail;
+SELECT * FROM v_dwm_qi_card_transaction_detail
+WHERE transaction_time >= CAST('${start_time}' AS TIMESTAMP(6))
+  AND transaction_time < CAST('${end_time}' AS TIMESTAMP(6));
+

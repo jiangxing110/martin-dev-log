@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-22
+-- 历史名称：sp_init_gross_profit_daily_by_fast.sql
 -- Description:    Gross Profit 批量初始化/回刷
 -- 作业元信息：
 --   作业类型：批处理

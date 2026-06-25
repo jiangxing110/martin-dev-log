@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-22
+-- 历史名称：sp_init_global_sub_account_ods.sql
 -- 功能：PG业务表 globalSubAccount 实时同步到 ODS层 ods_global_sub_account
 -- 作业元信息：
 --   作业类型：流处理 CDC

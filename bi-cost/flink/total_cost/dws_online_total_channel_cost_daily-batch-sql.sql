@@ -1,11 +1,12 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-16
+-- 历史名称：sp_init_total_channel_cost_by_fast.sql
 -- Description:    总渠道成本 DWS 批量初始化/回刷
 -- 作业元信息：
 --   作业类型：批处理
 --   运行方式：一次性初始化/回刷或调度执行
---   运行参数：无
+--   运行参数：start_date, end_date
 --   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
 -- Notes:
 --   1. BB/QI/SL 作为量子卡卡渠道成本来源
@@ -272,3 +273,4 @@ CREATE TEMPORARY TABLE sink_dws_total_channel_cost_daily_p (
 
 INSERT INTO sink_dws_total_channel_cost_daily_p
 SELECT * FROM v_total_channel_cost_daily;
+
