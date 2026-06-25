@@ -35,7 +35,7 @@ CREATE TEMPORARY TABLE source_profit_revenue_daily (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT report_date, account_id, account_type, account_category, system_type, category, revenue_amount FROM dws.vw_profit_revenue_daily WHERE report_date >= CAST(''${start_date}'' AS DATE) AND report_date < CAST(''${end_date}'' AS DATE)) AS vw_profit_revenue_daily_f',
+    'table-name' = '(SELECT stat_date AS report_date, account_id, account_type, account_category, system_type, category, amount AS revenue_amount FROM dws.dws_revenue_summary_daily_mv WHERE stat_date >= CAST(''${start_date}'' AS DATE) AND stat_date < CAST(''${end_date}'' AS DATE)) AS dws_revenue_summary_daily_mv_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
