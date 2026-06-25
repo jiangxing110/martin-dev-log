@@ -2,6 +2,11 @@
 -- Author:         martinJiang
 -- Created Time:   2026-06-15
 -- Description:    Quantum SL DWM 批量初始化/回刷
+-- 作业元信息：
+--   作业类型：批处理
+--   运行方式：一次性初始化/回刷或调度执行
+--   运行参数：start_time, end_time
+--   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
 -- Notes:
 --   1. Batch 主源: PostgreSQL 侧先完成 settlement + qbit_transaction join
 --   2. Flink 只消费 join 后的基础结果，减少 TaskManager 内部 hash join 压力

@@ -2,6 +2,11 @@
 -- Author:         martinJiang
 -- Created Time:   2026-06-23
 -- 功能：ADBPG ODS物化视图，等价于 PG public.view_crypto_assets_blockchain_transfers
+-- 作业元信息：
+--   作业类型：DDL建表/视图脚本
+--   运行方式：非运行作业
+--   运行参数：无
+--   源库变更响应：不涉及源库变更同步；用于创建 ADBPG 目标表、分区、索引或视图。
 -- 说明：基表 ods_crypto_assets_transfers / ods_balance / ods_crypto_assets_transactions
 --       均已通过 CDC 同步到 ODS，在 ADBPG 内建物化视图无需处理 UUID 问题
 --********************************************************************--

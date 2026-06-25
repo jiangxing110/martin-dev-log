@@ -2,6 +2,11 @@
 -- Author:         martinJiang
 -- Created Time:   2026-06-22
 -- Description:    Gross Profit 批量初始化/回刷
+-- 作业元信息：
+--   作业类型：批处理
+--   运行方式：一次性初始化/回刷或调度执行
+--   运行参数：start_date, end_date
+--   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
 -- Notes:
 --   1. 收入输入来自独立视图 dws.vw_profit_revenue_daily
 --   2. 成本输入来自 dws.dws_total_channel_cost_daily_p

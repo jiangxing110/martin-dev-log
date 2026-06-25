@@ -1,3 +1,8 @@
+-- 作业元信息：
+--   作业类型：DDL建表/视图脚本
+--   运行方式：非运行作业
+--   运行参数：无
+--   源库变更响应：不涉及源库变更同步；用于创建 ADBPG 目标表、分区、索引或视图。
 CREATE TABLE "dws"."dws_total_channel_cost_daily_p" (
   "id" int8 NOT NULL,
   "report_date" date NOT NULL,

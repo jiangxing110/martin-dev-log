@@ -2,6 +2,11 @@
 -- Author:         martinJiang
 -- Created Time:   2026-06-23
 -- Description:    金融渠道成本 DWM 批量初始化 - QUANTUM_CARD / IDEMIA
+-- 作业元信息：
+--   作业类型：批处理
+--   运行方式：一次性初始化/回刷或调度执行
+--   运行参数：source_month, next_month
+--   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
 -- 说明：按底层 provider 拆分，每个作业只加载自己需要的 source 表
 -- 执行前置：
 --   UPDATE dwm.dwm_finance_channel_cost_p

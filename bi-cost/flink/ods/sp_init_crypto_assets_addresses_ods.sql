@@ -2,6 +2,12 @@
 -- Author:         martinJiang
 -- Created Time:   2026-06-22
 -- 功能：PG业务表 crypto_assets_addresses 实时同步到 ODS层 ods_crypto_assets_addresses
+-- 作业元信息：
+--   作业类型：流处理 CDC
+--   运行方式：全量初始化 + 增量实时同步
+--   运行参数：无
+--   源库变更响应：源库表 INSERT/UPDATE/DELETE 通过 postgres-cdc 同步到 ODS。
+--   ODS说明：ODS 原始层优先使用 postgres-cdc，确保原始库表变更能同步到 ods 表。
 -- 模式：全量初始化 + 增量实时同步 | 支持 Upsert/Delete
 ----------------------------------------------------------------------
 

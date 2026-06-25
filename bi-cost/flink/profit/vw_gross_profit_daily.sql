@@ -1,3 +1,8 @@
+-- 作业元信息：
+--   作业类型：DDL视图脚本
+--   运行方式：非运行作业
+--   运行参数：无
+--   源库变更响应：不涉及源库变更同步；用于创建毛利查询视图。
 CREATE OR REPLACE VIEW "dws"."vw_gross_profit_daily" AS
 SELECT
     r.report_date,

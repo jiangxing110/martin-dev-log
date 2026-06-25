@@ -1,3 +1,8 @@
+-- 作业元信息：
+--   作业类型：DDL建表/视图脚本
+--   运行方式：非运行作业
+--   运行参数：无
+--   源库变更响应：不涉及源库变更同步；用于创建 ADBPG 目标表、分区、索引或视图。
 CREATE TABLE "dwm"."dwm_qi_card_transaction_detail_p" (
   "id" uuid NOT NULL,
   "transaction_id" varchar(100) COLLATE "pg_catalog"."default" NOT NULL,

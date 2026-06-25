@@ -2,6 +2,11 @@
 -- Author:         martinJiang
 -- Created Time:   2026-06-15
 -- Description:    Quantum QI CDC 增量同步: qbit_card_transaction -> DWM
+-- 作业元信息：
+--   作业类型：流处理 CDC
+--   运行方式：全量初始化 + 增量实时同步
+--   运行参数：无
+--   源库变更响应：源表变更通过 postgres-cdc 驱动下游写入。
 -- Notes:
 --   1. CDC 只负责 ODS -> DWM
 --   2. 按 transactionTime 匹配 dim_sale_account_relation_p 获取 sale_id / am_id

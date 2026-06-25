@@ -2,6 +2,12 @@
 -- Author:         martinJiang
 -- Created Time:   2026-06-16
 -- Description:    销售关系 DIM 批量初始化/回刷
+-- 作业元信息：
+--   作业类型：批处理
+--   运行方式：一次性初始化/回刷或调度执行
+--   运行参数：无
+--   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
+--   DIM说明：销售关系 DIM 的持续变更由 CDC 增量脚本承担。
 -- Notes:
 --   1. 主源: salesAccountRelation
 --   2. 只同步销售关系时间线，不展开 api_account_relation 子户

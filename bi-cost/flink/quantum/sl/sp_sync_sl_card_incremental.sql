@@ -2,6 +2,11 @@
 -- Author:         martinJiang
 -- Created Time:   2026-06-15
 -- Description:    Quantum SL 日增量同步: qbitCardSettlement -> DWM
+-- 作业元信息：
+--   作业类型：日增量批处理
+--   运行方式：调度执行
+--   运行参数：无
+--   源库变更响应：按调度窗口回刷增量数据，不使用 CDC 常驻监听。
 -- Notes:
 --   1. DWM 基于 qbitCardSettlement
 --   2. qbitCardSettlement.qbitCardTransactionId 仅用于补 account_id / qbit_transaction_id

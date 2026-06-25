@@ -2,6 +2,12 @@
 -- Author:         martinJiang
 -- Created Time:   2026-06-16
 -- Description:    销售关系 DIM CDC 增量同步
+-- 作业元信息：
+--   作业类型：流处理 CDC
+--   运行方式：全量初始化 + 增量实时同步
+--   运行参数：无
+--   源库变更响应：salesAccountRelation 变更通过 postgres-cdc 同步到 DIM。
+--   DIM说明：销售关系 DIM 的持续变更由 CDC 增量脚本承担。
 -- Notes:
 --   1. CDC 主源: salesAccountRelation
 --   2. 只同步销售关系时间线，不展开 api_account_relation 子户

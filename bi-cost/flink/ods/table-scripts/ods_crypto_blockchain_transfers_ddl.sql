@@ -2,6 +2,11 @@
 -- Author:         martinJiang
 -- Created Time:   2026-06-22
 -- 功能：ADBPG ODS目标表 ods_crypto_blockchain_transfers DDL | 按dt日期分区
+-- 作业元信息：
+--   作业类型：DDL建表/视图脚本
+--   运行方式：非运行作业
+--   运行参数：无
+--   源库变更响应：不涉及源库变更同步；用于创建 ADBPG 目标表、分区、索引或视图。
 -- 说明：先执行建表，再跑 Flink 同步作业
 -- 源表视图：public.view_crypto_assets_blockchain_transfers
 -- 注意：视图无法 CDC，使用 JDBC 批读
