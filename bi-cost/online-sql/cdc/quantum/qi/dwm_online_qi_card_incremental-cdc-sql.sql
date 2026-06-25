@@ -1,17 +1,17 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-15
--- 历史名称：sp_init_qi_card_dwm_by_fast.sql
--- Description:    Quantum QI DWM 批量初始化/回刷
+-- 历史名称：sp_sync_qi_card_incremental.sql
+-- Description:    Quantum QI CDC 增量同步: qbit_card_transaction -> DWM
 -- 作业元信息：
---   作业类型：批处理
---   运行方式：一次性初始化/回刷或调度执行
---   运行参数：start_time, end_time
---   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
+--   作业类型：流处理 CDC
+--   运行方式：全量初始化 + 增量实时同步
+--   运行参数：无
+--   源库变更响应：源表变更通过 postgres-cdc 驱动下游写入。
 -- Notes:
---   1. Batch 主源: qbit_card_transaction
+--   1. CDC 只负责 ODS -> DWM
 --   2. 按 transactionTime 匹配 dim_sale_account_relation_p 获取 sale_id / am_id
---   3. DWM 按 transaction_time 月分区
+--   3. DWS 日汇总由 sp_init_qi_card_dws_by_fast.sql 回刷受影响日期
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
@@ -33,27 +33,36 @@ SET 'table.exec.mini-batch.size' = '5000';
 
 CREATE TEMPORARY TABLE source_qbit_card_transaction (
     id                  STRING,
-    "transactionId"     STRING,
-    "accountId"         STRING,
-    "cardId"            STRING,
+    `transactionId`     STRING,
+    `accountId`         STRING,
+    `cardId`            STRING,
     status              STRING,
-    "transactionTime"   TIMESTAMP(6),
-    "businessType"      STRING,
+    `transactionTime`   TIMESTAMP(6),
+    `businessType`      STRING,
     provider            STRING,
-    "specialSourceData" STRING,
+    `specialSourceData` STRING,
     version             INT,
     remarks             STRING,
-    "createTime"        TIMESTAMP(6),
-    "updateTime"        TIMESTAMP(6),
-    "deleteTime"        TIMESTAMP(6),
+    `createTime`        TIMESTAMP(6),
+    `updateTime`        TIMESTAMP(6),
+    `deleteTime`        TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'qbit_card_transaction',
-    'targetSchema' = 'public',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'connector' = 'postgres-cdc',
+    'hostname' = '${secret_values.PG_TEST_HOST}',
+    'port' = '${secret_values.PG_TEST_PORT1}',
+    'username' = '${secret_values.PG_TEST_USERNAME}',
+    'password' = '${secret_values.PG_TEST_PASSWORD}',
+    'database-name' = '${secret_values.PG_TEST_DATABASE}',
+    'schema-name' = 'public',
+    'table-name' = 'qbit_card_transaction',
+    'slot.name' = 'flink_slot_qbit_card_transaction_qi_dwm',
+    'decoding.plugin.name' = 'pgoutput',
+    'debezium.publication.name' = 'flink_cdc_publication',
+    'debezium.slot.drop.on.stop' = 'true',
+    'debezium.decimal.handling.mode' = 'string',
+    'scan.startup.mode' = 'initial',
+    'scan.incremental.snapshot.enabled' = 'false'
 );
 
 CREATE TEMPORARY TABLE source_card_bin (
@@ -97,21 +106,6 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
-CREATE TEMPORARY TABLE source_dim_account (
-    id                STRING,
-    account_type      STRING,
-    "type"            STRING,
-    system_type       STRING,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'adbpg',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dim_account',
-    'targetSchema' = 'dim',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
-);
-
 CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     id                    STRING,
     relation_account_id   STRING,
@@ -134,38 +128,33 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
 CREATE TEMPORARY VIEW v_qi_base AS
 SELECT
     t.id,
-    t."transactionId" AS transaction_id,
-    t."accountId" AS account_id,
-    da.account_type,
-    da."type" AS account_category,
-    da.system_type,
+    t.`transactionId` AS transaction_id,
+    t.`accountId` AS account_id,
     t.status,
-    t."transactionTime" AS transaction_time,
+    t.`transactionTime` AS transaction_time,
     COALESCE(t.version, 1) AS version,
-    COALESCE(t.remarks, 'History Init') AS remarks,
-    t."createTime" AS create_time,
-    COALESCE(t."updateTime", t."createTime") AS update_time,
-    t."deleteTime" AS delete_time,
+    t.remarks,
+    t.`createTime` AS create_time,
+    COALESCE(t.`updateTime`, t.`createTime`) AS update_time,
+    t.`deleteTime` AS delete_time,
     CAST(COALESCE(e.usd_amount, CAST(0 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS billing_amount,
     e.channel_provision = 'QBIT' AS is_qbit_provision,
     e.country IN ('HK', 'HKG') AS is_hk_region,
-    t."businessType" = 'Consumption' AS is_consumption,
-    t."businessType" IN ('Reversal', 'Credit') AS is_reversal_or_credit,
-    JSON_VALUE(t."specialSourceData", '$.code.1001') IS NOT NULL
-        OR JSON_VALUE(t."specialSourceData", '$.code.1103') IS NOT NULL
-        OR JSON_VALUE(t."specialSourceData", '$.code.1105') IS NOT NULL AS has_special_code,
+    t.`businessType` = 'Consumption' AS is_consumption,
+    t.`businessType` IN ('Reversal', 'Credit') AS is_reversal_or_credit,
+    JSON_VALUE(t.`specialSourceData`, '$.code.1001') IS NOT NULL
+        OR JSON_VALUE(t.`specialSourceData`, '$.code.1103') IS NOT NULL
+        OR JSON_VALUE(t.`specialSourceData`, '$.code.1105') IS NOT NULL AS has_special_code,
     FALSE AS is_vip_account,
-    t."businessType" AS business_type,
-    t."cardId" AS card_id
+    t.`businessType` AS business_type,
+    t.`cardId` AS card_id
 FROM source_qbit_card_transaction t
 INNER JOIN source_card_bin b
     ON b.system_provider = t.provider
    AND b.brand = 'QbitIssuing'
 LEFT JOIN source_quantum_card_transaction_extend e
-    ON e.transaction_id = t."transactionId"
-LEFT JOIN source_dim_account da
-    ON da.id = t."accountId"
-WHERE t."deleteTime" IS NULL;
+    ON e.transaction_id = t.`transactionId`
+WHERE t.`deleteTime` IS NULL;
 
 CREATE TEMPORARY VIEW v_qi_direct_sale_relation AS
 SELECT tx_id, sale_id, am_id
@@ -221,9 +210,6 @@ SELECT
     b.id,
     b.transaction_id,
     b.account_id,
-    b.account_type,
-    b.account_category,
-    b.system_type,
     b.status,
     b.transaction_time,
     b.version,
@@ -253,9 +239,6 @@ CREATE TEMPORARY TABLE sink_dwm_qi_card_transaction_detail_p (
     id                    STRING,
     transaction_id        STRING,
     account_id            STRING,
-    account_type          STRING,
-    account_category      STRING,
-    system_type           STRING,
     status                STRING,
     transaction_time      TIMESTAMP(6),
     version               INT,
@@ -288,7 +271,4 @@ CREATE TEMPORARY TABLE sink_dwm_qi_card_transaction_detail_p (
 );
 
 INSERT INTO sink_dwm_qi_card_transaction_detail_p
-SELECT * FROM v_dwm_qi_card_transaction_detail
-WHERE transaction_time >= CAST('${start_time}' AS TIMESTAMP(6))
-  AND transaction_time < CAST('${end_time}' AS TIMESTAMP(6));
-
+SELECT * FROM v_dwm_qi_card_transaction_detail;

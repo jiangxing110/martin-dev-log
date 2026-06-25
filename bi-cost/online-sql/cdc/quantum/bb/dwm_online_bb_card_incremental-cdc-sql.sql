@@ -1,18 +1,17 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-15
--- 历史名称：sp_init_bb_card_dwm_by_fast.sql
--- Description:    Quantum BB DWM 批量初始化/回刷
+-- 历史名称：sp_sync_bb_card_incremental.sql
+-- Description:    Quantum BB CDC 增量同步: qbit_card_transaction/qbitCardSettlement -> DWM
 -- 作业元信息：
---   作业类型：批处理
---   运行方式：一次性初始化/回刷或调度执行
---   运行参数：start_time, end_time
---   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
+--   作业类型：流处理 CDC
+--   运行方式：全量初始化 + 增量实时同步
+--   运行参数：无
+--   源库变更响应：源表变更通过 postgres-cdc 驱动下游写入。
 -- Notes:
---   1. Batch 主源: qbit_card_transaction
---   2. 关联 qbitCardSettlement 提取清算/响应/国家因子
---   3. 按 transactionTime 匹配 dim_sale_account_relation_p 获取 sale_id / am_id
---   4. DWM 按 transaction_time 月分区
+--   1. CDC 只负责 ODS -> DWM
+--   2. 按 transactionTime 匹配 dim_sale_account_relation_p 获取 sale_id / am_id
+--   3. DWS 日汇总由 sp_init_bb_card_dws_by_fast.sql 回刷受影响日期
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
@@ -31,60 +30,74 @@ SET 'table.exec.mini-batch.enabled' = 'true';
 SET 'table.exec.mini-batch.allow-latency' = '5s';
 SET 'table.exec.mini-batch.size' = '5000';
 
--- 传参示例:
--- start_time = 2026-06-01 00:00:00
--- end_time   = 2026-07-01 00:00:00
--- 建议按自然月回刷，以便 PostgreSQL 更充分利用 transaction_time 分区裁剪
 
 CREATE TEMPORARY TABLE source_qbit_card_transaction (
     id                  STRING,
-    "transactionId"     STRING,
-    "sourceId"          STRING,
-    "accountId"         STRING,
-    "cardId"            STRING,
-    "transactionTime"   TIMESTAMP(6),
-    "createTime"        TIMESTAMP(6),
-    "thirdCompleteTime" TIMESTAMP(6),
-    "businessType"      STRING,
+    `transactionId`     STRING,
+    `sourceId`          STRING,
+    `accountId`         STRING,
+    `cardId`            STRING,
+    `transactionTime`   TIMESTAMP(6),
+    `createTime`        TIMESTAMP(6),
+    `thirdCompleteTime` TIMESTAMP(6),
+    `businessType`      STRING,
     status              STRING,
     remarks             STRING,
     provider            STRING,
-    "specialSourceData" STRING,
-    "updateTime"        TIMESTAMP(6),
-    "deleteTime"        TIMESTAMP(6),
+    `specialSourceData` STRING,
+    `updateTime`        TIMESTAMP(6),
+    `deleteTime`        TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'qbit_card_transaction',
-    'targetSchema' = 'public',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'connector' = 'postgres-cdc',
+    'hostname' = '${secret_values.PG_TEST_HOST}',
+    'port' = '${secret_values.PG_TEST_PORT1}',
+    'username' = '${secret_values.PG_TEST_USERNAME}',
+    'password' = '${secret_values.PG_TEST_PASSWORD}',
+    'database-name' = '${secret_values.PG_TEST_DATABASE}',
+    'schema-name' = 'public',
+    'table-name' = 'qbit_card_transaction',
+    'slot.name' = 'flink_slot_qbit_card_transaction_bb_dwm',
+    'decoding.plugin.name' = 'pgoutput',
+    'debezium.publication.name' = 'flink_cdc_publication',
+    'debezium.slot.drop.on.stop' = 'true',
+    'debezium.decimal.handling.mode' = 'string',
+    'scan.startup.mode' = 'initial',
+    'scan.incremental.snapshot.enabled' = 'false'
 );
 
 CREATE TEMPORARY TABLE source_qbit_card_settlement (
     id                      STRING,
-    "transactionId"         STRING,
-    "qbitCardTransactionId" STRING,
+    `transactionId`         STRING,
+    `qbitCardTransactionId` STRING,
     provider                STRING,
-    "transactionType"       STRING,
-    "billingAmount"         DECIMAL(38, 18),
-    "rawData"               STRING,
-    "createTime"            TIMESTAMP(6),
-    "deleteTime"            TIMESTAMP(6),
+    `transactionType`       STRING,
+    `billingAmount`         DECIMAL(38, 18),
+    `rawData`               STRING,
+    `createTime`            TIMESTAMP(6),
+    `deleteTime`            TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'qbitCardSettlement',
-    'targetSchema' = 'public',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'connector' = 'postgres-cdc',
+    'hostname' = '${secret_values.PG_TEST_HOST}',
+    'port' = '${secret_values.PG_TEST_PORT1}',
+    'username' = '${secret_values.PG_TEST_USERNAME}',
+    'password' = '${secret_values.PG_TEST_PASSWORD}',
+    'database-name' = '${secret_values.PG_TEST_DATABASE}',
+    'schema-name' = 'public',
+    'table-name' = 'qbitCardSettlement',
+    'slot.name' = 'flink_slot_qbit_card_settlement_bb_dwm',
+    'decoding.plugin.name' = 'pgoutput',
+    'debezium.publication.name' = 'flink_cdc_publication',
+    'debezium.slot.drop.on.stop' = 'true',
+    'debezium.decimal.handling.mode' = 'string',
+    'scan.startup.mode' = 'initial',
+    'scan.incremental.snapshot.enabled' = 'false'
 );
 
 CREATE TEMPORARY TABLE source_qbit_card (
     id     STRING,
-    "type" STRING,
+    `type` STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'adbpg',
@@ -121,21 +134,6 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
-CREATE TEMPORARY TABLE source_dim_account (
-    id                STRING,
-    account_type      STRING,
-    "type"            STRING,
-    system_type       STRING,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'adbpg',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dim_account',
-    'targetSchema' = 'dim',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
-);
-
 CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     id                    STRING,
     relation_account_id   STRING,
@@ -159,77 +157,68 @@ CREATE TEMPORARY VIEW v_bb_base AS
 WITH bb_tx AS (
     SELECT
         t.*,
-        c."type" AS card_org
+        c.`type` AS card_org
     FROM source_qbit_card_transaction t
     LEFT JOIN source_qbit_card c
-        ON c.id = t."cardId"
+        ON c.id = t.`cardId`
     INNER JOIN source_card_bin b
         ON b.system_provider = t.provider
        AND b.brand = 'BlueBanc'
-    WHERE t."deleteTime" IS NULL
+    WHERE t.`deleteTime` IS NULL
 ),
 matched_settle AS (
-    SELECT
-        t.id AS tx_uuid,
-        s.*
+    SELECT t.id AS tx_uuid, s.*
     FROM bb_tx t
     INNER JOIN source_qbit_card_settlement s
-        ON t."sourceId" = s."transactionId"
+        ON t.`sourceId` = s.`transactionId`
        AND s.provider = 'BlueBancCard'
-       AND s."deleteTime" IS NULL
+       AND s.`deleteTime` IS NULL
     UNION ALL
-    SELECT
-        t.id AS tx_uuid,
-        s.*
+    SELECT t.id AS tx_uuid, s.*
     FROM bb_tx t
     INNER JOIN source_qbit_card_settlement s
-        ON t.id = s."qbitCardTransactionId"
+        ON t.id = s.`qbitCardTransactionId`
        AND s.provider = 'BlueBancCard'
-       AND s."deleteTime" IS NULL
+       AND s.`deleteTime` IS NULL
 ),
 latest_settle AS (
     SELECT *
     FROM (
         SELECT
             m.*,
-            ROW_NUMBER() OVER (PARTITION BY tx_uuid ORDER BY "createTime" DESC) AS rn
+            ROW_NUMBER() OVER (PARTITION BY tx_uuid ORDER BY `createTime` DESC) AS rn
         FROM matched_settle m
     ) ranked_settle
     WHERE rn = 1
 )
 SELECT
     t.id,
-    t."accountId" AS account_id,
-    da.account_type,
-    da."type" AS account_category,
-    da.system_type,
-    t."cardId" AS card_id,
-    COALESCE(t."transactionTime", t."createTime") AS transaction_time,
-    t."thirdCompleteTime" AS third_complete_time,
-    t."businessType" AS business_type,
+    t.`accountId` AS account_id,
+    t.`cardId` AS card_id,
+    COALESCE(t.`transactionTime`, t.`createTime`) AS transaction_time,
+    t.`thirdCompleteTime` AS third_complete_time,
+    t.`businessType` AS business_type,
     t.status,
     t.remarks,
     t.card_org,
-    JSON_VALUE(s."rawData", '$.txnLocation') IN ('US', 'USA') OR JSON_VALUE(t."specialSourceData", '$.country') IN ('US', 'USA') AS is_dom,
-    JSON_VALUE(s."rawData", '$.responseCode') AS resp_code,
-    JSON_VALUE(s."rawData", '$.requestCode') AS request_code,
-    JSON_VALUE(s."rawData", '$.reasonCode') AS reason_code,
-    s."transactionType" NOT IN ('ST-REFUND_ADV', 'ST-PURCHASE_ADV', 'ST-ECOMM_ADV', 'ST-SETT_ADV', 'ST-ATM_ADV') AS is_valid_settle,
-    s."transactionType" = 'authorization.clearing' AS is_clearing,
-    s."transactionType" = 'authorization.reversal' AS is_reversal,
-    s."transactionType" = 'refund.clearing' AS is_refund,
-    CAST(COALESCE(s."billingAmount", CAST(0 AS DECIMAL(38, 18))) AS DECIMAL(20, 4)) AS billing_amount,
+    JSON_VALUE(s.`rawData`, '$.txnLocation') IN ('US', 'USA') OR JSON_VALUE(t.`specialSourceData`, '$.country') IN ('US', 'USA') AS is_dom,
+    JSON_VALUE(s.`rawData`, '$.responseCode') AS resp_code,
+    JSON_VALUE(s.`rawData`, '$.requestCode') AS request_code,
+    JSON_VALUE(s.`rawData`, '$.reasonCode') AS reason_code,
+    s.`transactionType` NOT IN ('ST-REFUND_ADV', 'ST-PURCHASE_ADV', 'ST-ECOMM_ADV', 'ST-SETT_ADV', 'ST-ATM_ADV') AS is_valid_settle,
+    s.`transactionType` = 'authorization.clearing' AS is_clearing,
+    s.`transactionType` = 'authorization.reversal' AS is_reversal,
+    s.`transactionType` = 'refund.clearing' AS is_refund,
+    CAST(COALESCE(s.`billingAmount`, CAST(0 AS DECIMAL(38, 18))) AS DECIMAL(20, 4)) AS billing_amount,
     1 AS version,
-    t."createTime" AS create_time,
-    COALESCE(t."updateTime", t."createTime") AS update_time,
-    t."deleteTime" AS delete_time,
-    JSON_VALUE(s."rawData", '$.txnLocation') AS settle_country,
-    JSON_VALUE(t."specialSourceData", '$.country') AS tx_country
+    t.`createTime` AS create_time,
+    COALESCE(t.`updateTime`, t.`createTime`) AS update_time,
+    t.`deleteTime` AS delete_time,
+    JSON_VALUE(s.`rawData`, '$.txnLocation') AS settle_country,
+    JSON_VALUE(t.`specialSourceData`, '$.country') AS tx_country
 FROM bb_tx t
 LEFT JOIN latest_settle s
-    ON s.tx_uuid = t.id
-LEFT JOIN source_dim_account da
-    ON da.id = t."accountId";
+    ON s.tx_uuid = t.id;
 
 CREATE TEMPORARY VIEW v_bb_direct_sale_relation AS
 SELECT tx_id, sale_id, am_id
@@ -284,9 +273,6 @@ CREATE TEMPORARY VIEW v_dwm_bb_card_transaction_detail AS
 SELECT
     b.id,
     b.account_id,
-    b.account_type,
-    b.account_category,
-    b.system_type,
     b.card_id,
     b.transaction_time,
     b.third_complete_time,
@@ -321,9 +307,6 @@ LEFT JOIN v_bb_root_sale_relation r
 CREATE TEMPORARY TABLE sink_dwm_bb_card_transaction_detail_p (
     id                  STRING,
     account_id          STRING,
-    account_type        STRING,
-    account_category    STRING,
-    system_type         STRING,
     card_id             STRING,
     transaction_time    TIMESTAMP(6),
     third_complete_time TIMESTAMP(6),
@@ -362,7 +345,4 @@ CREATE TEMPORARY TABLE sink_dwm_bb_card_transaction_detail_p (
 );
 
 INSERT INTO sink_dwm_bb_card_transaction_detail_p
-SELECT * FROM v_dwm_bb_card_transaction_detail
-WHERE transaction_time >= CAST('${start_time}' AS TIMESTAMP(6))
-  AND transaction_time < CAST('${end_time}' AS TIMESTAMP(6));
-
+SELECT * FROM v_dwm_bb_card_transaction_detail;
