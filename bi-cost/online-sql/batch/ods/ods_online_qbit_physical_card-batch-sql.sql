@@ -64,7 +64,7 @@ CREATE TEMPORARY TABLE flink_source_qbit_physical_card (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.PG_TEST_HOST}:${secret_values.PG_TEST_PORT1}/${secret_values.PG_TEST_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT * FROM qbitPhysicalCard) AS qbitPhysicalCard_f',
+    'table-name' = '(SELECT * FROM "qbitPhysicalCard") AS qbitPhysicalCard_f',
     'username' = '${secret_values.PG_TEST_USERNAME}',
     'password' = '${secret_values.PG_TEST_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

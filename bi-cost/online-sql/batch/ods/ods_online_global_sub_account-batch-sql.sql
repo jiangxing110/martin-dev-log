@@ -53,7 +53,7 @@ CREATE TEMPORARY TABLE flink_source_global_sub_account (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.PG_TEST_HOST}:${secret_values.PG_TEST_PORT1}/${secret_values.PG_TEST_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT * FROM globalSubAccount) AS globalSubAccount_f',
+    'table-name' = '(SELECT * FROM "globalSubAccount") AS globalSubAccount_f',
     'username' = '${secret_values.PG_TEST_USERNAME}',
     'password' = '${secret_values.PG_TEST_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

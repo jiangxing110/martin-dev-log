@@ -72,7 +72,7 @@ CREATE TEMPORARY TABLE flink_source_qbit_card_settlement (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.PG_TEST_HOST}:${secret_values.PG_TEST_PORT1}/${secret_values.PG_TEST_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT * FROM qbitCardSettlement) AS qbitCardSettlement_f',
+    'table-name' = '(SELECT * FROM "qbitCardSettlement") AS qbitCardSettlement_f',
     'username' = '${secret_values.PG_TEST_USERNAME}',
     'password' = '${secret_values.PG_TEST_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -187,6 +187,14 @@ SELECT
     wallet,
     mcc
 FROM flink_source_qbit_card_settlement
-WHERE "createTime" >'2026-01-01 00:00:00' and "createTime" <'2026-06-25 00:00:00'
-and provider in('SlashCard43612081')
+WHERE createTime >= CAST('${start_time}' AS TIMESTAMP(6))
+  AND createTime < CAST('${end_time}' AS TIMESTAMP(6))
+  AND provider IN (
+    'SlashCard43612081', 'SlashCardRecharge43612081',
+    'SlashCard40024200', 'SlashCardRecharge40024200',
+    'SlashCard43612077', 'SlashCardRecharge43612077',
+    'SlashCard43612078', 'SlashCardRecharge43612078',
+    'SlashCard43612079', 'SlashCardRecharge43612079',
+    'SlashCard43612080', 'SlashCardRecharge43612080'
+  )
 ;
