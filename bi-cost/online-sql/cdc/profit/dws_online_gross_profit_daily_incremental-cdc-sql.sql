@@ -36,7 +36,7 @@ CREATE TEMPORARY TABLE source_profit_revenue_daily (
     account_category  STRING,
     system_type       STRING,
     category          STRING,
-    revenue_amount    DECIMAL(20, 4)
+    revenue_amount    STRING
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
@@ -52,11 +52,11 @@ CREATE TEMPORARY TABLE source_total_channel_cost_daily (
     account_type      STRING,
     account_category  STRING,
     system_type       STRING,
-    acquiring_cost    DECIMAL(20, 4),
-    business_cost     DECIMAL(20, 4),
-    quantum_cost      DECIMAL(20, 4),
-    crypto_cost       DECIMAL(20, 4),
-    total_channel_cost DECIMAL(20, 4),
+    acquiring_cost    STRING,
+    business_cost     STRING,
+    quantum_cost      STRING,
+    crypto_cost       STRING,
+    total_channel_cost STRING,
     delete_time       TIMESTAMP(6)
 ) WITH (
     'connector' = 'jdbc',
@@ -76,12 +76,12 @@ SELECT
     COALESCE(r.account_category, c.account_category) AS account_category,
     COALESCE(r.system_type, c.system_type) AS system_type,
     r.category,
-    CAST(COALESCE(r.revenue_amount, CAST(0 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS revenue_amount,
+    CAST(COALESCE(CAST(r.revenue_amount AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS revenue_amount,
     CAST(
         CASE r.category
-            WHEN 'qbit_card' THEN COALESCE(c.quantum_cost, CAST(0 AS DECIMAL(20, 4)))
-            WHEN 'global_account' THEN COALESCE(c.business_cost, CAST(0 AS DECIMAL(20, 4)))
-            WHEN 'crypto_assets' THEN COALESCE(c.crypto_cost, CAST(0 AS DECIMAL(20, 4)))
+            WHEN 'qbit_card' THEN COALESCE(CAST(c.quantum_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
+            WHEN 'global_account' THEN COALESCE(CAST(c.business_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
+            WHEN 'crypto_assets' THEN COALESCE(CAST(c.crypto_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
             WHEN 'particle_financing' THEN CAST(0 AS DECIMAL(20, 4))
             WHEN 'company_registration' THEN CAST(0 AS DECIMAL(20, 4))
             WHEN 'offline_order' THEN CAST(0 AS DECIMAL(20, 4))
@@ -89,11 +89,11 @@ SELECT
         END AS DECIMAL(20, 4)
     ) AS channel_cost_amount,
     CAST(
-        COALESCE(r.revenue_amount, CAST(0 AS DECIMAL(20, 4))) -
+        COALESCE(CAST(r.revenue_amount AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4))) -
         CASE r.category
-            WHEN 'qbit_card' THEN COALESCE(c.quantum_cost, CAST(0 AS DECIMAL(20, 4)))
-            WHEN 'global_account' THEN COALESCE(c.business_cost, CAST(0 AS DECIMAL(20, 4)))
-            WHEN 'crypto_assets' THEN COALESCE(c.crypto_cost, CAST(0 AS DECIMAL(20, 4)))
+            WHEN 'qbit_card' THEN COALESCE(CAST(c.quantum_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
+            WHEN 'global_account' THEN COALESCE(CAST(c.business_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
+            WHEN 'crypto_assets' THEN COALESCE(CAST(c.crypto_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
             WHEN 'particle_financing' THEN CAST(0 AS DECIMAL(20, 4))
             WHEN 'company_registration' THEN CAST(0 AS DECIMAL(20, 4))
             WHEN 'offline_order' THEN CAST(0 AS DECIMAL(20, 4))
@@ -102,20 +102,20 @@ SELECT
     ) AS gross_profit_amount,
     CAST(
         CASE
-            WHEN COALESCE(r.revenue_amount, CAST(0 AS DECIMAL(20, 4))) = CAST(0 AS DECIMAL(20, 4)) THEN CAST(0 AS DECIMAL(20, 8))
+            WHEN COALESCE(CAST(r.revenue_amount AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4))) = CAST(0 AS DECIMAL(20, 4)) THEN CAST(0 AS DECIMAL(20, 8))
             ELSE (
                 (
-                    COALESCE(r.revenue_amount, CAST(0 AS DECIMAL(20, 4))) -
+                    COALESCE(CAST(r.revenue_amount AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4))) -
                     CASE r.category
-                        WHEN 'qbit_card' THEN COALESCE(c.quantum_cost, CAST(0 AS DECIMAL(20, 4)))
-                        WHEN 'global_account' THEN COALESCE(c.business_cost, CAST(0 AS DECIMAL(20, 4)))
-                        WHEN 'crypto_assets' THEN COALESCE(c.crypto_cost, CAST(0 AS DECIMAL(20, 4)))
+                        WHEN 'qbit_card' THEN COALESCE(CAST(c.quantum_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
+                        WHEN 'global_account' THEN COALESCE(CAST(c.business_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
+                        WHEN 'crypto_assets' THEN COALESCE(CAST(c.crypto_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
                         WHEN 'particle_financing' THEN CAST(0 AS DECIMAL(20, 4))
                         WHEN 'company_registration' THEN CAST(0 AS DECIMAL(20, 4))
                         WHEN 'offline_order' THEN CAST(0 AS DECIMAL(20, 4))
                         ELSE CAST(0 AS DECIMAL(20, 4))
                     END
-                ) / COALESCE(r.revenue_amount, CAST(0 AS DECIMAL(20, 4)))
+                ) / COALESCE(CAST(r.revenue_amount AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
             )
         END AS DECIMAL(20, 8)
     ) AS gross_margin,

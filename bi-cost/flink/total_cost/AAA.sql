@@ -35,6 +35,9 @@ CREATE TEMPORARY TABLE source_dws_bb_card_finance_daily_p (
     id                       BIGINT,
     report_date              DATE,
     account_id               STRING,
+    account_type             STRING,
+    account_category         STRING,
+    system_type              STRING,
     m_dom_auth_count         INT,
     m_int_auth_count         INT,
     v_dom_auth_count         INT,
@@ -78,6 +81,9 @@ CREATE TEMPORARY TABLE source_dws_qi_card_finance_daily_p (
     id                        BIGINT,
     report_date               DATE,
     account_id                STRING,
+    account_type              STRING,
+    account_category          STRING,
+    system_type               STRING,
     sale_id                   STRING,
     am_id                     STRING,
     cost_reimbursement_vol    DECIMAL(20, 4),
@@ -104,6 +110,9 @@ CREATE TEMPORARY TABLE source_dws_sl_card_finance_daily_p (
     id              BIGINT,
     report_date     DATE,
     account_id      STRING,
+    account_type    STRING,
+    account_category STRING,
+    system_type     STRING,
     sale_id         STRING,
     am_id           STRING,
     rebate_base     DECIMAL(20, 4),
@@ -143,92 +152,132 @@ CREATE TEMPORARY TABLE source_dwm_finance_channel_cost_p (
     'scan.auto-commit' = 'false'
 );
 
+CREATE TEMPORARY TABLE source_dim_account (
+    id                STRING,
+    account_type      STRING,
+    account_category  STRING,
+    system_type       STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT id, account_type, type AS account_category, system_type FROM dim.dim_account) AS dim_account_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000'
+);
+
 CREATE TEMPORARY VIEW v_channel_cost_source AS
 SELECT
-    report_date,
-    account_id,
-    sale_id,
-    am_id,
+    s.report_date,
+    s.account_id,
+    da.account_type,
+    da.account_category,
+    da.system_type,
+    s.sale_id,
+    s.am_id,
     'QUANTUM_CARD' AS product_line,
     'BB' AS cost_source,
     CAST(
-        COALESCE(m_dom_auth_count, 0) * 0.1090
-      + COALESCE(av_m_dom_count, 0) * 0.1090
-      + COALESCE(m_int_auth_count, 0) * 0.4845
-      + COALESCE(av_m_int_count, 0) * 0.4845
-      + COALESCE(v_dom_auth_count, 0) * 0.0725
-      + COALESCE(av_v_dom_count, 0) * 0.0725
-      + COALESCE(v_int_auth_count, 0) * 0.4700
-      + COALESCE(av_v_int_count, 0) * 0.4770
-      + COALESCE(m_int_decline_count, 0) * 0.3595
-      + COALESCE(v_int_decline_count, 0) * 0.3570
-      + COALESCE(dom_decline_count, 0) * 0.0890
-      + COALESCE(m_int_reversal_count, 0) * 0.7190
-      + COALESCE(v_int_reversal_count, 0) * 0.7140
-      + COALESCE(dom_reversal_count, 0) * 0.0890
-      + COALESCE(m_int_refund_count, 0) * 0.4845
-      + COALESCE(v_int_refund_count, 0) * 0.4770
-      + COALESCE(dom_refund_count, 0) * 0.1090
-      + COALESCE(active_card_count, 0) * 0.1000
-      + COALESCE(cost_fixed_fee, CAST(0 AS DECIMAL(20, 4)))
+        COALESCE(s.m_dom_auth_count, 0) * 0.1090
+      + COALESCE(s.m_int_auth_count, 0) * 0.4845
+      + COALESCE(s.v_dom_auth_count, 0) * 0.0725
+      + COALESCE(s.v_int_auth_count, 0) * 0.4700
+      + COALESCE(s.m_int_decline_count, 0) * 0.3595
+      + COALESCE(s.v_int_decline_count, 0) * 0.3570
+      + COALESCE(s.dom_decline_count, 0) * 0.0890
+      + COALESCE(s.m_int_reversal_count, 0) * 0.7190
+      + COALESCE(s.v_int_reversal_count, 0) * 0.7140
+      + COALESCE(s.dom_reversal_count, 0) * 0.1780
+      + COALESCE(s.m_int_refund_count, 0) * 0.4845
+      + COALESCE(s.v_int_refund_count, 0) * 0.4770
+      + COALESCE(s.dom_refund_count, 0) * 0.1090
+      + COALESCE(s.av_m_dom_count, 0) * 0.1090
+      + COALESCE(s.av_m_int_count, 0) * 0.4845
+      + COALESCE(s.av_v_dom_count, 0) * 0.0725
+      + COALESCE(s.av_v_int_count, 0) * 0.4770
+      + COALESCE(s.m_dom_clearing_vol, 0) * -0.0021
+      + COALESCE(s.m_int_clearing_vol, 0) * -0.0111
+      + COALESCE(s.v_dom_clearing_vol, 0) * -0.0016
+      + COALESCE(s.v_int_clearing_vol, 0) * -0.0116
+      + COALESCE(s.bb_channel_cashback_comm, 0) * -1
+      + COALESCE(s.active_card_count, 0) * 0.1000
+      + COALESCE(s.cost_fixed_fee, CAST(0 AS DECIMAL(20, 4)))
         AS DECIMAL(20, 4)
     ) AS cost_amount
-FROM source_dws_bb_card_finance_daily_p
-WHERE delete_time IS NULL
+FROM source_dws_bb_card_finance_daily_p s
+LEFT JOIN source_dim_account da ON da.id = s.account_id
+WHERE s.delete_time IS NULL
 
     
 UNION ALL
 
 SELECT
-    report_date,
-    account_id,
-    sale_id,
-    am_id,
+    s.report_date,
+    s.account_id,
+    da.account_type,
+    da.account_category,
+    da.system_type,
+    s.sale_id,
+    s.am_id,
     'QUANTUM_CARD' AS product_line,
     'QI' AS cost_source,
     CAST(
-        COALESCE(cost_reimbursement_vol, CAST(0 AS DECIMAL(20, 4)))
-      + COALESCE(cost_service_vol, CAST(0 AS DECIMAL(20, 4)))
-      + COALESCE(cost_acs_regular_count, 0)
-      + COALESCE(cost_acs_vip_count, 0)
-      + COALESCE(cost_vrm_count, 0)
-      + COALESCE(cost_fixed_fee, CAST(0 AS DECIMAL(20, 4)))
+        COALESCE(s.cost_reimbursement_vol * 0.9946, CAST(0 AS DECIMAL(20, 4)))
+      + COALESCE(s.cost_service_vol * 1.0084, CAST(0 AS DECIMAL(20, 4)))
+      + COALESCE(s.cost_acs_regular_count * 0.9852, CAST(0 AS DECIMAL(20, 4)))
+      + COALESCE(s.cost_acs_vip_count * 1.1146, CAST(0 AS DECIMAL(20, 4)))
+      + COALESCE(s.cost_vrm_count * 1.2239, CAST(0 AS DECIMAL(20, 4)))
+      + COALESCE(s.cost_fixed_fee, CAST(0 AS DECIMAL(20, 4)))
         AS DECIMAL(20, 4)
     ) AS cost_amount
-FROM source_dws_qi_card_finance_daily_p
-WHERE delete_time IS NULL
+FROM source_dws_qi_card_finance_daily_p s
+LEFT JOIN source_dim_account da ON da.id = s.account_id
+WHERE s.delete_time IS NULL
 
 UNION ALL
 
 SELECT
-    report_date,
-    account_id,
-    sale_id,
-    am_id,
+    s.report_date,
+    s.account_id,
+    da.account_type,
+    da.account_category,
+    da.system_type,
+    s.sale_id,
+    s.am_id,
     'QUANTUM_CARD' AS product_line,
     'SL' AS cost_source,
-    CAST(COALESCE(cost_fixed_fee, CAST(0 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS cost_amount
-FROM source_dws_sl_card_finance_daily_p
-WHERE delete_time IS NULL
+    CAST(COALESCE(s.cost_fixed_fee, CAST(0 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS cost_amount
+FROM source_dws_sl_card_finance_daily_p s
+LEFT JOIN source_dim_account da ON da.id = s.account_id
+WHERE s.delete_time IS NULL
 
 UNION ALL
 
 SELECT
-    report_date,
-    account_id,
-    sale_id,
-    am_id,
-    product_line,
-    CONCAT('FINANCE:', COALESCE(provider, ''), ':', COALESCE(cost_type, '')) AS cost_source,
-    CAST(COALESCE(cost_amount, CAST(0 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS cost_amount
-FROM source_dwm_finance_channel_cost_p
-WHERE delete_time IS NULL;
+    s.report_date,
+    s.account_id,
+    da.account_type,
+    da.account_category,
+    da.system_type,
+    s.sale_id,
+    s.am_id,
+    s.product_line,
+    CONCAT('FINANCE:', COALESCE(s.provider, ''), ':', COALESCE(s.cost_type, '')) AS cost_source,
+    CAST(COALESCE(s.cost_amount, CAST(0 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS cost_amount
+FROM source_dwm_finance_channel_cost_p s
+LEFT JOIN source_dim_account da ON da.id = s.account_id
+WHERE s.delete_time IS NULL;
 
 CREATE TEMPORARY VIEW v_total_channel_cost_daily AS
 SELECT
     CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', COALESCE(sale_id, ''), ':', COALESCE(am_id, '')))) AS BIGINT) AS id,
     report_date,
     account_id,
+    account_type,
+    account_category,
+    system_type,
     sale_id,
     am_id,
     CAST(SUM(CASE WHEN product_line = 'ACQUIRING' THEN cost_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS acquiring_cost,
@@ -242,12 +291,15 @@ SELECT
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM v_channel_cost_source
-GROUP BY report_date, account_id, sale_id, am_id;
+GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id;
 
 CREATE TEMPORARY TABLE sink_dws_total_channel_cost_daily_p (
     id                            BIGINT,
     report_date                   DATE,
     account_id                    STRING,
+    account_type                  STRING,
+    account_category              STRING,
+    system_type                   STRING,
     sale_id                       STRING,
     am_id                         STRING,
     acquiring_cost                DECIMAL(20, 4),
@@ -274,4 +326,3 @@ CREATE TEMPORARY TABLE sink_dws_total_channel_cost_daily_p (
 
 INSERT INTO sink_dws_total_channel_cost_daily_p
 SELECT * FROM v_total_channel_cost_daily;
-

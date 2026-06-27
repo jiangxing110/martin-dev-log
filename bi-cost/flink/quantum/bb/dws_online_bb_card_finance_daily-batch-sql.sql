@@ -96,12 +96,12 @@ SELECT
     CAST(SUM(CASE WHEN business_type = 'Fee_Consumption' AND remarks = '绑卡验证手续费' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') THEN 1 ELSE 0 END) AS INT) AS av_m_int_count,
     CAST(SUM(CASE WHEN business_type = 'Fee_Consumption' AND remarks = '绑卡验证手续费' AND card_org = 'VISA' AND tx_country IN ('US', 'USA') THEN 1 ELSE 0 END) AS INT) AS av_v_dom_count,
     CAST(SUM(CASE WHEN business_type = 'Fee_Consumption' AND remarks = '绑卡验证手续费' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') THEN 1 ELSE 0 END) AS INT) AS av_v_int_count,
-    CAST(SUM(CASE WHEN card_org = 'Master' AND is_dom = TRUE AND is_clearing = TRUE THEN billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_dom_clearing_vol,
-    CAST(SUM(CASE WHEN card_org = 'Master' AND is_dom = FALSE AND is_clearing = TRUE THEN billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_int_clearing_vol,
-    CAST(SUM(CASE WHEN card_org = 'VISA' AND is_dom = TRUE AND is_clearing = TRUE THEN billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
-    CAST(SUM(CASE WHEN card_org = 'VISA' AND is_dom = FALSE AND is_clearing = TRUE THEN billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_int_clearing_vol,
-    CAST(SUM(CASE WHEN is_valid_settle = TRUE AND (is_clearing = TRUE OR is_refund = TRUE) THEN billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
-    CAST(SUM(CASE WHEN is_valid_settle = TRUE AND (is_clearing = TRUE OR is_refund = TRUE) THEN billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
+    CAST(SUM(CASE WHEN card_org = 'Master' AND is_dom = TRUE AND is_clearing = TRUE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_dom_clearing_vol,
+    CAST(SUM(CASE WHEN card_org = 'Master' AND is_dom = FALSE AND is_clearing = TRUE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_int_clearing_vol,
+    CAST(SUM(CASE WHEN card_org = 'VISA' AND is_dom = TRUE AND is_clearing = TRUE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
+    CAST(SUM(CASE WHEN card_org = 'VISA' AND is_dom = FALSE AND is_clearing = TRUE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_int_clearing_vol,
+    CAST(SUM(CASE WHEN is_valid_settle = TRUE AND (is_clearing = TRUE OR is_refund = TRUE) THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
+    CAST(SUM(CASE WHEN is_valid_settle = TRUE AND (is_clearing = TRUE OR is_refund = TRUE) THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
     CAST(COUNT(DISTINCT card_id) AS INT) AS active_card_count,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
     sale_id,
@@ -169,4 +169,3 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_p (
 
 INSERT INTO sink_dws_bb_card_finance_daily_p
 SELECT * FROM v_dws_bb_daily_base;
-

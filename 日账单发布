@@ -39,49 +39,5 @@ COALESCE(sum(case when qcte."type" = 'Consumption' and not qcte.business_code_li
 COALESCE(sum ( case when qcte."type" = 'Consumption' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb and not qcte.business_code_list @> '1010'::jsonb then qcte.usd_amount else 0 end ) - sum (case when qcte.business_code_list @>'1105'::jsonb then qcte.usd_amount else 0 end ),0) as "unVerifyAmount", COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Closed' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1103'::jsonb and not qcte.business_code_list @> '1010'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb then 1 else 0 end),0) as "closeCount", COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Closed' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1013'::jsonb then qcte.usd_amount else 0 end ) - sum(case when qcte.business_code_list @> '1105'::jsonb then qcte.usd_amount else 0 end ),0) as "closeAmount", COALESCE(sum(case when qcte.business_code_list @> '1001'::jsonb then 1 else 0 end ),0) as "mandatoryCount", COALESCE(sum(case when qcte.business_code_list @>'1001'::jsonb then qcte.usd_amount else 0 end ),0) as "mandatoryAmount", COALESCE(mode() within group (order by NULLIF(trim(qcte.detail), '')), '') as "mainDetail" 
 FROM quantum_card_transaction_extend qcte 
 WHERE qcte.delete_time IS NULL AND qcte."type" IN ('Consumption', 'Credit') AND qcte."card_id" IN ( 'd8ea2a02-7a04-410d-857b-969f0c6c2476' ) 
-AND qcte."transaction_time" BETWEEN '2026-05-27 14:35:29.881' AND '2026-06-26 14:35:29.881' 
-GROUP BY qcte."card_id"
-
-
-QBIT	02adce3d-c32c-49c9-bc61-5b64a38a59a6
-BLUEBANC	059e5efd-7889-4d90-9064-9f9a4d834b32
-SLASH	357fe903-16b8-4afb-9812-9fac74824f31
-CORPAY	8ac28c18-6653-47d7-91ce-9ae7ada6d1a8
-I2C	e6d2689f-625b-4e04-86cc-0acff7ffadab
-
-
-
-     <!--1. 笔数类基数 (Count Fees Base - 授权/拒绝/冲正/退款)-->
-        COALESCE(m_dom_auth_count * 0.1090, 0) as "bbMasterDomCnt",
-        COALESCE(SUM(m_int_auth_count * 0.4845), 0) as "bbMasterIntCnt",
-        COALESCE(SUM(v_dom_auth_count * 0.0725), 0) as "bbVisaDomCnt",
-        COALESCE(SUM(v_int_auth_count * 0.4700), 0) as "bbVisaIntCnt",
-        COALESCE(SUM(m_int_decline_count * 0.3595), 0) as "bbMasterIntDecline",
-        COALESCE(SUM(v_int_decline_count * 0.3570), 0) as "bbVisaIntDecline",
-        COALESCE(SUM(dom_decline_count * 0.0890), 0) as "bbDomDecline",
-        COALESCE(SUM(m_int_reversal_count * 0.7190), 0) as "bbMasterIntReversal",
-        COALESCE(SUM(v_int_reversal_count * 0.7140), 0) as "bbVisaIntReversal",
-        COALESCE(SUM(dom_reversal_count * 0.1780), 0) as "bbDomReversal",
-        COALESCE(SUM(m_int_refund_count * 0.4845), 0) as "bbMasterIntRefund",
-        COALESCE(SUM(v_int_refund_count * 0.4770), 0) as "bbVisaIntRefund",
-        COALESCE(SUM(dom_refund_count * 0.1090), 0) as "bbDomRefund",
-        <!--2. AV 验证费基数-->
-        COALESCE(SUM(av_m_dom_count * 0.1090), 0) as "bbAcMasterDomCnt",
-        COALESCE(SUM(av_m_int_count * 0.4845), 0) as "bbAcMasterIntCnt",
-        COALESCE(SUM(av_v_dom_count * 0.0725), 0) as "bbAcVisaDomCnt",
-        COALESCE(SUM(av_v_int_count * 0.4770), 0) as "bbAcVisaIntCnt",
-        COALESCE(SUM(m_int_decline_count * 0.3595), 0) as "bbAcMasterIntDecline",
-        COALESCE(SUM(v_int_decline_count * 0.3570), 0) as "bbAcVisaIntDecline",
-        COALESCE(SUM(dom_decline_count * 0.0890), 0) as "bbAcDomDecline",
-        <!--3. 金额类基数 (Volume Fees Base - 流量费)-->
-        COALESCE(SUM(m_dom_clearing_vol * -0.0021), 0) as "bbMasterDomVol",
-        COALESCE(SUM(m_int_clearing_vol * -0.0111), 0) as "bbMasterIntVol",
-        COALESCE(SUM(v_dom_clearing_vol * -0.0016), 0) as "bbVisaDomVol",
-        COALESCE(SUM(v_int_clearing_vol * -0.0116), 0) as "bbVisaIntVol",
-
-          COALESCE(SUM(cost_reimbursement_vol*0.9946), 0) as "qiReimbursement",
-        COALESCE(SUM(cost_service_vol*1.0084), 0) as "qiCardService",
-        COALESCE(SUM(cost_acs_regular_count*0.9852), 0) as "qiSettleAuth",
-        COALESCE(SUM(cost_acs_vip_count*1.1146), 0) as "qiSettleVip",
-        COALESCE(SUM(cost_vrm_count*1.2239), 0) as "qiVrmFee"
-        FROM dws_qi_card_finance_daily_p as tr
+AND qcte."transaction_time" BETWEEN  AND ? GROUP BY qcte."card_id"
+==> Parameters: (String), (Timestamp), 2026-06-26 14:35:29.881(Timestamp)

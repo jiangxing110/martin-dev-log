@@ -66,3 +66,5 @@ CREATE INDEX "idx_dws_total_channel_cost_account_dim" ON "dws"."dws_total_channe
 
 CREATE TABLE "dws"."dws_total_channel_cost_daily_2026" PARTITION OF "dws"."dws_total_channel_cost_daily_p"
 FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+CREATE TABLE "dws"."dws_total_channel_cost_daily_2025_12" PARTITION OF "dws"."dws_total_channel_cost_daily_p"
+FOR VALUES FROM ('2025-12-01') TO ('2026-01-01');
