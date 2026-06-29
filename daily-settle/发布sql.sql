@@ -51,7 +51,7 @@ COMMENT ON COLUMN "public"."daily_statement_file"."status" IS '账单状态';
 COMMENT ON COLUMN "public"."daily_statement_file"."occurrence_time" IS '业务发生时间';
 
 CREATE TABLE "public"."balance_snapshot" (
-  "id" int8 NOT NULL DEFAULT nextval('balance_snapshot_id_seq'::regclass),
+  "id" int8 NOT NULL,
   "account_id" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
   "currency" varchar(10) COLLATE "pg_catalog"."default" NOT NULL,
   "wallet_type" varchar(32) COLLATE "pg_catalog"."default",
