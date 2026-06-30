@@ -1,0 +1,79 @@
+DELETE FROM "dws_qbit_card_transaction_extend_2026" AS d
+WHERE d."create_time">'2026-06-30 00:00:00'
+
+DELETE FROM "dws_sale_card_transaction_extend_2026" AS d
+WHERE d."create_time">'2026-06-30 00:00:00'
+
+
+
+-- 03. INSERT_DATA dws_qbit_card_transaction_extend_2026
+-- =========================================
+INSERT INTO "public"."dws_qbit_card_transaction_extend_2026" (
+  "id", "account_id", "provider", "bin", "business_type", "status", "settle_amount", "transaction_currency", "country", 
+  "transaction_count","fx_fee", "atm_fee", "apple_pay_fee","settle_fee", "create_date", "version", "create_time", "update_time")
+SELECT 
+  generate_snowflake_id() AS "id",
+  tr."accountId" AS "account_id",
+  tr."provider" AS "provider",
+  qc."firstSix" AS "bin",
+  tr."businessType",
+  tr."status" AS "status", 
+  COALESCE(SUM(tr."settleAmount"), 0) AS "settle_amount",
+  tr."transactionCurrency" AS "transaction_currency",
+  tr."specialSourceData"->>'country' AS "country",
+  COUNT(*) AS "transaction_count",
+  COALESCE(SUM((tr."specialSourceData"->>'markupFee')::numeric), 0) AS "fx_fee",
+  COALESCE(SUM(CASE WHEN tr.remarks LIKE '%ATM取现费' THEN fee::numeric ELSE 0 END), 0) AS "atm_fee",
+  COALESCE(SUM((tr."specialSourceData"->>'applePayFee')::numeric), 0) AS "apple_pay_fee",
+  COALESCE(SUM((tr."specialSourceData"->>'settleFee')::numeric), 0) AS "settle_fee",
+  TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS "create_date",
+  1 AS "version",
+  NOW() AS "create_time",
+  NOW() AS "update_time"
+FROM "qbit_card_transaction" AS tr
+LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
+WHERE 
+  tr."deleteTime" IS NULL
+  AND tr."createTime" >= '2026-06-10 00:00:00' AND tr."createTime" < '2026-06-11 00:00:00'
+GROUP BY 
+  tr."accountId", tr."provider", qc."firstSix", tr."businessType", tr."status",
+  tr."transactionCurrency", tr."specialSourceData"->>'country',TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE
+ON CONFLICT (id) DO NOTHING;
+
+
+-- 14. INSERT_DATA dws_sale_card_transaction_extend_2026
+-- =========================================
+INSERT INTO "public"."dws_sale_card_transaction_extend_2026" (
+  "id", "account_id", "sale_or_am_id", "business_type", "provider", "bin", "status", "settle_amount", "transaction_currency", "country", 
+  "transaction_count", "fx_fee", "atm_fee", "apple_pay_fee","settle_fee", "create_date", "version", "create_time", "update_time")
+SELECT 
+  generate_snowflake_id() AS id,
+  tr."accountId" AS account_id,
+  ids."sale_or_am_id",
+  tr."businessType",
+  tr."provider",
+  qc."firstSix" AS bin,
+  tr."status",
+  COALESCE(SUM(tr."settleAmount"), 0) AS settle_amount,
+  tr."transactionCurrency",
+  tr."specialSourceData"->>'country' AS country,
+  COUNT(*) AS transaction_count,
+  COALESCE(SUM((tr."specialSourceData"->>'markupFee')::numeric), 0) AS fx_fee,
+  COALESCE(SUM(CASE WHEN tr.remarks LIKE '%ATM取现费' THEN fee::numeric ELSE 0 END), 0) AS atm_fee,
+  COALESCE(SUM((tr."specialSourceData"->>'applePayFee')::numeric), 0) AS apple_pay_fee,
+  COALESCE(SUM((tr."specialSourceData"->>'settleFee')::numeric), 0) AS settle_fee,
+  TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date,
+  1 AS version,
+  NOW() AS create_time,
+  NOW() AS update_time
+FROM "qbit_card_transaction" AS tr
+LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc.id
+LEFT JOIN "ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::UUID = osat.transaction_id::UUID
+LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE
+WHERE 
+  tr."deleteTime" IS NULL
+  AND tr."createTime" >= '2026-06-10 00:00:00' AND tr."createTime" < '2026-06-11 00:00:00'
+GROUP BY 
+  tr."accountId", tr."provider", qc."firstSix", tr."businessType", tr."status",tr."transactionCurrency", tr."specialSourceData"->>'country',
+  TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE, ids."sale_or_am_id"
+ON CONFLICT (id) DO NOTHING;  

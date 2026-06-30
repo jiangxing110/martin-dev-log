@@ -59,3 +59,5 @@ WITH (
 
 我现在想要odd 的全球账户提交完业务经营证明的代办,
 如果OddAccountReview是Closed的那将OddAccountReview重新置为待审核（包括已完结的）
+daily_settle
+0 0 2 * * ?
