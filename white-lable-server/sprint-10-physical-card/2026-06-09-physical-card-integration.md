@@ -2,7 +2,7 @@
 
 ## 1. 背景
 
-本期支持 Infinity Launch 实体卡申请、邮寄地址提交、费用预览、物流查询、实体卡激活、PIN 设置/修改，以及 Admin 卡类型筛选。
+本期支持 Infinity Launch 实体卡申请、邮寄地址提交、卡样查询、制卡费查询、运费查询、物流查询、实体卡激活、PIN 设置/修改，以及 Admin 卡类型筛选。
 
 卡片类型复用数据库 `card.type` 字段：
 
@@ -10,6 +10,22 @@
 - `PHYSICAL_CARD`：实体卡
 
 实体卡专属履约信息保存在 `card_physical_detail`。
+
+## 1.1 2026-07-06 更新
+
+本次补充以下结论与接口调整：
+
+- 会员端不再建议继续使用 `GET /member/api/v1/card/{id}/physical/fee-preview`。
+- 实体卡费用已拆分为 3 个接口：
+  - `GET /member/api/v1/card/physical/designs`
+  - `GET /member/api/v1/card/physical/production-fees`
+  - `GET /member/api/v1/card/physical/shipping-fee`
+- 卡样列表查询条件为 `cardBin + firstSix`。
+- 制卡费用查询条件为 `cardBin + firstSix`。
+- 运费查询条件为 `cardBin + firstSix + country`。
+- White Label 调 assets 卡样内部接口时，不能复用老的 `buildNodeHeaders` 签名；`/qbit-assets/internal/physical-card/designs` 需要使用 assets 内部签名头：`x-sign`、`x-timestamp`、`x-nonce-str`。
+- 当前 White Label 的 `CardPinRequest` 已增加 `oldPassword` 字段，但底层 Interlace SDK 的 `UpdatePINReqDTO` 仍只有新 `pin`，暂未支持把旧 PIN 一并透传给上游校验。
+- 无论是 White Label 创建卡，还是 assets openApi 创建卡，当前都不会自动生成或返回默认 PIN；PIN 需要在开卡后单独设置。
 
 ## 2. 开卡能力
 
@@ -117,36 +133,75 @@ Query 参数：
 
 ## 5. 实体卡费用
 
-### 查询实体卡费用预览
+### 5.1 查询实体卡卡样列表
 
-`GET /member/api/v1/card/{id}/physical/fee-preview`
+`GET /member/api/v1/card/physical/designs`
 
-用途：进入 Shipping Address 页面时展示费用。
+Query 参数：
 
-响应示例：
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| cardBin | 是 | 卡段，例如 `45492418` |
+| firstSix | 是 | 卡号前六位，例如 `454924` |
 
-```json
-{
-  "currency": "USD",
-  "productionFee": 10,
-  "shippingFee": 15,
-  "totalCost": 25
-}
-```
+说明：
+
+- 当前 White Label 通过 assets 内部接口 `/qbit-assets/internal/physical-card/designs` 获取卡样列表。
+- assets 内部接口签名规则与老的 node 账户类接口不同，需使用基于 `method + path + timestamp + nonce` 的内部签名。
+- assets 若无匹配卡样，White Label 当前会回退到默认卡样。
+
+### 5.2 查询实体卡制卡费
+
+`GET /member/api/v1/card/physical/production-fees`
+
+Query 参数：
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| cardBin | 是 | 卡段 |
+| firstSix | 是 | 卡号前六位 |
+
+响应说明：
+
+- 当前返回币种 `USD`。
+- 制卡费需要按实际卡样材质和 API 口径匹配费率。
+- 当前涉及的费率类型至少包括：
+  - `AccountFeeType.QUANTUM_CARD_MAKE_CARD_FEE_BY_API`
+  - `AccountFeeType.QUANTUM_CARD_METAL_MAKE_CARD_FEE`
+  - `AccountFeeType.QUANTUM_CARD_CERAMIC_MAKE_CARD_FEE`
+
+### 5.3 查询实体卡运费
+
+`GET /member/api/v1/card/physical/shipping-fee`
+
+Query 参数：
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| cardBin | 是 | 卡段 |
+| firstSix | 是 | 卡号前六位 |
+| country | 是 | 邮寄国家，ISO2，例如 `US` |
+
+响应说明：
+
+- 当前返回币种 `USD`。
+- 运费来源为 `AccountFeeType.SHOPPING_FEE`。
 
 费用口径：
 
 | 费用 | AccountFeeType | 说明 |
 |---|---|---|
-| 制卡费 | `QuantumCardMakeCardFee` | 对应 `AccountFeeType.QUANTUM_CARD_MAKE_CARD_FEE` |
+| 制卡费 | `QuantumCardMakeCardFeeByApi` | API 口径基础制卡费，对应 `AccountFeeType.QUANTUM_CARD_MAKE_CARD_FEE_BY_API` |
+| 制卡费 | `QuantumCardMetalMakeCardFee` | 金属卡制卡费，对应 `AccountFeeType.QUANTUM_CARD_METAL_MAKE_CARD_FEE` |
+| 制卡费 | `QuantumCardCeramicMakeCardFee` | 陶瓷卡制卡费，对应 `AccountFeeType.QUANTUM_CARD_CERAMIC_MAKE_CARD_FEE` |
 | 邮寄费 | `ShoppingFee` | 对应 `AccountFeeType.SHOPPING_FEE` |
-| 总支出 | - | `productionFee + shippingFee` |
 
 注意：
 
+- 不再建议前端依赖旧的 `fee-preview` 接口。
 - 不使用 `_Caas` 版本费率。
 - 提交邮寄地址时后端会重新计算一次费用，并将 `production_fee`、`shipping_fee`、`total_cost` 快照保存到 `card_physical_detail`。
-- 如果缺少 `QuantumCardMakeCardFee` 或 `ShoppingFee` 配置，提交邮寄地址会失败。
+- 如果缺少对应材质制卡费或 `ShoppingFee` 配置，提交邮寄地址会失败。
 
 ## 6. 邮寄地址
 
@@ -226,6 +281,7 @@ Query 参数：
 
 ```json
 {
+  "oldPassword": "111111",
   "pin": "123456"
 }
 ```
@@ -235,6 +291,8 @@ Query 参数：
 - 只能本人账户操作。
 - 仅 `ACTIVATED` 实体卡可设置/修改 PIN。
 - PIN 当前按 6 位数字校验。
+- 当前 API 入参要求 `oldPassword` 为 6 位数字。
+- 但底层 Interlace SDK `UpdatePINReqDTO` 仍只有新 `pin`，暂未真正透传旧 PIN 给上游做校验。
 - PIN 不落库、不打印日志。
 - 成功后仅保存 `pin_set = true`。
 
@@ -279,7 +337,7 @@ Query 参数：
 2. 根据返回值展示 Add Virtual Card / Add Physical Card。
 3. 创建实体卡时传 `cardMode = PHYSICAL_CARD` 和实体卡 BIN ID。
 4. 创建成功后进入 Shipping Address 页面。
-5. Shipping Address 页面调用 `GET /card/{id}/physical/fee-preview` 展示费用。
+5. Shipping Address 页面先调用 `GET /card/physical/designs` 获取卡样，再调用 `GET /card/physical/production-fees` 和 `GET /card/physical/shipping-fee` 展示费用。
 6. 用户确认后调用 `POST /card/{id}/physical/shipping-address`。
 7. 详情页按 `physicalCardStatus` 控制按钮展示：
    - `PENDING_SHIPPING_ADDRESS`：展示填写邮寄地址。
@@ -292,6 +350,7 @@ Query 参数：
 - BZ 黑白塑料实体卡真实 `physicalCardDesignId`。
 - PIN 是否确认为 6 位数字。
 - 三方 `CARD.SETTING.UPDATED` resource 是否能明确识别 PIN 更新。
+- 上游 SDK / API 何时支持修改 PIN 时透传旧 PIN。
 - 费用配置中 `QuantumCardMakeCardFee`、`ShoppingFee` 是否已为 Infinity Launch 配好最终客户价。
 
 ## 14. curl 示例
@@ -443,10 +502,50 @@ curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/<
   -H 'timestamp: <TIMESTAMP>'
 ```
 
-### 14.8 查询实体卡费用预览
+### 14.8 查询实体卡卡样列表
 
 ```bash
-curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/<CARD_ID>/physical/fee-preview' \
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/physical/designs?cardBin=45492418&firstSix=454924' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.8.1 查询实体卡制卡费
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/physical/production-fees?cardBin=45492418&firstSix=454924' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.8.2 查询实体卡运费
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/physical/shipping-fee?cardBin=45492418&firstSix=454924&country=US' \
   -H 'Accept: application/json, text/plain, */*' \
   -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
   -H 'Connection: keep-alive' \
@@ -543,7 +642,7 @@ curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/<
   -H 'platform: member' \
   -H 'sign: <SIGN>' \
   -H 'timestamp: <TIMESTAMP>' \
-  --data-raw '{"pin":"123456"}'
+  --data-raw '{"oldPassword":"111111","pin":"123456"}'
 ```
 
 ### 14.13 会员端冻结实体卡

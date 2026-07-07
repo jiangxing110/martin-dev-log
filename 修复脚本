@@ -23,7 +23,7 @@ SELECT
   tr."specialSourceData"->>'country' AS "country",
   COUNT(*) AS "transaction_count",
   COALESCE(SUM((tr."specialSourceData"->>'markupFee')::numeric), 0) AS "fx_fee",
-  COALESCE(SUM(CASE WHEN tr.remarks LIKE '%ATM取现费' THEN fee::numeric ELSE 0 END), 0) AS "atm_fee",
+  COALESCE(SUM((tr."specialSourceData"->>'atmFee')::numeric), 0)  AS "atm_fee",
   COALESCE(SUM((tr."specialSourceData"->>'applePayFee')::numeric), 0) AS "apple_pay_fee",
   COALESCE(SUM((tr."specialSourceData"->>'settleFee')::numeric), 0) AS "settle_fee",
   TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS "create_date",
@@ -59,7 +59,7 @@ SELECT
   tr."specialSourceData"->>'country' AS country,
   COUNT(*) AS transaction_count,
   COALESCE(SUM((tr."specialSourceData"->>'markupFee')::numeric), 0) AS fx_fee,
-  COALESCE(SUM(CASE WHEN tr.remarks LIKE '%ATM取现费' THEN fee::numeric ELSE 0 END), 0) AS atm_fee,
+  COALESCE(SUM((tr."specialSourceData"->>'atmFee')::numeric), 0)  AS "atm_fee",
   COALESCE(SUM((tr."specialSourceData"->>'applePayFee')::numeric), 0) AS apple_pay_fee,
   COALESCE(SUM((tr."specialSourceData"->>'settleFee')::numeric), 0) AS settle_fee,
   TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date,
@@ -77,3 +77,25 @@ GROUP BY
   tr."accountId", tr."provider", qc."firstSix", tr."businessType", tr."status",tr."transactionCurrency", tr."specialSourceData"->>'country',
   TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE, ids."sale_or_am_id"
 ON CONFLICT (id) DO NOTHING;  
+
+
+1.首先我想要这些慢sql 可以拿出来进行执行的sql
+2.输出到/Users/martinjiang/martin-dev-log/ads-sql文件夹
+
+SELECT
+         
+        COALESCE(SUM (CASE WHEN tr."businessType" IN ('Consumption') THEN "fxFee"::numeric ELSE 0 END),0) AS
+        "fxFee" ,
+        COALESCE(SUM (CASE WHEN tr."businessType" IN ('Consumption') THEN "atmFee"::numeric+"applePayFee"::numeric ELSE
+        0 END),0) AS "atmFee" ,
+        COALESCE(SUM (CASE WHEN tr."businessType" IN ('Consumption') THEN "settleFee"::numeric ELSE
+        0 END),0) AS "settleFee" ,
+        COALESCE(SUM (CASE WHEN tr."businessType" IN ('Credit','Refund') THEN "settleAmount"::numeric ELSE 0 END),0) AS
+        "refundAmount" ,
+        COALESCE(SUM (CASE WHEN tr."businessType" IN ('Credit', 'Refund', 'Fee_Credit') THEN "fee"::numeric ELSE 0
+        END ),0) AS "refundFee" ,
+        COALESCE(SUM (CASE WHEN tr."businessType" IN ('Fee_Consumption') THEN "fee"::numeric ELSE 0 END ),0) AS
+        "consumptionAuthFee" ,
+        COALESCE(SUM (CASE WHEN tr."businessType" IN ('Declined_Fee') THEN "fee"::numeric ELSE 0 END ),0) AS
+        "rejectFee",
+        COALESCE(SUM (CAS
