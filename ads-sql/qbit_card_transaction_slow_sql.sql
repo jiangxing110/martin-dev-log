@@ -60,3 +60,7 @@
     ],
     "success": true
 }
+
+  1.physicalCardService.listDesigns(request)
+  2.List<PhysicalCardDesignResponseDTO> designs = listDesigns(normalizedRequest);
+  我感觉 2没有用到1的缓存

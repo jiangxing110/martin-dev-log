@@ -99,3 +99,8 @@ SELECT
         COALESCE(SUM (CASE WHEN tr."businessType" IN ('Declined_Fee') THEN "fee"::numeric ELSE 0 END ),0) AS
         "rejectFee",
         COALESCE(SUM (CAS
+
+ 关联
+ /Users/martinjiang/WebstormProjects/qbitpay_service
+/Users/martinjiang/IdeaProjects/qbit-assets
+给我整理一份文档到/Users/martinjiang/martin-dev-log/qbit_develop

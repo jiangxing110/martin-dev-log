@@ -11,7 +11,7 @@
 
 实体卡专属履约信息保存在 `card_physical_detail`。
 
-## 1.1 2026-07-06 更新
+## 1.1 2026-07-07 更新
 
 本次补充以下结论与接口调整：
 
@@ -23,9 +23,13 @@
 - 卡样列表查询条件为 `cardBin + firstSix`。
 - 制卡费用查询条件为 `cardBin + firstSix`。
 - 运费查询条件为 `cardBin + firstSix + country`。
+- 卡样列表结果增加 1 天缓存，缓存 key 为 `cardBin + firstSix`。
+- 查询制卡费、运费时，如果 `cardBin` 和 `firstSix` 同时为空，后端默认回退为 `cardBin = I2c`、`firstSix = 454924`。
 - White Label 调 assets 卡样内部接口时，不能复用老的 `buildNodeHeaders` 签名；`/qbit-assets/internal/physical-card/designs` 需要使用 assets 内部签名头：`x-sign`、`x-timestamp`、`x-nonce-str`。
-- 当前 White Label 的 `CardPinRequest` 已增加 `oldPassword` 字段，但底层 Interlace SDK 的 `UpdatePINReqDTO` 仍只有新 `pin`，暂未支持把旧 PIN 一并透传给上游校验。
+- `card_physical_detail` 已补充 `physical_card_material` 字段，创建实体卡和提交邮寄地址时都会保存卡样材质快照。
 - 无论是 White Label 创建卡，还是 assets openApi 创建卡，当前都不会自动生成或返回默认 PIN；PIN 需要在开卡后单独设置。
+- 实体卡 PIN 已拆分为“首次设置”和“修改”两个接口，两者都必须先通过邮箱验证码校验。
+- 当前 PIN 流程不再使用旧 PIN 校验，也不保存 PIN 明文或可回放密文。
 
 ## 2. 开卡能力
 
@@ -43,8 +47,8 @@
 | virtualCardAvailable | boolean | 是否可创建虚拟卡 |
 | physicalCardAvailable | boolean | 是否可创建实体卡 |
 | physicalCardReason | string | 实体卡不可创建原因 |
-| physicalCardBin | string | 实体卡固定 BIN，当前为 `45492418` |
-| physicalCardBinId | string | 实体卡 BIN ID |
+| physicalCardBin | string | 当前账户可用的实体卡 BIN |
+| physicalCardBinId | string | 当前账户可用的实体卡 BIN ID |
 
 `physicalCardReason`：
 
@@ -52,7 +56,7 @@
 |---|---|
 | TOTAL_LIMIT_REACHED | 实体卡 + 虚拟卡总数已达 3 |
 | PHYSICAL_LIMIT_REACHED | 已有 1 张实体卡 |
-| BIN_NOT_ALLOWED | 当前账户无 `45492418` 卡段权限 |
+| BIN_NOT_ALLOWED | 当前账户无可用实体卡卡段权限 |
 
 ## 3. 创建卡
 
@@ -76,7 +80,7 @@
 | 字段 | 必填 | 说明 |
 |---|---|---|
 | cardMode | 否 | `VIRTUAL_CARD` / `PHYSICAL_CARD`，为空默认 `VIRTUAL_CARD` |
-| binId | 实体卡必填 | 实体卡只能使用 `45492418` 对应 BIN ID |
+| binId | 实体卡必填 | 使用开卡能力接口返回的实体卡 BIN ID |
 | physicalCardDesignId | 否 | 实体卡样式 ID，未传使用后端默认值，联调需替换为三方真实 ID |
 | label | 否 | 卡片名称 |
 
@@ -84,9 +88,10 @@
 
 - 实体卡 + 虚拟卡最多 3 张。
 - 实体卡最多 1 张。
-- 当前账户必须有 `45492418` BIN 权限。
+- 当前账户必须有至少 1 个可用实体卡 BIN 权限。
 - 创建成功后本地 `card.type = PHYSICAL_CARD`。
 - 创建成功后生成 `card_physical_detail`，状态为 `PENDING_SHIPPING_ADDRESS`。
+- 创建实体卡详情时同时保存 `physical_card_design_id` 和 `physical_card_material`。
 
 ## 4. 卡列表与详情
 
@@ -141,7 +146,7 @@ Query 参数：
 
 | 字段 | 必填 | 说明 |
 |---|---|---|
-| cardBin | 是 | 卡段，例如 `45492418` |
+| cardBin | 是 | 卡段，例如 `I2c` |
 | firstSix | 是 | 卡号前六位，例如 `454924` |
 
 说明：
@@ -149,6 +154,7 @@ Query 参数：
 - 当前 White Label 通过 assets 内部接口 `/qbit-assets/internal/physical-card/designs` 获取卡样列表。
 - assets 内部接口签名规则与老的 node 账户类接口不同，需使用基于 `method + path + timestamp + nonce` 的内部签名。
 - assets 若无匹配卡样，White Label 当前会回退到默认卡样。
+- 卡样列表结果按 `cardBin + firstSix` 缓存 1 天。
 
 ### 5.2 查询实体卡制卡费
 
@@ -158,8 +164,8 @@ Query 参数：
 
 | 字段 | 必填 | 说明 |
 |---|---|---|
-| cardBin | 是 | 卡段 |
-| firstSix | 是 | 卡号前六位 |
+| cardBin | 否 | 卡段，和 `firstSix` 同时为空时默认 `I2c` |
+| firstSix | 否 | 卡号前六位，和 `cardBin` 同时为空时默认 `454924` |
 
 响应说明：
 
@@ -178,8 +184,8 @@ Query 参数：
 
 | 字段 | 必填 | 说明 |
 |---|---|---|
-| cardBin | 是 | 卡段 |
-| firstSix | 是 | 卡号前六位 |
+| cardBin | 否 | 卡段，和 `firstSix` 同时为空时默认 `I2c` |
+| firstSix | 否 | 卡号前六位，和 `cardBin` 同时为空时默认 `454924` |
 | country | 是 | 邮寄国家，ISO2，例如 `US` |
 
 响应说明：
@@ -200,7 +206,7 @@ Query 参数：
 
 - 不再建议前端依赖旧的 `fee-preview` 接口。
 - 不使用 `_Caas` 版本费率。
-- 提交邮寄地址时后端会重新计算一次费用，并将 `production_fee`、`shipping_fee`、`total_cost` 快照保存到 `card_physical_detail`。
+- 提交邮寄地址时后端会重新计算一次费用，并将 `production_fee`、`shipping_fee`、`total_cost`、`physical_card_material` 快照保存到 `card_physical_detail`。
 - 如果缺少对应材质制卡费或 `ShoppingFee` 配置，提交邮寄地址会失败。
 
 ## 6. 邮寄地址
@@ -273,28 +279,52 @@ Query 参数：
 
 ## 9. 设置/修改 PIN
 
-### 设置或修改 PIN
+### 9.1 首次设置 PIN
 
-`POST /member/api/v1/card/{id}/pin`
+`POST /member/api/v1/card/{id}/pin/set`
 
 请求示例：
 
 ```json
 {
-  "oldPassword": "111111",
-  "pin": "123456"
+  "pin": "123456",
+  "verificationCode": "123456"
 }
 ```
 
 规则：
 
 - 只能本人账户操作。
-- 仅 `ACTIVATED` 实体卡可设置/修改 PIN。
+- 仅 `ACTIVATED` 实体卡可设置 PIN。
+- 仅 `pinSet = false` 时允许调用。
 - PIN 当前按 6 位数字校验。
-- 当前 API 入参要求 `oldPassword` 为 6 位数字。
-- 但底层 Interlace SDK `UpdatePINReqDTO` 仍只有新 `pin`，暂未真正透传旧 PIN 给上游做校验。
+- 必须先通过邮箱验证码校验，验证码类型为 `UPDATE_PIN`。
 - PIN 不落库、不打印日志。
 - 成功后仅保存 `pin_set = true`。
+
+### 9.2 修改 PIN
+
+`POST /member/api/v1/card/{id}/pin/update`
+
+请求示例：
+
+```json
+{
+  "pin": "123456",
+  "verificationCode": "123456"
+}
+```
+
+规则：
+
+- 只能本人账户操作。
+- 仅 `ACTIVATED` 实体卡可修改 PIN。
+- 仅 `pinSet = true` 时允许调用。
+- PIN 当前按 6 位数字校验。
+- 必须先通过邮箱验证码校验，验证码类型为 `UPDATE_PIN`。
+- 当前不校验旧 PIN，也不会把旧 PIN 透传给上游。
+- PIN 不落库、不打印日志。
+- 成功后保持 `pin_set = true`。
 
 ## 10. 冻结/解冻限制
 
@@ -337,20 +367,22 @@ Query 参数：
 2. 根据返回值展示 Add Virtual Card / Add Physical Card。
 3. 创建实体卡时传 `cardMode = PHYSICAL_CARD` 和实体卡 BIN ID。
 4. 创建成功后进入 Shipping Address 页面。
-5. Shipping Address 页面先调用 `GET /card/physical/designs` 获取卡样，再调用 `GET /card/physical/production-fees` 和 `GET /card/physical/shipping-fee` 展示费用。
+5. Shipping Address 页面先调用 `GET /card/physical/designs` 获取卡样，再调用 `GET /card/physical/production-fees` 和 `GET /card/physical/shipping-fee` 展示费用；如果前端拿不到 `cardBin/firstSix`，可留空，由后端按默认值补齐。
 6. 用户确认后调用 `POST /card/{id}/physical/shipping-address`。
 7. 详情页按 `physicalCardStatus` 控制按钮展示：
    - `PENDING_SHIPPING_ADDRESS`：展示填写邮寄地址。
    - `PROCESSING` / `SHIPPING`：展示物流信息、激活按钮；隐藏冻结/解冻。
    - `ACTIVATED`：展示设置/修改 PIN、冻结/解冻。
-8. 激活后调用 PIN 接口设置或修改 PIN。
+8. 激活后根据 `pinSet` 分流：
+   - `pinSet = false`：调用 `POST /card/{id}/pin/set`
+   - `pinSet = true`：调用 `POST /card/{id}/pin/update`
+9. PIN 设置和修改都需要先发送并校验邮箱验证码，验证码类型为 `UPDATE_PIN`。
 
 ## 13. 待联调确认
 
 - BZ 黑白塑料实体卡真实 `physicalCardDesignId`。
 - PIN 是否确认为 6 位数字。
 - 三方 `CARD.SETTING.UPDATED` resource 是否能明确识别 PIN 更新。
-- 上游 SDK / API 何时支持修改 PIN 时透传旧 PIN。
 - 费用配置中 `QuantumCardMakeCardFee`、`ShoppingFee` 是否已为 Infinity Launch 配好最终客户价。
 
 ## 14. curl 示例
@@ -505,7 +537,7 @@ curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/<
 ### 14.8 查询实体卡卡样列表
 
 ```bash
-curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/physical/designs?cardBin=45492418&firstSix=454924' \
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/physical/designs?cardBin=I2c&firstSix=454924' \
   -H 'Accept: application/json, text/plain, */*' \
   -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
   -H 'Connection: keep-alive' \
@@ -525,7 +557,7 @@ curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/p
 ### 14.8.1 查询实体卡制卡费
 
 ```bash
-curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/physical/production-fees?cardBin=45492418&firstSix=454924' \
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/physical/production-fees?cardBin=I2c&firstSix=454924' \
   -H 'Accept: application/json, text/plain, */*' \
   -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
   -H 'Connection: keep-alive' \
@@ -545,7 +577,7 @@ curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/p
 ### 14.8.2 查询实体卡运费
 
 ```bash
-curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/physical/shipping-fee?cardBin=45492418&firstSix=454924&country=US' \
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/physical/shipping-fee?cardBin=I2c&firstSix=454924&country=US' \
   -H 'Accept: application/json, text/plain, */*' \
   -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
   -H 'Connection: keep-alive' \
@@ -624,10 +656,10 @@ curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/<
   -H 'timestamp: <TIMESTAMP>'
 ```
 
-### 14.12 设置或修改实体卡 PIN
+### 14.12 首次设置实体卡 PIN
 
 ```bash
-curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/<CARD_ID>/pin' \
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/<CARD_ID>/pin/set' \
   -H 'Accept: application/json, text/plain, */*' \
   -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
   -H 'Connection: keep-alive' \
@@ -642,7 +674,28 @@ curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/<
   -H 'platform: member' \
   -H 'sign: <SIGN>' \
   -H 'timestamp: <TIMESTAMP>' \
-  --data-raw '{"oldPassword":"111111","pin":"123456"}'
+  --data-raw '{"pin":"123456","verificationCode":"123456"}'
+```
+
+### 14.12.1 修改实体卡 PIN
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/<CARD_ID>/pin/update' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>' \
+  --data-raw '{"pin":"123456","verificationCode":"123456"}'
 ```
 
 ### 14.13 会员端冻结实体卡
