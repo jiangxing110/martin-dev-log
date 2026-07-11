@@ -240,7 +240,9 @@ SELECT
     t.provider,
     t.tag AS source_tag,
     cb.cost_type,
-    p.source_month AS source_month,
+    MAX(p.source_month) AS source_month,
+    MAX(p.next_month) AS next_month,
+    MAX(p.month_day_count) AS month_day_count,
     CAST(SUM(COALESCE(t.amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS source_amount
 FROM source_bi_month_tag t CROSS JOIN v_param p
 INNER JOIN (SELECT DISTINCT product_line, provider, cost_type FROM v_cost_basis) cb
