@@ -1,6 +1,9 @@
 # Flink 脚本运行参数与同步说明
 
 > 说明：本文只列业务运行参数，不列 `${secret_values.*}` 这类环境密钥。
+>
+> 新目录说明：金融渠道成本脚本已同步到 `online/batch/` 和 `online/cdc/`。
+> `batch` 版本支持传入 `start_time/end_time`，`cdc` 版本默认跑昨天且不需要传参。
 
 ## 1. 需要传入或替换业务参数的脚本
 
