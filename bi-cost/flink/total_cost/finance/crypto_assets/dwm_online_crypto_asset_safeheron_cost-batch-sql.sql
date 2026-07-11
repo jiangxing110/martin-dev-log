@@ -37,6 +37,7 @@ SET 'sql-client.execution.result-mode' = 'tableau';
 SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
 -- 降低 floating-buffers-per-gate：默认 256 × 8 个消费者 = 2048 超出 TM buffer 池
 SET 'taskmanager.network.memory.floating-buffers-per-gate' = '64';
+SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_BLOCKING';
 
 -- ====================================================================
 -- 1. 参数

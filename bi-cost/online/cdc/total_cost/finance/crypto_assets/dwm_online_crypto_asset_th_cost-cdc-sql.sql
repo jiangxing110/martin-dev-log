@@ -37,6 +37,7 @@ SET 'sql-client.execution.result-mode' = 'tableau';
 SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
 -- 降低单 gate 的浮动 buffer 占用，避免启动时一次性申请过多网络缓冲区
 SET 'taskmanager.network.memory.floating-buffers-per-gate' = '64';
+SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_BLOCKING';
 
 -- ====================================================================
 -- 1. 参数（已 inline 到各视图中，避免 VALUES broadcast）

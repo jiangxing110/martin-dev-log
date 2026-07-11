@@ -32,6 +32,7 @@ SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
 SET 'table.optimizer.broadcast.join.enabled' = 'false';
 SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_BLOCKING';
 SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
+SET 'taskmanager.network.memory.floating-buffers-per-gate' = '64';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '1';
 SET 'restart-strategy.fixed-delay.delay' = '60s';

@@ -30,11 +30,12 @@ SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'table.optimizer.reuse-source-enabled' = 'true';
 SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
 SET 'table.optimizer.broadcast.join.enabled' = 'false';
-SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_PIPELINED';
+SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_BLOCKING';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '1';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'sql-client.execution.result-mode' = 'tableau';
+SET 'taskmanager.network.memory.floating-buffers-per-gate' = '64';
 
 -- ====================================================================
 -- 2. Source 表

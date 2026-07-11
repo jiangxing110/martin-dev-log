@@ -44,6 +44,9 @@ SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '1';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'sql-client.execution.result-mode' = 'tableau';
+SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
+SET 'taskmanager.network.memory.floating-buffers-per-gate' = '64';
+SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_BLOCKING';
 
 
 -- ====================================================================
