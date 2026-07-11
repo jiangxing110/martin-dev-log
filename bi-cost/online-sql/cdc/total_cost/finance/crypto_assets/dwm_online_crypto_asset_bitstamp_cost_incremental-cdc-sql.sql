@@ -14,7 +14,7 @@
 --   WHERE source_month IN (
 --       SELECT DISTINCT CAST(DATE_FORMAT(CAST(statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE)
 --       FROM ods.ods_bi_month_tag
---       WHERE update_time >= CAST(CURRENT_DATE - INTERVAL '1 day' AS TIMESTAMP(6))
+--       WHERE update_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6))
 --         AND update_time < CAST(CURRENT_DATE AS TIMESTAMP(6))
 --   )
 --     AND product_line = 'CRYPTO_ASSET'
@@ -53,7 +53,7 @@ FROM (
         CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS source_month
     FROM source_bi_month_tag t
     WHERE t.delete_time IS NULL
-      AND t.update_time >= CAST(CURRENT_DATE - INTERVAL '1 day' AS TIMESTAMP(6))
+      AND t.update_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6))
       AND t.update_time < CAST(CURRENT_DATE AS TIMESTAMP(6))
 ) p;
 

@@ -42,7 +42,7 @@ SET 'sql-client.execution.result-mode' = 'tableau';
 
 CREATE TEMPORARY VIEW v_runtime AS
 SELECT
-    COALESCE(CAST(NULLIF('${start_time}', '') AS TIMESTAMP(6)), CAST(CURRENT_DATE - INTERVAL '1 day' AS TIMESTAMP(6))) AS start_time,
+    COALESCE(CAST(NULLIF('${start_time}', '') AS TIMESTAMP(6)), CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6))) AS start_time,
     COALESCE(CAST(NULLIF('${end_time}', '') AS TIMESTAMP(6)), CAST(CURRENT_DATE AS TIMESTAMP(6))) AS end_time;
 
 CREATE TEMPORARY VIEW v_param AS
