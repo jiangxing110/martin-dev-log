@@ -116,6 +116,56 @@ CREATE TEMPORARY TABLE source_crypto_blockchain_transfers (
     'scan.fetch-size' = '1000'
 );
 
+CREATE TEMPORARY TABLE source_api_account_relation (
+    account_id  STRING,
+    root_id     STRING,
+    delete_time TIMESTAMP(6),
+    PRIMARY KEY (account_id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT account_id, root_id, delete_time FROM ods.ods_api_account_relation WHERE delete_time IS NULL) AS api_account_relation_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000'
+);
+
+CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
+    id                    STRING,
+    relation_account_id   STRING,
+    sale_id               STRING,
+    am_id                 STRING,
+    operation_manager_id  STRING,
+    relation_start_time   TIMESTAMP(6),
+    relation_end_time     TIMESTAMP(6),
+    delete_time           TIMESTAMP(6),
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT id, relation_account_id, sale_id, am_id, operation_manager_id, relation_start_time, relation_end_time, delete_time FROM dim.dim_sale_account_relation_p WHERE delete_time IS NULL) AS dim_sale_account_relation_p_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000'
+);
+
+CREATE TEMPORARY TABLE source_dim_account (
+    id                  VARCHAR,
+    account_type        STRING,
+    account_category    STRING,
+    system_type         STRING
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT id, account_type, type AS account_category, system_type FROM dim.dim_account) AS dim_account_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000'
+);
+
 -- ====================================================================
 -- 3. 分摊基础明细
 -- ====================================================================
