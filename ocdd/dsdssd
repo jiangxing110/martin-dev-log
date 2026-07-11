@@ -1,0 +1,33 @@
+还有，且最值得盯的是这几处：
+
+1. `account-to-do` 这条后补入口还是一个 reopen 口子
+
+- [account-to-do.service.ts](/Users/martinjiang/WebstormProjects/qbitpay_service/src/modules/account-to-do/account-to-do.service.ts#L1255)
+- 这里逻辑是：`MultiCurrencyAccountOdd` 的业务待补材料提交时，只要当前 `OddAccountReview.status === Closed`，就直接改成 `Pending`
+- 这和你刚收紧的 `kyb-v2` reopen 逻辑是同一类动作，但它是另一条链路
+- 如果你们现在的产品口径是“只有满足更严格条件的已关闭 ODD 才能重开”，这里也要一起收口
+
+2. `OddAccountReviewHook` 仍然会基于旧 case 去补 KYC/KYB
+
+- [odd-account-review.hook.ts](/Users/martinjiang/WebstormProjects/qbitpay_service/src/modules/event-subscriber-register/odd-account-review.hook.ts#L60)
+- 它在 `OddAccountReview` insert 后，会去找一条 `Closed` 的历史 ODD，再拿它的 `kyCaseId` 当旧 case 继续补数据
+- 这条链本身不一定错，但如果历史数据和软删除策略没完全统一，这里可能把“旧 case”重新带进流转里
+
+3. `updateOddAccountReviewStatus()` 虽然已经收掉 `Processing`，但异常兜底逻辑也一起没了
+
+- [odd-account-review.service.ts](/Users/martinjiang/WebstormProjects/qbitpay_service/src/modules/cdd/odd/odd-account-review.service.ts#L128)
+- 现在只要 `Request`，并且只在 `KYC + KYB` 都提交后才推进到 `Pending`
+- 旧的 7 天游走已经被你们定义为异常，不再走自动兜底
+- 这不是 bug，但它意味着：如果后面还有历史脏数据没清干净，会更明显地卡住，而不会被自动“顺手修正”
+
+5. 你刚改的 `kyb-v2` reopen 已经收口，但要注意它只保护了这一条路径
+
+- [kyb-v2.service.ts](/Users/martinjiang/WebstormProjects/qbitpay_service/src/modules/cdd/v2/service/kyb-v2.service.ts#L981)
+- 它现在只会把 `status = Closed` 且 `deleteTime IS NULL` 的那条 ODD 改成 `Pending`
+- 这很好，但说明系统里还有别的入口也能做 reopen，比如上面第 1 点的 `account-to-do`
+- 真正安全的做法是把所有 reopen 口子统一成同一套条件
+
+如果你要，我建议下一步直接处理第 1 点：
+
+- 把 `account-to-do.service.ts` 那个 `MultiCurrencyAccountOdd` 的 reopen 也收紧
+- 或者如果你们已经确认“业务后补本来就要 reopen”，那就至少补上和 `kyb-v2` 一致的条件，避免不同链路的 reopen 规则不一致
