@@ -1,9 +1,33 @@
 1.金融渠道成本现在固定写死了时间,我觉得这样不好处理(类似说财务在7月8好先输入了一份6月的渠道成本数据,我们洗到金融渠道成本表会不好处理)
 最好可以感知到ods_bi_month_tag数据的变动自动去清洗历史的数据
+bi-cost/flink/total_cost/finance 金融渠道成本各个业务拆分脚本
 
 2.bb qi 渠道成本
-bb 
+bb bi那边制定了新的规则/Users/martinjiang/martin-dev-log/bi-cost/bi_month/BB客户成本-202606.sql
+之前的数据是参考 /Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/product-collaboration/BB-gross-profit.sql
+我们洗出来的
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/dwm_bb_card_transaction_detail_p.sql
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/dws_bb_card_finance_daily_p.sql
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/qbit_card_settlement_bb_clean_2026.sql
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/qbit_card_transaction_clean_2026.sql
+这几个表结构
+和
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/dwm_bb_card_transaction_detail_p.sql
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/dws_bb_card_finance_daily_p.sql
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/qbit_card_settlement_bb_clean_2026.sql
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/qbit_card_transaction_clean_2026.sql
+这些个方法
+然后我涉及了阿里云实时计算flink 版本
+/Users/martinjiang/martin-dev-log/bi-cost/flink/quantum/bb/dwm_online_bb_card_incremental-cdc-sql.sql
+/Users/martinjiang/martin-dev-log/bi-cost/flink/quantum/bb/dwm_online_bb_card_transaction_detail-batch-sql.sql
+/Users/martinjiang/martin-dev-log/bi-cost/flink/quantum/bb/dws_online_bb_card_finance_daily-batch-sql.sql
+qi成本系数的获取也要根据 ods_bi_month_tag来
+下面这些之前qi 渠道 flink 版本
+/Users/martinjiang/martin-dev-log/bi-cost/flink/quantum/bb/dwm_online_bb_card_incremental-cdc-sql.sql
+/Users/martinjiang/martin-dev-log/bi-cost/flink/quantum/bb/dwm_online_bb_card_transaction_detail-batch-sql.sql
+/Users/martinjiang/martin-dev-log/bi-cost/flink/quantum/bb/dws_online_bb_card_finance_daily-batch-sql.sql
 
-qi 成本系数的获取也要根据 ods_bi_month_tag
+3.最后总成本和毛利成本是不是改视图更好,可以不用频繁更新数据减少任务复杂度
+我想问成本至少是一条一更新的 根据最新的ods数据->dwm数据->dws数据
 
-3.成本及毛利成本是不是改视图更好 可以不用频繁更新数据减少任务复杂度
+
