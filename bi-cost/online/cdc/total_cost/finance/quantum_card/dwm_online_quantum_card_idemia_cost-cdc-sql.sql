@@ -40,7 +40,7 @@ SET 'taskmanager.network.memory.floating-buffers-per-gate' = '64';
 SET 'taskmanager.network.memory.fraction' = '0.20';
 SET 'taskmanager.network.memory.min' = '128mb';
 SET 'taskmanager.network.memory.max' = '512mb';
-SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_BLOCKING';
+-- CDC 任务保持默认 shuffle 策略，避免额外放大 network buffer 占用
 
 -- ====================================================================
 -- 1. Source 表
@@ -56,11 +56,14 @@ CREATE TEMPORARY TABLE source_bi_month_tag (
     detail          STRING,
     update_time     TIMESTAMP(6),
     delete_time     TIMESTAMP(6),
+    source_month    DATE,
+    next_month      DATE,
+    month_day_count INT,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, product_line, provider, tag, statistics_time, amount, detail, update_time, delete_time FROM ods.ods_bi_month_tag WHERE delete_time IS NULL) AS bi_month_tag_f',
+    'table-name' = '(SELECT t.id, t.product_line, t.provider, t.tag, t.statistics_time, t.amount, t.detail, t.update_time, t.delete_time, p.source_month, p.next_month, p.month_day_count FROM ods.ods_bi_month_tag t INNER JOIN (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month, ((DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date - DATE_TRUNC(''month'', statistics_time)::date) AS month_day_count FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p ON t.statistics_time >= p.source_month::timestamp AND t.statistics_time < p.next_month::timestamp WHERE t.delete_time IS NULL) AS bi_month_tag_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -126,49 +129,30 @@ CREATE TEMPORARY TABLE source_qbit_physical_card (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_id, create_time, delete_time FROM ods.ods_qbit_physical_card WHERE delete_time IS NULL) AS qbit_physical_card_f',
+    'table-name' = '(SELECT pc.id, pc.account_id, pc.create_time, pc.delete_time FROM ods.ods_qbit_physical_card pc WHERE pc.delete_time IS NULL AND EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p WHERE pc.create_time >= p.source_month::timestamp AND pc.create_time < p.next_month::timestamp)) AS qbit_physical_card_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
     'scan.fetch-size' = '1000'
 );
 
-CREATE TEMPORARY VIEW v_day_numbers AS
-SELECT *
-FROM (
-    VALUES
-        (1), (2), (3), (4), (5), (6), (7), (8), (9), (10),
-        (11), (12), (13), (14), (15), (16), (17), (18), (19), (20),
-        (21), (22), (23), (24), (25), (26), (27), (28), (29), (30), (31)
-) AS t(day_no);
-
-CREATE TEMPORARY VIEW v_runtime AS
-SELECT
-    CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6)) AS start_time,
-    CAST(CURRENT_DATE AS TIMESTAMP(6)) AS end_time;
-
-CREATE TEMPORARY VIEW v_param AS
-SELECT
-    p.source_month,
-    CAST(DATE_FORMAT(DATE_ADD(p.source_month, 32), 'yyyy-MM-01') AS DATE) AS next_month,
-    DATEDIFF(CAST(DATE_FORMAT(DATE_ADD(p.source_month, 32), 'yyyy-MM-01') AS DATE), p.source_month) AS month_day_count
-FROM (
-    SELECT DISTINCT
-        CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS source_month
-    FROM source_bi_month_tag t
-    CROSS JOIN v_runtime r
-    WHERE t.delete_time IS NULL
-      AND t.update_time >= r.start_time
-      AND t.update_time < r.end_time
-) p;
+CREATE TEMPORARY TABLE source_cost_month_days (
+    report_date     DATE,
+    month_day_count INT,
+    PRIMARY KEY (report_date) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT gs.report_date::date AS report_date, p.month_day_count FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month, ((DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date - DATE_TRUNC(''month'', statistics_time)::date) AS month_day_count FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p CROSS JOIN LATERAL generate_series(p.source_month, p.next_month - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(report_date)) AS cost_month_days_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '100'
+);
 
 CREATE TEMPORARY VIEW v_month_days AS
-SELECT
-    DATE_ADD(p.source_month, d.day_no - 1) AS report_date,
-    p.month_day_count
-FROM v_param p
-INNER JOIN v_day_numbers d
-    ON d.day_no <= p.month_day_count;
+SELECT report_date, month_day_count
+FROM source_cost_month_days;
 -- ====================================================================
 -- 3. 分摊基础明细
 -- ====================================================================
@@ -176,10 +160,8 @@ INNER JOIN v_day_numbers d
 -- IDEMIA: 实体卡数
 CREATE TEMPORARY VIEW v_idemia_accounts AS
 SELECT pc.account_id, COUNT(*) AS physical_card_count
-FROM source_qbit_physical_card pc CROSS JOIN v_param p
+FROM source_qbit_physical_card pc
 WHERE pc.delete_time IS NULL
-  AND pc.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-  AND pc.create_time < CAST(p.next_month AS TIMESTAMP(6))
 GROUP BY pc.account_id;
 
 CREATE TEMPORARY VIEW v_idemia_basis AS
@@ -246,17 +228,15 @@ SELECT
     t.provider,
     t.tag AS source_tag,
     cb.cost_type,
-    MAX(p.source_month) AS source_month,
-    MAX(p.next_month) AS next_month,
-    MAX(p.month_day_count) AS month_day_count,
+    MAX(t.source_month) AS source_month,
+    MAX(t.next_month) AS next_month,
+    MAX(t.month_day_count) AS month_day_count,
     CAST(SUM(COALESCE(t.amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS source_amount
-FROM source_bi_month_tag t CROSS JOIN v_param p
+FROM source_bi_month_tag t
 INNER JOIN (SELECT DISTINCT product_line, provider, cost_type FROM v_cost_basis) cb
     ON cb.product_line = t.product_line
    AND cb.provider = t.provider
 WHERE t.delete_time IS NULL
-  AND CAST(t.statistics_time AS DATE) >= p.source_month
-  AND CAST(t.statistics_time AS DATE) < p.next_month
 GROUP BY t.product_line, t.provider, t.tag, cb.cost_type;
 
 -- ====================================================================
@@ -313,59 +293,61 @@ WHERE mt.source_amount <> CAST(0 AS DECIMAL(20, 4));
 -- 7. 销售关系
 -- ====================================================================
 
-CREATE TEMPORARY VIEW v_direct_sale_relation AS
-SELECT cost_key, sale_id, am_id
-FROM (
-    SELECT
-        CONCAT(
-            DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-            b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
-        ) AS cost_key,
-        sr.sale_id,
-        sr.am_id,
-        ROW_NUMBER() OVER (
-            PARTITION BY b.report_date, b.account_id, b.product_line, b.provider, b.cost_type
-            ORDER BY sr.relation_start_time DESC
-        ) AS rn
-    FROM v_allocated_cost_base b
-    INNER JOIN source_dim_sale_account_relation_p sr
-        ON sr.relation_account_id = b.account_id
-       AND sr.delete_time IS NULL
-       AND CAST(b.report_date AS TIMESTAMP(6)) >= sr.relation_start_time
-       AND (
-            CAST(b.report_date AS TIMESTAMP(6)) < sr.relation_end_time
-            OR sr.relation_end_time IS NULL
-       )
-) ranked_direct
-WHERE rn = 1;
+CREATE TEMPORARY VIEW v_sale_relation_candidates AS
+SELECT
+    CONCAT(
+        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
+        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
+    ) AS cost_key,
+    sr.sale_id,
+    sr.am_id,
+    sr.relation_start_time,
+    1 AS sale_priority
+FROM v_allocated_cost_base b
+INNER JOIN source_dim_sale_account_relation_p sr
+    ON sr.relation_account_id = b.account_id
+   AND sr.delete_time IS NULL
+   AND CAST(b.report_date AS TIMESTAMP(6)) >= sr.relation_start_time
+   AND (
+        CAST(b.report_date AS TIMESTAMP(6)) < sr.relation_end_time
+        OR sr.relation_end_time IS NULL
+   )
+UNION ALL
+SELECT
+    CONCAT(
+        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
+        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
+    ) AS cost_key,
+    sr.sale_id,
+    sr.am_id,
+    sr.relation_start_time,
+    2 AS sale_priority
+FROM v_allocated_cost_base b
+INNER JOIN source_api_account_relation aar
+    ON aar.account_id = b.account_id
+   AND aar.delete_time IS NULL
+INNER JOIN source_dim_sale_account_relation_p sr
+    ON sr.relation_account_id = aar.root_id
+   AND sr.delete_time IS NULL
+   AND CAST(b.report_date AS TIMESTAMP(6)) >= sr.relation_start_time
+   AND (
+        CAST(b.report_date AS TIMESTAMP(6)) < sr.relation_end_time
+        OR sr.relation_end_time IS NULL
+   );
 
-CREATE TEMPORARY VIEW v_root_sale_relation AS
+CREATE TEMPORARY VIEW v_sale_relation AS
 SELECT cost_key, sale_id, am_id
 FROM (
     SELECT
-        CONCAT(
-            DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-            b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
-        ) AS cost_key,
-        sr.sale_id,
-        sr.am_id,
+        cost_key,
+        sale_id,
+        am_id,
         ROW_NUMBER() OVER (
-            PARTITION BY b.report_date, b.account_id, b.product_line, b.provider, b.cost_type
-            ORDER BY sr.relation_start_time DESC
+            PARTITION BY cost_key
+            ORDER BY sale_priority ASC, relation_start_time DESC
         ) AS rn
-    FROM v_allocated_cost_base b
-    INNER JOIN source_api_account_relation aar
-        ON aar.account_id = b.account_id
-       AND aar.delete_time IS NULL
-    INNER JOIN source_dim_sale_account_relation_p sr
-        ON sr.relation_account_id = aar.root_id
-       AND sr.delete_time IS NULL
-       AND CAST(b.report_date AS TIMESTAMP(6)) >= sr.relation_start_time
-       AND (
-            CAST(b.report_date AS TIMESTAMP(6)) < sr.relation_end_time
-            OR sr.relation_end_time IS NULL
-       )
-) ranked_root
+    FROM v_sale_relation_candidates
+) ranked_sale
 WHERE rn = 1;
 
 
@@ -379,16 +361,16 @@ SELECT
         b.cost_type, ':',
         DATE_FORMAT(CAST(b.source_month AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
         b.source_tag, ':',
-        COALESCE(d.sale_id, r.sale_id, ''), ':',
-        COALESCE(d.am_id, r.am_id, '')
+        COALESCE(sr.sale_id, ''), ':',
+        COALESCE(sr.am_id, '')
     ))) AS BIGINT) AS id,
     b.report_date,
     b.account_id,
     da.account_type,
     da.account_category,
     da.system_type,
-    COALESCE(d.sale_id, r.sale_id) AS sale_id,
-    COALESCE(d.am_id, r.am_id) AS am_id,
+    sr.sale_id,
+    sr.am_id,
     b.product_line,
     b.provider,
     b.cost_type,
@@ -409,17 +391,11 @@ SELECT
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM v_allocated_cost_base b
 LEFT JOIN source_dim_account da ON da.id = b.account_id
-LEFT JOIN v_direct_sale_relation d
-    ON d.cost_key = CONCAT(
+LEFT JOIN v_sale_relation sr
+    ON sr.cost_key = CONCAT(
         DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
         b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
     )
-LEFT JOIN v_root_sale_relation r
-    ON r.cost_key = CONCAT(
-        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
-    )
-   AND d.cost_key IS NULL
 WHERE b.cost_amount <> CAST(0 AS DECIMAL(20, 4));
 
 -- ====================================================================
