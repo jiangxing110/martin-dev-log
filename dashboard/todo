@@ -43,3 +43,7 @@ cdc 的可以根据当前数据判断updateTime处理
 本质上是传 start_time/end_time 时，按 ods_bi_month_tag.update_time 窗口跑 找到更新数据的对应月份 和指标再洗书记
 如果start_time/end_time  不传默认昨天开始时间结束时间
 我不需要同时保留原来的 start_month/end_month 作为月份兜底，这样兼容性会更稳。 所有脚本统一使用start_time/end_tim
+
+
+ [1]:TableSourceScan(table=[[vvp, default, source_qbit_card_transaction, filter=[and(and(IS NULL(delete_time), LIKE(provider, _UTF-16LE'%Qbit%')), OR(OR(=(business_type, _UTF-16LE'Consumption':VARCHAR(11) CHARACTER SET &quot;UTF-16LE&quot;), =(business_type, _UTF-16LE'Credit':VARCHAR(11) CHARACTER SET &quot;UTF-16LE&quot;)), =(business_type, _UTF-16LE'Reversal':VARCHAR(11) CHARACTER SET &quot;UTF-16LE&quot;)))], project=[account_id, transaction_time, business_type, status, settle_amount]]], fields=[account_id, transaction_time, business_type, status, settle_amount])
+dwm_online_quantum_card_hz_bank_cost-cdc-sql

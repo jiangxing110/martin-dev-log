@@ -20,6 +20,8 @@
 -- 作业类型：CDC (默认昨天)
 
 SET 'parallelism.default' = '1';
+SET 'pipeline.default-parallelism' = '1';
+SET 'table.exec.resource.default-parallelism' = '1';
 SET 'sink.parallelism' = '1';
 SET 'table.dml-sync' = 'true';
 SET 'pipeline.operator-chaining' = 'true';
@@ -27,8 +29,8 @@ SET 'execution.checkpointing.interval' = '5min';
 SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
 SET 'execution.checkpointing.timeout' = '30min';
 SET 'table.exec.mini-batch.enabled' = 'false';
-SET 'table.optimizer.reuse-source-enabled' = 'true';
-SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
+SET 'table.optimizer.reuse-source-enabled' = 'false';
+SET 'table.optimizer.reuse-sub-plan-enabled' = 'false';
 SET 'table.optimizer.broadcast.join.enabled' = 'false';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '1';
