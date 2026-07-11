@@ -5,13 +5,18 @@
 -- 作业元信息：
 --   作业类型：流处理 CDC
 --   运行方式：全量初始化 + 增量实时同步
---   运行参数：无
+--   运行参数：无（默认读取昨天更新的 ods_bi_month_tag 记录）
 --   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
 -- 说明：按底层 provider 拆分，每个作业只加载自己需要的 source 表
 -- 执行前置：
 --   UPDATE dwm.dwm_finance_channel_cost_p
 --   SET delete_time = NOW(), update_time = NOW()
---   WHERE source_month = '2026-05-01'::date
+--   WHERE source_month IN (
+--       SELECT DISTINCT CAST(DATE_FORMAT(CAST(statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE)
+--       FROM ods.ods_bi_month_tag
+--       WHERE update_time >= CAST(CURRENT_DATE - INTERVAL '1 day' AS TIMESTAMP(6))
+--         AND update_time < CAST(CURRENT_DATE AS TIMESTAMP(6))
+--   )
 --     AND product_line = 'CRYPTO_ASSET'
 --     AND delete_time IS NULL;
 --********************************************************************--
@@ -38,7 +43,19 @@ SET 'table.exec.batch-shuffle-mode' = 'ALL_EXCHANGES_BLOCKING';
 
 -- ====================================================================
 
--- NOTE: v_param （批处理硬编码日期）已移除，CDC 版本需调整日期逻辑
+CREATE TEMPORARY VIEW v_param AS
+SELECT
+    p.source_month,
+    CAST(DATE_FORMAT(DATE_ADD(p.source_month, 32), 'yyyy-MM-01') AS DATE) AS next_month,
+    DATEDIFF(CAST(DATE_FORMAT(DATE_ADD(p.source_month, 32), 'yyyy-MM-01') AS DATE), p.source_month) AS month_day_count
+FROM (
+    SELECT DISTINCT
+        CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS source_month
+    FROM source_bi_month_tag t
+    WHERE t.delete_time IS NULL
+      AND t.update_time >= CAST(CURRENT_DATE - INTERVAL '1 day' AS TIMESTAMP(6))
+      AND t.update_time < CAST(CURRENT_DATE AS TIMESTAMP(6))
+) p;
 
 CREATE TEMPORARY VIEW v_day_numbers AS
 SELECT *
@@ -61,12 +78,13 @@ CREATE TEMPORARY TABLE source_bi_month_tag (
     statistics_time TIMESTAMP(6),
     amount          DECIMAL(20, 4),
     detail          STRING,
+    update_time     TIMESTAMP(6),
     delete_time     TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, product_line, provider, tag, statistics_time, amount, detail, delete_time FROM ods.ods_bi_month_tag WHERE delete_time IS NULL) AS bi_month_tag_f',
+    'table-name' = '(SELECT id, product_line, provider, tag, statistics_time, amount, detail, update_time, delete_time FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= CAST(CURRENT_DATE - INTERVAL ''1 day'' AS TIMESTAMP(6)) AND update_time < CAST(CURRENT_DATE AS TIMESTAMP(6))) AS bi_month_tag_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

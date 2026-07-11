@@ -59,7 +59,6 @@ SELECT
     '${source_tag}' AS source_tag,
     '${cost_type}' AS cost_type,
     DATEDIFF(CAST('${next_month}' AS DATE), CAST('${source_month}' AS DATE)) AS month_day_count;
-
 CREATE TEMPORARY VIEW v_day_numbers AS
 SELECT *
 FROM (
@@ -348,7 +347,7 @@ GROUP BY p.product_line, p.provider, p.source_tag, p.cost_type, p.source_month, 
 -- BPC: QI 活跃卡客户
 CREATE TEMPORARY VIEW v_bpc_accounts AS
 SELECT q.`accountId` AS account_id
-FROM source_qbit_card q, v_param p
+FROM source_qbit_card q CROSS JOIN v_param p
 WHERE q.provider LIKE '%Qbit%'
   AND (q.`deleteCardTime` > CAST(p.source_month AS TIMESTAMP(6)) OR q.`deleteCardTime` IS NULL)
 GROUP BY q.`accountId`;
@@ -970,4 +969,5 @@ CREATE TEMPORARY TABLE sink_dwm_finance_channel_cost_p (
 );
 
 INSERT INTO sink_dwm_finance_channel_cost_p
-SELECT * FROM v_dwm_finance_channel_cost;
+SELECT *
+FROM v_dwm_finance_channel_cost;

@@ -17,7 +17,7 @@
 --   5. 执行本 Flink SQL 前，先在 PostgreSQL 执行幂等清理:
 --        UPDATE dwm.dwm_finance_channel_cost_p
 --        SET delete_time = NOW(), update_time = NOW()
---        WHERE source_month = '2026-05-01'::date
+--        WHERE source_month = '${source_month}'::date
 --          AND delete_time IS NULL;
 --   6. 2026-06-23: 修复列名 camelCase → snake_case（ODS 表统一使用 snake_case）
 --      修复网络缓冲区不足: SET table.exec.batch-shuffle-mode = ALL_EXCHANGES_PIPELINED
@@ -49,10 +49,15 @@ SET 'sql-client.execution.result-mode' = 'tableau';
 
 CREATE TEMPORARY VIEW v_param AS
 SELECT
-    CAST('2026-05-01' AS DATE) AS source_month,
-    CAST('2026-06-01' AS DATE) AS next_month,
-    DATEDIFF(CAST('2026-06-01' AS DATE), CAST('2026-05-01' AS DATE)) AS month_day_count;
-
+    p.source_month,
+    CAST(DATE_FORMAT(DATE_ADD(p.source_month, 32), 'yyyy-MM-01') AS DATE) AS next_month,
+    DATEDIFF(CAST(DATE_FORMAT(DATE_ADD(p.source_month, 32), 'yyyy-MM-01') AS DATE), p.source_month) AS month_day_count
+FROM (
+    SELECT DISTINCT
+        CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS source_month
+    FROM source_bi_month_tag t
+    WHERE t.delete_time IS NULL
+) p;
 CREATE TEMPORARY VIEW v_day_numbers AS
 SELECT *
 FROM (
@@ -317,7 +322,7 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
 -- BPC: QI 活跃卡客户
 CREATE TEMPORARY VIEW v_bpc_accounts AS
 SELECT q.account_id
-FROM source_qbit_card q, v_param p
+FROM source_qbit_card q CROSS JOIN v_param p
 WHERE q.provider LIKE '%Qbit%'
   AND (q.delete_card_time > CAST(p.source_month AS TIMESTAMP(6)) OR q.delete_card_time IS NULL)
 GROUP BY q.account_id;
@@ -959,4 +964,5 @@ CREATE TEMPORARY TABLE sink_dwm_finance_channel_cost_p (
 );
 
 INSERT INTO sink_dwm_finance_channel_cost_p
-SELECT * FROM v_dwm_finance_channel_cost;
+SELECT *
+FROM v_dwm_finance_channel_cost;

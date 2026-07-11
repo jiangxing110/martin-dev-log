@@ -6,13 +6,13 @@
 -- 作业元信息：
 --   作业类型：批处理
 --   运行方式：一次性初始化/回刷或调度执行
---   运行参数：source_month, next_month, start_date, end_date
+--   运行参数：start_time, end_time
 --   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
 -- 说明：按底层 provider 拆分，每个作业只加载自己需要的 source 表
 -- 执行前置：
 --   UPDATE dwm.dwm_finance_channel_cost_p
 --   SET delete_time = NOW(), update_time = NOW()
---   WHERE source_month = '2026-05-01'::date
+--   WHERE source_month IN (由 update_time 窗口推导的月份集合)
 --     AND product_line = 'CRYPTO_ASSET'
 --     AND delete_time IS NULL;
 --********************************************************************--
@@ -52,12 +52,13 @@ CREATE TEMPORARY TABLE source_bi_month_tag (
     statistics_time TIMESTAMP(6),
     amount          DECIMAL(20, 4),
     detail          STRING,
+    update_time     TIMESTAMP(6),
     delete_time     TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, product_line, provider, tag, statistics_time, amount, detail, delete_time FROM ods.ods_bi_month_tag WHERE delete_time IS NULL) AS bi_month_tag_f',
+    'table-name' = '(SELECT id, product_line, provider, tag, statistics_time, amount, detail, update_time, delete_time FROM ods.ods_bi_month_tag WHERE delete_time IS NULL) AS bi_month_tag_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -137,20 +138,42 @@ CREATE TEMPORARY TABLE source_crypto_assets_transfers (
     'scan.fetch-size' = '1000'
 );
 
-CREATE TEMPORARY TABLE source_month_days (
-    report_date     DATE,
-    month_day_count INT,
-    PRIMARY KEY (report_date) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT d::date AS report_date, 31 AS month_day_count FROM generate_series(''2026-05-01''::date, ''2026-05-31''::date, ''1 day'') AS d) AS month_days',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '100'
-);
+CREATE TEMPORARY VIEW v_day_numbers AS
+SELECT *
+FROM (
+    VALUES
+        (1), (2), (3), (4), (5), (6), (7), (8), (9), (10),
+        (11), (12), (13), (14), (15), (16), (17), (18), (19), (20),
+        (21), (22), (23), (24), (25), (26), (27), (28), (29), (30), (31)
+) AS t(day_no);
 
+CREATE TEMPORARY VIEW v_runtime AS
+SELECT
+    COALESCE(CAST(NULLIF('${start_time}', '') AS TIMESTAMP(6)), CAST(CURRENT_DATE - INTERVAL '1 day' AS TIMESTAMP(6))) AS start_time,
+    COALESCE(CAST(NULLIF('${end_time}', '') AS TIMESTAMP(6)), CAST(CURRENT_DATE AS TIMESTAMP(6))) AS end_time;
+
+CREATE TEMPORARY VIEW v_param AS
+SELECT
+    p.source_month,
+    CAST(DATE_FORMAT(DATE_ADD(p.source_month, 32), 'yyyy-MM-01') AS DATE) AS next_month,
+    DATEDIFF(CAST(DATE_FORMAT(DATE_ADD(p.source_month, 32), 'yyyy-MM-01') AS DATE), p.source_month) AS month_day_count
+FROM (
+    SELECT DISTINCT
+        CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS source_month
+    FROM source_bi_month_tag t
+    CROSS JOIN v_runtime r
+    WHERE t.delete_time IS NULL
+      AND t.update_time >= r.start_time
+      AND t.update_time < r.end_time
+) p;
+
+CREATE TEMPORARY VIEW v_month_days AS
+SELECT
+    DATE_ADD(p.source_month, d.day_no - 1) AS report_date,
+    p.month_day_count
+FROM v_param p
+INNER JOIN v_day_numbers d
+    ON d.day_no <= p.month_day_count;
 -- ====================================================================
 -- 3. 分摊基础明细
 -- ====================================================================
@@ -166,9 +189,9 @@ SELECT
     CAST(0 AS DECIMAL(20, 4)) AS basis_count,
     CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(t.usd_rate, CAST(0 AS DECIMAL(20, 8)))) AS DECIMAL(20, 4)) AS basis_amount,
     CAST(0 AS INT) AS month_day_count
-FROM source_crypto_assets_transfers t
-WHERE t.create_time >= CAST('2026-05-01' AS TIMESTAMP(6))
-  AND t.create_time < CAST('2026-06-01' AS TIMESTAMP(6))
+FROM source_crypto_assets_transfers t CROSS JOIN v_param p
+WHERE t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
+  AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
   AND t.recipient_type = 'wire'
   AND t.status = 'Closed'
   AND t.delete_time IS NULL
@@ -179,9 +202,9 @@ HAVING CAST(SUM(COALESCE(t.origin_amount, CAST(0 AS DECIMAL(20, 4))) * COALESCE(
 -- Thunes 固定成本: 用过 Thunes wire 的客户
 CREATE TEMPORARY VIEW v_th_fixed_accounts AS
 SELECT t.account_id
-FROM source_crypto_assets_transfers t
-WHERE t.create_time >= CAST('2026-05-01' AS TIMESTAMP(6))
-  AND t.create_time < CAST('2026-06-01' AS TIMESTAMP(6))
+FROM source_crypto_assets_transfers t CROSS JOIN v_param p
+WHERE t.create_time >= CAST(p.source_month AS TIMESTAMP(6))
+  AND t.create_time < CAST(p.next_month AS TIMESTAMP(6))
   AND t.recipient_type = 'wire'
   AND t.status = 'Closed'
   AND t.delete_time IS NULL
@@ -199,7 +222,7 @@ SELECT
     CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
     d.month_day_count
 FROM v_th_fixed_accounts a
-CROSS JOIN source_month_days d;
+CROSS JOIN v_month_days d;
 
 -- ====================================================================
 -- 4. 合并分摊明细 + 月汇总
@@ -253,17 +276,17 @@ SELECT
     t.provider,
     t.tag AS source_tag,
     cb.cost_type,
-    CAST('2026-05-01' AS DATE) AS source_month,
-    CAST('2026-06-01' AS DATE) AS next_month,
-    DATEDIFF(CAST('2026-06-01' AS DATE), CAST('2026-05-01' AS DATE)) AS month_day_count,
+    p.source_month AS source_month,
+    p.next_month AS next_month,
+    DATEDIFF(p.next_month, p.source_month) AS month_day_count,
     CAST(SUM(COALESCE(t.amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS source_amount
-FROM source_bi_month_tag t
+FROM source_bi_month_tag t CROSS JOIN v_param p
 INNER JOIN (SELECT DISTINCT product_line, provider, cost_type FROM v_cost_basis) cb
     ON cb.product_line = t.product_line
    AND cb.provider = t.provider
 WHERE t.delete_time IS NULL
-  AND CAST(t.statistics_time AS DATE) >= CAST('2026-05-01' AS DATE)
-  AND CAST(t.statistics_time AS DATE) < CAST('2026-06-01' AS DATE)
+  AND CAST(t.statistics_time AS DATE) >= p.source_month
+  AND CAST(t.statistics_time AS DATE) < p.next_month
 GROUP BY t.product_line, t.provider, t.tag, cb.cost_type;
 
 -- ====================================================================
@@ -473,6 +496,5 @@ CREATE TEMPORARY TABLE sink_dwm_finance_channel_cost_p (
 );
 
 INSERT INTO sink_dwm_finance_channel_cost_p
-SELECT * FROM v_dwm_finance_channel_cost;
-
-
+SELECT *
+FROM v_dwm_finance_channel_cost;

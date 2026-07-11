@@ -1,6 +1,10 @@
 1.金融渠道成本现在固定写死了时间,我觉得这样不好处理(类似说财务在7月8好先输入了一份6月的渠道成本数据,我们洗到金融渠道成本表会不好处理)
 最好可以感知到ods_bi_month_tag数据的变动自动去清洗历史的数据
 bi-cost/flink/total_cost/finance 金融渠道成本各个业务拆分脚本
+我是希望每天凌晨可以去判断ods_bi_month_tag update_time是前一天的数据 在处理改的那一条数据记录运行脚本
+在自己想要定向修复的时候可以传入只需要在对应的脚本传入月份 或者 startTime endTime就可以批量去洗
+
+
 
 2.bb qi 渠道成本
 bb bi那边制定了新的规则/Users/martinjiang/martin-dev-log/bi-cost/bi_month/BB客户成本-202606.sql
@@ -31,3 +35,11 @@ qi成本系数的获取也要根据 ods_bi_month_tag来
 我想问成本至少是一条一更新的 根据最新的ods数据->dwm数据->dws数据
 
 
+
+
+我觉得既然是批处理脚本
+init 的范围是要可以设置的
+cdc 的可以根据当前数据判断updateTime处理
+本质上是传 start_time/end_time 时，按 ods_bi_month_tag.update_time 窗口跑 找到更新数据的对应月份 和指标再洗书记
+如果start_time/end_time  不传默认昨天开始时间结束时间
+我不需要同时保留原来的 start_month/end_month 作为月份兜底，这样兼容性会更稳。 所有脚本统一使用start_time/end_tim

@@ -41,11 +41,25 @@ SET 'sql-client.execution.result-mode' = 'tableau';
 -- 1. 参数
 -- ====================================================================
 
+CREATE TEMPORARY VIEW v_runtime AS
+SELECT
+    COALESCE(CAST(NULLIF('${start_time}', '') AS TIMESTAMP(6)), CAST(CURRENT_DATE - INTERVAL '1 day' AS TIMESTAMP(6))) AS start_time,
+    COALESCE(CAST(NULLIF('${end_time}', '') AS TIMESTAMP(6)), CAST(CURRENT_DATE AS TIMESTAMP(6))) AS end_time;
+
 CREATE TEMPORARY VIEW v_param AS
 SELECT
-    CAST('2026-05-01' AS DATE) AS source_month,
-    CAST('2026-06-01' AS DATE) AS next_month,
-    DATEDIFF(CAST('2026-06-01' AS DATE), CAST('2026-05-01' AS DATE)) AS month_day_count;
+    p.source_month,
+    CAST(DATE_FORMAT(DATE_ADD(p.source_month, 32), 'yyyy-MM-01') AS DATE) AS next_month,
+    DATEDIFF(CAST(DATE_FORMAT(DATE_ADD(p.source_month, 32), 'yyyy-MM-01') AS DATE), p.source_month) AS month_day_count
+FROM (
+    SELECT DISTINCT
+        CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS source_month
+    FROM source_bi_month_tag t
+    CROSS JOIN v_runtime r
+    WHERE t.delete_time IS NULL
+      AND t.update_time >= r.start_time
+      AND t.update_time < r.end_time
+) p;
 
 CREATE TEMPORARY VIEW v_day_numbers AS
 SELECT *
@@ -76,12 +90,13 @@ CREATE TEMPORARY TABLE source_bi_month_tag (
     statistics_time TIMESTAMP(6),
     amount          DECIMAL(20, 4),
     detail          STRING,
+    update_time     TIMESTAMP(6),
     delete_time     TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, product_line, provider, tag, statistics_time, amount, detail, delete_time FROM ods.ods_bi_month_tag WHERE delete_time IS NULL) AS bi_month_tag_f',
+    'table-name' = '(SELECT id, product_line, provider, tag, statistics_time, amount, detail, update_time, delete_time FROM ods.ods_bi_month_tag WHERE delete_time IS NULL) AS bi_month_tag_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

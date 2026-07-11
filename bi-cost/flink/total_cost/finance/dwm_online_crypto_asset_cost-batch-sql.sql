@@ -6,14 +6,14 @@
 -- 作业元信息：
 --   作业类型：批处理
 --   运行方式：一次性初始化/回刷或调度执行
---   运行参数：source_month, next_month, start_date, end_date
+--   运行参数：start_time, end_time
 --   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
 -- Providers:      TH / Cregis / TZ-wire / TZ-sell / Safeheron / BS
 -- 说明：按渠道拆分，每个作业只加载自己需要的 source 表
 -- 执行前置：
 --   UPDATE dwm.dwm_finance_channel_cost_p
 --   SET delete_time = NOW(), update_time = NOW()
---   WHERE source_month = '2026-05-01'::date
+--   WHERE source_month = '${source_month}'::date
 --     AND product_line = 'CRYPTO_ASSET'
 --     AND delete_time IS NULL;
 --********************************************************************--
@@ -38,14 +38,55 @@ SET 'sql-client.execution.result-mode' = 'tableau';
 SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
 
 -- ====================================================================
+-- 2. Source 表
+-- ====================================================================
+
+CREATE TEMPORARY TABLE source_bi_month_tag (
+    id              BIGINT,
+    product_line    STRING,
+    provider        STRING,
+    tag             STRING,
+    statistics_time TIMESTAMP(6),
+    amount          DECIMAL(20, 4),
+    detail          STRING,
+    update_time     TIMESTAMP(6),
+    delete_time     TIMESTAMP(6),
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT id, product_line, provider, tag, statistics_time, amount, detail, update_time, delete_time FROM ods.ods_bi_month_tag WHERE delete_time IS NULL) AS bi_month_tag_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000'
+);
+
+
+
+-- ====================================================================
 -- 1. 参数
 -- ====================================================================
 
+CREATE TEMPORARY VIEW v_runtime AS
+SELECT
+    COALESCE(CAST(NULLIF('${start_time}', '') AS TIMESTAMP(6)), CAST(CURRENT_DATE - INTERVAL '1 day' AS TIMESTAMP(6))) AS start_time,
+    COALESCE(CAST(NULLIF('${end_time}', '') AS TIMESTAMP(6)), CAST(CURRENT_DATE AS TIMESTAMP(6))) AS end_time;
+
 CREATE TEMPORARY VIEW v_param AS
 SELECT
-    CAST('2026-05-01' AS DATE) AS source_month,
-    CAST('2026-06-01' AS DATE) AS next_month,
-    DATEDIFF(CAST('2026-06-01' AS DATE), CAST('2026-05-01' AS DATE)) AS month_day_count;
+    p.source_month,
+    CAST(DATE_FORMAT(DATE_ADD(p.source_month, 32), 'yyyy-MM-01') AS DATE) AS next_month,
+    DATEDIFF(CAST(DATE_FORMAT(DATE_ADD(p.source_month, 32), 'yyyy-MM-01') AS DATE), p.source_month) AS month_day_count
+FROM (
+    SELECT DISTINCT
+        CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS source_month
+    FROM source_bi_month_tag t
+    CROSS JOIN v_runtime r
+    WHERE t.delete_time IS NULL
+      AND t.update_time >= r.start_time
+      AND t.update_time < r.end_time
+) p;
 
 CREATE TEMPORARY VIEW v_day_numbers AS
 SELECT *
@@ -63,30 +104,6 @@ SELECT
 FROM v_param p
 INNER JOIN v_day_numbers d
     ON d.day_no <= p.month_day_count;
-
--- ====================================================================
--- 2. Source 表
--- ====================================================================
-
-CREATE TEMPORARY TABLE source_bi_month_tag (
-    id              BIGINT,
-    product_line    STRING,
-    provider        STRING,
-    tag             STRING,
-    statistics_time TIMESTAMP(6),
-    amount          DECIMAL(20, 4),
-    detail          STRING,
-    delete_time     TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, product_line, provider, tag, statistics_time, amount, detail, delete_time FROM ods.ods_bi_month_tag WHERE delete_time IS NULL) AS bi_month_tag_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
 
 CREATE TEMPORARY TABLE source_crypto_assets_transfers (
     id             STRING,
@@ -663,5 +680,5 @@ CREATE TEMPORARY TABLE sink_dwm_finance_channel_cost_p (
 );
 
 INSERT INTO sink_dwm_finance_channel_cost_p
-SELECT * FROM v_dwm_finance_channel_cost;
-
+SELECT *
+FROM v_dwm_finance_channel_cost;

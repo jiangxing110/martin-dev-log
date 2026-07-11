@@ -90,7 +90,85 @@ CREATE INDEX "idx_dwm_finance_channel_cost_source_tag" ON "dwm"."dwm_finance_cha
   "source_month" "pg_catalog"."date_ops" ASC NULLS LAST,
   "source_tag" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
 );
+-- 2023
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202301" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2023-01-01') TO ('2023-02-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202302" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2023-02-01') TO ('2023-03-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202303" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2023-03-01') TO ('2023-04-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202304" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2023-04-01') TO ('2023-05-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202305" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2023-05-01') TO ('2023-06-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202306" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2023-06-01') TO ('2023-07-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202307" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2023-07-01') TO ('2023-08-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202308" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2023-08-01') TO ('2023-09-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202309" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2023-09-01') TO ('2023-10-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202310" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2023-10-01') TO ('2023-11-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202311" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2023-11-01') TO ('2023-12-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202312" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2023-12-01') TO ('2024-01-01');
 
+-- 2024
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202401" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2024-01-01') TO ('2024-02-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202402" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2024-02-01') TO ('2024-03-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202403" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2024-03-01') TO ('2024-04-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202404" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2024-04-01') TO ('2024-05-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202405" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2024-05-01') TO ('2024-06-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202406" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2024-06-01') TO ('2024-07-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202407" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2024-07-01') TO ('2024-08-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202408" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2024-08-01') TO ('2024-09-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202409" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2024-09-01') TO ('2024-10-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202410" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2024-10-01') TO ('2024-11-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202411" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2024-11-01') TO ('2024-12-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202412" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2024-12-01') TO ('2025-01-01');
+
+-- 2025
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202501" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2025-01-01') TO ('2025-02-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202502" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2025-02-01') TO ('2025-03-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202503" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2025-03-01') TO ('2025-04-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202504" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2025-04-01') TO ('2025-05-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202505" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2025-05-01') TO ('2025-06-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202506" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2025-06-01') TO ('2025-07-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202507" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2025-07-01') TO ('2025-08-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202508" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2025-08-01') TO ('2025-09-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202509" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2025-09-01') TO ('2025-10-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202510" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2025-10-01') TO ('2025-11-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202511" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2025-11-01') TO ('2025-12-01');
+CREATE TABLE "dwm"."dwm_finance_channel_cost_202512" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
+  FOR VALUES FROM ('2025-12-01') TO ('2026-01-01');
+
+-- 2026
 CREATE TABLE "dwm"."dwm_finance_channel_cost_202601" PARTITION OF "dwm"."dwm_finance_channel_cost_p"
   FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
 CREATE TABLE "dwm"."dwm_finance_channel_cost_202602" PARTITION OF "dwm"."dwm_finance_channel_cost_p"

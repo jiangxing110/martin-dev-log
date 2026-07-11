@@ -12,21 +12,21 @@
 | `quantum/sl/sp_init_sl_card_dwm_by_fast_v2.sql` | 批处理 | `start_time`, `end_time` | V2 批量回刷版本，按时间窗口读取分区数据。 |
 | `total_cost/sp_init_finance_channel_cost_by_fast.sql` | 批处理 | `source_month`, `next_month`, `product_line`, `provider`, `source_tag`, `cost_type` | V1 金融渠道成本脚本，一次处理一个产品线/渠道/指标。 |
 | `total_cost/sp_init_finance_channel_cost_by_fast_v2.sql` | 批处理 | `source_month`, `next_month` | V2 金融渠道成本脚本，一次处理当月全部 bi_month_tag 成本数据。 |
-| `total_cost/finance/sp_init_acquiring_cost.sql` | 批处理 | `source_month`, `next_month` | 收单金融渠道成本，按月回刷。 |
-| `total_cost/finance/sp_init_crypto_asset_cost.sql` | 批处理 | `source_month`, `next_month` | 加密资产金融渠道成本汇总脚本，按月回刷。 |
-| `total_cost/finance/sp_init_global_account_cost.sql` | 批处理 | `source_month`, `next_month` | 全球账户金融渠道成本汇总脚本，按月回刷。 |
-| `total_cost/finance/sp_init_quantum_card_cost.sql` | 批处理 | `source_month`, `next_month` | 量子卡金融渠道成本汇总脚本，按月回刷。 |
-| `total_cost/finance/crypto_assets/sp_init_crypto_asset_bitstamp_cost.sql` | 批处理 | `source_month`, `next_month` | Bitstamp 成本，按月回刷。 |
-| `total_cost/finance/crypto_assets/sp_init_crypto_asset_cregis_cost.sql` | 批处理 | `source_month`, `next_month` | Cregis 成本，按月回刷。 |
-| `total_cost/finance/crypto_assets/sp_init_crypto_asset_safeheron_cost.sql` | 批处理 | `source_month`, `next_month` | Safeheron 成本，按月回刷。 |
-| `total_cost/finance/crypto_assets/sp_init_crypto_asset_th_cost.sql` | 批处理 | `source_month`, `next_month` | Thunes 成本，按月回刷。 |
-| `total_cost/finance/crypto_assets/sp_init_crypto_asset_tz_cost.sql` | 批处理 | `source_month`, `next_month` | TZ 成本，按月回刷。 |
-| `total_cost/finance/global_account/sp_init_global_account_bz_cost.sql` | 批处理 | `source_month`, `next_month` | BZ 成本，按月回刷。 |
-| `total_cost/finance/global_account/sp_init_global_account_cl_cost.sql` | 批处理 | `source_month`, `next_month` | CL 成本，按月回刷。 |
-| `total_cost/finance/quantum_card/sp_init_quantum_card_bpc_cost.sql` | 批处理 | `source_month`, `next_month` | BPC 成本，按月回刷。 |
-| `total_cost/finance/quantum_card/sp_init_quantum_card_hz_bank_cost.sql` | 批处理 | `source_month`, `next_month` | HZ 银行手续费，按月回刷。 |
-| `total_cost/finance/quantum_card/sp_init_quantum_card_idemia_cost.sql` | 批处理 | `source_month`, `next_month` | IDEMIA 制卡成本，按月回刷。 |
-| `total_cost/finance/quantum_card/sp_init_quantum_card_sumsub_cost.sql` | 批处理 | `source_month`, `next_month` | Sumsub KYC 成本，按月回刷。 |
+| `total_cost/finance/sp_init_acquiring_cost.sql` | 批处理 | `start_time`, `end_time` | 收单金融渠道成本，按 `ods_bi_month_tag.update_time` 窗口回刷，默认昨天。 |
+| `total_cost/finance/sp_init_crypto_asset_cost.sql` | 批处理 | `start_time`, `end_time` | 加密资产金融渠道成本汇总脚本，按 `ods_bi_month_tag.update_time` 窗口回刷，默认昨天。 |
+| `total_cost/finance/sp_init_global_account_cost.sql` | 批处理 | `start_time`, `end_time` | 全球账户金融渠道成本汇总脚本，按 `ods_bi_month_tag.update_time` 窗口回刷，默认昨天。 |
+| `total_cost/finance/sp_init_quantum_card_cost.sql` | 批处理 | `start_time`, `end_time` | 量子卡金融渠道成本汇总脚本，按 `ods_bi_month_tag.update_time` 窗口回刷，默认昨天。 |
+| `total_cost/finance/crypto_assets/sp_init_crypto_asset_bitstamp_cost.sql` | 批处理 | `start_time`, `end_time` | Bitstamp 成本，按 `ods_bi_month_tag.update_time` 窗口回刷，默认昨天。 |
+| `total_cost/finance/crypto_assets/sp_init_crypto_asset_cregis_cost.sql` | 批处理 | `start_time`, `end_time` | Cregis 成本，按 `ods_bi_month_tag.update_time` 窗口回刷，默认昨天。 |
+| `total_cost/finance/crypto_assets/sp_init_crypto_asset_safeheron_cost.sql` | 批处理 | `start_time`, `end_time` | Safeheron 成本，按 `ods_bi_month_tag.update_time` 窗口回刷，默认昨天。 |
+| `total_cost/finance/crypto_assets/sp_init_crypto_asset_th_cost.sql` | 批处理 | `start_time`, `end_time` | Thunes 成本，按 `ods_bi_month_tag.update_time` 窗口回刷，默认昨天。 |
+| `total_cost/finance/crypto_assets/sp_init_crypto_asset_tz_cost.sql` | 批处理 | `start_time`, `end_time` | TZ 成本，按 `ods_bi_month_tag.update_time` 窗口回刷，默认昨天。 |
+| `total_cost/finance/global_account/sp_init_global_account_bz_cost.sql` | 批处理 | `start_time`, `end_time` | BZ 成本，按 `ods_bi_month_tag.update_time` 窗口回刷，默认昨天。 |
+| `total_cost/finance/global_account/sp_init_global_account_cl_cost.sql` | 批处理 | `start_time`, `end_time` | CL 成本，按 `ods_bi_month_tag.update_time` 窗口回刷，默认昨天。 |
+| `total_cost/finance/quantum_card/sp_init_quantum_card_bpc_cost.sql` | 批处理 | `start_time`, `end_time` | BPC 成本，按 `ods_bi_month_tag.update_time` 窗口回刷，默认昨天。 |
+| `total_cost/finance/quantum_card/sp_init_quantum_card_hz_bank_cost.sql` | 批处理 | `start_time`, `end_time` | HZ 银行手续费，按 `ods_bi_month_tag.update_time` 窗口回刷，默认昨天。 |
+| `total_cost/finance/quantum_card/sp_init_quantum_card_idemia_cost.sql` | 批处理 | `start_time`, `end_time` | IDEMIA 制卡成本，按 `ods_bi_month_tag.update_time` 窗口回刷，默认昨天。 |
+| `total_cost/finance/quantum_card/sp_init_quantum_card_sumsub_cost.sql` | 批处理 | `start_time`, `end_time` | Sumsub KYC 成本，按 `ods_bi_month_tag.update_time` 窗口回刷，默认昨天。 |
 
 ## 2. 无业务运行参数的脚本
 
