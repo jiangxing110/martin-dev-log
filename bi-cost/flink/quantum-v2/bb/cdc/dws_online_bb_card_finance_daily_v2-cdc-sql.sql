@@ -9,7 +9,7 @@
 --   源库变更响应：源表 update_time / delete_time 变化后，重刷对应月份
 -- Notes:
 --   1. 主链路: DWM transaction/auth -> DWS
---   2. 粒度: account_id + report_date + sale_id + am_id
+--   2. 粒度: account_id + report_date(月初) + sale_id + am_id
 --   3. cost_fixed_fee 字段保留在同一条 DWS 写入链路中，值先保持 0
 --********************************************************************--
 
@@ -241,8 +241,8 @@ GROUP BY report_date, account_id, account_type, account_category, system_type, s
 
 CREATE TEMPORARY VIEW v_dws_bb_auth_daily_base AS
 SELECT
-    CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(CAST(auth_time AS DATE) AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', COALESCE(sale_id, ''), ':', COALESCE(am_id, '')))) AS BIGINT) AS id,
-    CAST(auth_time AS DATE) AS report_date,
+    CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(DATE_FORMAT(CAST(auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', COALESCE(sale_id, ''), ':', COALESCE(am_id, '')))) AS BIGINT) AS id,
+    CAST(DATE_FORMAT(CAST(auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
     account_id,
     account_type,
     account_category,
@@ -280,7 +280,7 @@ SELECT
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM v_bb_auth_scope_rows
-GROUP BY CAST(auth_time AS DATE), account_id, account_type, account_category, system_type, sale_id, am_id;
+GROUP BY CAST(DATE_FORMAT(CAST(auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE), account_id, account_type, account_category, system_type, sale_id, am_id;
 
 CREATE TEMPORARY VIEW v_dws_bb_daily_base AS
 SELECT

@@ -9,7 +9,7 @@
 --   源库变更响应：源库变化不会自动触发本作业。
 -- Notes:
 --   1. 主链路: dwm_bb_card_transaction_detail_v2_p + dwm_bb_card_auth_detail_v2_p -> dws_bb_card_finance_daily_p。
---   2. DWS 粒度: account_id + report_date + sale_id + am_id。
+--   2. DWS 粒度: account_id + report_date(月初) + sale_id + am_id。
 --   3. cost_fixed_fee 由 ods_bi_month_tag 月固定成本按当月 DWS 行数均摊。
 --********************************************************************--
 
@@ -135,7 +135,7 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
 
 CREATE TEMPORARY VIEW v_bb_metric_rows AS
 SELECT
-    CAST(transaction_time AS DATE) AS report_date,
+    CAST(DATE_FORMAT(CAST(transaction_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
     account_id,
     account_type,
     account_category,
@@ -166,7 +166,7 @@ WHERE delete_time IS NULL
   AND transaction_time < CAST('${end_date}' AS TIMESTAMP(6))
 UNION ALL
 SELECT
-    CAST(original_completion_time AS DATE) AS report_date,
+    CAST(DATE_FORMAT(CAST(original_completion_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
     account_id,
     account_type,
     account_category,
@@ -197,7 +197,7 @@ WHERE delete_time IS NULL
   AND original_completion_time < CAST('${end_date}' AS TIMESTAMP(6))
 UNION ALL
 SELECT
-    CAST(settlement_post_date AS DATE) AS report_date,
+    CAST(DATE_FORMAT(CAST(settlement_post_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
     account_id,
     account_type,
     account_category,
@@ -272,8 +272,8 @@ GROUP BY report_date, account_id, account_type, account_category, system_type, s
 
 CREATE TEMPORARY VIEW v_dws_bb_auth_daily_base AS
 SELECT
-    CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(CAST(auth_time AS DATE) AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', COALESCE(sale_id, ''), ':', COALESCE(am_id, '')))) AS BIGINT) AS id,
-    CAST(auth_time AS DATE) AS report_date,
+    CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(DATE_FORMAT(CAST(auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', COALESCE(sale_id, ''), ':', COALESCE(am_id, '')))) AS BIGINT) AS id,
+    CAST(DATE_FORMAT(CAST(auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
     account_id,
     account_type,
     account_category,
@@ -314,7 +314,7 @@ FROM source_dwm_bb_card_auth_detail_v2_p
 WHERE delete_time IS NULL
   AND auth_time >= CAST('${start_date}' AS TIMESTAMP(6))
   AND auth_time < CAST('${end_date}' AS TIMESTAMP(6))
-GROUP BY CAST(auth_time AS DATE), account_id, account_type, account_category, system_type, sale_id, am_id;
+GROUP BY CAST(DATE_FORMAT(CAST(auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE), account_id, account_type, account_category, system_type, sale_id, am_id;
 
 CREATE TEMPORARY VIEW v_dws_bb_daily_base AS
 SELECT
