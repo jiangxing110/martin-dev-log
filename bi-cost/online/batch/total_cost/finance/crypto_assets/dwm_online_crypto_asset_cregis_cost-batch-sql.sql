@@ -19,6 +19,8 @@
 -- 作业类型：批处理 (BATCH)
 
 SET 'parallelism.default' = '1';
+SET 'pipeline.default-parallelism' = '1';
+SET 'table.exec.resource.default-parallelism' = '1';
 SET 'sink.parallelism' = '1';
 SET 'table.dml-sync' = 'true';
 SET 'pipeline.operator-chaining' = 'true';
@@ -26,8 +28,8 @@ SET 'execution.checkpointing.interval' = '5min';
 SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
 SET 'execution.checkpointing.timeout' = '30min';
 SET 'table.exec.mini-batch.enabled' = 'false';
-SET 'table.optimizer.reuse-source-enabled' = 'true';
-SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
+SET 'table.optimizer.reuse-source-enabled' = 'false';
+SET 'table.optimizer.reuse-sub-plan-enabled' = 'false';
 SET 'table.optimizer.broadcast.join.enabled' = 'false';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '1';
@@ -386,16 +388,16 @@ SELECT
         b.cost_type, ':',
         DATE_FORMAT(CAST(b.source_month AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
         b.source_tag, ':',
-        COALESCE(d.sale_id, r.sale_id, ''), ':',
-        COALESCE(d.am_id, r.am_id, '')
+        COALESCE(sr.sale_id, ''), ':',
+        COALESCE(sr.am_id, '')
     ))) AS BIGINT) AS id,
     b.report_date,
     b.account_id,
     da.account_type,
     da.account_category,
     da.system_type,
-    COALESCE(d.sale_id, r.sale_id) AS sale_id,
-    COALESCE(d.am_id, r.am_id) AS am_id,
+    sr.sale_id AS sale_id,
+    sr.am_id AS am_id,
     b.product_line,
     b.provider,
     b.cost_type,

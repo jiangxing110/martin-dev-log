@@ -19,6 +19,8 @@
 -- 作业类型：批处理 (BATCH)
 
 SET 'parallelism.default' = '1';
+SET 'pipeline.default-parallelism' = '1';
+SET 'table.exec.resource.default-parallelism' = '1';
 SET 'sink.parallelism' = '1';
 SET 'table.dml-sync' = 'true';
 SET 'pipeline.operator-chaining' = 'true';
@@ -26,8 +28,8 @@ SET 'execution.checkpointing.interval' = '5min';
 SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
 SET 'execution.checkpointing.timeout' = '30min';
 SET 'table.exec.mini-batch.enabled' = 'false';
-SET 'table.optimizer.reuse-source-enabled' = 'true';
-SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
+SET 'table.optimizer.reuse-source-enabled' = 'false';
+SET 'table.optimizer.reuse-sub-plan-enabled' = 'false';
 SET 'table.optimizer.broadcast.join.enabled' = 'false';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '1';
@@ -255,7 +257,9 @@ SELECT
     t.provider,
     t.tag AS source_tag,
     cb.cost_type,
-    p.source_month AS source_month,
+    MAX(p.source_month) AS source_month,
+    MAX(p.next_month) AS next_month,
+    MAX(p.month_day_count) AS month_day_count,
     CAST(SUM(COALESCE(t.amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS source_amount
 FROM source_bi_month_tag t CROSS JOIN v_param p
 INNER JOIN (SELECT DISTINCT product_line, provider, cost_type FROM v_cost_basis) cb
