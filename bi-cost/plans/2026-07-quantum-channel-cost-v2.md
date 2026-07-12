@@ -54,7 +54,8 @@
 
 - [ ] 创建 QI batch / cdc 目录。
 - [ ] 迁移现有 QI DWS 逻辑。
-- [ ] 将 QI 成本系数改为从 `ods_bi_month_tag` 获取。
+- [ ] 将 QI 成本系数和阶梯规则改为从 `ods_account_fee` 获取。
+- [ ] 通过独立迁移 SQL 维护 `ods_account_fee` 的 QI 兜底规则。
 - [ ] 通过独立迁移 SQL 增加 `cost_reimbursement_base_amt`、`cost_service_base_amt`、`cost_acs_regular_base_cnt`、`cost_acs_vip_base_cnt`、`cost_vrm_base_cnt`、`rebate_interchange_base_amt`、`rebate_incentive_base_amt`。
 - [ ] QI DWS 保留原有 `*_vol` 字段兼容旧链路。
 - [ ] QI DWS 保留 `cost_fixed_fee` 字段，但主业务脚本不负责固定成本回刷。
