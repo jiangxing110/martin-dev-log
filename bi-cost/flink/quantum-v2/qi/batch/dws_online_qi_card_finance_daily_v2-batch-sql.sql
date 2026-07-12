@@ -11,7 +11,8 @@
 -- Notes:
 --   1. 主链路: DWM -> DWS
 --   2. 粒度: account_id + report_date + sale_id + am_id
---   3. cost_fixed_fee 由固定成本独立脚本回刷，本脚本保持 0
+--   3. 新增成本/返现 base 字段，保留旧 vol 字段兼容
+--   4. cost_fixed_fee 由固定成本独立脚本回刷，本脚本保持 0
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
@@ -81,6 +82,13 @@ SELECT
     CAST(NULL AS TIMESTAMP(6)) AS delete_time,
     sale_id,
     am_id,
+    CAST(SUM(CASE WHEN is_hk_region = FALSE AND business_type = 'Consumption' AND status IN ('Closed', 'Pending') THEN billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS cost_reimbursement_base_amt,
+    CAST(SUM(CASE WHEN is_hk_region = FALSE AND status IN ('Closed', 'Pending') AND business_type IN ('Consumption', 'Reversal', 'Credit') THEN billing_amount * CASE WHEN business_type = 'Consumption' THEN 1 ELSE -1 END ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS cost_service_base_amt,
+    CAST(SUM(CASE WHEN is_hk_region = FALSE AND business_type = 'Consumption' AND status IN ('Closed', 'Pending') THEN 1 ELSE 0 END) AS BIGINT) AS cost_acs_regular_base_cnt,
+    CAST(SUM(CASE WHEN is_hk_region = FALSE AND business_type = 'Consumption' AND has_special_code = FALSE THEN 1 ELSE 0 END) AS BIGINT) AS cost_acs_vip_base_cnt,
+    CAST(SUM(CASE WHEN is_hk_region = FALSE AND business_type = 'Consumption' AND has_special_code = FALSE THEN 1 ELSE 0 END) AS BIGINT) AS cost_vrm_base_cnt,
+    CAST(SUM(CASE WHEN status IN ('Closed', 'Pending') AND is_hk_region = FALSE AND business_type = 'Consumption' THEN billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS rebate_interchange_base_amt,
+    CAST(SUM(CASE WHEN status IN ('Closed', 'Pending') AND business_type = 'Consumption' THEN billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS rebate_incentive_base_amt,
     CAST(SUM(CASE WHEN is_hk_region = FALSE AND business_type = 'Consumption' AND status IN ('Closed', 'Pending') THEN billing_amount * CAST(0.0135 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS cost_reimbursement_vol,
     CAST(SUM(CASE WHEN is_hk_region = FALSE AND status IN ('Closed', 'Pending') AND business_type IN ('Consumption', 'Reversal', 'Credit') THEN
         CASE
@@ -129,6 +137,13 @@ CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_p (
     delete_time               TIMESTAMP(6),
     sale_id                   STRING,
     am_id                     STRING,
+    cost_reimbursement_base_amt DECIMAL(20, 4),
+    cost_service_base_amt     DECIMAL(20, 4),
+    cost_acs_regular_base_cnt BIGINT,
+    cost_acs_vip_base_cnt     BIGINT,
+    cost_vrm_base_cnt         BIGINT,
+    rebate_interchange_base_amt DECIMAL(20, 4),
+    rebate_incentive_base_amt DECIMAL(20, 4),
     cost_reimbursement_vol    DECIMAL(20, 4),
     cost_service_vol          DECIMAL(20, 4),
     cost_acs_regular_count    INT,
