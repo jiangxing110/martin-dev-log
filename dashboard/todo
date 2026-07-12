@@ -3,9 +3,6 @@
 bi-cost/flink/total_cost/finance 金融渠道成本各个业务拆分脚本
 我是希望每天凌晨可以去判断ods_bi_month_tag update_time是前一天的数据 在处理改的那一条数据记录运行脚本
 在自己想要定向修复的时候可以传入只需要在对应的脚本传入月份 或者 startTime endTime就可以批量去洗
-
-
-
 2.bb qi 渠道成本
 bb bi那边制定了新的规则/Users/martinjiang/martin-dev-log/bi-cost/bi_month/BB客户成本-202606.sql
 之前的数据是参考 /Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/product-collaboration/BB-gross-profit.sql
@@ -30,10 +27,231 @@ qi成本系数的获取也要根据 ods_bi_month_tag来
 /Users/martinjiang/martin-dev-log/bi-cost/flink/quantum/bb/dwm_online_bb_card_incremental-cdc-sql.sql
 /Users/martinjiang/martin-dev-log/bi-cost/flink/quantum/bb/dwm_online_bb_card_transaction_detail-batch-sql.sql
 /Users/martinjiang/martin-dev-log/bi-cost/flink/quantum/bb/dws_online_bb_card_finance_daily-batch-sql.sql
+我们之前也是ods->dwm—>dws
+我们肯定也是任务编排的这一部分 洗数据的脚本也是 两个版本 batch cdc
+如果需要给我一个/Users/martinjiang/martin-dev-log/bi-cost/flink/quantum v2的版本
+
+从数据清洗的角度来说我们的维度应该是到每一个accountId day saleId amId 就是差不多了
+不让你都算到master accountId 不好算成本，
+你可以看看我们sl都逻辑
+
+对，你这个判断更合理。我们应该按 SL 的方式做：
+
+```text
+DWM 明细层：尽量保留交易/结算/Auth 原始因子
+DWS 日汇总层：account_id + report_date + sale_id + am_id
+成本系数：从 ods_bi_month_tag 按月份取，不写死
+母客户汇总：不在清洗层做，后面报表再按账户层级 rollup
+```
+
+我建议 BB v2 这样拆：
+
+1. `dwm_online_bb_card_transaction_detail_v2`
+   继续从 BB 交易和结算清洗明细，补齐新规则需要的字段：
+   `business_code_list`、`original_completion_time`、`post_date`、`txn_location`、`approval_code`、`card_org`、`country`、`sale_id`、`am_id`。
+
+2. `dwm_online_bb_card_auth_detail_v2`
+   单独处理 `bb_card_auth_detail_yyyy-mm` 这种 Auth 明细，用来算：
+   `decline_count`、`ac_decline_count`、`active_card_count`。
+   这块不适合硬塞进交易表，因为来源和时间字段都不一样。
+
+3. `dws_online_bb_card_finance_daily_v2`
+   汇总到：
+   `report_date + account_id + sale_id + am_id`
+   字段保留各种 count/volume/base，例如：
+   `master_dom_txn_count`、`ac_master_dom_count`、`master_int_refund_count`、`total_net_amount`、`active_card_count` 等。
+
+4. `dws` 里成本金额是否直接算
+   我建议可以算，因为你说“QI 成本系数要根据 ods_bi_month_tag 来”。也就是 DWS v2 同时保留：
+   `xxx_count / xxx_amount 基数`
+   和
+   `xxx_fee 成本金额`
+   系数从 `ods_bi_month_tag` 当前月份取，不写死。
+
+5. batch/cdc 两套
+   `batch`：传 `start_time/end_time`，用于定向回刷。
+   `cdc`：默认看昨天 `ods_bi_month_tag.update_time`，找变动月份后重洗对应月份。
+
+我还差一个关键确认：`bb_card_auth_detail_2026-06` 这类 Auth 明细，在线上 Flink 能读的真实表名是什么？是每个月一张物理表，还是已经有统一表/ODS 表？  
+这个决定 `dwm_online_bb_card_auth_detail_v2` 能不能做成通用 batch/cdc。
+
+1.bb_card_auth_detail_yyyy-mm 这个确实是每个月都有的 所以我觉得我们如果这个在计算的时候 bb_card_auth_detail_yyyy-mm找不到对应的 表的话那相印的字段可以按0来处理2.成本系数：从 ods_bi_month_tag 按月份取，不写死但是我会记录一到兜底的数据来保证财务还没及时填写的时候有数据
+3.bb 的dws_bb_card_finance_daily_p 表结构我现在不想改变因为生产的另外一个模块使用了这个列表 该起来很麻烦
+qi 的可以加 成本及渠道返现的基数字段 5. batch/cdc 两套 这个是的
+`batch`：传 `start_time/end_time`，用于定向回刷。
+`cdc`：默认看昨天 `ods_bi_month_tag.update_time`，找变动月份后重洗对应月份。
 
 3.最后总成本和毛利成本是不是改视图更好,可以不用频繁更新数据减少任务复杂度
 我想问成本至少是一条一更新的 根据最新的ods数据->dwm数据->dws数据
 
+我现在最需要确认这些表结构，按优先级来：
 
+**第一优先级：BB v2 主干必需**
 
+1. `quantum_card_transaction_extend`
 
+我需要确认字段名是不是这些：
+
+```text
+id
+source_id
+card_transaction_id
+transaction_id
+account_id
+country
+type
+transaction_time
+original_completion_time
+business_code_list
+remarks
+card_id
+detail
+channel_provision
+delete_time
+```
+
+尤其要确认：
+
+```text
+source_id / card_transaction_id / transaction_id
+transaction_time / original_completion_time
+business_code_list
+detail
+```
+
+这几个字段名和类型。
+
+2. `qbitCard`
+
+需要确认：
+
+```text
+id
+token
+accountId
+type
+```
+
+因为 BB 交易要通过：
+
+```text
+quantum_card_transaction_extend.card_id = qbitCard.id
+```
+
+Auth 要通过：
+
+```text
+bb_card_auth_detail."Card Proxy" = qbitCard.token
+```
+
+3. `qbitCardSettlement`
+
+需要确认：
+
+```text
+id
+transactionId
+qbitCardTransactionId
+provider
+transactionType
+billingAmount
+rawData
+createTime
+deleteTime
+```
+
+尤其是 `rawData` 类型，以及这些 JSON key 是否稳定：
+
+```text
+responseCode
+reasonCode
+txnLocation
+postDate
+txnDate
+approvalCode
+```
+
+**第二优先级：BB Auth** 4. `bb_card_auth_detail_yyyy-mm`
+
+随便给一个月份的表结构就行，比如：
+
+```text
+bb_card_auth_detail_2026-06
+```
+
+需要确认字段：
+
+```text
+Card Proxy
+Program Name
+Merchant Country
+Request Description
+Auth Txn GUID
+Trans Date / Time
+Response Code
+```
+
+还有这些字段是不是带空格和大小写，Flink 里引用会比较敏感。
+
+**第三优先级：账户和归属** 5. `dim_account`
+
+需要确认：
+
+```text
+id
+account_type
+type
+system_type
+```
+
+6. `api_account_relation`
+
+需要确认：
+
+```text
+account_id
+root_id
+delete_time
+```
+
+7. `dim_sale_account_relation_p`
+
+需要确认：
+
+```text
+id
+relation_account_id
+sale_id
+am_id
+operation_manager_id
+relation_start_time
+relation_end_time
+delete_time
+```
+
+**第四优先级：固定成本独立链路** 8. `ods_bi_month_tag`
+
+这个后面写 `cost_fixed_fee` 回刷一定要用。
+
+需要确认：
+
+```text
+id
+statistics_time
+update_time
+delete_time
+tag / metric / source_tag / cost_type 之类字段
+amount / cost_amount 之类金额字段
+provider / channel / product_line 之类渠道字段
+```
+
+我现在最想先看的是：
+
+```text
+quantum_card_transaction_extend
+qbitCardSettlement
+bb_card_auth_detail_2026-06
+ods_bi_month_tag
+```
+
+这四张最关键。

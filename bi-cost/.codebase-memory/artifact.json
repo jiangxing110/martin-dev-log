@@ -1,11 +1,11 @@
 {
     "schema_version": 1,
-    "commit": "21588b2da6d60325e772db46576817ec023ff473",
-    "indexed_at": "2026-07-11T07:25:30Z",
+    "commit": "e5ed03d77da16a1ff837124589412b2fe12993e5",
+    "indexed_at": "2026-07-12T02:11:35Z",
     "project": "Users-martinjiang-martin-dev-log-bi-cost",
-    "nodes": 2189,
-    "edges": 2144,
-    "original_size": 4784128,
-    "compressed_size": 274283,
+    "nodes": 2882,
+    "edges": 2742,
+    "original_size": 5832704,
+    "compressed_size": 331524,
     "compression_level": 3
 }
