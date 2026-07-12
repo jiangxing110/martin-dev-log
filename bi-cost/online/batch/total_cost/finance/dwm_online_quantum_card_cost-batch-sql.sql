@@ -19,10 +19,10 @@
 --********************************************************************--
 -- 作业类型：批处理 (BATCH)
 
-SET 'parallelism.default' = '1';
-SET 'pipeline.default-parallelism' = '1';
-SET 'table.exec.resource.default-parallelism' = '1';
-SET 'sink.parallelism' = '1';
+SET 'parallelism.default' = '2';
+SET 'pipeline.default-parallelism' = '2';
+SET 'table.exec.resource.default-parallelism' = '2';
+SET 'sink.parallelism' = '2';
 SET 'table.dml-sync' = 'true';
 SET 'pipeline.operator-chaining' = 'true';
 SET 'execution.checkpointing.interval' = '5min';

@@ -44,42 +44,16 @@ DWS 日汇总层：account_id + report_date + sale_id + am_id
 母客户汇总：不在清洗层做，后面报表再按账户层级 rollup
 ```
 
-我建议 BB v2 这样拆：
+我发现
+[568]:HashJoin(joinType=[LeftOuterJoin], where=[((cost_key0 = $f22) AND cost_key IS NULL)], select=[report_date, account_id, product_line, provider, cost_type, source_month, source_tag, source_amount, month_day_count, basis_count, month_basis_count, basis_amount, month_basis_amount, allocation_rate, cost_amount, account_type, account_category, system_type, cost_key, sale_id, am_id, $f22, cost_key0, sale_id0, am_id0], build=[right])
++- [569]:Calc(select=[CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', product_line, ':', provider, ':', cost_type, ':', DATE_FORMAT(CAST(source_month AS TIMESTAMP(6)), 'yyyyMMdd'), ':', source_tag, ':', CASE(sale_id IS NOT NULL, CAST(sale_id AS VARCHAR(2147483647)), sale_id0 IS NOT NULL, CAST(sale_id0 AS VARCHAR(2147483647)), ''), ':', CASE(am_id IS NOT NULL, CAST(am_id AS VARCHAR(2147483647)), am_id0 IS NOT NULL, CAST(am_id0 AS VARCHAR(2147483647)), '')))) AS BIGINT) AS id, report_date, account_id, account_type, account_category, system_type, CASE(sale_id IS NOT NULL, sale_id, sale_id0) AS sale_id, CASE(am_id IS NOT NULL, am_id, am_id0) AS am_id, product_line, provider, cost_type, source_month, source_tag, source_amount, month_day_count, basis_count, month_basis_count, basis_amount, month_basis_amount, allocation_rate, cost_amount, 1 AS version, 'quantum_card_idemia_batch' AS remarks, CAST(CURRENT_TIMESTAMP() AS TIMESTAMP(6)) AS create_time, CAST(CURRENT_TIMESTAMP() AS TIMESTAMP(6)) AS update_time, null:TIMESTAMP(6) AS delete_time])
++- [570]:ConstraintEnforcer[NotNullEnforcer(fields=[id, report_date])]
++- [570]:Sink(table=[vvp.default.sink_dwm_finance_channel_cost_p], fields=[id, report_date, account_id, account_type, account_category, system_type, sale_id, am_id, product_line, provider, cost_type, source_month, source_tag, source_amount, month_day_count, basis_count, month_basis_count, basis_amount, month_basis_amount, allocation_rate, cost_amount, version, remarks, create_time, update_time, delete_time])
 
-1. `dwm_online_bb_card_transaction_detail_v2`
-   继续从 BB 交易和结算清洗明细，补齐新规则需要的字段：
-   `business_code_list`、`original_completion_time`、`post_date`、`txn_location`、`approval_code`、`card_org`、`country`、`sale_id`、`am_id`。
+好几个都是这样的问题
+dwm_online_quantum_card_idemia_cost-batch-sql
+dwm_online_quantum_card_bpc_cost-batch-sql
 
-2. `dwm_online_bb_card_auth_detail_v2`
-   单独处理 `bb_card_auth_detail_yyyy-mm` 这种 Auth 明细，用来算：
-   `decline_count`、`ac_decline_count`、`active_card_count`。
-   这块不适合硬塞进交易表，因为来源和时间字段都不一样。
+[255]:TableSourceScan(table=[[vvp, default, source_qbit_card_transaction, filter=[and(and(IS NULL(delete_time), LIKE(provider, _UTF-16LE'%Qbit%')), OR(OR(=(business_type, _UTF-16LE'Consumption':VARCHAR(11) CHARACTER SET &quot;UTF-16LE&quot;), =(business_type, _UTF-16LE'Credit':VARCHAR(11) CHARACTER SET &quot;UTF-16LE&quot;)), =(business_type, _UTF-16LE'Reversal':VARCHAR(11) CHARACTER SET &quot;UTF-16LE&quot;)))], project=[account_id, business_type, status, settle_amount, transaction_time]]], fields=[account_id, business_type, status, settle_amount, transaction_time])
 
-3. `dws_online_bb_card_finance_daily_v2`
-   汇总到：
-   `report_date + account_id + sale_id + am_id`
-   字段保留各种 count/volume/base，例如：
-   `master_dom_txn_count`、`ac_master_dom_count`、`master_int_refund_count`、`total_net_amount`、`active_card_count` 等。
-
-4. `dws` 里成本金额是否直接算
-   我建议可以算，因为你说“QI 成本系数要根据 ods_bi_month_tag 来”。也就是 DWS v2 同时保留：
-   `xxx_count / xxx_amount 基数`
-   和
-   `xxx_fee 成本金额`
-   系数从 `ods_bi_month_tag` 当前月份取，不写死。
-
-5. batch/cdc 两套
-   `batch`：传 `start_time/end_time`，用于定向回刷。
-   `cdc`：默认看昨天 `ods_bi_month_tag.update_time`，找变动月份后重洗对应月份。
-
-我还差一个关键确认：`bb_card_auth_detail_2026-06` 这类 Auth 明细，在线上 Flink 能读的真实表名是什么？是每个月一张物理表，还是已经有统一表/ODS 表？  
-这个决定 `dwm_online_bb_card_auth_detail_v2` 能不能做成通用 batch/cdc。
-
-1.bb_card_auth_detail_yyyy-mm 这个确实是每个月都有的 所以我觉得我们如果这个在计算的时候 bb_card_auth_detail_yyyy-mm找不到对应的 表的话那相印的字段可以按0来处理2.成本系数：从 ods_bi_month_tag 按月份取，不写死但是我会记录一到兜底的数据来保证财务还没及时填写的时候有数据
-3.bb 的dws_bb_card_finance_daily_p 表结构我现在不想改变因为生产的另外一个模块使用了这个列表 该起来很麻烦
-qi 的可以加 成本及渠道返现的基数字段 5. batch/cdc 两套 这个是的
-`batch`：传 `start_time/end_time`，用于定向回刷。
-`cdc`：默认看昨天 `ods_bi_month_tag.update_time`，找变动月份后重洗对应月份。
-
-3.最后总成本和毛利成本是不是改视图更好,可以不用频繁更新数据减少任务复杂度
-我想问成本至少是一条一更新的 根据最新的ods数据->dwm数据->dws数据
+dwm_online_quantum_card_hz_bank_cost-batch-sql

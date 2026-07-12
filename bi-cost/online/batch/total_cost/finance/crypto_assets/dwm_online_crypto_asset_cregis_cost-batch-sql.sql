@@ -18,10 +18,10 @@
 --********************************************************************--
 -- 作业类型：批处理 (BATCH)
 
-SET 'parallelism.default' = '1';
-SET 'pipeline.default-parallelism' = '1';
-SET 'table.exec.resource.default-parallelism' = '1';
-SET 'sink.parallelism' = '1';
+SET 'parallelism.default' = '2';
+SET 'pipeline.default-parallelism' = '2';
+SET 'table.exec.resource.default-parallelism' = '2';
+SET 'sink.parallelism' = '2';
 SET 'table.dml-sync' = 'true';
 SET 'pipeline.operator-chaining' = 'true';
 SET 'execution.checkpointing.interval' = '5min';
@@ -388,16 +388,16 @@ SELECT
         b.cost_type, ':',
         DATE_FORMAT(CAST(b.source_month AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
         b.source_tag, ':',
-        COALESCE(sr.sale_id, ''), ':',
-        COALESCE(sr.am_id, '')
+        COALESCE(d.sale_id, r.sale_id, ''), ':',
+        COALESCE(d.am_id, r.am_id, '')
     ))) AS BIGINT) AS id,
     b.report_date,
     b.account_id,
     da.account_type,
     da.account_category,
     da.system_type,
-    sr.sale_id AS sale_id,
-    sr.am_id AS am_id,
+    COALESCE(d.sale_id, r.sale_id) AS sale_id,
+    COALESCE(d.am_id, r.am_id) AS am_id,
     b.product_line,
     b.provider,
     b.cost_type,
