@@ -69,19 +69,10 @@ SELECT DISTINCT
     CAST(DATE_FORMAT(CAST(transaction_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month,
     CAST(DATE_FORMAT(CAST(DATE_ADD(CAST(DATE_FORMAT(CAST(transaction_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE), 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS next_month
 FROM source_dwm_qi_card_transaction_detail_p
-WHERE delete_time IS NULL
-  AND (
+WHERE (
         (update_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6)) AND update_time < CAST(CURRENT_DATE AS TIMESTAMP(6)))
      OR (delete_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6)) AND delete_time < CAST(CURRENT_DATE AS TIMESTAMP(6)))
   );
-
-DELETE FROM sink_dws_qi_card_finance_daily_p
-WHERE EXISTS (
-    SELECT 1
-    FROM v_qi_changed_months m
-    WHERE sink_dws_qi_card_finance_daily_p.report_date >= m.report_month
-      AND sink_dws_qi_card_finance_daily_p.report_date < m.next_month
-);
 
 CREATE TEMPORARY VIEW v_qi_month_scope_base AS
 SELECT
@@ -180,6 +171,14 @@ CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_p (
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'writeMode' = 'upsert',
     'batchSize' = '2000'
+);
+
+DELETE FROM sink_dws_qi_card_finance_daily_p
+WHERE EXISTS (
+    SELECT 1
+    FROM v_qi_changed_months m
+    WHERE sink_dws_qi_card_finance_daily_p.report_date >= m.report_month
+      AND sink_dws_qi_card_finance_daily_p.report_date < m.next_month
 );
 
 INSERT INTO sink_dws_qi_card_finance_daily_p

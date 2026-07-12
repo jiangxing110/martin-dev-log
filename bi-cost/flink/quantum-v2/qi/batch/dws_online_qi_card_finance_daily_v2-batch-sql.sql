@@ -12,7 +12,7 @@
 --   1. 主链路: DWM -> DWS
 --   2. 粒度: account_id + report_date + sale_id + am_id
 --   3. 新增成本/返现 base 字段，保留旧 vol 字段兼容
---   4. cost_fixed_fee 由固定成本独立脚本回刷，本脚本保持 0
+--   4. cost_fixed_fee 由 ods_bi_month_tag 月固定成本按当月 DWS 行数均摊
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
@@ -30,6 +30,27 @@ SET 'execution.checkpointing.timeout' = '30min';
 SET 'table.exec.mini-batch.enabled' = 'true';
 SET 'table.exec.mini-batch.allow-latency' = '5s';
 SET 'table.exec.mini-batch.size' = '5000';
+
+CREATE TEMPORARY TABLE source_bi_month_tag (
+    id              BIGINT,
+    product_line    STRING,
+    provider        STRING,
+    tag             STRING,
+    statistics_time TIMESTAMP(6),
+    amount          DECIMAL(20, 4),
+    detail          STRING,
+    update_time     TIMESTAMP(6),
+    delete_time     TIMESTAMP(6),
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT id, product_line, provider, tag, statistics_time, amount, detail, update_time, delete_time FROM ods.ods_bi_month_tag WHERE delete_time IS NULL) AS bi_month_tag_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000'
+);
 
 
 CREATE TEMPORARY TABLE source_dwm_qi_card_transaction_detail_p (
@@ -123,6 +144,36 @@ FROM source_dwm_qi_card_transaction_detail_p
 WHERE delete_time IS NULL
 GROUP BY CAST(transaction_time AS DATE), account_id, account_type, account_category, system_type, sale_id, am_id;
 
+CREATE TEMPORARY VIEW v_qi_month_scope AS
+SELECT DISTINCT CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
+FROM v_dws_qi_daily_base;
+
+CREATE TEMPORARY VIEW v_qi_month_row_count AS
+SELECT
+    CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month,
+    COUNT(*) AS row_count
+FROM v_dws_qi_daily_base
+GROUP BY CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE);
+
+CREATE TEMPORARY VIEW v_qi_month_fixed_fee AS
+SELECT report_month, amount AS month_fixed_fee
+FROM (
+    SELECT
+        s.report_month,
+        t.amount,
+        ROW_NUMBER() OVER (
+            PARTITION BY s.report_month
+            ORDER BY t.statistics_time DESC, t.update_time DESC, t.id DESC
+        ) AS rn
+    FROM v_qi_month_scope s
+    LEFT JOIN source_bi_month_tag t
+        ON t.provider = 'IQ'
+       AND t.tag = '量子卡-渠道固定成本'
+       AND t.delete_time IS NULL
+       AND t.statistics_time < CAST(DATE_FORMAT(CAST(DATE_ADD(s.report_month, 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6))
+) ranked_fee
+WHERE rn = 1;
+
 CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_p (
     id                        BIGINT,
     report_date               DATE,
@@ -165,4 +216,37 @@ CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_p (
 );
 
 INSERT INTO sink_dws_qi_card_finance_daily_p
-SELECT * FROM v_dws_qi_daily_base;
+SELECT
+    b.id,
+    b.report_date,
+    b.account_id,
+    b.account_type,
+    b.account_category,
+    b.system_type,
+    b.version,
+    b.remarks,
+    b.create_time,
+    b.update_time,
+    b.delete_time,
+    b.sale_id,
+    b.am_id,
+    b.cost_reimbursement_rate,
+    b.cost_service_rate,
+    b.cost_acs_regular_rate,
+    b.cost_acs_vip_rate,
+    b.cost_vrm_rate,
+    b.rebate_interchange_rate,
+    b.rebate_incentive_rate,
+    b.cost_reimbursement_vol,
+    b.cost_service_vol,
+    b.cost_acs_regular_count,
+    b.cost_acs_vip_count,
+    b.cost_vrm_count,
+    b.rebate_interchange_vol,
+    b.rebate_incentive_vol,
+    COALESCE(f.month_fixed_fee / NULLIF(c.row_count, 0), CAST(0 AS DECIMAL(20, 4))) AS cost_fixed_fee
+FROM v_dws_qi_daily_base b
+LEFT JOIN v_qi_month_row_count c
+    ON CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = c.report_month
+LEFT JOIN v_qi_month_fixed_fee f
+    ON CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = f.report_month;

@@ -1,17 +1,16 @@
 --********************************************************************--
 -- Author:         martinJiang
--- Created Time:   2026-06-15
--- 历史名称：sp_init_sl_card_dws_by_fast.sql
--- Description:    Quantum SL v2 DWS 批量初始化/回刷
+-- Created Time:   2026-07-12
+-- Description:    Quantum SL v2 DWS CDC 按月回刷
 -- 作业元信息：
---   作业类型：批处理
---   运行方式：一次性初始化/回刷或调度执行
---   运行参数：start_date, end_date
---   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
+--   作业类型：流处理 CDC
+--   运行方式：默认按昨天变更扫描，按受影响月份整月删除后重算
+--   运行参数：无
+--   源库变更响应：源表 update_time / delete_time 变化后，重刷对应月份
 -- Notes:
 --   1. 主链路: qbitCardSettlement -> DWM -> DWS
 --   2. 粒度: account_id + report_date + sale_id + am_id
---   3. cost_fixed_fee 由 ods_bi_month_tag 月固定成本按当月 DWS 行数均摊
+--   3. cost_fixed_fee 字段保留在同一条 DWS 写入链路中，值先保持 0
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
@@ -28,27 +27,6 @@ SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '1';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'sql-client.execution.result-mode' = 'tableau';
-
-CREATE TEMPORARY TABLE source_bi_month_tag (
-    id              BIGINT,
-    product_line    STRING,
-    provider        STRING,
-    tag             STRING,
-    statistics_time TIMESTAMP(6),
-    amount          DECIMAL(20, 4),
-    detail          STRING,
-    update_time     TIMESTAMP(6),
-    delete_time     TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, product_line, provider, tag, statistics_time, amount, detail, update_time, delete_time FROM ods.ods_bi_month_tag WHERE delete_time IS NULL) AS bi_month_tag_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
 
 CREATE TEMPORARY TABLE source_dwm_sl_card_transaction_detail_p (
     id                         STRING,
@@ -99,6 +77,31 @@ CREATE TEMPORARY TABLE source_dim_account (
     'scan.fetch-size' = '1000'
 );
 
+CREATE TEMPORARY VIEW v_sl_changed_months AS
+SELECT DISTINCT
+    report_month,
+    CAST(DATE_FORMAT(CAST(DATE_ADD(report_month, 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS next_month
+FROM (
+    SELECT CAST(DATE_FORMAT(CAST(settlement_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
+    FROM source_dwm_sl_card_transaction_detail_p
+    WHERE (
+            update_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6))
+        AND update_time < CAST(CURRENT_DATE AS TIMESTAMP(6))
+    )
+       OR (
+            delete_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6))
+        AND delete_time < CAST(CURRENT_DATE AS TIMESTAMP(6))
+    )
+) x
+WHERE report_month IS NOT NULL;
+
+CREATE TEMPORARY VIEW v_sl_scope_rows AS
+SELECT s.*
+FROM source_dwm_sl_card_transaction_detail_p s
+INNER JOIN v_sl_changed_months m
+    ON CAST(DATE_FORMAT(CAST(s.settlement_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = m.report_month
+WHERE s.delete_time IS NULL;
+
 CREATE TEMPORARY VIEW v_dws_sl_daily_base AS
 SELECT
     CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(s.settlement_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', s.account_id, ':', COALESCE(s.sale_id, ''), ':', COALESCE(s.am_id, '')))) AS BIGINT) AS id,
@@ -122,40 +125,9 @@ SELECT
         END
     ) AS DECIMAL(20, 4)) AS rebate_amt,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee
-FROM source_dwm_sl_card_transaction_detail_p s
+FROM v_sl_scope_rows s
 LEFT JOIN source_dim_account da ON da.id = s.account_id
-WHERE s.delete_time IS NULL
 GROUP BY s.settlement_date, s.account_id, da.account_type, da.account_category, da.system_type, s.sale_id, s.am_id;
-
-CREATE TEMPORARY VIEW v_sl_month_scope AS
-SELECT DISTINCT CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
-FROM v_dws_sl_daily_base;
-
-CREATE TEMPORARY VIEW v_sl_month_row_count AS
-SELECT
-    CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month,
-    COUNT(*) AS row_count
-FROM v_dws_sl_daily_base
-GROUP BY CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE);
-
-CREATE TEMPORARY VIEW v_sl_month_fixed_fee AS
-SELECT report_month, amount AS month_fixed_fee
-FROM (
-    SELECT
-        s.report_month,
-        t.amount,
-        ROW_NUMBER() OVER (
-            PARTITION BY s.report_month
-            ORDER BY t.statistics_time DESC, t.update_time DESC, t.id DESC
-        ) AS rn
-    FROM v_sl_month_scope s
-    LEFT JOIN source_bi_month_tag t
-        ON t.provider = 'LS'
-       AND t.tag = '量子卡-渠道固定成本'
-       AND t.delete_time IS NULL
-       AND t.statistics_time < CAST(DATE_FORMAT(CAST(DATE_ADD(s.report_month, 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6))
-) ranked_fee
-WHERE rn = 1;
 
 CREATE TEMPORARY TABLE sink_dws_sl_card_finance_daily_p (
     id              BIGINT,
@@ -186,26 +158,30 @@ CREATE TEMPORARY TABLE sink_dws_sl_card_finance_daily_p (
     'batchSize' = '2000'
 );
 
+DELETE FROM sink_dws_sl_card_finance_daily_p
+WHERE EXISTS (
+    SELECT 1
+    FROM v_sl_changed_months m
+    WHERE sink_dws_sl_card_finance_daily_p.report_date >= m.report_month
+      AND sink_dws_sl_card_finance_daily_p.report_date < m.next_month
+);
+
 INSERT INTO sink_dws_sl_card_finance_daily_p
 SELECT
-    b.id,
-    b.report_date,
-    b.account_id,
-    b.account_type,
-    b.account_category,
-    b.system_type,
-    b.version,
-    b.remarks,
-    b.create_time,
-    b.update_time,
-    b.delete_time,
-    b.sale_id,
-    b.am_id,
-    b.rebate_base,
-    b.rebate_amt,
-    COALESCE(f.month_fixed_fee / NULLIF(c.row_count, 0), CAST(0 AS DECIMAL(20, 4))) AS cost_fixed_fee
-FROM v_dws_sl_daily_base b
-LEFT JOIN v_sl_month_row_count c
-    ON CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = c.report_month
-LEFT JOIN v_sl_month_fixed_fee f
-    ON CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = f.report_month;
+    id,
+    report_date,
+    account_id,
+    account_type,
+    account_category,
+    system_type,
+    version,
+    remarks,
+    create_time,
+    update_time,
+    delete_time,
+    sale_id,
+    am_id,
+    rebate_base,
+    rebate_amt,
+    cost_fixed_fee
+FROM v_dws_sl_daily_base;
