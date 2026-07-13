@@ -34,14 +34,13 @@ CREATE TEMPORARY TABLE source_profit_revenue_daily (
     report_date       DATE,
     account_id        STRING,
     account_type      STRING,
-    account_category  STRING,
     system_type       STRING,
     category          STRING,
-    revenue_amount    STRING
+    revenue_amount    DOUBLE
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT stat_date AS report_date, account_id, account_type, account_category, system_type, category, CAST(amount AS TEXT) AS revenue_amount FROM dws.dws_revenue_summary_daily_mv WHERE stat_date >= CAST(''${start_date}'' AS DATE) AND stat_date < CAST(''${end_date}'' AS DATE)) AS dws_revenue_summary_daily_mv_f',
+    'table-name' = '(SELECT stat_date AS report_date, account_id, account_type, system_type, category, CAST(CASE WHEN (amount IS NULL OR CAST(amount AS TEXT) = ''NaN'') THEN 0 ELSE amount END AS DOUBLE PRECISION) AS revenue_amount FROM dws.dws_revenue_summary_daily_mv WHERE stat_date >= CAST(''${start_date}'' AS DATE) AND stat_date < CAST(''${end_date}'' AS DATE)) AS dws_revenue_summary_daily_mv_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -54,29 +53,27 @@ CREATE TEMPORARY TABLE source_total_channel_cost_daily (
     account_type      STRING,
     account_category  STRING,
     system_type       STRING,
-    acquiring_cost    STRING,
-    business_cost     STRING,
-    quantum_cost      STRING,
-    crypto_cost       STRING,
-    total_channel_cost STRING,
-    delete_time       TIMESTAMP(6)
+    acquiring_cost    DOUBLE,
+    business_cost     DOUBLE,
+    quantum_cost      DOUBLE,
+    crypto_cost       DOUBLE,
+    total_channel_cost DOUBLE
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT report_date, account_id, account_type, account_category, system_type, CAST(acquiring_cost AS TEXT) AS acquiring_cost, CAST(business_cost AS TEXT) AS business_cost, CAST(quantum_cost AS TEXT) AS quantum_cost, CAST(crypto_cost AS TEXT) AS crypto_cost, CAST(total_channel_cost AS TEXT) AS total_channel_cost, delete_time FROM dws.dws_total_channel_cost_daily_p WHERE report_date >= CAST(''${start_date}'' AS DATE) AND report_date < CAST(''${end_date}'' AS DATE)) AS dws_total_channel_cost_daily_p_f',
+    'table-name' = '(SELECT report_date, account_id, account_type, account_category, system_type, CAST(CASE WHEN (acquiring_cost IS NULL OR CAST(acquiring_cost AS TEXT) = ''NaN'') THEN 0 ELSE acquiring_cost END AS DOUBLE PRECISION) AS acquiring_cost, CAST(CASE WHEN (business_cost IS NULL OR CAST(business_cost AS TEXT) = ''NaN'') THEN 0 ELSE business_cost END AS DOUBLE PRECISION) AS business_cost, CAST(CASE WHEN (quantum_cost IS NULL OR CAST(quantum_cost AS TEXT) = ''NaN'') THEN 0 ELSE quantum_cost END AS DOUBLE PRECISION) AS quantum_cost, CAST(CASE WHEN (crypto_cost IS NULL OR CAST(crypto_cost AS TEXT) = ''NaN'') THEN 0 ELSE crypto_cost END AS DOUBLE PRECISION) AS crypto_cost, CAST(CASE WHEN (total_channel_cost IS NULL OR CAST(total_channel_cost AS TEXT) = ''NaN'') THEN 0 ELSE total_channel_cost END AS DOUBLE PRECISION) AS total_channel_cost FROM dws.dws_total_channel_cost_daily_p WHERE delete_time IS NULL AND report_date >= CAST(''${start_date}'' AS DATE) AND report_date < CAST(''${end_date}'' AS DATE)) AS dws_total_channel_cost_daily_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
     'scan.fetch-size' = '1000'
 );
 
-CREATE TEMPORARY VIEW v_gross_profit_daily_base AS
+CREATE TEMPORARY VIEW v_gross_profit_daily_joined AS
 SELECT
-    CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(r.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', r.account_id, ':', r.category))) AS BIGINT) AS id,
     r.report_date,
     r.account_id,
     COALESCE(r.account_type, c.account_type) AS account_type,
-    COALESCE(r.account_category, c.account_category) AS account_category,
+    c.account_category AS account_category,
     COALESCE(r.system_type, c.system_type) AS system_type,
     r.category,
     CAST(COALESCE(CAST(r.revenue_amount AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS revenue_amount,
@@ -90,36 +87,28 @@ SELECT
             WHEN 'offline_order' THEN CAST(0 AS DECIMAL(20, 4))
             ELSE CAST(0 AS DECIMAL(20, 4))
         END AS DECIMAL(20, 4)
-    ) AS channel_cost_amount,
-    CAST(
-        COALESCE(CAST(r.revenue_amount AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4))) -
-        CASE r.category
-            WHEN 'qbit_card' THEN COALESCE(CAST(c.quantum_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
-            WHEN 'global_account' THEN COALESCE(CAST(c.business_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
-            WHEN 'crypto_assets' THEN COALESCE(CAST(c.crypto_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
-            WHEN 'particle_financing' THEN CAST(0 AS DECIMAL(20, 4))
-            WHEN 'company_registration' THEN CAST(0 AS DECIMAL(20, 4))
-            WHEN 'offline_order' THEN CAST(0 AS DECIMAL(20, 4))
-            ELSE CAST(0 AS DECIMAL(20, 4))
-        END AS DECIMAL(20, 4)
-    ) AS gross_profit_amount,
+    ) AS channel_cost_amount
+FROM source_profit_revenue_daily r
+LEFT JOIN source_total_channel_cost_daily c
+    ON c.report_date = r.report_date
+   AND c.account_id = r.account_id;
+
+CREATE TEMPORARY VIEW v_gross_profit_daily_base AS
+SELECT
+    CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', category))) AS BIGINT) AS id,
+    report_date,
+    account_id,
+    account_type,
+    account_category,
+    system_type,
+    category,
+    revenue_amount,
+    channel_cost_amount,
+    CAST(revenue_amount - channel_cost_amount AS DECIMAL(20, 4)) AS gross_profit_amount,
     CAST(
         CASE
-            WHEN COALESCE(CAST(r.revenue_amount AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4))) = CAST(0 AS DECIMAL(20, 4)) THEN CAST(0 AS DECIMAL(20, 8))
-            ELSE (
-                (
-                    COALESCE(CAST(r.revenue_amount AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4))) -
-                    CASE r.category
-                        WHEN 'qbit_card' THEN COALESCE(CAST(c.quantum_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
-                        WHEN 'global_account' THEN COALESCE(CAST(c.business_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
-                        WHEN 'crypto_assets' THEN COALESCE(CAST(c.crypto_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
-                        WHEN 'particle_financing' THEN CAST(0 AS DECIMAL(20, 4))
-                        WHEN 'company_registration' THEN CAST(0 AS DECIMAL(20, 4))
-                        WHEN 'offline_order' THEN CAST(0 AS DECIMAL(20, 4))
-                        ELSE CAST(0 AS DECIMAL(20, 4))
-                    END
-                ) / COALESCE(CAST(r.revenue_amount AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
-            )
+            WHEN revenue_amount = CAST(0 AS DECIMAL(20, 4)) THEN CAST(0 AS DECIMAL(20, 8))
+            ELSE (revenue_amount - channel_cost_amount) / revenue_amount
         END AS DECIMAL(20, 8)
     ) AS gross_margin,
     1 AS version,
@@ -127,11 +116,7 @@ SELECT
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
-FROM source_profit_revenue_daily r
-LEFT JOIN source_total_channel_cost_daily c
-    ON c.report_date = r.report_date
-   AND c.account_id = r.account_id
-   AND c.delete_time IS NULL;
+FROM v_gross_profit_daily_joined;
 
 CREATE TEMPORARY TABLE sink_dws_gross_profit_daily_p (
     id                   BIGINT,

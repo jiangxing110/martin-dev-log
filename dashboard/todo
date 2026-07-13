@@ -66,3 +66,4 @@ dwm_online_quantum_card_hz_bank_cost-batch-sql
 还要关联/Users/martinjiang/WebstormProjects/qbit-admin-v3项目 也要看看这个列表要怎么改
 2.createOddAccountReviewV2 的方法我们要对没有风险评级的账户拿到kyb 或者kyc 状态是代补录或通过状态的最近时间作为baseDate
 
+startDate=2026-06-01%2000%3A00%3A00&endDate=2026-06-30%2023%3A59%3A59&accountId=2cef54b6-51c9-47c8-a56a-66934cbfd619&datetype=month
