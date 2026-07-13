@@ -122,20 +122,15 @@ CREATE TEMPORARY TABLE source_dim_account (
     'scan.fetch-size' = '1000'
 );
 
-CREATE TEMPORARY TABLE source_qbit_card_transaction (
-    id               STRING,
-    account_id       STRING,
-    provider         STRING,
-    business_type    STRING,
-    status           STRING,
-    settle_amount    DECIMAL(20, 4),
-    transaction_time TIMESTAMP(6),
-    delete_time      TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
+CREATE TEMPORARY TABLE source_hz_bank_basis (
+    source_month DATE,
+    report_date  DATE,
+    account_id   STRING,
+    basis_amount DECIMAL(20, 4)
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT tr.id, tr.account_id, tr.provider, tr.business_type, tr.status, tr.settle_amount, tr.transaction_time, tr.delete_time FROM ods.ods_qbit_card_transaction tr WHERE tr.delete_time IS NULL AND EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p WHERE tr.transaction_time >= p.source_month::timestamp AND tr.transaction_time < p.next_month::timestamp)) AS qbit_card_transaction_f',
+    'table-name' = '(SELECT source_month, report_date, account_id, basis_amount FROM (SELECT p.source_month, tr.transaction_time::date AS report_date, tr.account_id, CAST(SUM(CASE WHEN tr.business_type = ''Consumption'' AND tr.status IN (''Closed'', ''Pending'') THEN COALESCE(tr.settle_amount, 0) ELSE 0 END) - SUM(CASE WHEN tr.business_type = ''Reversal'' AND tr.status IN (''Closed'', ''Pending'') THEN COALESCE(tr.settle_amount, 0) ELSE 0 END) - SUM(CASE WHEN tr.business_type = ''Credit'' AND tr.status = ''Closed'' THEN COALESCE(tr.settle_amount, 0) ELSE 0 END) AS DECIMAL(20, 4)) AS basis_amount FROM ods.ods_qbit_card_transaction tr INNER JOIN (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p ON tr.transaction_time >= p.source_month::timestamp AND tr.transaction_time < p.next_month::timestamp WHERE tr.delete_time IS NULL AND tr.provider LIKE ''%Qbit%'' AND tr.business_type IN (''Credit'', ''Consumption'', ''Reversal'') GROUP BY p.source_month, tr.account_id, tr.transaction_time::date) hz_basis WHERE basis_amount <> 0) AS hz_bank_basis_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -172,34 +167,16 @@ FROM source_bi_month_tag;
 -- HZ_BANK: QI 净消费量
 CREATE TEMPORARY VIEW v_hz_bank_basis AS
 SELECT
-    p.source_month,
-    CAST(tr.transaction_time AS DATE) AS report_date,
-    tr.account_id,
+    source_month,
+    report_date,
+    account_id,
     'QUANTUM_CARD' AS product_line,
     'HZ_BANK' AS provider,
     'CONSUME_BANK_FEE' AS cost_type,
     CAST(0 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(
-        SUM(CASE WHEN tr.business_type = 'Consumption' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-      - SUM(CASE WHEN tr.business_type = 'Reversal' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-      - SUM(CASE WHEN tr.business_type = 'Credit' AND tr.status = 'Closed' THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-      AS DECIMAL(20, 4)
-    ) AS basis_amount,
+    basis_amount,
     CAST(0 AS INT) AS month_day_count
-FROM source_qbit_card_transaction tr
-INNER JOIN v_cost_month_param p
-    ON tr.transaction_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND tr.transaction_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE tr.delete_time IS NULL
-  AND tr.provider LIKE '%Qbit%'
-  AND tr.business_type IN ('Credit', 'Consumption', 'Reversal')
-GROUP BY p.source_month, tr.account_id, CAST(tr.transaction_time AS DATE)
-HAVING CAST(
-    SUM(CASE WHEN tr.business_type = 'Consumption' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-  - SUM(CASE WHEN tr.business_type = 'Reversal' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-  - SUM(CASE WHEN tr.business_type = 'Credit' AND tr.status = 'Closed' THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-  AS DECIMAL(20, 4)
-) <> CAST(0 AS DECIMAL(20, 4));
+FROM source_hz_bank_basis;
 
 -- ====================================================================
 -- 4. 合并分摊明细 + 月汇总
@@ -323,10 +300,11 @@ WHERE mt.source_amount <> CAST(0 AS DECIMAL(20, 4));
 
 CREATE TEMPORARY VIEW v_sale_relation_candidates AS
 SELECT
-    CONCAT(
-        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
-    ) AS cost_key,
+    b.report_date,
+    b.account_id,
+    b.product_line,
+    b.provider,
+    b.cost_type,
     sr.sale_id,
     sr.am_id,
     sr.relation_start_time,
@@ -342,10 +320,11 @@ INNER JOIN source_dim_sale_account_relation_p sr
    )
 UNION ALL
 SELECT
-    CONCAT(
-        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
-    ) AS cost_key,
+    b.report_date,
+    b.account_id,
+    b.product_line,
+    b.provider,
+    b.cost_type,
     sr.sale_id,
     sr.am_id,
     sr.relation_start_time,
@@ -364,14 +343,18 @@ INNER JOIN source_dim_sale_account_relation_p sr
    );
 
 CREATE TEMPORARY VIEW v_sale_relation AS
-SELECT cost_key, sale_id, am_id
+SELECT report_date, account_id, product_line, provider, cost_type, sale_id, am_id
 FROM (
     SELECT
-        cost_key,
+        report_date,
+        account_id,
+        product_line,
+        provider,
+        cost_type,
         sale_id,
         am_id,
         ROW_NUMBER() OVER (
-            PARTITION BY cost_key
+            PARTITION BY report_date, account_id, product_line, provider, cost_type
             ORDER BY sale_priority ASC, relation_start_time DESC
         ) AS rn
     FROM v_sale_relation_candidates
@@ -380,7 +363,7 @@ WHERE rn = 1;
 
 
 CREATE TEMPORARY VIEW v_dwm_finance_channel_cost AS
-SELECT
+SELECT /*+ BROADCAST(sr) */
     CAST(ABS(HASH_CODE(CONCAT(
         DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
         b.account_id, ':',
@@ -413,17 +396,18 @@ SELECT
     b.allocation_rate,
     b.cost_amount,
     1 AS version,
-    CAST('quantum_card_hz_bank_batch' AS STRING) AS remarks,
+    CAST('quantum_card_hz_bank_cdc' AS STRING) AS remarks,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM v_allocated_cost_base b
 LEFT JOIN source_dim_account da ON da.id = b.account_id
 LEFT JOIN v_sale_relation sr
-    ON sr.cost_key = CONCAT(
-        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
-    )
+    ON sr.report_date = b.report_date
+   AND sr.account_id = b.account_id
+   AND sr.product_line = b.product_line
+   AND sr.provider = b.provider
+   AND sr.cost_type = b.cost_type
 WHERE b.cost_amount <> CAST(0 AS DECIMAL(20, 4));
 
 -- ====================================================================

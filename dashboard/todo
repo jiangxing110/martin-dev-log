@@ -57,3 +57,12 @@ dwm_online_quantum_card_bpc_cost-batch-sql
 [255]:TableSourceScan(table=[[vvp, default, source_qbit_card_transaction, filter=[and(and(IS NULL(delete_time), LIKE(provider, _UTF-16LE'%Qbit%')), OR(OR(=(business_type, _UTF-16LE'Consumption':VARCHAR(11) CHARACTER SET &quot;UTF-16LE&quot;), =(business_type, _UTF-16LE'Credit':VARCHAR(11) CHARACTER SET &quot;UTF-16LE&quot;)), =(business_type, _UTF-16LE'Reversal':VARCHAR(11) CHARACTER SET &quot;UTF-16LE&quot;)))], project=[account_id, business_type, status, settle_amount, transaction_time]]], fields=[account_id, business_type, status, settle_amount, transaction_time])
 
 dwm_online_quantum_card_hz_bank_cost-batch-sql
+
+
+
+目前oddAccountReview
+还存在的问题
+1.目前初始状态是已通知 ,但是我的是request（本质上是通知了的），但是我的没有真正意义上驳回补录的状态（我想的是我这个状态机要怎么改）
+还要关联/Users/martinjiang/WebstormProjects/qbit-admin-v3项目 也要看看这个列表要怎么改
+2.createOddAccountReviewV2 的方法我们要对没有风险评级的账户拿到kyb 或者kyc 状态是代补录或通过状态的最近时间作为baseDate
+

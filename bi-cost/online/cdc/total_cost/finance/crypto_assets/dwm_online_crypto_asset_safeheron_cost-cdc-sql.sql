@@ -316,10 +316,11 @@ WHERE mt.source_amount <> CAST(0 AS DECIMAL(20, 4));
 
 CREATE TEMPORARY VIEW v_sale_relation_candidates AS
 SELECT
-    CONCAT(
-        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
-    ) AS cost_key,
+    b.report_date,
+    b.account_id,
+    b.product_line,
+    b.provider,
+    b.cost_type,
     sr.sale_id,
     sr.am_id,
     sr.relation_start_time,
@@ -335,10 +336,11 @@ INNER JOIN source_dim_sale_account_relation_p sr
    )
 UNION ALL
 SELECT
-    CONCAT(
-        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
-    ) AS cost_key,
+    b.report_date,
+    b.account_id,
+    b.product_line,
+    b.provider,
+    b.cost_type,
     sr.sale_id,
     sr.am_id,
     sr.relation_start_time,
@@ -357,14 +359,18 @@ INNER JOIN source_dim_sale_account_relation_p sr
    );
 
 CREATE TEMPORARY VIEW v_sale_relation AS
-SELECT cost_key, sale_id, am_id
+SELECT report_date, account_id, product_line, provider, cost_type, sale_id, am_id
 FROM (
     SELECT
-        cost_key,
+        report_date,
+        account_id,
+        product_line,
+        provider,
+        cost_type,
         sale_id,
         am_id,
         ROW_NUMBER() OVER (
-            PARTITION BY cost_key
+            PARTITION BY report_date, account_id, product_line, provider, cost_type
             ORDER BY sale_priority ASC, relation_start_time DESC
         ) AS rn
     FROM v_sale_relation_candidates
@@ -373,7 +379,7 @@ WHERE rn = 1;
 
 
 CREATE TEMPORARY VIEW v_dwm_finance_channel_cost AS
-SELECT
+SELECT /*+ BROADCAST(sr) */
     CAST(ABS(HASH_CODE(CONCAT(
         DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
         b.account_id, ':',
@@ -406,17 +412,18 @@ SELECT
     b.allocation_rate,
     b.cost_amount,
     1 AS version,
-    CAST('crypto_asset_safeheron_batch' AS STRING) AS remarks,
+    CAST('crypto_asset_safeheron_cdc' AS STRING) AS remarks,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM v_allocated_cost_base b
 LEFT JOIN source_dim_account da ON da.id = b.account_id
 LEFT JOIN v_sale_relation sr
-    ON sr.cost_key = CONCAT(
-        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
-    )
+    ON sr.report_date = b.report_date
+   AND sr.account_id = b.account_id
+   AND sr.product_line = b.product_line
+   AND sr.provider = b.provider
+   AND sr.cost_type = b.cost_type
 WHERE b.cost_amount <> CAST(0 AS DECIMAL(20, 4));
 
 -- ====================================================================
