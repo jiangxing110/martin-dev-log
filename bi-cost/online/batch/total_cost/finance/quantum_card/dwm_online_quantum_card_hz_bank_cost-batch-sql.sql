@@ -166,6 +166,7 @@ FROM (
 
 CREATE TEMPORARY VIEW v_month_days AS
 SELECT
+    p.source_month,
     DATE_ADD(p.source_month, d.day_no - 1) AS report_date,
     p.month_day_count
 FROM v_param p
@@ -179,6 +180,7 @@ INNER JOIN v_day_numbers d
 -- HZ_BANK: QI 净消费量
 CREATE TEMPORARY VIEW v_hz_bank_basis AS
 SELECT
+    p.source_month,
     CAST(tr.transaction_time AS DATE) AS report_date,
     tr.account_id,
     'QUANTUM_CARD' AS product_line,
@@ -198,7 +200,7 @@ WHERE tr.delete_time IS NULL
   AND tr.business_type IN ('Credit', 'Consumption', 'Reversal')
   AND tr.transaction_time >= CAST(p.source_month AS TIMESTAMP(6))
   AND tr.transaction_time < CAST(p.next_month AS TIMESTAMP(6))
-GROUP BY tr.account_id, CAST(tr.transaction_time AS DATE)
+GROUP BY p.source_month, tr.account_id, CAST(tr.transaction_time AS DATE)
 HAVING CAST(
     SUM(CASE WHEN tr.business_type = 'Consumption' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
   - SUM(CASE WHEN tr.business_type = 'Reversal' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
@@ -215,6 +217,7 @@ SELECT * FROM v_hz_bank_basis;
 
 CREATE TEMPORARY VIEW v_cost_basis_month_total AS
 SELECT
+    source_month,
     product_line,
     provider,
     cost_type,
@@ -222,10 +225,11 @@ SELECT
     CAST(SUM(basis_amount) AS DECIMAL(20, 4)) AS sum_basis_amount,
     CAST(MAX(month_day_count) AS INT) AS max_month_day_count
 FROM v_cost_basis_detail
-GROUP BY product_line, provider, cost_type;
+GROUP BY source_month, product_line, provider, cost_type;
 
 CREATE TEMPORARY VIEW v_cost_basis AS
 SELECT
+    d.source_month,
     d.report_date,
     d.account_id,
     d.product_line,
@@ -243,7 +247,8 @@ SELECT
     d.month_day_count
 FROM v_cost_basis_detail d
 INNER JOIN v_cost_basis_month_total t
-    ON t.product_line = d.product_line
+    ON t.source_month = d.source_month
+   AND t.product_line = d.product_line
    AND t.provider = d.provider
    AND t.cost_type = d.cost_type;
 
@@ -257,9 +262,9 @@ SELECT
     t.provider,
     t.tag AS source_tag,
     cb.cost_type,
-    MAX(p.source_month) AS source_month,
-    MAX(p.next_month) AS next_month,
-    MAX(p.month_day_count) AS month_day_count,
+    p.source_month,
+    p.next_month,
+    p.month_day_count,
     CAST(SUM(COALESCE(t.amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS source_amount
 FROM source_bi_month_tag t CROSS JOIN v_param p
 INNER JOIN (SELECT DISTINCT product_line, provider, cost_type FROM v_cost_basis) cb
@@ -268,7 +273,7 @@ INNER JOIN (SELECT DISTINCT product_line, provider, cost_type FROM v_cost_basis)
 WHERE t.delete_time IS NULL
   AND CAST(t.statistics_time AS DATE) >= p.source_month
   AND CAST(t.statistics_time AS DATE) < p.next_month
-GROUP BY t.product_line, t.provider, t.tag, cb.cost_type;
+GROUP BY t.product_line, t.provider, t.tag, cb.cost_type, p.source_month, p.next_month, p.month_day_count;
 
 -- ====================================================================
 -- 6. 金额分摊
@@ -315,7 +320,8 @@ SELECT
     ) AS cost_amount
 FROM v_cost_basis b
 INNER JOIN v_bi_month_tag_cost mt
-    ON mt.product_line = b.product_line
+    ON mt.source_month = b.source_month
+   AND mt.product_line = b.product_line
    AND mt.provider = b.provider
    AND mt.cost_type = b.cost_type
 WHERE mt.source_amount <> CAST(0 AS DECIMAL(20, 4));

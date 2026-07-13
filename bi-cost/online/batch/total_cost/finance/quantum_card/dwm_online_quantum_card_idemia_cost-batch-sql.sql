@@ -54,11 +54,14 @@ CREATE TEMPORARY TABLE source_bi_month_tag (
     detail          STRING,
     update_time     TIMESTAMP(6),
     delete_time     TIMESTAMP(6),
+    source_month    DATE,
+    next_month      DATE,
+    month_day_count INT,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, product_line, provider, tag, statistics_time, amount, detail, update_time, delete_time FROM ods.ods_bi_month_tag WHERE delete_time IS NULL) AS bi_month_tag_f',
+    'table-name' = '(SELECT t.id, t.product_line, t.provider, t.tag, t.statistics_time, t.amount, t.detail, t.update_time, t.delete_time, p.source_month, p.next_month, p.month_day_count FROM ods.ods_bi_month_tag t INNER JOIN (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month, ((DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date - DATE_TRUNC(''month'', statistics_time)::date) AS month_day_count FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= COALESCE(NULLIF(''${start_time}'', '''')::timestamp, (CURRENT_DATE - INTERVAL ''1 day'')::timestamp) AND update_time < COALESCE(NULLIF(''${end_time}'', '''')::timestamp, CURRENT_DATE::timestamp)) p ON t.statistics_time >= p.source_month::timestamp AND t.statistics_time < p.next_month::timestamp WHERE t.delete_time IS NULL) AS bi_month_tag_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -124,64 +127,55 @@ CREATE TEMPORARY TABLE source_qbit_physical_card (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_id, create_time, delete_time FROM ods.ods_qbit_physical_card WHERE delete_time IS NULL) AS qbit_physical_card_f',
+    'table-name' = '(SELECT pc.id, pc.account_id, pc.create_time, pc.delete_time FROM ods.ods_qbit_physical_card pc WHERE pc.delete_time IS NULL AND EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= COALESCE(NULLIF(''${start_time}'', '''')::timestamp, (CURRENT_DATE - INTERVAL ''1 day'')::timestamp) AND update_time < COALESCE(NULLIF(''${end_time}'', '''')::timestamp, CURRENT_DATE::timestamp)) p WHERE pc.create_time >= p.source_month::timestamp AND pc.create_time < p.next_month::timestamp)) AS qbit_physical_card_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
     'scan.fetch-size' = '1000'
 );
 
-CREATE TEMPORARY VIEW v_day_numbers AS
-SELECT *
-FROM (
-    VALUES
-        (1), (2), (3), (4), (5), (6), (7), (8), (9), (10),
-        (11), (12), (13), (14), (15), (16), (17), (18), (19), (20),
-        (21), (22), (23), (24), (25), (26), (27), (28), (29), (30), (31)
-) AS t(day_no);
-
-CREATE TEMPORARY VIEW v_runtime AS
-SELECT
-    COALESCE(CAST(NULLIF('${start_time}', '') AS TIMESTAMP(6)), CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6))) AS start_time,
-    COALESCE(CAST(NULLIF('${end_time}', '') AS TIMESTAMP(6)), CAST(CURRENT_DATE AS TIMESTAMP(6))) AS end_time;
-
-CREATE TEMPORARY VIEW v_param AS
-SELECT
-    p.source_month,
-    CAST(DATE_FORMAT(DATE_ADD(p.source_month, 32), 'yyyy-MM-01') AS DATE) AS next_month,
-    DATEDIFF(CAST(DATE_FORMAT(DATE_ADD(p.source_month, 32), 'yyyy-MM-01') AS DATE), p.source_month) AS month_day_count
-FROM (
-    SELECT DISTINCT
-        CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS source_month
-    FROM source_bi_month_tag t
-    CROSS JOIN v_runtime r
-    WHERE t.delete_time IS NULL
-      AND t.update_time >= r.start_time
-      AND t.update_time < r.end_time
-) p;
+CREATE TEMPORARY TABLE source_cost_month_days (
+    source_month    DATE,
+    report_date     DATE,
+    month_day_count INT,
+    PRIMARY KEY (source_month, report_date) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT p.source_month, gs.report_date::date AS report_date, p.month_day_count FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month, ((DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date - DATE_TRUNC(''month'', statistics_time)::date) AS month_day_count FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= COALESCE(NULLIF(''${start_time}'', '''')::timestamp, (CURRENT_DATE - INTERVAL ''1 day'')::timestamp) AND update_time < COALESCE(NULLIF(''${end_time}'', '''')::timestamp, CURRENT_DATE::timestamp)) p CROSS JOIN LATERAL generate_series(p.source_month, p.next_month - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(report_date)) AS cost_month_days_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '100'
+);
 
 CREATE TEMPORARY VIEW v_month_days AS
-SELECT
-    DATE_ADD(p.source_month, d.day_no - 1) AS report_date,
-    p.month_day_count
-FROM v_param p
-INNER JOIN v_day_numbers d
-    ON d.day_no <= p.month_day_count;
+SELECT source_month, report_date, month_day_count
+FROM source_cost_month_days;
+
+CREATE TEMPORARY VIEW v_cost_month_param AS
+SELECT DISTINCT source_month, next_month, month_day_count
+FROM source_bi_month_tag;
 -- ====================================================================
 -- 3. 分摊基础明细
 -- ====================================================================
 
 -- IDEMIA: 实体卡数
 CREATE TEMPORARY VIEW v_idemia_accounts AS
-SELECT pc.account_id, COUNT(*) AS physical_card_count
-FROM source_qbit_physical_card pc CROSS JOIN v_param p
+SELECT
+    p.source_month,
+    pc.account_id,
+    COUNT(*) AS physical_card_count
+FROM source_qbit_physical_card pc
+INNER JOIN v_cost_month_param p
+    ON pc.create_time >= CAST(p.source_month AS TIMESTAMP(6))
+   AND pc.create_time < CAST(p.next_month AS TIMESTAMP(6))
 WHERE pc.delete_time IS NULL
-  AND pc.create_time >= CAST(p.source_month AS TIMESTAMP(6))
-  AND pc.create_time < CAST(p.next_month AS TIMESTAMP(6))
-GROUP BY pc.account_id;
+GROUP BY p.source_month, pc.account_id;
 
 CREATE TEMPORARY VIEW v_idemia_basis AS
 SELECT
+    a.source_month,
     d.report_date,
     a.account_id,
     'QUANTUM_CARD' AS product_line,
@@ -191,7 +185,8 @@ SELECT
     CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
     d.month_day_count
 FROM v_idemia_accounts a
-CROSS JOIN v_month_days d;
+INNER JOIN v_month_days d
+    ON d.source_month = a.source_month;
 
 -- ====================================================================
 -- 4. 合并分摊明细 + 月汇总
@@ -202,6 +197,7 @@ SELECT * FROM v_idemia_basis;
 
 CREATE TEMPORARY VIEW v_cost_basis_month_total AS
 SELECT
+    source_month,
     product_line,
     provider,
     cost_type,
@@ -209,10 +205,11 @@ SELECT
     CAST(SUM(basis_amount) AS DECIMAL(20, 4)) AS sum_basis_amount,
     CAST(MAX(month_day_count) AS INT) AS max_month_day_count
 FROM v_cost_basis_detail
-GROUP BY product_line, provider, cost_type;
+GROUP BY source_month, product_line, provider, cost_type;
 
 CREATE TEMPORARY VIEW v_cost_basis AS
 SELECT
+    d.source_month,
     d.report_date,
     d.account_id,
     d.product_line,
@@ -230,7 +227,8 @@ SELECT
     d.month_day_count
 FROM v_cost_basis_detail d
 INNER JOIN v_cost_basis_month_total t
-    ON t.product_line = d.product_line
+    ON t.source_month = d.source_month
+   AND t.product_line = d.product_line
    AND t.provider = d.provider
    AND t.cost_type = d.cost_type;
 
@@ -244,18 +242,16 @@ SELECT
     t.provider,
     t.tag AS source_tag,
     cb.cost_type,
-    MAX(p.source_month) AS source_month,
-    MAX(p.next_month) AS next_month,
-    MAX(p.month_day_count) AS month_day_count,
+    t.source_month,
+    t.next_month,
+    t.month_day_count,
     CAST(SUM(COALESCE(t.amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS source_amount
-FROM source_bi_month_tag t CROSS JOIN v_param p
+FROM source_bi_month_tag t
 INNER JOIN (SELECT DISTINCT product_line, provider, cost_type FROM v_cost_basis) cb
     ON cb.product_line = t.product_line
    AND cb.provider = t.provider
 WHERE t.delete_time IS NULL
-  AND CAST(t.statistics_time AS DATE) >= p.source_month
-  AND CAST(t.statistics_time AS DATE) < p.next_month
-GROUP BY t.product_line, t.provider, t.tag, cb.cost_type;
+GROUP BY t.product_line, t.provider, t.tag, cb.cost_type, t.source_month, t.next_month, t.month_day_count;
 
 -- ====================================================================
 -- 6. 金额分摊
@@ -302,7 +298,8 @@ SELECT
     ) AS cost_amount
 FROM v_cost_basis b
 INNER JOIN v_bi_month_tag_cost mt
-    ON mt.product_line = b.product_line
+    ON mt.source_month = b.source_month
+   AND mt.product_line = b.product_line
    AND mt.provider = b.provider
    AND mt.cost_type = b.cost_type
 WHERE mt.source_amount <> CAST(0 AS DECIMAL(20, 4));
