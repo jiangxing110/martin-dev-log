@@ -160,20 +160,15 @@ CREATE TEMPORARY TABLE source_qbit_physical_card (
     'scan.fetch-size' = '1000'
 );
 
-CREATE TEMPORARY TABLE source_qbit_card_transaction (
-    id               STRING,
-    account_id       STRING,
-    provider         STRING,
-    business_type    STRING,
-    status           STRING,
-    settle_amount    DECIMAL(20, 4),
-    transaction_time TIMESTAMP(6),
-    delete_time      TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
+CREATE TEMPORARY TABLE source_hz_bank_basis (
+    source_month DATE,
+    report_date  DATE,
+    account_id   STRING,
+    basis_amount DECIMAL(20, 4)
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, account_id, provider, business_type, status, settle_amount, transaction_time, delete_time FROM ods.ods_qbit_card_transaction WHERE delete_time IS NULL) AS qbit_card_transaction_f',
+    'table-name' = '(SELECT source_month, report_date, account_id, basis_amount FROM (SELECT p.source_month, tr.transaction_time::date AS report_date, tr.account_id, CAST(SUM(CASE WHEN tr.business_type = ''Consumption'' AND tr.status IN (''Closed'', ''Pending'') THEN COALESCE(tr.settle_amount, 0) ELSE 0 END) - SUM(CASE WHEN tr.business_type = ''Reversal'' AND tr.status IN (''Closed'', ''Pending'') THEN COALESCE(tr.settle_amount, 0) ELSE 0 END) - SUM(CASE WHEN tr.business_type = ''Credit'' AND tr.status = ''Closed'' THEN COALESCE(tr.settle_amount, 0) ELSE 0 END) AS DECIMAL(20, 4)) AS basis_amount FROM ods.ods_qbit_card_transaction tr INNER JOIN (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= COALESCE(NULLIF(''${start_time}'', '''')::timestamp, (CURRENT_DATE - INTERVAL ''1 day'')::timestamp) AND update_time < COALESCE(NULLIF(''${end_time}'', '''')::timestamp, CURRENT_DATE::timestamp)) p ON tr.transaction_time >= p.source_month::timestamp AND tr.transaction_time < p.next_month::timestamp WHERE tr.delete_time IS NULL AND tr.provider LIKE ''%Qbit%'' AND tr.business_type IN (''Credit'', ''Consumption'', ''Reversal'') GROUP BY p.source_month, tr.account_id, tr.transaction_time::date) hz_basis WHERE basis_amount <> 0) AS hz_bank_basis_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -311,34 +306,16 @@ INNER JOIN v_month_days d
 -- HZ_BANK: QI 净消费量
 CREATE TEMPORARY VIEW v_hz_bank_basis AS
 SELECT
-    p.source_month,
-    CAST(tr.transaction_time AS DATE) AS report_date,
-    tr.account_id,
+    source_month,
+    report_date,
+    account_id,
     'QUANTUM_CARD' AS product_line,
     'HZ_BANK' AS provider,
     'CONSUME_BANK_FEE' AS cost_type,
     CAST(0 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(
-        SUM(CASE WHEN tr.business_type = 'Consumption' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-      - SUM(CASE WHEN tr.business_type = 'Reversal' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-      - SUM(CASE WHEN tr.business_type = 'Credit' AND tr.status = 'Closed' THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-      AS DECIMAL(20, 4)
-    ) AS basis_amount,
+    basis_amount,
     CAST(0 AS INT) AS month_day_count
-FROM source_qbit_card_transaction tr
-INNER JOIN v_param p
-    ON tr.transaction_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND tr.transaction_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE tr.delete_time IS NULL
-  AND tr.provider LIKE '%Qbit%'
-  AND tr.business_type IN ('Credit', 'Consumption', 'Reversal')
-GROUP BY p.source_month, tr.account_id, CAST(tr.transaction_time AS DATE)
-HAVING CAST(
-    SUM(CASE WHEN tr.business_type = 'Consumption' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-  - SUM(CASE WHEN tr.business_type = 'Reversal' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-  - SUM(CASE WHEN tr.business_type = 'Credit' AND tr.status = 'Closed' THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
-  AS DECIMAL(20, 4)
-) <> CAST(0 AS DECIMAL(20, 4));
+FROM source_hz_bank_basis;
 
 -- ====================================================================
 -- 4. 合并分摊明细 + 月汇总
@@ -466,60 +443,63 @@ WHERE mt.source_amount <> CAST(0 AS DECIMAL(20, 4));
 -- 7. 销售关系
 -- ====================================================================
 
-CREATE TEMPORARY VIEW v_direct_sale_relation AS
+CREATE TEMPORARY VIEW v_sale_relation_candidates AS
+SELECT
+    CONCAT(
+        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
+        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
+    ) AS cost_key,
+    sr.sale_id,
+    sr.am_id,
+    sr.relation_start_time,
+    1 AS sale_priority
+FROM v_allocated_cost_base b
+INNER JOIN source_dim_sale_account_relation_p sr
+    ON sr.relation_account_id = b.account_id
+   AND sr.delete_time IS NULL
+   AND CAST(b.report_date AS TIMESTAMP(6)) >= sr.relation_start_time
+   AND (
+        CAST(b.report_date AS TIMESTAMP(6)) < sr.relation_end_time
+        OR sr.relation_end_time IS NULL
+   )
+UNION ALL
+SELECT
+    CONCAT(
+        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
+        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
+    ) AS cost_key,
+    sr.sale_id,
+    sr.am_id,
+    sr.relation_start_time,
+    2 AS sale_priority
+FROM v_allocated_cost_base b
+INNER JOIN source_api_account_relation aar
+    ON aar.account_id = b.account_id
+   AND aar.delete_time IS NULL
+INNER JOIN source_dim_sale_account_relation_p sr
+    ON sr.relation_account_id = aar.root_id
+   AND sr.delete_time IS NULL
+   AND CAST(b.report_date AS TIMESTAMP(6)) >= sr.relation_start_time
+   AND (
+        CAST(b.report_date AS TIMESTAMP(6)) < sr.relation_end_time
+        OR sr.relation_end_time IS NULL
+   );
+
+CREATE TEMPORARY VIEW v_sale_relation AS
 SELECT cost_key, sale_id, am_id
 FROM (
     SELECT
-        CONCAT(
-            DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-            b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
-        ) AS cost_key,
-        sr.sale_id,
-        sr.am_id,
+        cost_key,
+        sale_id,
+        am_id,
         ROW_NUMBER() OVER (
-            PARTITION BY b.report_date, b.account_id, b.product_line, b.provider, b.cost_type
-            ORDER BY sr.relation_start_time DESC
+            PARTITION BY cost_key
+            ORDER BY sale_priority ASC, relation_start_time DESC
         ) AS rn
-    FROM v_allocated_cost_base b
-    INNER JOIN source_dim_sale_account_relation_p sr
-        ON sr.relation_account_id = b.account_id
-       AND sr.delete_time IS NULL
-       AND CAST(b.report_date AS TIMESTAMP(6)) >= sr.relation_start_time
-       AND (
-            CAST(b.report_date AS TIMESTAMP(6)) < sr.relation_end_time
-            OR sr.relation_end_time IS NULL
-       )
-) ranked_direct
+    FROM v_sale_relation_candidates
+) ranked_sale
 WHERE rn = 1;
 
-CREATE TEMPORARY VIEW v_root_sale_relation AS
-SELECT cost_key, sale_id, am_id
-FROM (
-    SELECT
-        CONCAT(
-            DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-            b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
-        ) AS cost_key,
-        sr.sale_id,
-        sr.am_id,
-        ROW_NUMBER() OVER (
-            PARTITION BY b.report_date, b.account_id, b.product_line, b.provider, b.cost_type
-            ORDER BY sr.relation_start_time DESC
-        ) AS rn
-    FROM v_allocated_cost_base b
-    INNER JOIN source_api_account_relation aar
-        ON aar.account_id = b.account_id
-       AND aar.delete_time IS NULL
-    INNER JOIN source_dim_sale_account_relation_p sr
-        ON sr.relation_account_id = aar.root_id
-       AND sr.delete_time IS NULL
-       AND CAST(b.report_date AS TIMESTAMP(6)) >= sr.relation_start_time
-       AND (
-            CAST(b.report_date AS TIMESTAMP(6)) < sr.relation_end_time
-            OR sr.relation_end_time IS NULL
-       )
-) ranked_root
-WHERE rn = 1;
 
 CREATE TEMPORARY VIEW v_dwm_finance_channel_cost AS
 SELECT
@@ -531,16 +511,16 @@ SELECT
         b.cost_type, ':',
         DATE_FORMAT(CAST(b.source_month AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
         b.source_tag, ':',
-        COALESCE(d.sale_id, r.sale_id, ''), ':',
-        COALESCE(d.am_id, r.am_id, '')
+        COALESCE(sr.sale_id, ''), ':',
+        COALESCE(sr.am_id, '')
     ))) AS BIGINT) AS id,
     b.report_date,
     b.account_id,
     da.account_type,
     da.account_category,
     da.system_type,
-    COALESCE(d.sale_id, r.sale_id) AS sale_id,
-    COALESCE(d.am_id, r.am_id) AS am_id,
+    sr.sale_id,
+    sr.am_id,
     b.product_line,
     b.provider,
     b.cost_type,
@@ -561,17 +541,11 @@ SELECT
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM v_allocated_cost_base b
 LEFT JOIN source_dim_account da ON da.id = b.account_id
-LEFT JOIN v_direct_sale_relation d
-    ON d.cost_key = CONCAT(
+LEFT JOIN v_sale_relation sr
+    ON sr.cost_key = CONCAT(
         DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
         b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
     )
-LEFT JOIN v_root_sale_relation r
-    ON r.cost_key = CONCAT(
-        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
-    )
-   AND d.cost_key IS NULL
 WHERE b.cost_amount <> CAST(0 AS DECIMAL(20, 4));
 
 -- ====================================================================

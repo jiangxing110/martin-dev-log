@@ -552,60 +552,63 @@ WHERE mt.source_amount <> CAST(0 AS DECIMAL(20, 4));
 -- 7. 销售关系
 -- ====================================================================
 
-CREATE TEMPORARY VIEW v_direct_sale_relation AS
+CREATE TEMPORARY VIEW v_sale_relation_candidates AS
+SELECT
+    CONCAT(
+        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
+        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
+    ) AS cost_key,
+    sr.sale_id,
+    sr.am_id,
+    sr.relation_start_time,
+    1 AS sale_priority
+FROM v_allocated_cost_base b
+INNER JOIN source_dim_sale_account_relation_p sr
+    ON sr.relation_account_id = b.account_id
+   AND sr.delete_time IS NULL
+   AND CAST(b.report_date AS TIMESTAMP(6)) >= sr.relation_start_time
+   AND (
+        CAST(b.report_date AS TIMESTAMP(6)) < sr.relation_end_time
+        OR sr.relation_end_time IS NULL
+   )
+UNION ALL
+SELECT
+    CONCAT(
+        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
+        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
+    ) AS cost_key,
+    sr.sale_id,
+    sr.am_id,
+    sr.relation_start_time,
+    2 AS sale_priority
+FROM v_allocated_cost_base b
+INNER JOIN source_api_account_relation aar
+    ON aar.account_id = b.account_id
+   AND aar.delete_time IS NULL
+INNER JOIN source_dim_sale_account_relation_p sr
+    ON sr.relation_account_id = aar.root_id
+   AND sr.delete_time IS NULL
+   AND CAST(b.report_date AS TIMESTAMP(6)) >= sr.relation_start_time
+   AND (
+        CAST(b.report_date AS TIMESTAMP(6)) < sr.relation_end_time
+        OR sr.relation_end_time IS NULL
+   );
+
+CREATE TEMPORARY VIEW v_sale_relation AS
 SELECT cost_key, sale_id, am_id
 FROM (
     SELECT
-        CONCAT(
-            DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-            b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
-        ) AS cost_key,
-        sr.sale_id,
-        sr.am_id,
+        cost_key,
+        sale_id,
+        am_id,
         ROW_NUMBER() OVER (
-            PARTITION BY b.report_date, b.account_id, b.product_line, b.provider, b.cost_type
-            ORDER BY sr.relation_start_time DESC
+            PARTITION BY cost_key
+            ORDER BY sale_priority ASC, relation_start_time DESC
         ) AS rn
-    FROM v_allocated_cost_base b
-    INNER JOIN source_dim_sale_account_relation_p sr
-        ON sr.relation_account_id = b.account_id
-       AND sr.delete_time IS NULL
-       AND CAST(b.report_date AS TIMESTAMP(6)) >= sr.relation_start_time
-       AND (
-            CAST(b.report_date AS TIMESTAMP(6)) < sr.relation_end_time
-            OR sr.relation_end_time IS NULL
-       )
-) ranked_direct
+    FROM v_sale_relation_candidates
+) ranked_sale
 WHERE rn = 1;
 
-CREATE TEMPORARY VIEW v_root_sale_relation AS
-SELECT cost_key, sale_id, am_id
-FROM (
-    SELECT
-        CONCAT(
-            DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-            b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
-        ) AS cost_key,
-        sr.sale_id,
-        sr.am_id,
-        ROW_NUMBER() OVER (
-            PARTITION BY b.report_date, b.account_id, b.product_line, b.provider, b.cost_type
-            ORDER BY sr.relation_start_time DESC
-        ) AS rn
-    FROM v_allocated_cost_base b
-    INNER JOIN source_api_account_relation aar
-        ON aar.account_id = b.account_id
-       AND aar.delete_time IS NULL
-    INNER JOIN source_dim_sale_account_relation_p sr
-        ON sr.relation_account_id = aar.root_id
-       AND sr.delete_time IS NULL
-       AND CAST(b.report_date AS TIMESTAMP(6)) >= sr.relation_start_time
-       AND (
-            CAST(b.report_date AS TIMESTAMP(6)) < sr.relation_end_time
-            OR sr.relation_end_time IS NULL
-       )
-) ranked_root
-WHERE rn = 1;
 
 CREATE TEMPORARY VIEW v_dwm_finance_channel_cost AS
 SELECT
@@ -617,16 +620,16 @@ SELECT
         b.cost_type, ':',
         DATE_FORMAT(CAST(b.source_month AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
         b.source_tag, ':',
-        COALESCE(d.sale_id, r.sale_id, ''), ':',
-        COALESCE(d.am_id, r.am_id, '')
+        COALESCE(sr.sale_id, ''), ':',
+        COALESCE(sr.am_id, '')
     ))) AS BIGINT) AS id,
     b.report_date,
     b.account_id,
     da.account_type,
     da.account_category,
     da.system_type,
-    COALESCE(d.sale_id, r.sale_id) AS sale_id,
-    COALESCE(d.am_id, r.am_id) AS am_id,
+    sr.sale_id,
+    sr.am_id,
     b.product_line,
     b.provider,
     b.cost_type,
@@ -647,17 +650,11 @@ SELECT
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM v_allocated_cost_base b
 LEFT JOIN source_dim_account da ON da.id = b.account_id
-LEFT JOIN v_direct_sale_relation d
-    ON d.cost_key = CONCAT(
+LEFT JOIN v_sale_relation sr
+    ON sr.cost_key = CONCAT(
         DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
         b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
     )
-LEFT JOIN v_root_sale_relation r
-    ON r.cost_key = CONCAT(
-        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
-    )
-   AND d.cost_key IS NULL
 WHERE b.cost_amount <> CAST(0 AS DECIMAL(20, 4));
 
 -- ====================================================================

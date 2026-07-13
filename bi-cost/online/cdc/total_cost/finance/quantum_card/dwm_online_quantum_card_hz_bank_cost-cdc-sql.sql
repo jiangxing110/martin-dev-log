@@ -143,13 +143,14 @@ CREATE TEMPORARY TABLE source_qbit_card_transaction (
 );
 
 CREATE TEMPORARY TABLE source_cost_month_days (
+    source_month    DATE,
     report_date     DATE,
     month_day_count INT,
-    PRIMARY KEY (report_date) NOT ENFORCED
+    PRIMARY KEY (source_month, report_date) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT gs.report_date::date AS report_date, p.month_day_count FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month, ((DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date - DATE_TRUNC(''month'', statistics_time)::date) AS month_day_count FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p CROSS JOIN LATERAL generate_series(p.source_month, p.next_month - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(report_date)) AS cost_month_days_f',
+    'table-name' = '(SELECT p.source_month, gs.report_date::date AS report_date, p.month_day_count FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month, ((DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date - DATE_TRUNC(''month'', statistics_time)::date) AS month_day_count FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p CROSS JOIN LATERAL generate_series(p.source_month, p.next_month - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(report_date)) AS cost_month_days_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -157,8 +158,12 @@ CREATE TEMPORARY TABLE source_cost_month_days (
 );
 
 CREATE TEMPORARY VIEW v_month_days AS
-SELECT report_date, month_day_count
+SELECT source_month, report_date, month_day_count
 FROM source_cost_month_days;
+
+CREATE TEMPORARY VIEW v_cost_month_param AS
+SELECT DISTINCT source_month, next_month, month_day_count
+FROM source_bi_month_tag;
 
 -- ====================================================================
 -- 3. 分摊基础明细
@@ -167,6 +172,7 @@ FROM source_cost_month_days;
 -- HZ_BANK: QI 净消费量
 CREATE TEMPORARY VIEW v_hz_bank_basis AS
 SELECT
+    p.source_month,
     CAST(tr.transaction_time AS DATE) AS report_date,
     tr.account_id,
     'QUANTUM_CARD' AS product_line,
@@ -181,10 +187,13 @@ SELECT
     ) AS basis_amount,
     CAST(0 AS INT) AS month_day_count
 FROM source_qbit_card_transaction tr
+INNER JOIN v_cost_month_param p
+    ON tr.transaction_time >= CAST(p.source_month AS TIMESTAMP(6))
+   AND tr.transaction_time < CAST(p.next_month AS TIMESTAMP(6))
 WHERE tr.delete_time IS NULL
   AND tr.provider LIKE '%Qbit%'
   AND tr.business_type IN ('Credit', 'Consumption', 'Reversal')
-GROUP BY tr.account_id, CAST(tr.transaction_time AS DATE)
+GROUP BY p.source_month, tr.account_id, CAST(tr.transaction_time AS DATE)
 HAVING CAST(
     SUM(CASE WHEN tr.business_type = 'Consumption' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
   - SUM(CASE WHEN tr.business_type = 'Reversal' AND tr.status IN ('Closed', 'Pending') THEN COALESCE(tr.settle_amount, CAST(0 AS DECIMAL(20, 4))) ELSE CAST(0 AS DECIMAL(20, 4)) END)
@@ -201,6 +210,7 @@ SELECT * FROM v_hz_bank_basis;
 
 CREATE TEMPORARY VIEW v_cost_basis_month_total AS
 SELECT
+    source_month,
     product_line,
     provider,
     cost_type,
@@ -208,10 +218,11 @@ SELECT
     CAST(SUM(basis_amount) AS DECIMAL(20, 4)) AS sum_basis_amount,
     CAST(MAX(month_day_count) AS INT) AS max_month_day_count
 FROM v_cost_basis_detail
-GROUP BY product_line, provider, cost_type;
+GROUP BY source_month, product_line, provider, cost_type;
 
 CREATE TEMPORARY VIEW v_cost_basis AS
 SELECT
+    d.source_month,
     d.report_date,
     d.account_id,
     d.product_line,
@@ -229,7 +240,8 @@ SELECT
     d.month_day_count
 FROM v_cost_basis_detail d
 INNER JOIN v_cost_basis_month_total t
-    ON t.product_line = d.product_line
+    ON t.source_month = d.source_month
+   AND t.product_line = d.product_line
    AND t.provider = d.provider
    AND t.cost_type = d.cost_type;
 
@@ -243,16 +255,16 @@ SELECT
     t.provider,
     t.tag AS source_tag,
     cb.cost_type,
-    MAX(t.source_month) AS source_month,
-    MAX(t.next_month) AS next_month,
-    MAX(t.month_day_count) AS month_day_count,
+    t.source_month,
+    t.next_month,
+    t.month_day_count,
     CAST(SUM(COALESCE(t.amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS source_amount
 FROM source_bi_month_tag t
 INNER JOIN (SELECT DISTINCT product_line, provider, cost_type FROM v_cost_basis) cb
     ON cb.product_line = t.product_line
    AND cb.provider = t.provider
 WHERE t.delete_time IS NULL
-GROUP BY t.product_line, t.provider, t.tag, cb.cost_type;
+GROUP BY t.product_line, t.provider, t.tag, cb.cost_type, t.source_month, t.next_month, t.month_day_count;
 
 -- ====================================================================
 -- 6. 金额分摊
@@ -299,7 +311,8 @@ SELECT
     ) AS cost_amount
 FROM v_cost_basis b
 INNER JOIN v_bi_month_tag_cost mt
-    ON mt.product_line = b.product_line
+    ON mt.source_month = b.source_month
+   AND mt.product_line = b.product_line
    AND mt.provider = b.provider
    AND mt.cost_type = b.cost_type
 WHERE mt.source_amount <> CAST(0 AS DECIMAL(20, 4));
