@@ -9,7 +9,7 @@
 --   运行参数：start_date, end_date
 --   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
 -- Notes:
---   1. 收入输入来自独立视图 dws.vw_profit_revenue_daily
+--   1. 收入输入来自收入汇总物化视图 dws.dws_revenue_summary_daily_mv
 --   2. 成本输入来自 dws.dws_total_channel_cost_daily_p
 --   3. 粒度: report_date + account_id + category
 --   4. 当前版本不按 sale_id / am_id 拆分毛利
@@ -34,14 +34,13 @@ CREATE TEMPORARY TABLE source_profit_revenue_daily (
     report_date       DATE,
     account_id        STRING,
     account_type      STRING,
-    account_category  STRING,
     system_type       STRING,
     category          STRING,
     revenue_amount    DECIMAL(20, 4)
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT stat_date AS report_date, account_id, account_type, account_category, system_type, category, CAST(amount AS NUMERIC(20, 4)) AS revenue_amount FROM dws.dws_revenue_summary_daily_mv WHERE stat_date >= CAST(''2026-01-01 00:00:00'' AS DATE) AND stat_date < CAST(''2026-06-25 00:00:00'' AS DATE)) AS dws_revenue_summary_daily_mv_f',
+    'table-name' = '(SELECT stat_date AS report_date, account_id, account_type, system_type, category, CAST(amount AS NUMERIC(20, 4)) AS revenue_amount FROM dws.dws_revenue_summary_daily_mv WHERE stat_date >= CAST(''2026-01-01 00:00:00'' AS DATE) AND stat_date < CAST(''2026-06-25 00:00:00'' AS DATE)) AS dws_revenue_summary_daily_mv_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -76,7 +75,7 @@ SELECT
     r.report_date,
     r.account_id,
     COALESCE(r.account_type, c.account_type) AS account_type,
-    COALESCE(r.account_category, c.account_category) AS account_category,
+    c.account_category AS account_category,
     COALESCE(r.system_type, c.system_type) AS system_type,
     r.category,
     CAST(COALESCE(r.revenue_amount, CAST(0 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS revenue_amount,

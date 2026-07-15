@@ -1,0 +1,77 @@
+SELECT 
+COALESCE(SUM(revenue_amount), 0) AS revenue_amount, 
+COALESCE(SUM(channel_cost_amount), 0) AS cogs_amount, 
+COALESCE(SUM(gross_profit_amount), 0) AS gross_profit_amount
+FROM dws.dws_gross_profit_daily_p 
+WHERE delete_time IS NULL 
+AND report_date >= '2026-05-01 00:00:00' AND report_date <= '2026-06-01 00:00:00' 
+
+--充值手续费+
+49476.086771+33632.85+26725.13
+24088.49+85327.10+83574.4+27466.2
+3286.65+22957.24+323522.19+160810.95
++
+557466.30
+-
+186002.30
+
+
+
+qbit_card	796599.7436	947595.0314
+crypto_assets	2050.6800	0.0000
+Treasury	29759.0000	0.0000
+global_account	7932.1600	0.0000
+
+
+/Users/martinjiang/martin-dev-log/bi-cost/flink/profit/dws_online_gross_profit_daily-batch-sql.sql
+sqlA:
+SELECT category,sum(amount) revenue_amount  FROM dws_revenue_summary_daily_mv 
+WHERE stat_date >='2026-05-01' and stat_date <'2026-06-01'
+GROUP BY category
+category	revenue_amount
+qbit_card	2672653.188705366000
+crypto_assets	343492.254988
+particle_financing	29759.00
+global_account	1689526.720
+
+sqlB:
+SELECT category,sum(revenue_amount),sum(channel_cost_amount),sum(gross_profit_amount) 
+FROM dws_gross_profit_daily_p
+WHERE report_date >='2026-05-01' and report_date <'2026-06-01'
+GROUP BY category
+
+category	revenue_amount	channel_cost_amount
+particle_financing	29759.0000	0.0000
+global_account	768.1500	3151.1746
+qbit_card	940943.6924	974872.0802
+crypto_assets	244160.1200	3728.3674
+
+我看最后的结果不对啊 至少是我sqlB里的 revenue_amount 应该和sqlA里的 revenue_amount 一样才对啊
+
+
+/Users/martinjiang/martin-dev-log/bi-cost/flink/profit/mv_gross_profit_daily.sql
+SELECT sum(cost_amount) 
+FROM dwm_finance_channel_cost_p 
+WHERE report_date >='2026-05-01 00:00:00'
+and report_date <'2026-06-01 00:00:00'
+244133.9886
+
+
+
+SELECT sum(total_channel_cost) 
+FROM dws.dws_total_channel_cost_daily_p
+WHERE report_date >='2026-05-01 00:00:00'
+and report_date <'2026-06-01 00:00:00'
+952739.8528
+
+
+
+SELECT 
+ COALESCE(SUM(revenue_amount), 0) AS revenue_amount,
+ COALESCE(SUM(channel_cost_amount), 0) AS cogs_amount
+FROM dws.mv_gross_profit_daily 
+WHERE report_date >='2026-05-01 00:00:00'
+and report_date <'2026-06-01 00:00:00'
+4735431.1976	951358.5224
+
+我感觉mv_gross_profit_daily的channel_cost_amount成本效率

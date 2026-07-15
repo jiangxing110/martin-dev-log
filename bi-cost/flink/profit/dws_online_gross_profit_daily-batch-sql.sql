@@ -9,7 +9,7 @@
 --   运行参数：start_date, end_date
 --   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
 -- Notes:
---   1. 收入输入来自独立视图 dws.vw_profit_revenue_daily
+--   1. 收入输入来自收入汇总物化视图 dws.dws_revenue_summary_daily_mv
 --   2. 成本输入来自 dws.dws_total_channel_cost_daily_p
 --   3. 粒度: report_date + account_id + category
 --   4. 当前版本不按 sale_id / am_id 拆分毛利
@@ -69,6 +69,32 @@ CREATE TEMPORARY TABLE source_total_channel_cost_daily (
 );
 
 CREATE TEMPORARY VIEW v_gross_profit_daily_joined AS
+WITH revenue_daily AS (
+    SELECT
+        report_date,
+        account_id,
+        MAX(account_type) AS account_type,
+        MAX(system_type) AS system_type,
+        category,
+        CAST(SUM(COALESCE(CAST(revenue_amount AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS revenue_amount
+    FROM source_profit_revenue_daily
+    GROUP BY report_date, account_id, category
+),
+channel_cost_daily AS (
+    SELECT
+        report_date,
+        account_id,
+        MAX(account_type) AS account_type,
+        MAX(account_category) AS account_category,
+        MAX(system_type) AS system_type,
+        CAST(SUM(COALESCE(CAST(acquiring_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS acquiring_cost,
+        CAST(SUM(COALESCE(CAST(business_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS business_cost,
+        CAST(SUM(COALESCE(CAST(quantum_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS quantum_cost,
+        CAST(SUM(COALESCE(CAST(crypto_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS crypto_cost,
+        CAST(SUM(COALESCE(CAST(total_channel_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS total_channel_cost
+    FROM source_total_channel_cost_daily
+    GROUP BY report_date, account_id
+)
 SELECT
     r.report_date,
     r.account_id,
@@ -76,7 +102,7 @@ SELECT
     c.account_category AS account_category,
     COALESCE(r.system_type, c.system_type) AS system_type,
     r.category,
-    CAST(COALESCE(CAST(r.revenue_amount AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS revenue_amount,
+    r.revenue_amount,
     CAST(
         CASE r.category
             WHEN 'qbit_card' THEN COALESCE(CAST(c.quantum_cost AS DECIMAL(20, 4)), CAST(0 AS DECIMAL(20, 4)))
@@ -88,8 +114,8 @@ SELECT
             ELSE CAST(0 AS DECIMAL(20, 4))
         END AS DECIMAL(20, 4)
     ) AS channel_cost_amount
-FROM source_profit_revenue_daily r
-LEFT JOIN source_total_channel_cost_daily c
+FROM revenue_daily r
+LEFT JOIN channel_cost_daily c
     ON c.report_date = r.report_date
    AND c.account_id = r.account_id;
 
