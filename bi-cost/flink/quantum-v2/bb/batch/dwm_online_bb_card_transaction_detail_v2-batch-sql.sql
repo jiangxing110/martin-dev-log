@@ -32,6 +32,7 @@ SET 'execution.application-management.enabled' = 'true';
 -- 交易主源在数据库侧按 BB 月度口径裁剪。
 -- card_org 优先使用 quantum_card_transaction_extend.card_type，卡类型为空时再用 ods_qbit_card 兜底。
 -- 卡表只允许 LEFT JOIN，避免卡表同步缺口导致交易被 INNER JOIN 过滤掉。
+-- DWM 明细层只负责沉淀 BB 交易，不在这里用卡组织/交易类型做成本口径过滤；否则卡表或枚举同步缺口会导致整月无数据。
 -- 大窗口回刷时必须使用游标读取，否则 PostgreSQL JDBC 可能一次性缓存结果导致 heap OOM。
 CREATE TEMPORARY TABLE source_bb_quantum_card_transaction_extend (
     id                       BIGINT,
@@ -53,7 +54,7 @@ CREATE TEMPORARY TABLE source_bb_quantum_card_transaction_extend (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT t.id, t.source_id, t.card_transaction_id::text AS card_transaction_id, t.account_id::text AS account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, CAST(t.business_code_list AS text) AS business_code_list, t.remarks, t.card_id::text AS card_id, t.detail, t.create_time, t.update_time, COALESCE(t.card_type, c.type) AS card_org FROM public.quantum_card_transaction_extend t LEFT JOIN ods.ods_qbit_card c ON c.id = t.card_id::text AND c.delete_time IS NULL WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND COALESCE(t.card_type, c.type) IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND ((t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6))) OR (t.original_completion_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''${end_time}'' AS TIMESTAMP(6))))) AS quantum_card_transaction_extend_f',
+    'table-name' = '(SELECT t.id, t.source_id, t.card_transaction_id::text AS card_transaction_id, t.account_id::text AS account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, CAST(t.business_code_list AS text) AS business_code_list, t.remarks, t.card_id::text AS card_id, t.detail, t.create_time, t.update_time, COALESCE(t.card_type, c.type) AS card_org FROM public.quantum_card_transaction_extend t LEFT JOIN ods.ods_qbit_card c ON c.id = t.card_id::text AND c.delete_time IS NULL WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND ((t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6))) OR (t.original_completion_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''${end_time}'' AS TIMESTAMP(6))))) AS quantum_card_transaction_extend_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -75,7 +76,7 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT s.id, s.transaction_id, s.qbit_card_transaction_id, s.transaction_type, s.billing_amount, s.raw_data, s.create_time FROM ods.ods_qbit_card_settlement s WHERE s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND EXISTS (SELECT 1 FROM public.quantum_card_transaction_extend t LEFT JOIN ods.ods_qbit_card c ON c.id = t.card_id::text AND c.delete_time IS NULL WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND COALESCE(t.card_type, c.type) IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND ((t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6))) OR (t.original_completion_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''${end_time}'' AS TIMESTAMP(6)))) AND (t.source_id = s.transaction_id OR t.card_transaction_id::text = s.qbit_card_transaction_id))) AS ods_qbit_card_settlement_f',
+    'table-name' = '(SELECT s.id, s.transaction_id, s.qbit_card_transaction_id, s.transaction_type, s.billing_amount, s.raw_data, s.create_time FROM ods.ods_qbit_card_settlement s WHERE s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND EXISTS (SELECT 1 FROM public.quantum_card_transaction_extend t WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND ((t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6))) OR (t.original_completion_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''${end_time}'' AS TIMESTAMP(6)))) AND (t.source_id = s.transaction_id OR t.card_transaction_id::text = s.qbit_card_transaction_id))) AS ods_qbit_card_settlement_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
