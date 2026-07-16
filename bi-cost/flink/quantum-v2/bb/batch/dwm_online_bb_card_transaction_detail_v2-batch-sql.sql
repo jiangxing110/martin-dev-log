@@ -21,6 +21,8 @@ SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'table.exec.mini-batch.enabled' = 'true';
 SET 'table.exec.mini-batch.allow-latency' = '5s';
 SET 'table.exec.mini-batch.size' = '5000';
+SET 'execution.application-management.enabled' = 'true';
+SET 'execution.multi-jobs-in-application.enable' = 'true';
 
 CREATE TEMPORARY TABLE source_quantum_card_transaction_extend (
     id                       BIGINT,
@@ -31,6 +33,7 @@ CREATE TEMPORARY TABLE source_quantum_card_transaction_extend (
     `type`                   STRING,
     transaction_time         TIMESTAMP(6),
     original_completion_time TIMESTAMP(6),
+    business_time            TIMESTAMP(6),
     business_code_list       STRING,
     remarks                  STRING,
     card_id                  STRING,
@@ -43,7 +46,7 @@ CREATE TEMPORARY TABLE source_quantum_card_transaction_extend (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, source_id, card_transaction_id, account_id, country, "type", transaction_time, original_completion_time, business_code_list, remarks, card_id, detail, channel_provision, create_time, update_time, delete_time FROM public.quantum_card_transaction_extend) AS quantum_card_transaction_extend_f',
+    'table-name' = '(SELECT id, source_id, card_transaction_id, account_id, country, "type", transaction_time, original_completion_time, COALESCE(transaction_time, original_completion_time) AS business_time, business_code_list, remarks, card_id, detail, channel_provision, create_time, update_time, delete_time FROM public.quantum_card_transaction_extend WHERE channel_provision = ''BLUEBANC'' AND delete_time IS NULL AND "type" IN (''Consumption'', ''Credit'') AND COALESCE(transaction_time, original_completion_time) >= CAST(''${start_time}'' AS TIMESTAMP) AND COALESCE(transaction_time, original_completion_time) < CAST(''${end_time}'' AS TIMESTAMP)) AS quantum_card_transaction_extend_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -64,7 +67,7 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, "transactionId", "qbitCardTransactionId", provider, "transactionType", "billingAmount", "rawData", "createTime", "deleteTime" FROM public."qbitCardSettlement") AS qbit_card_settlement_f',
+    'table-name' = '(SELECT id, "transactionId", "qbitCardTransactionId", provider, "transactionType", "billingAmount", "rawData", "createTime", "deleteTime" FROM public."qbitCardSettlement" WHERE provider = ''BlueBancCard'' AND "deleteTime" IS NULL) AS qbit_card_settlement_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -80,7 +83,7 @@ CREATE TEMPORARY TABLE source_qbit_card (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, token, "accountId", "type" FROM public."qbitCard") AS qbit_card_f',
+    'table-name' = '(SELECT id, token, "accountId", "type" FROM public."qbitCard" WHERE "type" IN (''Master'', ''VISA'')) AS qbit_card_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -111,7 +114,7 @@ CREATE TEMPORARY TABLE source_api_account_relation (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT account_id, root_id, delete_time FROM public.api_account_relation) AS api_account_relation_f',
+    'table-name' = '(SELECT account_id, root_id, delete_time FROM public.api_account_relation WHERE delete_time IS NULL) AS api_account_relation_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -131,7 +134,7 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, relation_account_id, sale_id, am_id, operation_manager_id, relation_start_time, relation_end_time, delete_time FROM dim.dim_sale_account_relation_p) AS dim_sale_account_relation_f',
+    'table-name' = '(SELECT id, relation_account_id, sale_id, am_id, operation_manager_id, relation_start_time, relation_end_time, delete_time FROM dim.dim_sale_account_relation_p WHERE delete_time IS NULL) AS dim_sale_account_relation_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -153,8 +156,8 @@ WHERE t.channel_provision = 'BLUEBANC'
         t.detail IS NULL
         OR t.detail NOT LIKE 'AUTO CLASS CAR RENTAL%'
   )
-  AND COALESCE(t.transaction_time, t.original_completion_time) >= CAST('${start_time}' AS TIMESTAMP(6))
-  AND COALESCE(t.transaction_time, t.original_completion_time) < CAST('${end_time}' AS TIMESTAMP(6));
+  AND t.business_time >= CAST('${start_time}' AS TIMESTAMP(6))
+  AND t.business_time < CAST('${end_time}' AS TIMESTAMP(6));
 
 CREATE TEMPORARY VIEW v_matched_settle AS
 SELECT
@@ -186,7 +189,7 @@ SELECT
     da.`type` AS account_category,
     da.system_type,
     t.card_id,
-    COALESCE(t.transaction_time, t.original_completion_time) AS transaction_time,
+    t.business_time AS transaction_time,
     t.original_completion_time,
     t.`type` AS business_type,
     t.business_code_list,

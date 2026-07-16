@@ -20,6 +20,8 @@ SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'table.exec.mini-batch.enabled' = 'true';
 SET 'table.exec.mini-batch.allow-latency' = '5s';
 SET 'table.exec.mini-batch.size' = '5000';
+SET 'execution.application-management.enabled' = 'true';
+SET 'execution.multi-jobs-in-application.enable' = 'true';
 
 CREATE TEMPORARY TABLE source_bb_card_auth_detail (
     `Trans Date / Time`       STRING,
