@@ -12,7 +12,7 @@ pending 能看closed 可能fail
 他们都有涉及的ods dim层
 BB客户成本:
 account -> dim_account
-salesAccountRelation -> ods_sales_account_relation
+salesAccountRelation 
                      -> dim_sale_account_relation_p
 user -> ods_user
 accountExtend -> ods_account_extend
@@ -20,7 +20,7 @@ caas_open_api_extend
 quantum_card_transaction_extend -> ods_quantum_card_transaction_extend
 qbitCard -> ods_qbit_card
 qbitCardSettlement -> ods_qbit_card_settlement
-bb_card_auth_detail_2026-06
+
 
 QI客户毛利:
 account -> dim_account

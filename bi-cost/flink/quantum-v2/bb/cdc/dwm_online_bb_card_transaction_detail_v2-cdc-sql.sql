@@ -6,7 +6,7 @@
 --   作业类型：流处理 CDC
 --   运行方式：全量初始化 + 增量实时同步
 --   运行参数：无
---   源库变更响应：quantum_card_transaction_extend / qbitCardSettlement 变化驱动 DWM 写入。
+--   源库变更响应：ODS 交易/结算变化驱动 DWM 写入。
 -- Notes:
 --   1. 主业务 CDC 不扫描 ods_bi_month_tag.update_time。
 --   2. cost_fixed_fee 由固定成本独立脚本回刷。
@@ -46,65 +46,50 @@ CREATE TEMPORARY TABLE source_quantum_card_transaction_extend (
     delete_time              TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'postgres-cdc',
-    'hostname' = '${secret_values.PG_TEST_HOST}',
-    'port' = '${secret_values.PG_TEST_PORT1}',
-    'username' = '${secret_values.PG_TEST_USERNAME}',
-    'password' = '${secret_values.PG_TEST_PASSWORD}',
-    'database-name' = '${secret_values.PG_TEST_DATABASE}',
-    'schema-name' = 'public',
-    'table-name' = 'quantum_card_transaction_extend',
-    'slot.name' = 'flink_slot_bb_v2_tx_extend_dwm',
-    'decoding.plugin.name' = 'pgoutput',
-    'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.slot.drop.on.stop' = 'true',
-    'debezium.decimal.handling.mode' = 'string',
-    'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'false'
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT id, source_id, card_transaction_id, account_id, country, type AS "type", transaction_time, original_completion_time, business_code_list, remarks, card_id, detail, channel_provision, create_time, update_time, delete_time FROM ods.ods_quantum_card_transaction_extend WHERE delete_time IS NULL) AS ods_quantum_card_transaction_extend_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_qbit_card_settlement (
     id                      STRING,
-    `transactionId`         STRING,
-    `qbitCardTransactionId` STRING,
+    transaction_id          STRING,
+    qbit_card_transaction_id STRING,
     provider                STRING,
-    `transactionType`       STRING,
-    `billingAmount`         DOUBLE,
-    `rawData`               STRING,
-    `createTime`            TIMESTAMP(6),
-    `deleteTime`            TIMESTAMP(6),
+    transaction_type        STRING,
+    billing_amount          DOUBLE,
+    raw_data                STRING,
+    create_time             TIMESTAMP(6),
+    delete_time             TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'postgres-cdc',
-    'hostname' = '${secret_values.PG_TEST_HOST}',
-    'port' = '${secret_values.PG_TEST_PORT1}',
-    'username' = '${secret_values.PG_TEST_USERNAME}',
-    'password' = '${secret_values.PG_TEST_PASSWORD}',
-    'database-name' = '${secret_values.PG_TEST_DATABASE}',
-    'schema-name' = 'public',
-    'table-name' = 'qbitCardSettlement',
-    'slot.name' = 'flink_slot_bb_v2_settlement_dwm',
-    'decoding.plugin.name' = 'pgoutput',
-    'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.slot.drop.on.stop' = 'true',
-    'debezium.decimal.handling.mode' = 'string',
-    'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'false'
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT id, transaction_id, qbit_card_transaction_id, provider, transaction_type, billing_amount, raw_data, create_time, delete_time FROM ods.ods_qbit_card_settlement WHERE delete_time IS NULL AND provider = ''BlueBancCard'') AS ods_qbit_card_settlement_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_qbit_card (
     id          STRING,
     token       STRING,
-    `accountId` STRING,
+    account_id   STRING,
     `type`      STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'qbitCard',
-    'targetSchema' = 'public',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT id, token, account_id, type AS "type" FROM ods.ods_qbit_card WHERE delete_time IS NULL) AS ods_qbit_card_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_dim_account (
@@ -128,12 +113,13 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     delete_time TIMESTAMP(6),
     PRIMARY KEY (account_id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'api_account_relation',
-    'targetSchema' = 'public',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT account_id, root_id, delete_time FROM ods.ods_api_account_relation WHERE delete_time IS NULL) AS ods_api_account_relation_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
@@ -175,16 +161,16 @@ CREATE TEMPORARY VIEW v_matched_settle AS
 SELECT t.id AS txn_id, s.*
 FROM v_bb_tx t
 INNER JOIN source_qbit_card_settlement s
-    ON t.source_id = s.`transactionId`
+    ON t.source_id = s.transaction_id
    AND s.provider = 'BlueBancCard'
-   AND s.`deleteTime` IS NULL
+   AND s.delete_time IS NULL
 UNION ALL
 SELECT t.id AS txn_id, s.*
 FROM v_bb_tx t
 INNER JOIN source_qbit_card_settlement s
-    ON t.card_transaction_id = s.`qbitCardTransactionId`
+    ON t.card_transaction_id = s.qbit_card_transaction_id
    AND s.provider = 'BlueBancCard'
-   AND s.`deleteTime` IS NULL;
+   AND s.delete_time IS NULL;
 
 CREATE TEMPORARY VIEW v_bb_base AS
 SELECT
@@ -205,18 +191,18 @@ SELECT
     t.detail,
     t.card_org,
     t.country AS tx_country,
-    JSON_VALUE(s.`rawData`, '$.txnLocation') AS settle_country,
-    COALESCE(JSON_VALUE(s.`rawData`, '$.txnLocation'), t.country) IN ('US', 'USA') AS is_dom,
-    JSON_VALUE(s.`rawData`, '$.responseCode') AS resp_code,
-    JSON_VALUE(s.`rawData`, '$.reasonCode') AS reason_code,
-    s.`transactionType` AS transaction_type,
-    s.`transactionType` NOT IN ('ST-REFUND_ADV', 'ST-PURCHASE_ADV', 'ST-ECOMM_ADV', 'ST-SETT_ADV', 'ST-ATM_ADV') AS is_valid_settle,
-    s.`transactionType` = 'authorization.clearing' AS is_clearing,
-    s.`transactionType` = 'authorization.reversal' AS is_reversal,
-    s.`transactionType` = 'refund.clearing' AS is_refund,
-    CAST(COALESCE(s.`billingAmount`, CAST(0 AS DOUBLE)) AS DECIMAL(20, 4)) AS billing_amount,
-    CAST(JSON_VALUE(s.`rawData`, '$.postDate') AS TIMESTAMP(6)) AS settlement_post_date,
-    CAST(JSON_VALUE(s.`rawData`, '$.txnDate') AS TIMESTAMP(6)) AS settlement_txn_date,
+    JSON_VALUE(s.raw_data, '$.txnLocation') AS settle_country,
+    COALESCE(JSON_VALUE(s.raw_data, '$.txnLocation'), t.country) IN ('US', 'USA') AS is_dom,
+    JSON_VALUE(s.raw_data, '$.responseCode') AS resp_code,
+    JSON_VALUE(s.raw_data, '$.reasonCode') AS reason_code,
+    s.transaction_type AS transaction_type,
+    s.transaction_type NOT IN ('ST-REFUND_ADV', 'ST-PURCHASE_ADV', 'ST-ECOMM_ADV', 'ST-SETT_ADV', 'ST-ATM_ADV') AS is_valid_settle,
+    s.transaction_type = 'authorization.clearing' AS is_clearing,
+    s.transaction_type = 'authorization.reversal' AS is_reversal,
+    s.transaction_type = 'refund.clearing' AS is_refund,
+    CAST(COALESCE(s.billing_amount, CAST(0 AS DOUBLE)) AS DECIMAL(20, 4)) AS billing_amount,
+    CAST(JSON_VALUE(s.raw_data, '$.postDate') AS TIMESTAMP(6)) AS settlement_post_date,
+    CAST(JSON_VALUE(s.raw_data, '$.txnDate') AS TIMESTAMP(6)) AS settlement_txn_date,
     1 AS version,
     COALESCE(t.create_time, CURRENT_TIMESTAMP) AS create_time,
     COALESCE(t.update_time, t.create_time, CURRENT_TIMESTAMP) AS update_time,

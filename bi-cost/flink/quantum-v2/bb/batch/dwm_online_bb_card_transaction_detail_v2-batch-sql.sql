@@ -8,7 +8,7 @@
 --   运行参数：start_time, end_time
 --   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由 CDC 脚本同步。
 -- Notes:
---   1. 交易主源: quantum_card_transaction_extend。
+--   1. 交易主源: ods.ods_quantum_card_transaction_extend。
 --   2. 明细粒度: 交易 + BlueBanc 结算明细。
 --   3. 不处理 cost_fixed_fee，固定成本由独立脚本回刷。
 --********************************************************************--
@@ -33,7 +33,6 @@ CREATE TEMPORARY TABLE source_quantum_card_transaction_extend (
     `type`                   STRING,
     transaction_time         TIMESTAMP(6),
     original_completion_time TIMESTAMP(6),
-    business_time            TIMESTAMP(6),
     business_code_list       STRING,
     remarks                  STRING,
     card_id                  STRING,
@@ -42,11 +41,12 @@ CREATE TEMPORARY TABLE source_quantum_card_transaction_extend (
     create_time              TIMESTAMP(6),
     update_time              TIMESTAMP(6),
     delete_time              TIMESTAMP(6),
+    card_org                 STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, source_id, card_transaction_id, account_id, country, "type", transaction_time, original_completion_time, COALESCE(transaction_time, original_completion_time) AS business_time, business_code_list, remarks, card_id, detail, channel_provision, create_time, update_time, delete_time FROM public.quantum_card_transaction_extend WHERE channel_provision = ''BLUEBANC'' AND delete_time IS NULL AND "type" IN (''Consumption'', ''Credit'') AND COALESCE(transaction_time, original_completion_time) >= CAST(''${start_time}'' AS TIMESTAMP) AND COALESCE(transaction_time, original_completion_time) < CAST(''${end_time}'' AS TIMESTAMP)) AS quantum_card_transaction_extend_f',
+    'table-name' = '(SELECT t.id, t.source_id, t.card_transaction_id, t.account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, t.business_code_list, t.remarks, t.card_id, t.detail, t.channel_provision, t.create_time, t.update_time, t.delete_time, c.type AS card_org FROM ods.ods_quantum_card_transaction_extend t INNER JOIN ods.ods_qbit_card c ON c.id = t.card_id AND c.delete_time IS NULL AND c.type IN (''Master'', ''VISA'') WHERE t.delete_time IS NULL AND t.channel_provision = ''BLUEBANC'' AND t.type IN (''Consumption'', ''Credit'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND COALESCE(t.transaction_time, t.original_completion_time) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND COALESCE(t.transaction_time, t.original_completion_time) < CAST(''${end_time}'' AS TIMESTAMP(6))) AS ods_quantum_card_transaction_extend_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -55,35 +55,19 @@ CREATE TEMPORARY TABLE source_quantum_card_transaction_extend (
 
 CREATE TEMPORARY TABLE source_qbit_card_settlement (
     id                      STRING,
-    `transactionId`         STRING,
-    `qbitCardTransactionId` STRING,
+    transaction_id          STRING,
+    qbit_card_transaction_id STRING,
     provider                STRING,
-    `transactionType`       STRING,
-    `billingAmount`         DOUBLE,
-    `rawData`               STRING,
-    `createTime`            TIMESTAMP(6),
-    `deleteTime`            TIMESTAMP(6),
+    transaction_type        STRING,
+    billing_amount          DOUBLE,
+    raw_data                STRING,
+    create_time             TIMESTAMP(6),
+    delete_time             TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, "transactionId", "qbitCardTransactionId", provider, "transactionType", "billingAmount", "rawData", "createTime", "deleteTime" FROM public."qbitCardSettlement" WHERE provider = ''BlueBancCard'' AND "deleteTime" IS NULL) AS qbit_card_settlement_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
-);
-
-CREATE TEMPORARY TABLE source_qbit_card (
-    id          STRING,
-    token       STRING,
-    `accountId` STRING,
-    `type`      STRING,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, token, "accountId", "type" FROM public."qbitCard" WHERE "type" IN (''Master'', ''VISA'')) AS qbit_card_f',
+    'table-name' = '(SELECT s.id, s.transaction_id, s.qbit_card_transaction_id, s.provider, s.transaction_type, s.billing_amount, s.raw_data, s.create_time, s.delete_time FROM ods.ods_qbit_card_settlement s WHERE s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND EXISTS (SELECT 1 FROM ods.ods_quantum_card_transaction_extend t WHERE t.delete_time IS NULL AND t.channel_provision = ''BLUEBANC'' AND t.type IN (''Consumption'', ''Credit'') AND COALESCE(t.transaction_time, t.original_completion_time) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND COALESCE(t.transaction_time, t.original_completion_time) < CAST(''${end_time}'' AS TIMESTAMP(6)) AND (t.source_id = s.transaction_id OR t.card_transaction_id = s.qbit_card_transaction_id))) AS ods_qbit_card_settlement_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -114,7 +98,7 @@ CREATE TEMPORARY TABLE source_api_account_relation (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT account_id, root_id, delete_time FROM public.api_account_relation WHERE delete_time IS NULL) AS api_account_relation_f',
+    'table-name' = '(SELECT account_id, root_id, delete_time FROM ods.ods_api_account_relation WHERE delete_time IS NULL) AS ods_api_account_relation_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -143,21 +127,17 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
 
 CREATE TEMPORARY VIEW v_bb_tx AS
 SELECT
-    t.*,
-    c.`type` AS card_org
+    t.*
 FROM source_quantum_card_transaction_extend t
-INNER JOIN source_qbit_card c
-    ON c.id = t.card_id
 WHERE t.channel_provision = 'BLUEBANC'
   AND t.delete_time IS NULL
   AND t.`type` IN ('Consumption', 'Credit')
-  AND c.`type` IN ('Master', 'VISA')
   AND (
         t.detail IS NULL
         OR t.detail NOT LIKE 'AUTO CLASS CAR RENTAL%'
   )
-  AND t.business_time >= CAST('${start_time}' AS TIMESTAMP(6))
-  AND t.business_time < CAST('${end_time}' AS TIMESTAMP(6));
+  AND COALESCE(t.transaction_time, t.original_completion_time) >= CAST('${start_time}' AS TIMESTAMP(6))
+  AND COALESCE(t.transaction_time, t.original_completion_time) < CAST('${end_time}' AS TIMESTAMP(6));
 
 CREATE TEMPORARY VIEW v_matched_settle AS
 SELECT
@@ -165,18 +145,18 @@ SELECT
     s.*
 FROM v_bb_tx t
 INNER JOIN source_qbit_card_settlement s
-    ON t.source_id = s.`transactionId`
+    ON t.source_id = s.transaction_id
    AND s.provider = 'BlueBancCard'
-   AND s.`deleteTime` IS NULL
+   AND s.delete_time IS NULL
 UNION ALL
 SELECT
     t.id AS txn_id,
     s.*
 FROM v_bb_tx t
 INNER JOIN source_qbit_card_settlement s
-    ON t.card_transaction_id = s.`qbitCardTransactionId`
+    ON t.card_transaction_id = s.qbit_card_transaction_id
    AND s.provider = 'BlueBancCard'
-   AND s.`deleteTime` IS NULL;
+   AND s.delete_time IS NULL;
 
 CREATE TEMPORARY VIEW v_bb_base AS
 SELECT
@@ -189,7 +169,7 @@ SELECT
     da.`type` AS account_category,
     da.system_type,
     t.card_id,
-    t.business_time AS transaction_time,
+    COALESCE(t.transaction_time, t.original_completion_time) AS transaction_time,
     t.original_completion_time,
     t.`type` AS business_type,
     t.business_code_list,
@@ -197,18 +177,18 @@ SELECT
     t.detail,
     t.card_org,
     t.country AS tx_country,
-    JSON_VALUE(s.`rawData`, '$.txnLocation') AS settle_country,
-    COALESCE(JSON_VALUE(s.`rawData`, '$.txnLocation'), t.country) IN ('US', 'USA') AS is_dom,
-    JSON_VALUE(s.`rawData`, '$.responseCode') AS resp_code,
-    JSON_VALUE(s.`rawData`, '$.reasonCode') AS reason_code,
-    s.`transactionType` AS transaction_type,
-    s.`transactionType` NOT IN ('ST-REFUND_ADV', 'ST-PURCHASE_ADV', 'ST-ECOMM_ADV', 'ST-SETT_ADV', 'ST-ATM_ADV') AS is_valid_settle,
-    s.`transactionType` = 'authorization.clearing' AS is_clearing,
-    s.`transactionType` = 'authorization.reversal' AS is_reversal,
-    s.`transactionType` = 'refund.clearing' AS is_refund,
-    CAST(COALESCE(s.`billingAmount`, CAST(0 AS DOUBLE)) AS DECIMAL(20, 4)) AS billing_amount,
-    CAST(JSON_VALUE(s.`rawData`, '$.postDate') AS TIMESTAMP(6)) AS settlement_post_date,
-    CAST(JSON_VALUE(s.`rawData`, '$.txnDate') AS TIMESTAMP(6)) AS settlement_txn_date,
+    JSON_VALUE(s.raw_data, '$.txnLocation') AS settle_country,
+    COALESCE(JSON_VALUE(s.raw_data, '$.txnLocation'), t.country) IN ('US', 'USA') AS is_dom,
+    JSON_VALUE(s.raw_data, '$.responseCode') AS resp_code,
+    JSON_VALUE(s.raw_data, '$.reasonCode') AS reason_code,
+    s.transaction_type AS transaction_type,
+    s.transaction_type NOT IN ('ST-REFUND_ADV', 'ST-PURCHASE_ADV', 'ST-ECOMM_ADV', 'ST-SETT_ADV', 'ST-ATM_ADV') AS is_valid_settle,
+    s.transaction_type = 'authorization.clearing' AS is_clearing,
+    s.transaction_type = 'authorization.reversal' AS is_reversal,
+    s.transaction_type = 'refund.clearing' AS is_refund,
+    CAST(COALESCE(s.billing_amount, CAST(0 AS DOUBLE)) AS DECIMAL(20, 4)) AS billing_amount,
+    CAST(JSON_VALUE(s.raw_data, '$.postDate') AS TIMESTAMP(6)) AS settlement_post_date,
+    CAST(JSON_VALUE(s.raw_data, '$.txnDate') AS TIMESTAMP(6)) AS settlement_txn_date,
     1 AS version,
     COALESCE(t.create_time, CURRENT_TIMESTAMP) AS create_time,
     COALESCE(t.update_time, t.create_time, CURRENT_TIMESTAMP) AS update_time,

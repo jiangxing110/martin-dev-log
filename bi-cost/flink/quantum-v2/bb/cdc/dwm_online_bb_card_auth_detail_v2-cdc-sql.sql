@@ -56,16 +56,17 @@ CREATE TEMPORARY TABLE source_bb_card_auth_detail (
 CREATE TEMPORARY TABLE source_qbit_card (
     id          STRING,
     token       STRING,
-    `accountId` STRING,
+    account_id   STRING,
     `type`      STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'qbitCard',
-    'targetSchema' = 'public',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT id, token, account_id, type AS "type" FROM ods.ods_qbit_card WHERE delete_time IS NULL) AS ods_qbit_card_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_dim_account (
@@ -89,12 +90,13 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     delete_time TIMESTAMP(6),
     PRIMARY KEY (account_id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'api_account_relation',
-    'targetSchema' = 'public',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT account_id, root_id, delete_time FROM ods.ods_api_account_relation WHERE delete_time IS NULL) AS ods_api_account_relation_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
@@ -122,7 +124,7 @@ SELECT
     a.`Auth Txn GUID` AS auth_txn_guid,
     a.`Card Proxy` AS card_proxy,
     c.id AS card_id,
-    c.`accountId` AS account_id,
+    c.account_id AS account_id,
     da.account_type,
     da.`type` AS account_category,
     da.system_type,
@@ -149,12 +151,13 @@ SELECT
         'E-Commerce or MOTO Advice',
         'ATM Cash Withdrawal Advice',
         'Purchase Advice'
-    ) AS is_excluded_request
+    ) AS is_excluded_request,
+    a.source_table
 FROM source_bb_card_auth_detail a
 LEFT JOIN source_qbit_card c
     ON a.`Card Proxy` = c.token
 LEFT JOIN source_dim_account da
-    ON da.id = c.`accountId`
+    ON da.id = c.account_id
 WHERE TO_TIMESTAMP(a.`Trans Date / Time`, 'MM/dd/yyyy hh:mm:ss a') >= CAST('${start_time}' AS TIMESTAMP(6))
   AND TO_TIMESTAMP(a.`Trans Date / Time`, 'MM/dd/yyyy hh:mm:ss a') < CAST('${end_time}' AS TIMESTAMP(6));
 
