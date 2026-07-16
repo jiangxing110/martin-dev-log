@@ -1,10 +1,10 @@
 --********************************************************************--
 -- Author:         martinJiang
--- Created Time:   2026-07-12
--- Description:    BB v2 Auth DWM 月表导入
+-- Created Time:   2026-07-15
+-- Description:    BB v2 Auth DWM CDC 窗口导入
 -- 作业元信息：
---   作业类型：批处理
---   运行方式：按月导入存在的 bb_card_auth_detail_yyyy-mm
+--   作业类型：批式 CDC 修复任务
+--   运行方式：按 start_time 所在月份导入存在的 bb_card_auth_detail_yyyy-mm
 --   运行参数：start_time, end_time
 -- Notes:
 --   1. Auth 原始表是月表，单月通常 200w+。

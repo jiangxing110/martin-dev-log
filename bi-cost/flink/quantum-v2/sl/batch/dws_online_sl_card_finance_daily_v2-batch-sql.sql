@@ -6,12 +6,12 @@
 -- 作业元信息：
 --   作业类型：批处理
 --   运行方式：一次性初始化/回刷或调度执行
---   运行参数：start_date, end_date
+--   运行参数：start_time, end_time
 --   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由上游 CDC ODS/DIM 提供最新数据。
 -- Notes:
 --   1. 主链路: qbitCardSettlement -> DWM -> DWS
 --   2. 粒度: account_id + report_date + sale_id + am_id
---   3. cost_fixed_fee 由 ods_bi_month_tag 月固定成本按当月 DWS 行数均摊
+--   3. 固定成本由 common 特殊费用脚本处理，主链路保持 0
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
@@ -125,37 +125,9 @@ SELECT
 FROM source_dwm_sl_card_transaction_detail_p s
 LEFT JOIN source_dim_account da ON da.id = s.account_id
 WHERE s.delete_time IS NULL
+  AND s.settlement_date >= CAST('${start_time}' AS DATE)
+  AND s.settlement_date < CAST('${end_time}' AS DATE)
 GROUP BY s.settlement_date, s.account_id, da.account_type, da.account_category, da.system_type, s.sale_id, s.am_id;
-
-CREATE TEMPORARY VIEW v_sl_month_scope AS
-SELECT DISTINCT CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
-FROM v_dws_sl_daily_base;
-
-CREATE TEMPORARY VIEW v_sl_month_row_count AS
-SELECT
-    CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month,
-    COUNT(*) AS row_count
-FROM v_dws_sl_daily_base
-GROUP BY CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE);
-
-CREATE TEMPORARY VIEW v_sl_month_fixed_fee AS
-SELECT report_month, amount AS month_fixed_fee
-FROM (
-    SELECT
-        s.report_month,
-        t.amount,
-        ROW_NUMBER() OVER (
-            PARTITION BY s.report_month
-            ORDER BY t.statistics_time DESC, t.update_time DESC, t.id DESC
-        ) AS rn
-    FROM v_sl_month_scope s
-    LEFT JOIN source_bi_month_tag t
-        ON t.provider = 'LS'
-       AND t.tag = '量子卡-渠道固定成本'
-       AND t.delete_time IS NULL
-       AND t.statistics_time < CAST(DATE_FORMAT(CAST(DATE_ADD(s.report_month, 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6))
-) ranked_fee
-WHERE rn = 1;
 
 CREATE TEMPORARY TABLE sink_dws_sl_card_finance_daily_p (
     id              BIGINT,
@@ -203,9 +175,5 @@ SELECT
     b.am_id,
     b.rebate_base,
     b.rebate_amt,
-    COALESCE(f.month_fixed_fee / NULLIF(c.row_count, 0), CAST(0 AS DECIMAL(20, 4))) AS cost_fixed_fee
-FROM v_dws_sl_daily_base b
-LEFT JOIN v_sl_month_row_count c
-    ON CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = c.report_month
-LEFT JOIN v_sl_month_fixed_fee f
-    ON CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = f.report_month;
+    CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee
+FROM v_dws_sl_daily_base b;

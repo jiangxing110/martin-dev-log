@@ -10,7 +10,7 @@
 -- Notes:
 --   1. 主链路: qbitCardSettlement -> DWM -> DWS
 --   2. 粒度: account_id + report_date + sale_id + am_id
---   3. cost_fixed_fee 字段保留在同一条 DWS 写入链路中，值先保持 0
+--   3. 固定成本由 common 特殊费用脚本处理，主链路保持 0
 --********************************************************************--
 
 SET 'parallelism.default' = '1';

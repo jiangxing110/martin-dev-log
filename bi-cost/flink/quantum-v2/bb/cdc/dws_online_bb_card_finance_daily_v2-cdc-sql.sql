@@ -10,7 +10,7 @@
 -- Notes:
 --   1. 主链路: DWM transaction/auth -> DWS
 --   2. 粒度: account_id + report_date(月初) + sale_id + am_id
---   3. cost_fixed_fee 字段保留在同一条 DWS 写入链路中，值先保持 0
+--   3. 固定成本和 Active Card fee 由独立特殊行脚本处理，主链路保持 0。
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
@@ -239,10 +239,27 @@ SELECT
 FROM v_bb_metric_rows
 GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id;
 
+CREATE TEMPORARY VIEW v_bb_auth_month_rows AS
+SELECT
+    CAST(DATE_FORMAT(CAST(auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
+    account_id,
+    account_type,
+    account_category,
+    system_type,
+    card_org,
+    is_dom,
+    is_decline,
+    is_account_verification,
+    is_excluded_request,
+    auth_txn_guid,
+    sale_id,
+    am_id
+FROM v_bb_auth_scope_rows;
+
 CREATE TEMPORARY VIEW v_dws_bb_auth_daily_base AS
 SELECT
-    CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(DATE_FORMAT(CAST(auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', COALESCE(sale_id, ''), ':', COALESCE(am_id, '')))) AS BIGINT) AS id,
-    CAST(DATE_FORMAT(CAST(auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
+    CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', COALESCE(sale_id, ''), ':', COALESCE(am_id, '')))) AS BIGINT) AS id,
+    report_date,
     account_id,
     account_type,
     account_category,
@@ -270,7 +287,7 @@ SELECT
     CAST(0 AS DECIMAL(20, 4)) AS v_int_clearing_vol,
     CAST(0 AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
     CAST(0 AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
-    CAST(COUNT(DISTINCT card_proxy) AS INT) AS active_card_count,
+    CAST(0 AS INT) AS active_card_count,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
     sale_id,
     am_id,
@@ -279,8 +296,8 @@ SELECT
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
-FROM v_bb_auth_scope_rows
-GROUP BY CAST(DATE_FORMAT(CAST(auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE), account_id, account_type, account_category, system_type, sale_id, am_id;
+FROM v_bb_auth_month_rows
+GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id;
 
 CREATE TEMPORARY VIEW v_dws_bb_daily_base AS
 SELECT
@@ -313,7 +330,7 @@ SELECT
     COALESCE(t.v_int_clearing_vol, CAST(0 AS DECIMAL(20, 4))) + COALESCE(a.v_int_clearing_vol, CAST(0 AS DECIMAL(20, 4))) AS v_int_clearing_vol,
     COALESCE(t.bb_rebate_base_amt, CAST(0 AS DECIMAL(20, 4))) + COALESCE(a.bb_rebate_base_amt, CAST(0 AS DECIMAL(20, 4))) AS bb_rebate_base_amt,
     COALESCE(t.bb_channel_cashback_comm, CAST(0 AS DECIMAL(20, 4))) + COALESCE(a.bb_channel_cashback_comm, CAST(0 AS DECIMAL(20, 4))) AS bb_channel_cashback_comm,
-    COALESCE(t.active_card_count, 0) + COALESCE(a.active_card_count, 0) AS active_card_count,
+    CAST(0 AS INT) AS active_card_count,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
     COALESCE(t.sale_id, a.sale_id) AS sale_id,
     COALESCE(t.am_id, a.am_id) AS am_id,
@@ -329,7 +346,7 @@ FULL OUTER JOIN v_dws_bb_auth_daily_base a
    AND COALESCE(t.sale_id, '') = COALESCE(a.sale_id, '')
    AND COALESCE(t.am_id, '') = COALESCE(a.am_id, '');
 
-CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_p (
+CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     id                       BIGINT,
     report_date              DATE,
     account_id               STRING,
@@ -372,7 +389,7 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_p (
 ) WITH (
     'connector' = 'adbpg',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dws_bb_card_finance_daily_p',
+    'tableName' = 'dws_bb_card_finance_daily_v2_p',
     'targetSchema' = 'dws',
     'userName' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
@@ -380,13 +397,13 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_p (
     'batchSize' = '2000'
 );
 
-DELETE FROM sink_dws_bb_card_finance_daily_p
+DELETE FROM sink_dws_bb_card_finance_daily_v2_p
 WHERE EXISTS (
     SELECT 1
     FROM v_bb_changed_months m
-    WHERE sink_dws_bb_card_finance_daily_p.report_date >= m.report_month
-      AND sink_dws_bb_card_finance_daily_p.report_date < m.next_month
+    WHERE sink_dws_bb_card_finance_daily_v2_p.report_date >= m.report_month
+      AND sink_dws_bb_card_finance_daily_v2_p.report_date < m.next_month
 );
 
-INSERT INTO sink_dws_bb_card_finance_daily_p
+INSERT INTO sink_dws_bb_card_finance_daily_v2_p
 SELECT * FROM v_dws_bb_daily_base;

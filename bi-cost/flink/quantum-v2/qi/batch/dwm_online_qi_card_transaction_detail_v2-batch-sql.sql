@@ -34,39 +34,41 @@ SET 'table.exec.mini-batch.size' = '5000';
 
 CREATE TEMPORARY TABLE source_qbit_card_transaction (
     id                  STRING,
-    "transactionId"     STRING,
-    "accountId"         STRING,
-    "cardId"            STRING,
+    transaction_id      STRING,
+    account_id          STRING,
+    card_id             STRING,
     status              STRING,
-    "transactionTime"   TIMESTAMP(6),
-    "businessType"      STRING,
+    transaction_time    TIMESTAMP(6),
+    business_type       STRING,
     provider            STRING,
-    "specialSourceData" STRING,
+    special_source_data STRING,
     version             INT,
     remarks             STRING,
-    "createTime"        TIMESTAMP(6),
-    "updateTime"        TIMESTAMP(6),
-    "deleteTime"        TIMESTAMP(6),
+    create_time         TIMESTAMP(6),
+    update_time         TIMESTAMP(6),
+    delete_time         TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'qbit_card_transaction',
-    'targetSchema' = 'public',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT id, "transactionId" AS transaction_id, "accountId" AS account_id, "cardId" AS card_id, status, "transactionTime" AS transaction_time, "businessType" AS business_type, provider, "specialSourceData" AS special_source_data, version, remarks, "createTime" AS create_time, "updateTime" AS update_time, "deleteTime" AS delete_time FROM public.qbit_card_transaction) AS qbit_card_transaction_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_card_bin (
     system_provider STRING,
     brand           STRING
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'card_bin',
-    'targetSchema' = 'public',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT system_provider, brand FROM public.card_bin) AS card_bin_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000'
 );
 
 CREATE TEMPORARY TABLE source_quantum_card_transaction_extend (
@@ -76,12 +78,13 @@ CREATE TEMPORARY TABLE source_quantum_card_transaction_extend (
     country           STRING,
     PRIMARY KEY (transaction_id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'quantum_card_transaction_extend',
-    'targetSchema' = 'public',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT transaction_id, usd_amount, channel_provision, country FROM public.quantum_card_transaction_extend) AS quantum_card_transaction_extend_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_api_account_relation (
@@ -90,27 +93,29 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     delete_time TIMESTAMP(6),
     PRIMARY KEY (account_id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'api_account_relation',
-    'targetSchema' = 'public',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT account_id, root_id, delete_time FROM public.api_account_relation) AS api_account_relation_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_dim_account (
     id                STRING,
     account_type      STRING,
-    "type"            STRING,
+    account_category  STRING,
     system_type       STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dim_account',
-    'targetSchema' = 'dim',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT id, account_type, "type" AS account_category, system_type FROM dim.dim_account) AS dim_account_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
@@ -124,49 +129,53 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     delete_time           TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dim_sale_account_relation_p',
-    'targetSchema' = 'dim',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT id, relation_account_id, sale_id, am_id, operation_manager_id, relation_start_time, relation_end_time, delete_time FROM dim.dim_sale_account_relation_p) AS dim_sale_account_relation_p_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY VIEW v_qi_base AS
 SELECT
     t.id,
-    t."transactionId" AS transaction_id,
-    t."accountId" AS account_id,
+    t.transaction_id AS transaction_id,
+    t.account_id AS account_id,
     da.account_type,
-    da."type" AS account_category,
+    da.account_category AS account_category,
     da.system_type,
     t.status,
-    t."transactionTime" AS transaction_time,
+    t.transaction_time AS transaction_time,
     COALESCE(t.version, 1) AS version,
     COALESCE(t.remarks, 'History Init') AS remarks,
-    t."createTime" AS create_time,
-    COALESCE(t."updateTime", t."createTime") AS update_time,
-    t."deleteTime" AS delete_time,
+    t.create_time AS create_time,
+    COALESCE(t.update_time, t.create_time) AS update_time,
+    t.delete_time AS delete_time,
+    COALESCE(t.update_time, t.create_time) AS source_update_time,
+    t.delete_time AS source_delete_time,
+    t.delete_time IS NULL AS is_current_valid,
     CAST(COALESCE(e.usd_amount, CAST(0 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS billing_amount,
     e.channel_provision = 'QBIT' AS is_qbit_provision,
     e.country IN ('HK', 'HKG') AS is_hk_region,
-    t."businessType" = 'Consumption' AS is_consumption,
-    t."businessType" IN ('Reversal', 'Credit') AS is_reversal_or_credit,
-    JSON_VALUE(t."specialSourceData", '$.code.1001') IS NOT NULL
-        OR JSON_VALUE(t."specialSourceData", '$.code.1103') IS NOT NULL
-        OR JSON_VALUE(t."specialSourceData", '$.code.1105') IS NOT NULL AS has_special_code,
+    t.business_type = 'Consumption' AS is_consumption,
+    t.business_type IN ('Reversal', 'Credit') AS is_reversal_or_credit,
+    JSON_VALUE(t.special_source_data, '$.code.1001') IS NOT NULL
+        OR JSON_VALUE(t.special_source_data, '$.code.1103') IS NOT NULL
+        OR JSON_VALUE(t.special_source_data, '$.code.1105') IS NOT NULL AS has_special_code,
     FALSE AS is_vip_account,
-    t."businessType" AS business_type,
-    t."cardId" AS card_id
+    t.business_type AS business_type,
+    t.card_id AS card_id
 FROM source_qbit_card_transaction t
 INNER JOIN source_card_bin b
     ON b.system_provider = t.provider
    AND b.brand = 'QbitIssuing'
 LEFT JOIN source_quantum_card_transaction_extend e
-    ON e.transaction_id = t."transactionId"
+    ON e.transaction_id = t.transaction_id
 LEFT JOIN source_dim_account da
-    ON da.id = t."accountId"
-WHERE t."deleteTime" IS NULL;
+    ON da.id = t.account_id
+WHERE t.delete_time IS NULL;
 
 CREATE TEMPORARY VIEW v_qi_direct_sale_relation AS
 SELECT tx_id, sale_id, am_id
@@ -232,6 +241,9 @@ SELECT
     b.create_time,
     b.update_time,
     b.delete_time,
+    b.source_update_time,
+    b.source_delete_time,
+    b.is_current_valid,
     b.billing_amount,
     b.is_qbit_provision,
     b.is_hk_region,
@@ -250,7 +262,7 @@ LEFT JOIN v_qi_root_sale_relation r
     ON r.tx_id = b.id
    AND d.tx_id IS NULL;
 
-CREATE TEMPORARY TABLE sink_dwm_qi_card_transaction_detail_p (
+CREATE TEMPORARY TABLE sink_dwm_qi_card_transaction_detail_v2_p (
     id                    STRING,
     transaction_id        STRING,
     account_id            STRING,
@@ -264,6 +276,9 @@ CREATE TEMPORARY TABLE sink_dwm_qi_card_transaction_detail_p (
     create_time           TIMESTAMP(6),
     update_time           TIMESTAMP(6),
     delete_time           TIMESTAMP(6),
+    source_update_time    TIMESTAMP(6),
+    source_delete_time    TIMESTAMP(6),
+    is_current_valid      BOOLEAN,
     billing_amount        DECIMAL(20, 4),
     is_qbit_provision     BOOLEAN,
     is_hk_region          BOOLEAN,
@@ -279,7 +294,7 @@ CREATE TEMPORARY TABLE sink_dwm_qi_card_transaction_detail_p (
 ) WITH (
     'connector' = 'adbpg',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dwm_qi_card_transaction_detail_p',
+    'tableName' = 'dwm_qi_card_transaction_detail_v2_p',
     'targetSchema' = 'dwm',
     'userName' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
@@ -287,7 +302,7 @@ CREATE TEMPORARY TABLE sink_dwm_qi_card_transaction_detail_p (
     'batchSize' = '2000'
 );
 
-INSERT INTO sink_dwm_qi_card_transaction_detail_p
+INSERT INTO sink_dwm_qi_card_transaction_detail_v2_p
 SELECT * FROM v_dwm_qi_card_transaction_detail
 WHERE transaction_time >= CAST('${start_time}' AS TIMESTAMP(6))
   AND transaction_time < CAST('${end_time}' AS TIMESTAMP(6));

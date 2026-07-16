@@ -108,6 +108,22 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
+CREATE TEMPORARY TABLE source_dim_account (
+    id           STRING,
+    account_type STRING,
+    `type`       STRING,
+    system_type  STRING,
+    delete_time  TIMESTAMP(6),
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'dim_account',
+    'targetSchema' = 'dim',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
+);
+
 CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     id                    STRING,
     relation_account_id   STRING,
@@ -132,6 +148,9 @@ SELECT
     t.id,
     t.`transactionId` AS transaction_id,
     t.`accountId` AS account_id,
+    da.account_type,
+    da.`type` AS account_category,
+    da.system_type,
     t.status,
     t.`transactionTime` AS transaction_time,
     COALESCE(t.version, 1) AS version,
@@ -139,6 +158,9 @@ SELECT
     t.`createTime` AS create_time,
     COALESCE(t.`updateTime`, t.`createTime`) AS update_time,
     t.`deleteTime` AS delete_time,
+    COALESCE(t.`updateTime`, t.`createTime`) AS source_update_time,
+    t.`deleteTime` AS source_delete_time,
+    t.`deleteTime` IS NULL AS is_current_valid,
     CAST(COALESCE(e.usd_amount, CAST(0 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS billing_amount,
     e.channel_provision = 'QBIT' AS is_qbit_provision,
     e.country IN ('HK', 'HKG') AS is_hk_region,
@@ -156,6 +178,8 @@ INNER JOIN source_card_bin b
    AND b.brand = 'QbitIssuing'
 LEFT JOIN source_quantum_card_transaction_extend e
     ON e.transaction_id = t.`transactionId`
+LEFT JOIN source_dim_account da
+    ON da.id = t.`accountId`
 WHERE t.`deleteTime` IS NULL;
 
 CREATE TEMPORARY VIEW v_qi_direct_sale_relation AS
@@ -212,6 +236,9 @@ SELECT
     b.id,
     b.transaction_id,
     b.account_id,
+    b.account_type,
+    b.account_category,
+    b.system_type,
     b.status,
     b.transaction_time,
     b.version,
@@ -219,6 +246,9 @@ SELECT
     b.create_time,
     b.update_time,
     b.delete_time,
+    b.source_update_time,
+    b.source_delete_time,
+    b.is_current_valid,
     b.billing_amount,
     b.is_qbit_provision,
     b.is_hk_region,
@@ -237,10 +267,13 @@ LEFT JOIN v_qi_root_sale_relation r
     ON r.tx_id = b.id
    AND d.tx_id IS NULL;
 
-CREATE TEMPORARY TABLE sink_dwm_qi_card_transaction_detail_p (
+CREATE TEMPORARY TABLE sink_dwm_qi_card_transaction_detail_v2_p (
     id                    STRING,
     transaction_id        STRING,
     account_id            STRING,
+    account_type          STRING,
+    account_category      STRING,
+    system_type           STRING,
     status                STRING,
     transaction_time      TIMESTAMP(6),
     version               INT,
@@ -248,6 +281,9 @@ CREATE TEMPORARY TABLE sink_dwm_qi_card_transaction_detail_p (
     create_time           TIMESTAMP(6),
     update_time           TIMESTAMP(6),
     delete_time           TIMESTAMP(6),
+    source_update_time    TIMESTAMP(6),
+    source_delete_time    TIMESTAMP(6),
+    is_current_valid      BOOLEAN,
     billing_amount        DECIMAL(20, 4),
     is_qbit_provision     BOOLEAN,
     is_hk_region          BOOLEAN,
@@ -263,14 +299,13 @@ CREATE TEMPORARY TABLE sink_dwm_qi_card_transaction_detail_p (
 ) WITH (
     'connector' = 'adbpg',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dwm_qi_card_transaction_detail_p',
+    'tableName' = 'dwm_qi_card_transaction_detail_v2_p',
     'targetSchema' = 'dwm',
     'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
-),
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
     'writeMode' = 'upsert',
     'batchSize' = '2000'
 );
 
-INSERT INTO sink_dwm_qi_card_transaction_detail_p
+INSERT INTO sink_dwm_qi_card_transaction_detail_v2_p
 SELECT * FROM v_dwm_qi_card_transaction_detail;
