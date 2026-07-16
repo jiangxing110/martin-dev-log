@@ -5,13 +5,15 @@
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
+SET 'table.exec.mini-batch.enabled' = 'true';
+SET 'table.exec.mini-batch.allow-latency' = '5s';
+SET 'table.exec.mini-batch.size' = '5000';
 SET 'table.dml-sync' = 'true';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
-SET 'table.exec.mini-batch.enabled' = 'true';
-SET 'table.exec.mini-batch.allow-latency' = '5s';
-SET 'table.exec.mini-batch.size' = '5000';
+SET 'execution.application-management.enabled' = 'true';
+SET 'execution.multi-jobs-in-application.enable' = 'true';
 
 CREATE TEMPORARY TABLE source_bi_month_tag (
     id BIGINT,
@@ -139,10 +141,6 @@ CREATE TEMPORARY TABLE sink_dws_sl_card_finance_daily_p (
     'writeMode' = 'upsert',
     'batchSize' = '2000'
 );
-
-DELETE FROM sink_dws_sl_card_finance_daily_p
-WHERE special_fee_type = 'CHANNEL_FIXED_FEE'
-  AND EXISTS (SELECT 1 FROM v_month_scope m WHERE report_date >= m.report_month AND report_date < m.next_month);
 
 INSERT INTO sink_dws_sl_card_finance_daily_p
 SELECT id, report_date, account_id, account_type, account_category, system_type,

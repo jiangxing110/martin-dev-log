@@ -8,25 +8,32 @@
 --   运行参数：start_time, end_time
 --   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由 CDC 脚本同步。
 -- Notes:
---   1. 交易主源: ods.ods_quantum_card_transaction_extend。
+--   1. 交易主源: public.quantum_card_transaction_extend。
 --   2. 明细粒度: 交易 + BlueBanc 结算明细。
 --   3. 不处理 cost_fixed_fee，固定成本由独立脚本回刷。
 --********************************************************************--
 
-SET 'parallelism.default' = '1';
+SET 'parallelism.default' = '4';
+SET 'taskmanager.memory.network.min' = '1gb';
+SET 'taskmanager.memory.network.max' = '3gb';
+SET 'taskmanager.memory.network.fraction' = '0.2';
+SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
+SET 'pipeline.default-parallelism' = '4';
+SET 'table.exec.resource.default-parallelism' = '4';
+SET 'pipeline.operator-chaining' = 'true';
+SET 'table.exec.mini-batch.enabled' = 'false';
+SET 'execution.multi-jobs-in-application.enable' = 'false';
 SET 'table.dml-sync' = 'true';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
-SET 'table.exec.mini-batch.enabled' = 'true';
-SET 'table.exec.mini-batch.allow-latency' = '5s';
-SET 'table.exec.mini-batch.size' = '5000';
 SET 'execution.application-management.enabled' = 'true';
-SET 'execution.multi-jobs-in-application.enable' = 'true';
 
--- 交易主源只读取 ODS 明细本身。
--- 不在 JDBC table-name 里关联卡表/销售关系，避免 Flink 计划里出现隐藏的大 SQL。
-CREATE TEMPORARY TABLE source_quantum_card_transaction_extend (
+-- 交易主源在数据库侧按 BB 月度口径裁剪。
+-- card_org 优先使用 quantum_card_transaction_extend.card_type，卡类型为空时再用 ods_qbit_card 兜底。
+-- 卡表只允许 LEFT JOIN，避免卡表同步缺口导致交易被 INNER JOIN 过滤掉。
+-- 大窗口回刷时必须使用游标读取，否则 PostgreSQL JDBC 可能一次性缓存结果导致 heap OOM。
+CREATE TEMPORARY TABLE source_bb_quantum_card_transaction_extend (
     id                       BIGINT,
     source_id                STRING,
     card_transaction_id      STRING,
@@ -39,39 +46,23 @@ CREATE TEMPORARY TABLE source_quantum_card_transaction_extend (
     remarks                  STRING,
     card_id                  STRING,
     detail                   STRING,
-    channel_provision        STRING,
     create_time              TIMESTAMP(6),
     update_time              TIMESTAMP(6),
-    delete_time              TIMESTAMP(6),
+    card_org                 STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, source_id, card_transaction_id, account_id, country, type AS "type", transaction_time, original_completion_time, business_code_list, remarks, card_id, detail, channel_provision, create_time, update_time, delete_time FROM ods.ods_quantum_card_transaction_extend WHERE COALESCE(transaction_time, original_completion_time) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND COALESCE(transaction_time, original_completion_time) < CAST(''${end_time}'' AS TIMESTAMP(6))) AS ods_quantum_card_transaction_extend_f',
+    'table-name' = '(SELECT t.id, t.source_id, t.card_transaction_id::text AS card_transaction_id, t.account_id::text AS account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, CAST(t.business_code_list AS text) AS business_code_list, t.remarks, t.card_id::text AS card_id, t.detail, t.create_time, t.update_time, COALESCE(t.card_type, c.type) AS card_org FROM public.quantum_card_transaction_extend t LEFT JOIN ods.ods_qbit_card c ON c.id = t.card_id::text AND c.delete_time IS NULL WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND COALESCE(t.card_type, c.type) IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND ((t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6))) OR (t.original_completion_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''${end_time}'' AS TIMESTAMP(6))))) AS quantum_card_transaction_extend_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
-);
-
--- 卡表只负责补充卡组织，并限制 BB 当前口径需要的 Master/VISA。
--- 交易是否属于 BLUEBANC 仍放在 v_bb_tx 里统一判断。
-CREATE TEMPORARY TABLE source_qbit_card (
-    id       STRING,
-    `type`   STRING,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, type AS "type" FROM ods.ods_qbit_card WHERE delete_time IS NULL AND type IN (''Master'', ''VISA'')) AS ods_qbit_card_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'scan.fetch-size' = '1000',
+    'scan.auto-commit' = 'false'
 );
 
 -- 结算源保持简单过滤，具体按 source_id / card_transaction_id 匹配交易在 v_matched_settle 中完成。
--- 这里不再用 EXISTS 反查交易表，避免 JDBC source 自身变成复杂半连接。
+-- 为避免全量读取 BlueBanc 结算，这里只保留本次交易窗口可能命中的结算记录。
 CREATE TEMPORARY TABLE source_qbit_card_settlement (
     id                      STRING,
     transaction_id          STRING,
@@ -84,11 +75,12 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT s.id, s.transaction_id, s.qbit_card_transaction_id, s.transaction_type, s.billing_amount, s.raw_data, s.create_time FROM ods.ods_qbit_card_settlement s WHERE s.delete_time IS NULL AND s.provider = ''BlueBancCard'') AS ods_qbit_card_settlement_f',
+    'table-name' = '(SELECT s.id, s.transaction_id, s.qbit_card_transaction_id, s.transaction_type, s.billing_amount, s.raw_data, s.create_time FROM ods.ods_qbit_card_settlement s WHERE s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND EXISTS (SELECT 1 FROM public.quantum_card_transaction_extend t LEFT JOIN ods.ods_qbit_card c ON c.id = t.card_id::text AND c.delete_time IS NULL WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND COALESCE(t.card_type, c.type) IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND ((t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6))) OR (t.original_completion_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''${end_time}'' AS TIMESTAMP(6)))) AND (t.source_id = s.transaction_id OR t.card_transaction_id::text = s.qbit_card_transaction_id))) AS ods_qbit_card_settlement_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'scan.fetch-size' = '1000',
+    'scan.auto-commit' = 'false'
 );
 
 -- 账户维度：只取 DWM 需要落表的账户分类字段。
@@ -145,12 +137,8 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     'scan.fetch-size' = '5000'
 );
 
--- BB 交易口径入口：
--- 1. BLUEBANC 渠道；
--- 2. 未删除；
--- 3. 只保留 Consumption/Credit；
--- 4. 排除 AUTO CLASS CAR RENTAL；
--- 5. batch 按业务时间窗口回刷。
+-- BB 交易口径入口。
+-- 大表过滤已经下推到 JDBC 子查询里，这里只保留轻量投影，避免 Flink 再生成宽表扫描条件。
 CREATE TEMPORARY VIEW v_bb_tx AS
 SELECT
     t.id,
@@ -165,40 +153,23 @@ SELECT
     t.remarks,
     t.card_id,
     t.detail,
-    t.channel_provision,
     t.create_time,
     t.update_time,
-    t.delete_time,
-    c.`type` AS card_org
-FROM source_quantum_card_transaction_extend t
-INNER JOIN source_qbit_card c
-    ON c.id = t.card_id
-WHERE t.channel_provision = 'BLUEBANC'
-  AND t.delete_time IS NULL
-  AND t.`type` IN ('Consumption', 'Credit')
-  AND (
-        t.detail IS NULL
-        OR t.detail NOT LIKE 'AUTO CLASS CAR RENTAL%'
-  )
-  AND COALESCE(t.transaction_time, t.original_completion_time) >= CAST('${start_time}' AS TIMESTAMP(6))
-  AND COALESCE(t.transaction_time, t.original_completion_time) < CAST('${end_time}' AS TIMESTAMP(6));
+    t.card_org
+FROM source_bb_quantum_card_transaction_extend t;
 
 -- 一笔交易可能通过 source_id 或 card_transaction_id 命中 BlueBanc 结算明细。
--- 用 UNION ALL 保留两种匹配方式，后续 id 用 txn_id + settlement_id 保证明细粒度稳定。
+-- 合并成单次 join，避免交易源和结算源各自 fan-out 成两路，降低 ResultPartition buffer 压力。
 CREATE TEMPORARY VIEW v_matched_settle AS
 SELECT
     t.id AS txn_id,
     s.*
 FROM v_bb_tx t
 INNER JOIN source_qbit_card_settlement s
-    ON t.source_id = s.transaction_id
-UNION ALL
-SELECT
-    t.id AS txn_id,
-    s.*
-FROM v_bb_tx t
-INNER JOIN source_qbit_card_settlement s
-    ON t.card_transaction_id = s.qbit_card_transaction_id;
+    ON (
+        t.source_id = s.transaction_id
+        OR t.card_transaction_id = s.qbit_card_transaction_id
+    );
 
 -- 交易基础明细层：把交易、结算、账户维度合并成 DWM 主体字段。
 -- 成本指标不在这里计算，这里只沉淀可复用明细和判断标识。
@@ -236,7 +207,7 @@ SELECT
     1 AS version,
     COALESCE(t.create_time, CURRENT_TIMESTAMP) AS create_time,
     COALESCE(t.update_time, t.create_time, CURRENT_TIMESTAMP) AS update_time,
-    t.delete_time
+    CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM v_bb_tx t
 LEFT JOIN v_matched_settle s
     ON s.txn_id = t.id

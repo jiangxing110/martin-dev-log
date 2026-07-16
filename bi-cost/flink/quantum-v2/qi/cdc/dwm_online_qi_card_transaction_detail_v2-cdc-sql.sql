@@ -17,6 +17,11 @@
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
+SET 'pipeline.operator-chaining' = 'false';
+SET 'table.exec.mini-batch.enabled' = 'false';
+SET 'table.exec.mini-batch.enabled' = 'true';
+SET 'table.exec.mini-batch.allow-latency' = '5s';
+SET 'table.exec.mini-batch.size' = '5000';
 SET 'table.dml-sync' = 'true';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '3';
@@ -24,13 +29,8 @@ SET 'restart-strategy.fixed-delay.delay' = '60s';
 
 SET 'execution.checkpointing.interval' = '10s';
 SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
-SET 'pipeline.operator-chaining' = 'false';
-SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'execution.checkpointing.timeout' = '30min';
 
-SET 'table.exec.mini-batch.enabled' = 'true';
-SET 'table.exec.mini-batch.allow-latency' = '5s';
-SET 'table.exec.mini-batch.size' = '5000';
 
 
 CREATE TEMPORARY TABLE source_qbit_card_transaction (

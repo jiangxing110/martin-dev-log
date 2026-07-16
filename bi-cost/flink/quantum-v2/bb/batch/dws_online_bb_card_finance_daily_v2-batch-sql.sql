@@ -13,14 +13,19 @@
 --   3. 固定成本和 Active Card fee 由独立特殊行脚本处理，主链路保持 0。
 --********************************************************************--
 
-SET 'parallelism.default' = '1';
+SET 'parallelism.default' = '4';
+SET 'taskmanager.memory.network.min' = '1gb';
+SET 'taskmanager.memory.network.max' = '3gb';
+SET 'taskmanager.memory.network.fraction' = '0.2';
+SET 'pipeline.default-parallelism' = '4';
+SET 'table.exec.resource.default-parallelism' = '4';
+SET 'pipeline.operator-chaining' = 'true';
+SET 'table.exec.mini-batch.enabled' = 'false';
+SET 'execution.multi-jobs-in-application.enable' = 'false';
 SET 'table.dml-sync' = 'true';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
-SET 'table.exec.mini-batch.enabled' = 'true';
-SET 'table.exec.mini-batch.allow-latency' = '5s';
-SET 'table.exec.mini-batch.size' = '5000';
 -- 禁止将同源 JDBC 表扫描合并为 Expand，因 JDBC connector 不支持该物理算子
 SET 'table.optimizer.union-any-expand' = 'false';
 

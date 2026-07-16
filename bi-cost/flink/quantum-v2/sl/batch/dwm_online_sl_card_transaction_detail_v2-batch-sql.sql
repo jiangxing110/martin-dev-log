@@ -18,13 +18,13 @@
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
+SET 'pipeline.operator-chaining' = 'true';
+SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'sink.parallelism' = '1';
 SET 'table.dml-sync' = 'true';
-SET 'pipeline.operator-chaining' = 'true';
 SET 'execution.checkpointing.interval' = '5min';
 SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
 SET 'execution.checkpointing.timeout' = '30min';
-SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'table.optimizer.reuse-source-enabled' = 'true';
 SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
 SET 'restart-strategy.type' = 'fixed-delay';

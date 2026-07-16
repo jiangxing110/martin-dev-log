@@ -12,9 +12,15 @@
 --   2. cost_fixed_fee 由固定成本独立脚本回刷。
 --********************************************************************--
 
-SET 'parallelism.default' = '1';
-SET 'pipeline.default-parallelism' = '1';
-SET 'table.exec.resource.default-parallelism' = '1';
+SET 'parallelism.default' = '4';
+SET 'taskmanager.memory.network.min' = '1gb';
+SET 'taskmanager.memory.network.max' = '3gb';
+SET 'taskmanager.memory.network.fraction' = '0.2';
+SET 'pipeline.default-parallelism' = '4';
+SET 'table.exec.resource.default-parallelism' = '4';
+SET 'pipeline.operator-chaining' = 'true';
+SET 'table.exec.mini-batch.enabled' = 'false';
+SET 'execution.multi-jobs-in-application.enable' = 'false';
 SET 'table.optimizer.reuse-source-enabled' = 'false';
 SET 'table.optimizer.reuse-sub-plan-enabled' = 'false';
 SET 'table.dml-sync' = 'true';
@@ -23,8 +29,6 @@ SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'execution.checkpointing.interval' = '10s';
 SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
-SET 'pipeline.operator-chaining' = 'false';
-SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'execution.checkpointing.timeout' = '30min';
 
 -- 交易主源只读取 ODS 明细本身。
