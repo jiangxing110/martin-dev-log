@@ -51,7 +51,7 @@ CREATE TEMPORARY TABLE source_qbit_card_transaction (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, "transactionId" AS transaction_id, "accountId" AS account_id, "cardId" AS card_id, status, "transactionTime" AS transaction_time, "businessType" AS business_type, provider, "specialSourceData" AS special_source_data, version, remarks, "createTime" AS create_time, "updateTime" AS update_time, "deleteTime" AS delete_time FROM public.qbit_card_transaction) AS qbit_card_transaction_f',
+    'table-name' = '(SELECT id::text AS id, "transactionId"::text AS transaction_id, "accountId"::text AS account_id, "cardId"::text AS card_id, status, "transactionTime" AS transaction_time, "businessType" AS business_type, provider, CAST("specialSourceData" AS text) AS special_source_data, version, remarks, "createTime" AS create_time, "updateTime" AS update_time, "deleteTime" AS delete_time FROM public.qbit_card_transaction) AS qbit_card_transaction_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -80,7 +80,7 @@ CREATE TEMPORARY TABLE source_quantum_card_transaction_extend (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT transaction_id, usd_amount, channel_provision, country FROM public.quantum_card_transaction_extend) AS quantum_card_transaction_extend_f',
+    'table-name' = '(SELECT transaction_id::text AS transaction_id, usd_amount, channel_provision, country FROM public.quantum_card_transaction_extend) AS quantum_card_transaction_extend_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -95,7 +95,7 @@ CREATE TEMPORARY TABLE source_api_account_relation (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT account_id, root_id, delete_time FROM public.api_account_relation) AS api_account_relation_f',
+    'table-name' = '(SELECT account_id::text AS account_id, root_id::text AS root_id, delete_time FROM public.api_account_relation) AS api_account_relation_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -111,7 +111,7 @@ CREATE TEMPORARY TABLE source_dim_account (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, account_type, "type" AS account_category, system_type FROM dim.dim_account) AS dim_account_f',
+    'table-name' = '(SELECT id::text AS id, account_type, "type" AS account_category, system_type FROM dim.dim_account) AS dim_account_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -131,7 +131,7 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, relation_account_id, sale_id, am_id, operation_manager_id, relation_start_time, relation_end_time, delete_time FROM dim.dim_sale_account_relation_p) AS dim_sale_account_relation_p_f',
+    'table-name' = '(SELECT id::text AS id, relation_account_id::text AS relation_account_id, sale_id::text AS sale_id, am_id::text AS am_id, operation_manager_id::text AS operation_manager_id, relation_start_time, relation_end_time, delete_time FROM dim.dim_sale_account_relation_p) AS dim_sale_account_relation_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

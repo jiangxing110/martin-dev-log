@@ -56,12 +56,13 @@ CREATE TEMPORARY TABLE source_dws_bb_card_finance_daily_v2_p (
     delete_time      TIMESTAMP(6),
     PRIMARY KEY (id, report_date) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dws_bb_card_finance_daily_v2_p',
-    'targetSchema' = 'dws',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT id, report_date, account_id, account_type, account_category, system_type, sale_id, am_id, special_fee_type, delete_time FROM dws.dws_bb_card_finance_daily_v2_p WHERE report_date >= CAST(''${start_time}'' AS date) AND report_date < CAST(''${end_time}'' AS date)) AS dws_bb_card_finance_daily_v2_p_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY VIEW v_month_scope AS
@@ -136,6 +137,25 @@ LEFT JOIN v_month_row_count rc
 LEFT JOIN v_month_channel_cost c
     ON c.report_month = rc.report_month;
 
+CREATE TEMPORARY VIEW v_obsolete_fixed_fee_rows AS
+SELECT
+    existing_row.id,
+    existing_row.report_date,
+    existing_row.account_id,
+    existing_row.account_type,
+    existing_row.account_category,
+    existing_row.system_type,
+    existing_row.sale_id,
+    existing_row.am_id
+FROM source_dws_bb_card_finance_daily_v2_p existing_row
+LEFT JOIN v_fixed_fee_rows fresh
+    ON fresh.id = existing_row.id
+   AND fresh.report_date = existing_row.report_date
+WHERE existing_row.special_fee_type = 'CHANNEL_FIXED_FEE'
+  AND existing_row.delete_time IS NULL
+  AND EXISTS (SELECT 1 FROM v_month_scope m WHERE existing_row.report_date >= m.report_month AND existing_row.report_date < m.next_month)
+  AND fresh.id IS NULL;
+
 CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     id               BIGINT,
     report_date      DATE,
@@ -164,10 +184,6 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     'batchSize' = '2000'
 );
 
-DELETE FROM sink_dws_bb_card_finance_daily_v2_p
-WHERE special_fee_type = 'CHANNEL_FIXED_FEE'
-  AND EXISTS (SELECT 1 FROM v_month_scope m WHERE report_date >= m.report_month AND report_date < m.next_month);
-
 INSERT INTO sink_dws_bb_card_finance_daily_v2_p
 SELECT
     id,
@@ -185,4 +201,22 @@ SELECT
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
-FROM v_fixed_fee_rows;
+FROM v_fixed_fee_rows
+UNION ALL
+SELECT
+    id,
+    report_date,
+    account_id,
+    account_type,
+    account_category,
+    system_type,
+    CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
+    'CHANNEL_FIXED_FEE' AS special_fee_type,
+    sale_id,
+    am_id,
+    1 AS version,
+    'bb_channel_fixed_fee_v2_soft_delete' AS remarks,
+    CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
+    CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
+    CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS delete_time
+FROM v_obsolete_fixed_fee_rows;
