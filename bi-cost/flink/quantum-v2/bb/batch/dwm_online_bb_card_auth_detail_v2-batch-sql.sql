@@ -9,7 +9,7 @@
 -- Notes:
 --   1. Auth 原始表是月表，单月通常 200w+。
 --   2. 通过 public.fn_bb_card_auth_detail_by_window 固定入口按 start_time 选择月表。
---   3. 月表不存在时函数返回空结果，脚本只清理目标窗口旧数据。
+--   3. 月表不存在时函数返回空结果；DWM 通过 upsert 覆盖，不做删除。
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
@@ -44,21 +44,46 @@ CREATE TEMPORARY TABLE source_bb_card_auth_detail (
     pos_service_code          STRING,
     MCC                       STRING,
     authorization_id_code     STRING,
-    source_table              STRING,
-    card_id                   STRING,
-    account_id                STRING,
-    account_type              STRING,
-    account_category          STRING,
-    system_type               STRING,
-    card_org                  STRING
+    source_table              STRING
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT a."Trans Date / Time", a."Program GUID", a."Program Name", a."Card Proxy", a."Person Name", a."Request Code", a."Request Description", a."Local Trans Date / Time", a."Auth Txn GUID", a."Response Code", a."Reason Code", a."Txn Amount", a."Settle Amount", a."Txn Currency", a."Merchant Country", a."Transmission Date", a."Merchant Name", a.pos_service_code, a."MCC", a.authorization_id_code, a.source_table, c.id AS card_id, c.account_id, da.account_type, da.type AS account_category, da.system_type, c.type AS card_org FROM public.fn_bb_card_auth_detail_by_window(CAST(''${start_time}'' AS timestamp), CAST(''${end_time}'' AS timestamp)) a LEFT JOIN ods.ods_qbit_card c ON c.token = a."Card Proxy" AND c.delete_time IS NULL LEFT JOIN dim.dim_account da ON da.id = c.account_id) AS bb_auth_detail_f',
+    'table-name' = '(SELECT * FROM public.fn_bb_card_auth_detail_by_window(CAST(''${start_time}'' AS timestamp), CAST(''${end_time}'' AS timestamp))) AS bb_auth_detail_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
     'scan.fetch-size' = '5000'
+);
+
+CREATE TEMPORARY TABLE source_qbit_card (
+    id         STRING,
+    token      STRING,
+    account_id STRING,
+    `type`     STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT id, token, account_id, type AS "type" FROM ods.ods_qbit_card WHERE delete_time IS NULL) AS ods_qbit_card_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
+);
+
+CREATE TEMPORARY TABLE source_dim_account (
+    id           STRING,
+    account_type STRING,
+    `type`       STRING,
+    system_type  STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'dim_account',
+    'targetSchema' = 'dim',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}'
 );
 
 CREATE TEMPORARY TABLE source_api_account_relation (
@@ -100,11 +125,11 @@ SELECT
     TO_TIMESTAMP(a.`Trans Date / Time`, 'MM/dd/yyyy hh:mm:ss a') AS auth_time,
     a.`Auth Txn GUID` AS auth_txn_guid,
     a.`Card Proxy` AS card_proxy,
-    a.card_id,
-    a.account_id,
-    a.account_type,
-    a.account_category,
-    a.system_type,
+    c.id AS card_id,
+    c.account_id AS account_id,
+    da.account_type,
+    da.`type` AS account_category,
+    da.system_type,
     a.`Program Name` AS program_name,
     a.`Merchant Country` AS merchant_country,
     a.`Request Code` AS request_code,
@@ -116,7 +141,7 @@ SELECT
     a.`Txn Currency` AS txn_currency,
     a.`Merchant Name` AS merchant_name,
     a.MCC AS mcc,
-    a.card_org,
+    c.`type` AS card_org,
     a.`Merchant Country` = 'USA' AS is_dom,
     a.`Response Code` = 'DECLINE' AS is_decline,
     a.`Request Description` = 'Account Verification' AS is_account_verification,
@@ -131,6 +156,10 @@ SELECT
     ) AS is_excluded_request,
     a.source_table
 FROM source_bb_card_auth_detail a
+LEFT JOIN source_qbit_card c
+    ON a.`Card Proxy` = c.token
+LEFT JOIN source_dim_account da
+    ON da.id = c.account_id
 WHERE TO_TIMESTAMP(a.`Trans Date / Time`, 'MM/dd/yyyy hh:mm:ss a') >= CAST('${start_time}' AS TIMESTAMP(6))
   AND TO_TIMESTAMP(a.`Trans Date / Time`, 'MM/dd/yyyy hh:mm:ss a') < CAST('${end_time}' AS TIMESTAMP(6));
 

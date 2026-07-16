@@ -146,6 +146,7 @@ CREATE TEMPORARY TABLE sink_dws_sl_card_finance_daily_p (
     rebate_base     DECIMAL(20, 4),
     rebate_amt      DECIMAL(20, 4),
     cost_fixed_fee  DECIMAL(20, 4),
+    special_fee_type STRING,
     PRIMARY KEY (id, report_date) NOT ENFORCED
 ) WITH (
     'connector' = 'adbpg',
@@ -159,7 +160,8 @@ CREATE TEMPORARY TABLE sink_dws_sl_card_finance_daily_p (
 );
 
 DELETE FROM sink_dws_sl_card_finance_daily_p
-WHERE EXISTS (
+WHERE (special_fee_type IS NULL OR special_fee_type <> 'CHANNEL_FIXED_FEE')
+  AND EXISTS (
     SELECT 1
     FROM v_sl_changed_months m
     WHERE sink_dws_sl_card_finance_daily_p.report_date >= m.report_month
@@ -183,5 +185,6 @@ SELECT
     am_id,
     rebate_base,
     rebate_amt,
-    cost_fixed_fee
+    cost_fixed_fee,
+    CAST(NULL AS STRING) AS special_fee_type
 FROM v_dws_sl_daily_base;

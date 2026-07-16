@@ -13,7 +13,8 @@
 - Do not write BB/QI v2 results into `dws_bb_card_finance_daily_p` or `dws_qi_card_finance_daily_p`.
 - QI coefficients come from `ods_bi_month_tag`, not `ods_account_fee`.
 - CDC scripts must delete affected DWS ranges before inserting recomputed rows.
-- BB Active Card is monthly distinct count and must not be daily-summed.
+- BB Active Card is maintained by an independent script as monthly distinct count and must not be daily-summed.
+- BB main DWS flow must not calculate `active_card_count` or `active_card_account_fee`.
 - DWM keeps source status and delete fields so `Pending -> Failed` and soft delete can be repaired by DWS recompute.
 
 ---
@@ -49,7 +50,24 @@
 - [x] Rename temporary sink to `sink_dws_bb_card_finance_daily_v2_p`.
 - [x] Change ADBPG `tableName` to `dws_bb_card_finance_daily_v2_p`.
 - [ ] Add fee amount fields derived from count/vol fields.
-- [ ] Keep Active Card monthly-only logic.
+- [ ] Remove Active Card calculation from BB main DWS flow.
+
+### Task 2.1: Add BB Active Card Count Independent Flow
+
+**Files:**
+- Create: `flink/quantum-v2/bb/batch/dws_online_bb_active_card_count_v2-batch-sql.sql`
+- Create: `flink/quantum-v2/bb/cdc/dws_online_bb_active_card_count_v2-cdc-sql.sql`
+
+**Interfaces:**
+- Consumes: `dwm.dwm_bb_card_auth_detail_v2_p`
+- Consumes: latest customer sale relation from `dim.dim_sale_account_relation_p`
+- Produces: `dws.dws_bb_card_finance_daily_v2_p`
+
+- [ ] Batch supports `start_time/end_time` and rewrites affected month-start active card rows.
+- [ ] CDC defaults to current month daily maintenance.
+- [ ] Delete old rows with `remarks = 'bb_active_card_count_v2'` before inserting recalculated rows.
+- [ ] Write only `active_card_count`; keep `active_card_account_fee` and other cost fields as 0.
+- [ ] Use latest valid sale/am relation for the customer, not auth-time historical relation.
 
 ### Task 3: Point QI DWM/DWS Scripts To V2 Sink
 

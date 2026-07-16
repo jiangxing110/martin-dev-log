@@ -378,6 +378,7 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     bb_channel_cashback_comm DECIMAL(20, 4),
     active_card_count        INT,
     cost_fixed_fee           DECIMAL(20, 4),
+    special_fee_type         STRING,
     sale_id                  STRING,
     am_id                    STRING,
     version                  INT,
@@ -398,7 +399,8 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
 );
 
 DELETE FROM sink_dws_bb_card_finance_daily_v2_p
-WHERE EXISTS (
+WHERE (special_fee_type IS NULL OR special_fee_type NOT IN ('ACTIVE_CARD_ACCOUNT_FEE', 'CHANNEL_FIXED_FEE'))
+  AND EXISTS (
     SELECT 1
     FROM v_bb_changed_months m
     WHERE sink_dws_bb_card_finance_daily_v2_p.report_date >= m.report_month
@@ -406,4 +408,44 @@ WHERE EXISTS (
 );
 
 INSERT INTO sink_dws_bb_card_finance_daily_v2_p
-SELECT * FROM v_dws_bb_daily_base;
+SELECT
+    id,
+    report_date,
+    account_id,
+    account_type,
+    account_category,
+    system_type,
+    m_dom_auth_count,
+    m_int_auth_count,
+    v_dom_auth_count,
+    v_int_auth_count,
+    m_int_decline_count,
+    v_int_decline_count,
+    dom_decline_count,
+    m_int_reversal_count,
+    v_int_reversal_count,
+    dom_reversal_count,
+    m_int_refund_count,
+    v_int_refund_count,
+    dom_refund_count,
+    av_m_dom_count,
+    av_m_int_count,
+    av_v_dom_count,
+    av_v_int_count,
+    m_dom_clearing_vol,
+    m_int_clearing_vol,
+    v_dom_clearing_vol,
+    v_int_clearing_vol,
+    bb_rebate_base_amt,
+    bb_channel_cashback_comm,
+    active_card_count,
+    cost_fixed_fee,
+    CAST(NULL AS STRING) AS special_fee_type,
+    sale_id,
+    am_id,
+    version,
+    remarks,
+    create_time,
+    update_time,
+    delete_time
+FROM v_dws_bb_daily_base;

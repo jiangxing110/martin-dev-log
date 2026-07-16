@@ -18,16 +18,30 @@
 
 ## DWS 粒度
 
-BB DWS v2 建议粒度：
+BB DWS v2 主链路保持日维度：
 
 | 字段 | 说明 |
 |---|---|
-| `report_date` | 报表月份，统一落当月 1 号 |
+| `report_date` | 报表日期，普通成本按真实业务日期落表 |
 | `account_id` | 账号 |
 | `sale_id` | 销售 |
 | `am_id` | AM |
 
-BB 当前成本本质是月度账单口径，不适合按日拆分。尤其 `active_card_count` 必须按月去重，所以 DWS 应使用月初 1 号承载整月结果。
+普通授权、Dollar Volume、Reversal、Refund、Decline、Cashback 等指标继续按真实业务日期写入 DWS。
+
+`active_card_count` 是例外：它必须按月对活跃卡去重，不能按天去重后再累加。该指标不进入 BB DWS 主链路，改由独立脚本维护当月月初那条记录：
+
+| 字段 | 说明 |
+|---|---|
+| `report_date` | 当月 1 号 |
+| `account_id` | 客户账号 |
+| `sale_id` | 执行时该客户最新有效销售 |
+| `am_id` | 执行时该客户最新有效 AM |
+| `active_card_count` | 当月 distinct active card 数 |
+| `active_card_account_fee` | 不在该脚本计算，保持 0 |
+| `special_fee_type` | 固定为 `ACTIVE_CARD_ACCOUNT_FEE` |
+
+如果客户当月换销售，独立脚本每天重算时应删除该客户当月旧 active card 记录，并按最新销售关系写入一条新记录。
 
 ## DWM 设计原因
 
@@ -226,18 +240,21 @@ BB 拆两张 DWM 表：
 | `ac_v_int_decline_fee` | `ac_v_int_decline_count * 0.3570` |
 | `ac_dom_decline_fee` | `ac_dom_decline_count * 0.0890` |
 
-### Active Card Account Fee
+### Active Card Count
 
 | DWS 字段 | BI 指标 | 过滤条件 | DWS 值 |
 |---|---|---|---|
 | `active_card_count` | Active Card Count | Auth DWM，当月所有 auth 记录 | `COUNT(DISTINCT card_proxy)` |
-| `active_card_account_fee` | Active Card Account Fee | 基于 `active_card_count` | `active_card_count * 0.1` |
 
 注意：
 
 - `active_card_count` 必须按月去重。
 - 不能按天先去重再相加。
-- DWS 建议只在当月 1 号记录该值。
+- `active_card_count` 不进入 BB DWS 主链路，由独立脚本维护。
+- 独立脚本每天重算当月数据，只更新当月 1 号的客户记录。
+- 销售归属不按 auth 发生时匹配，而是取执行时客户最新有效销售关系。
+- `active_card_account_fee` 不在该脚本计算，保持 0。
+- Active Card 特殊行使用 `special_fee_type = 'ACTIVE_CARD_ACCOUNT_FEE'`，普通主链路行为空。
 
 ### BB Rebate Base 与 Cashback Income
 
@@ -286,8 +303,6 @@ volume_fee_cost = row_total_net_amount / month_total_net_amount * month_volume_f
 - Dollar Volume base。
 - Reversal / Refund base。
 - 非验证 Decline base。
-- Active Card Count。
-- 固定成本均摊。
 
 当前还需要补齐：
 
@@ -295,7 +310,7 @@ volume_fee_cost = row_total_net_amount / month_total_net_amount * month_volume_f
 - v2 DWS 表结构脚本。
 - 各指标 fee amount 字段。
 - AC Decline count 和 fee 字段。
-- Active Card Account Fee 字段。
+- Active Card Count 独立维护脚本。
 - Volume Fee Cost 字段。
 - Cashback Income 字段。
 - `cashback_rate` 从 `ods_bi_month_tag` 取值。
@@ -317,7 +332,45 @@ BB DWS 的一致性策略：
 | settlement 到达或变化 | clearing/reversal/refund/count/volume 变化 |
 | `original_completion_time` 变化 | Dollar Volume 和 Cashback 月份变化 |
 | `settlement_post_date` 变化 | Refund 月份变化 |
-| Auth 月表迟到 | Decline 和 Active Card 变化 |
+| Auth 月表迟到 | Decline 变化；Active Card 由独立脚本按月重算 |
 | 销售关系历史变更 | `sale_id`、`am_id` 归属变化 |
 
 硬删除需要通过 ODS/DWM 主键对账发现，然后将对应月份加入回刷范围。
+
+## Active Card 独立维护策略
+
+Active Card 不作为 BB 主链路成本结果参与计算，只维护 `active_card_count`。
+
+建议新增脚本：
+
+- `flink/quantum-v2/bb/batch/dws_online_bb_active_card_count_v2-batch-sql.sql`
+- `flink/quantum-v2/bb/cdc/dws_online_bb_active_card_count_v2-cdc-sql.sql`
+
+脚本行为：
+
+- Batch 传入 `start_time/end_time`，按窗口覆盖涉及月份。
+- CDC 默认每天跑当月，可通过调度每天更新客户当月 active card 记录。
+- 先删除目标月份内 `remarks = 'bb_active_card_count_v2'` 的旧记录。
+- 从 `dwm_bb_card_auth_detail_v2_p` 统计当月 `COUNT(DISTINCT card_proxy)`。
+- 销售关系按执行时最新有效关系取值，不按 auth_time 历史关系拆分。
+- 插入 DWS 时除 `active_card_count` 外，其他成本、金额、fee 字段均为 0。
+- `active_card_account_fee` 保持 0。
+
+## 特殊费用类型字段
+
+BB/QI/SL DWS 表新增 `special_fee_type`，用于区分普通主链路行和特殊维护行。
+
+| `special_fee_type` | 说明 |
+|---|---|
+| `NULL` | 普通主链路行 |
+| `ACTIVE_CARD_ACCOUNT_FEE` | BB active card count 独立维护行；当前只写 `active_card_count`，`active_card_account_fee` 保持 0 |
+| `CHANNEL_FIXED_FEE` | 渠道固定成本独立维护行 |
+
+渠道固定成本不再使用 `common/dws_online_quantum_channel_special_fee_allocation-*` 大脚本，改为 BB/QI/SL 各自维护：
+
+- `flink/quantum-v2/bb/batch/dws_online_bb_channel_fixed_fee_v2-batch-sql.sql`
+- `flink/quantum-v2/bb/cdc/dws_online_bb_channel_fixed_fee_v2-cdc-sql.sql`
+- `flink/quantum-v2/qi/batch/dws_online_qi_channel_fixed_fee_v2-batch-sql.sql`
+- `flink/quantum-v2/qi/cdc/dws_online_qi_channel_fixed_fee_v2-cdc-sql.sql`
+- `flink/quantum-v2/sl/batch/dws_online_sl_channel_fixed_fee_v2-batch-sql.sql`
+- `flink/quantum-v2/sl/cdc/dws_online_sl_channel_fixed_fee_v2-cdc-sql.sql`

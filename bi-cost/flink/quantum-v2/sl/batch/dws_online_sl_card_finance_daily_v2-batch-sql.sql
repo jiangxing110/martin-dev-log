@@ -146,6 +146,7 @@ CREATE TEMPORARY TABLE sink_dws_sl_card_finance_daily_p (
     rebate_base     DECIMAL(20, 4),
     rebate_amt      DECIMAL(20, 4),
     cost_fixed_fee  DECIMAL(20, 4),
+    special_fee_type STRING,
     PRIMARY KEY (id, report_date) NOT ENFORCED
 ) WITH (
     'connector' = 'adbpg',
@@ -175,5 +176,6 @@ SELECT
     b.am_id,
     b.rebate_base,
     b.rebate_amt,
-    CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee
+    CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
+    CAST(NULL AS STRING) AS special_fee_type
 FROM v_dws_sl_daily_base b;

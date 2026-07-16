@@ -9,7 +9,7 @@
 -- Notes:
 --   1. Auth 原始表是月表，单月通常 200w+。
 --   2. 通过 public.fn_bb_card_auth_detail_by_window 固定入口按 start_time 选择月表。
---   3. 月表不存在时函数返回空结果，脚本只清理目标窗口旧数据。
+--   3. 月表不存在时函数返回空结果；DWM 通过 upsert 覆盖，不做删除。
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
@@ -297,11 +297,6 @@ CREATE TEMPORARY TABLE sink_dwm_bb_card_auth_detail_v2_p (
     'writeMode' = 'upsert',
     'batchSize' = '2000'
 );
-
-DELETE FROM sink_dwm_bb_card_auth_detail_v2_p
-WHERE auth_time >= CAST('${start_time}' AS TIMESTAMP(6))
-  AND auth_time < CAST('${end_time}' AS TIMESTAMP(6))
-  AND source_table = CONCAT('bb_card_auth_detail_', DATE_FORMAT(CAST('${start_time}' AS TIMESTAMP(6)), 'yyyy-MM'));
 
 INSERT INTO sink_dwm_bb_card_auth_detail_v2_p
 SELECT * FROM v_dwm_bb_card_auth_detail_v2;

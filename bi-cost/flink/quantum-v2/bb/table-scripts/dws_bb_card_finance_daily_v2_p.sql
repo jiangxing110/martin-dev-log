@@ -72,6 +72,7 @@ CREATE TABLE "dws"."dws_bb_card_finance_daily_v2_p" (
   "cashback_rate" numeric(20,8) DEFAULT 0,
   "cashback_income" numeric(20,4) DEFAULT 0,
   "cost_fixed_fee" numeric(20,4) DEFAULT 0,
+  "special_fee_type" varchar(64) COLLATE "pg_catalog"."default",
   "sale_id" varchar(64) COLLATE "pg_catalog"."default",
   "am_id" varchar(64) COLLATE "pg_catalog"."default",
   "version" int4 DEFAULT 1,
@@ -143,12 +144,13 @@ COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."dom_decline_fee" IS 'd
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."ac_m_int_decline_fee" IS 'ac_m_int_decline_count * 0.3595';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."ac_v_int_decline_fee" IS 'ac_v_int_decline_count * 0.3570';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."ac_dom_decline_fee" IS 'ac_dom_decline_count * 0.0890';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."active_card_account_fee" IS 'active_card_count * 0.1';
+COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."active_card_account_fee" IS 'BB 活跃卡费用字段，当前 v2 口径不在 active count 独立脚本计算，默认保持 0';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."total_net_amount" IS 'BB 当行总净额，用于 Volume Fee Cost 和 Cashback Income';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."volume_fee_cost" IS '按全月 total_net_amount 阶梯后按行净额占比分摊';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."cashback_rate" IS 'BB 月度 Cashback 费率，建议来源 ods_bi_month_tag';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."cashback_income" IS 'bb_rebate_base_amt * cashback_rate';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."cost_fixed_fee" IS 'BB 月度固定渠道成本分摊金额';
+COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."special_fee_type" IS '特殊费用行类型，普通行为空；ACTIVE_CARD_ACCOUNT_FEE=活跃卡特殊行，CHANNEL_FIXED_FEE=渠道固定成本特殊行';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."sale_id" IS '销售ID，按交易或授权时间匹配销售关系';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."am_id" IS 'AM ID，按交易或授权时间匹配销售关系';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."version" IS '版本号';

@@ -20,6 +20,7 @@ CREATE TABLE "dws"."dws_sl_card_finance_daily_p" (
   "rebate_base" numeric(20,4) DEFAULT 0,
   "rebate_amt" numeric(20,4) DEFAULT 0,
   "cost_fixed_fee" numeric(20,4) DEFAULT 0,
+  "special_fee_type" varchar(64) COLLATE "pg_catalog"."default",
   CONSTRAINT "dws_sl_daily_pkey" PRIMARY KEY ("id", "report_date")
 )
 PARTITION BY RANGE (
@@ -44,6 +45,7 @@ COMMENT ON COLUMN "dws"."dws_sl_card_finance_daily_p"."am_id" IS 'AM ID';
 COMMENT ON COLUMN "dws"."dws_sl_card_finance_daily_p"."rebate_base" IS '可分摊净消费基数';
 COMMENT ON COLUMN "dws"."dws_sl_card_finance_daily_p"."rebate_amt" IS '净消费金额';
 COMMENT ON COLUMN "dws"."dws_sl_card_finance_daily_p"."cost_fixed_fee" IS 'SL固定渠道成本分摊金额';
+COMMENT ON COLUMN "dws"."dws_sl_card_finance_daily_p"."special_fee_type" IS '特殊费用行类型，普通行为空；CHANNEL_FIXED_FEE=渠道固定成本特殊行';
 
 CREATE INDEX "idx_dws_sl_card_finance_account_dim" ON "dws"."dws_sl_card_finance_daily_p" USING btree (
   "report_date" "pg_catalog"."date_ops" ASC NULLS LAST,

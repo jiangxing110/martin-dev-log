@@ -24,6 +24,8 @@ SET 'table.exec.mini-batch.size' = '5000';
 SET 'execution.application-management.enabled' = 'true';
 SET 'execution.multi-jobs-in-application.enable' = 'true';
 
+-- 交易主源只读取 ODS 明细本身。
+-- 不在 JDBC table-name 里关联卡表/销售关系，避免 Flink 计划里出现隐藏的大 SQL。
 CREATE TEMPORARY TABLE source_quantum_card_transaction_extend (
     id                       BIGINT,
     source_id                STRING,
@@ -41,39 +43,55 @@ CREATE TEMPORARY TABLE source_quantum_card_transaction_extend (
     create_time              TIMESTAMP(6),
     update_time              TIMESTAMP(6),
     delete_time              TIMESTAMP(6),
-    card_org                 STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT t.id, t.source_id, t.card_transaction_id, t.account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, t.business_code_list, t.remarks, t.card_id, t.detail, t.channel_provision, t.create_time, t.update_time, t.delete_time, c.type AS card_org FROM ods.ods_quantum_card_transaction_extend t INNER JOIN ods.ods_qbit_card c ON c.id = t.card_id AND c.delete_time IS NULL AND c.type IN (''Master'', ''VISA'') WHERE t.delete_time IS NULL AND t.channel_provision = ''BLUEBANC'' AND t.type IN (''Consumption'', ''Credit'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND COALESCE(t.transaction_time, t.original_completion_time) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND COALESCE(t.transaction_time, t.original_completion_time) < CAST(''${end_time}'' AS TIMESTAMP(6))) AS ods_quantum_card_transaction_extend_f',
+    'table-name' = '(SELECT id, source_id, card_transaction_id, account_id, country, type AS "type", transaction_time, original_completion_time, business_code_list, remarks, card_id, detail, channel_provision, create_time, update_time, delete_time FROM ods.ods_quantum_card_transaction_extend WHERE COALESCE(transaction_time, original_completion_time) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND COALESCE(transaction_time, original_completion_time) < CAST(''${end_time}'' AS TIMESTAMP(6))) AS ods_quantum_card_transaction_extend_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
     'scan.fetch-size' = '5000'
 );
 
+-- 卡表只负责补充卡组织，并限制 BB 当前口径需要的 Master/VISA。
+-- 交易是否属于 BLUEBANC 仍放在 v_bb_tx 里统一判断。
+CREATE TEMPORARY TABLE source_qbit_card (
+    id       STRING,
+    `type`   STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT id, type AS "type" FROM ods.ods_qbit_card WHERE delete_time IS NULL AND type IN (''Master'', ''VISA'')) AS ods_qbit_card_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
+);
+
+-- 结算源保持简单过滤，具体按 source_id / card_transaction_id 匹配交易在 v_matched_settle 中完成。
+-- 这里不再用 EXISTS 反查交易表，避免 JDBC source 自身变成复杂半连接。
 CREATE TEMPORARY TABLE source_qbit_card_settlement (
     id                      STRING,
     transaction_id          STRING,
     qbit_card_transaction_id STRING,
-    provider                STRING,
     transaction_type        STRING,
     billing_amount          DOUBLE,
     raw_data                STRING,
     create_time             TIMESTAMP(6),
-    delete_time             TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT s.id, s.transaction_id, s.qbit_card_transaction_id, s.provider, s.transaction_type, s.billing_amount, s.raw_data, s.create_time, s.delete_time FROM ods.ods_qbit_card_settlement s WHERE s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND EXISTS (SELECT 1 FROM ods.ods_quantum_card_transaction_extend t WHERE t.delete_time IS NULL AND t.channel_provision = ''BLUEBANC'' AND t.type IN (''Consumption'', ''Credit'') AND COALESCE(t.transaction_time, t.original_completion_time) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND COALESCE(t.transaction_time, t.original_completion_time) < CAST(''${end_time}'' AS TIMESTAMP(6)) AND (t.source_id = s.transaction_id OR t.card_transaction_id = s.qbit_card_transaction_id))) AS ods_qbit_card_settlement_f',
+    'table-name' = '(SELECT s.id, s.transaction_id, s.qbit_card_transaction_id, s.transaction_type, s.billing_amount, s.raw_data, s.create_time FROM ods.ods_qbit_card_settlement s WHERE s.delete_time IS NULL AND s.provider = ''BlueBancCard'') AS ods_qbit_card_settlement_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
     'scan.fetch-size' = '5000'
 );
 
+-- 账户维度：只取 DWM 需要落表的账户分类字段。
 CREATE TEMPORARY TABLE source_dim_account (
     id                STRING,
     account_type      STRING,
@@ -90,6 +108,7 @@ CREATE TEMPORARY TABLE source_dim_account (
     'scan.fetch-size' = '5000'
 );
 
+-- API 子账户到 root account 的关系，用于直连销售关系找不到时兜底到 root。
 CREATE TEMPORARY TABLE source_api_account_relation (
     account_id  STRING,
     root_id     STRING,
@@ -105,6 +124,7 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     'scan.fetch-size' = '5000'
 );
 
+-- 销售关系维表，后面会按交易时间取当时生效且开始时间最新的一条。
 CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     id                    STRING,
     relation_account_id   STRING,
@@ -125,10 +145,34 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     'scan.fetch-size' = '5000'
 );
 
+-- BB 交易口径入口：
+-- 1. BLUEBANC 渠道；
+-- 2. 未删除；
+-- 3. 只保留 Consumption/Credit；
+-- 4. 排除 AUTO CLASS CAR RENTAL；
+-- 5. batch 按业务时间窗口回刷。
 CREATE TEMPORARY VIEW v_bb_tx AS
 SELECT
-    t.*
+    t.id,
+    t.source_id,
+    t.card_transaction_id,
+    t.account_id,
+    t.country,
+    t.`type`,
+    t.transaction_time,
+    t.original_completion_time,
+    t.business_code_list,
+    t.remarks,
+    t.card_id,
+    t.detail,
+    t.channel_provision,
+    t.create_time,
+    t.update_time,
+    t.delete_time,
+    c.`type` AS card_org
 FROM source_quantum_card_transaction_extend t
+INNER JOIN source_qbit_card c
+    ON c.id = t.card_id
 WHERE t.channel_provision = 'BLUEBANC'
   AND t.delete_time IS NULL
   AND t.`type` IN ('Consumption', 'Credit')
@@ -139,6 +183,8 @@ WHERE t.channel_provision = 'BLUEBANC'
   AND COALESCE(t.transaction_time, t.original_completion_time) >= CAST('${start_time}' AS TIMESTAMP(6))
   AND COALESCE(t.transaction_time, t.original_completion_time) < CAST('${end_time}' AS TIMESTAMP(6));
 
+-- 一笔交易可能通过 source_id 或 card_transaction_id 命中 BlueBanc 结算明细。
+-- 用 UNION ALL 保留两种匹配方式，后续 id 用 txn_id + settlement_id 保证明细粒度稳定。
 CREATE TEMPORARY VIEW v_matched_settle AS
 SELECT
     t.id AS txn_id,
@@ -146,18 +192,16 @@ SELECT
 FROM v_bb_tx t
 INNER JOIN source_qbit_card_settlement s
     ON t.source_id = s.transaction_id
-   AND s.provider = 'BlueBancCard'
-   AND s.delete_time IS NULL
 UNION ALL
 SELECT
     t.id AS txn_id,
     s.*
 FROM v_bb_tx t
 INNER JOIN source_qbit_card_settlement s
-    ON t.card_transaction_id = s.qbit_card_transaction_id
-   AND s.provider = 'BlueBancCard'
-   AND s.delete_time IS NULL;
+    ON t.card_transaction_id = s.qbit_card_transaction_id;
 
+-- 交易基础明细层：把交易、结算、账户维度合并成 DWM 主体字段。
+-- 成本指标不在这里计算，这里只沉淀可复用明细和判断标识。
 CREATE TEMPORARY VIEW v_bb_base AS
 SELECT
     t.id AS txn_id,
@@ -199,6 +243,7 @@ LEFT JOIN v_matched_settle s
 LEFT JOIN source_dim_account da
     ON da.id = t.account_id;
 
+-- 优先取交易 account_id 自己在交易发生时生效的销售关系。
 CREATE TEMPORARY VIEW v_bb_direct_sale_relation AS
 SELECT tx_id, sale_id, am_id
 FROM (
@@ -222,6 +267,7 @@ FROM (
 ) ranked_direct
 WHERE rn = 1;
 
+-- 如果子账户自身没有销售关系，则通过 root account 取当时生效的销售关系兜底。
 CREATE TEMPORARY VIEW v_bb_root_sale_relation AS
 SELECT tx_id, sale_id, am_id
 FROM (
@@ -248,6 +294,7 @@ FROM (
 ) ranked_root
 WHERE rn = 1;
 
+-- 最终 DWM 明细：销售关系 direct 优先，root 兜底；写入 upsert sink。
 CREATE TEMPORARY VIEW v_dwm_bb_card_transaction_detail_v2 AS
 SELECT
     CAST(ABS(HASH_CODE(CONCAT(CAST(b.txn_id AS STRING), ':', COALESCE(b.settlement_id, 'NO_SETTLEMENT')))) AS STRING) AS id,

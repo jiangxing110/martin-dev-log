@@ -36,6 +36,7 @@ CREATE TABLE "dws"."dws_qi_card_finance_daily_v2_p" (
   "rebate_interchange_rate" numeric(20,8) DEFAULT 0,
   "rebate_incentive_rate" numeric(20,8) DEFAULT 0,
   "cost_fixed_fee" numeric(20,4) DEFAULT 0,
+  "special_fee_type" varchar(64) COLLATE "pg_catalog"."default",
   CONSTRAINT "dws_qi_card_finance_daily_v2_pkey" PRIMARY KEY ("id", "report_date")
 )
 PARTITION BY RANGE (
@@ -71,6 +72,7 @@ COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_vrm_rate" IS 'VRM
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."rebate_interchange_rate" IS 'Interchange 返现月度系数，来源 ods_bi_month_tag.QI_REBATE_INTERCHANGE_RATE';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."rebate_incentive_rate" IS 'Incentive 返现月度系数，来源 ods_bi_month_tag.QI_REBATE_INCENTIVE_RATE';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_fixed_fee" IS '固定渠道成本分摊金额';
+COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."special_fee_type" IS '特殊费用行类型，普通行为空；CHANNEL_FIXED_FEE=渠道固定成本特殊行';
 
 CREATE INDEX "idx_dws_qi_v2_daily_acc_sale_am" ON "dws"."dws_qi_card_finance_daily_v2_p" USING btree (
   "report_date" "pg_catalog"."date_ops" ASC NULLS LAST,
