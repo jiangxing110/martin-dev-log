@@ -69,7 +69,7 @@ channel_cost_source AS (
     FROM total_channel_cost_daily
     WHERE crypto_cost_amount <> 0
     UNION ALL
-    SELECT report_date, account_id, 'particle_financing' AS category, acquiring_cost_amount AS channel_cost_amount
+    SELECT report_date, account_id, 'acquiring' AS category, acquiring_cost_amount AS channel_cost_amount
     FROM total_channel_cost_daily
     WHERE acquiring_cost_amount <> 0
 ),

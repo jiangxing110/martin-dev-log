@@ -33,3 +33,32 @@ and report_date<'2026-06-01 00:00:00'
 select sum(channel_cost_amount) from dws.dws_gross_profit_daily_p
 WHERE report_date>='2026-05-01 00:00:00'
 and report_date<'2026-06-01 00:00:00'
+
+
+{
+    "code": 200,
+    "message": "success",
+    "data": [
+        {
+            "category": "qbit_card",
+            "categoryName": "Card",
+            "revenueAmount": 2219546.7466,
+            "grossProfitAmount": 1040348.2325,
+            "cogsAmount": 1179198.5141
+        },
+        {
+            "category": "crypto_assets",
+            "categoryName": "crypto",
+            "revenueAmount": 395623.1508,
+            "grossProfitAmount": 385904.5377,
+            "cogsAmount": 9718.6131
+        },
+        {
+            "category": "global_account",
+            "categoryName": "Global Account",
+            "revenueAmount": 9057.4000,
+            "grossProfitAmount": -111668.7301,
+            "cogsAmount": 120726.1301
+        }
+    ]
+}

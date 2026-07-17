@@ -101,7 +101,7 @@ SELECT report_date, account_id, 'crypto_assets' AS category, crypto_cost AS chan
 FROM v_total_channel_cost_daily
 WHERE crypto_cost <> CAST(0 AS DECIMAL(20, 4))
 UNION ALL
-SELECT report_date, account_id, 'particle_financing' AS category, acquiring_cost AS channel_cost_amount
+SELECT report_date, account_id, 'acquiring' AS category, acquiring_cost AS channel_cost_amount
 FROM v_total_channel_cost_daily
 WHERE acquiring_cost <> CAST(0 AS DECIMAL(20, 4));
 
