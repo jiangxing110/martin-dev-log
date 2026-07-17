@@ -311,6 +311,10 @@ FROM source_bi_month_tag t
 INNER JOIN (SELECT DISTINCT product_line, provider, cost_type FROM v_cost_basis) cb
     ON cb.product_line = t.product_line
    AND cb.provider = t.provider
+   AND (
+        (cb.cost_type = 'FIXED_FEE' AND t.tag = 'CHANNEL_COST')
+        OR (cb.cost_type <> 'FIXED_FEE' AND (t.tag <> 'CHANNEL_COST' OR t.tag IS NULL))
+   )
 WHERE t.delete_time IS NULL
 GROUP BY t.product_line, t.provider, t.tag, cb.cost_type, t.source_month, t.next_month, t.month_day_count;
 

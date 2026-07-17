@@ -5,7 +5,7 @@
 -- Usage:
 --   1. 修改 params 中的 start_date / end_date。
 --   2. end_date 使用左闭右开，不包含当天。
---   3. 计算口径对齐 flink/total_cost/dws_online_total_channel_cost_daily-batch-sql.sql。
+--   3. 计算口径对齐 flink/total_cost/dws_online_total_channel_cost_daily_v2-batch-sql.sql。
 --********************************************************************--
 
 WITH params AS (
@@ -15,12 +15,12 @@ WITH params AS (
 ),
 qi_detail AS (
     SELECT
-        SUM(COALESCE(qi.cost_reimbursement_vol, 0)) AS cost_reimbursement_cost,
-        SUM(COALESCE(qi.cost_service_vol, 0)) AS cost_service_cost,
-        SUM(COALESCE(qi.cost_acs_regular_count, 0)) AS cost_acs_regular_cost,
-        SUM(COALESCE(qi.cost_acs_vip_count, 0)) AS cost_acs_vip_cost,
-        SUM(COALESCE(qi.cost_vrm_count, 0)) AS cost_vrm_cost,
-        SUM(COALESCE(qi.cost_fixed_fee, 0)) AS fixed_fee_cost
+        SUM(COALESCE(qi.cost_reimbursement_vol, 0)) AS cost_reimbursement_base,
+        SUM(COALESCE(qi.cost_service_vol, 0)) AS cost_service_base,
+        SUM(COALESCE(qi.cost_acs_regular_count, 0)) AS cost_acs_regular_base,
+        SUM(COALESCE(qi.cost_acs_vip_count, 0)) AS cost_acs_vip_base,
+        SUM(COALESCE(qi.cost_vrm_count, 0)) AS cost_vrm_base,
+        SUM(COALESCE(qi.cost_fixed_fee, 0)) AS fixed_fee_base
     FROM dws.dws_qi_card_finance_daily_p qi
     CROSS JOIN params p
     WHERE qi.delete_time IS NULL
@@ -28,24 +28,34 @@ qi_detail AS (
       AND qi.report_date < p.end_date
 ),
 qi_cost_item AS (
-    SELECT 'cost_reimbursement_cost' AS cost_item, cost_reimbursement_cost AS cost_amount FROM qi_detail
-    UNION ALL SELECT 'cost_service_cost', cost_service_cost FROM qi_detail
-    UNION ALL SELECT 'cost_acs_regular_cost', cost_acs_regular_cost FROM qi_detail
-    UNION ALL SELECT 'cost_acs_vip_cost', cost_acs_vip_cost FROM qi_detail
-    UNION ALL SELECT 'cost_vrm_cost', cost_vrm_cost FROM qi_detail
-    UNION ALL SELECT 'fixed_fee_cost', fixed_fee_cost FROM qi_detail
+    SELECT 'qiReimbursement' AS cost_item, cost_reimbursement_base AS base_amount, 0.9946 AS cost_rate, cost_reimbursement_base * 0.9946 AS cost_amount FROM qi_detail
+    UNION ALL SELECT 'qiCardService', cost_service_base, 1.0084, cost_service_base * 1.0084 FROM qi_detail
+    UNION ALL SELECT 'qiSettleAuth', cost_acs_regular_base, 0.9852, cost_acs_regular_base * 0.9852 FROM qi_detail
+    UNION ALL SELECT 'qiSettleVip', cost_acs_vip_base, 1.1146, cost_acs_vip_base * 1.1146 FROM qi_detail
+    UNION ALL SELECT 'qiVrmFee', cost_vrm_base, 1.2239, cost_vrm_base * 1.2239 FROM qi_detail
+    UNION ALL SELECT 'fixed_fee_cost', fixed_fee_base, 1.0000, fixed_fee_base FROM qi_detail
 ),
 result_detail AS (
-    SELECT cost_item, CAST(COALESCE(cost_amount, 0) AS NUMERIC(20, 4)) AS cost_amount
+    SELECT
+        cost_item,
+        CAST(COALESCE(base_amount, 0) AS NUMERIC(20, 4)) AS base_amount,
+        CAST(COALESCE(cost_rate, 0) AS NUMERIC(20, 4)) AS cost_rate,
+        CAST(COALESCE(cost_amount, 0) AS NUMERIC(20, 4)) AS cost_amount
     FROM qi_cost_item
 
     UNION ALL
 
-    SELECT 'TOTAL' AS cost_item, CAST(COALESCE(SUM(cost_amount), 0) AS NUMERIC(20, 4)) AS cost_amount
+    SELECT
+        'TOTAL' AS cost_item,
+        CAST(COALESCE(SUM(base_amount), 0) AS NUMERIC(20, 4)) AS base_amount,
+        CAST(NULL AS NUMERIC(20, 4)) AS cost_rate,
+        CAST(COALESCE(SUM(cost_amount), 0) AS NUMERIC(20, 4)) AS cost_amount
     FROM qi_cost_item
 )
 SELECT
     cost_item,
+    base_amount,
+    cost_rate,
     cost_amount
 FROM result_detail
 ORDER BY

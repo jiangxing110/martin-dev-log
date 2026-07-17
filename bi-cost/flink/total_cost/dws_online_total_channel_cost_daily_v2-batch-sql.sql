@@ -67,7 +67,7 @@ CREATE TEMPORARY TABLE source_dws_bb_card_finance_daily_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT * FROM dws.dws_bb_card_finance_daily_p) AS dws_bb_card_finance_daily_p_f',
+    'table-name' = '(SELECT id, report_date, account_id, m_dom_auth_count, m_int_auth_count, v_dom_auth_count, v_int_auth_count, m_int_decline_count, v_int_decline_count, dom_decline_count, m_int_reversal_count, v_int_reversal_count, dom_reversal_count, m_int_refund_count, v_int_refund_count, dom_refund_count, av_m_dom_count, av_m_int_count, av_v_dom_count, av_v_int_count, m_dom_clearing_vol, m_int_clearing_vol, v_dom_clearing_vol, v_int_clearing_vol, bb_rebate_base_amt, bb_channel_cashback_comm, active_card_count, cost_fixed_fee, sale_id, am_id, delete_time FROM dws.dws_bb_card_finance_daily_p WHERE report_date >= CAST(''${start_date}'' AS date) AND report_date < CAST(''${end_date}'' AS date)) AS dws_bb_card_finance_daily_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -93,7 +93,7 @@ CREATE TEMPORARY TABLE source_dws_qi_card_finance_daily_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT * FROM dws.dws_qi_card_finance_daily_p) AS dws_qi_card_finance_daily_p_f',
+    'table-name' = '(SELECT id, report_date, account_id, sale_id, am_id, cost_reimbursement_vol, cost_service_vol, cost_acs_regular_count, cost_acs_vip_count, cost_vrm_count, rebate_interchange_vol, rebate_incentive_vol, cost_fixed_fee, delete_time FROM dws.dws_qi_card_finance_daily_p WHERE report_date >= CAST(''${start_date}'' AS date) AND report_date < CAST(''${end_date}'' AS date)) AS dws_qi_card_finance_daily_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -114,7 +114,7 @@ CREATE TEMPORARY TABLE source_dws_sl_card_finance_daily_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT * FROM dws.dws_sl_card_finance_daily_p) AS dws_sl_card_finance_daily_p_f',
+    'table-name' = '(SELECT id, report_date, account_id, sale_id, am_id, rebate_base, rebate_amt, cost_fixed_fee, delete_time FROM dws.dws_sl_card_finance_daily_p WHERE report_date >= CAST(''${start_date}'' AS date) AND report_date < CAST(''${end_date}'' AS date)) AS dws_sl_card_finance_daily_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -136,7 +136,7 @@ CREATE TEMPORARY TABLE source_dwm_finance_channel_cost_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT * FROM dwm.dwm_finance_channel_cost_p) AS dwm_finance_channel_cost_p_f',
+    'table-name' = '(SELECT id, report_date, account_id, product_line, provider, cost_type, cost_amount, sale_id, am_id, delete_time FROM dwm.dwm_finance_channel_cost_p WHERE report_date >= CAST(''${start_date}'' AS date) AND report_date < CAST(''${end_date}'' AS date)) AS dwm_finance_channel_cost_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -194,11 +194,11 @@ SELECT
     'QUANTUM_CARD' AS product_line,
     'QI' AS cost_source,
     CAST(
-        COALESCE(cost_reimbursement_vol, CAST(0 AS DECIMAL(20, 4)))
-      + COALESCE(cost_service_vol, CAST(0 AS DECIMAL(20, 4)))
-      + COALESCE(cost_acs_regular_count, 0)
-      + COALESCE(cost_acs_vip_count, 0)
-      + COALESCE(cost_vrm_count, 0)
+        COALESCE(cost_reimbursement_vol, CAST(0 AS DECIMAL(20, 4))) * 0.9946
+      + COALESCE(cost_service_vol, CAST(0 AS DECIMAL(20, 4))) * 1.0084
+      + COALESCE(cost_acs_regular_count, 0) * 0.9852
+      + COALESCE(cost_acs_vip_count, 0) * 1.1146
+      + COALESCE(cost_vrm_count, 0) * 1.2239
       + COALESCE(cost_fixed_fee, CAST(0 AS DECIMAL(20, 4)))
         AS DECIMAL(20, 4)
     ) AS cost_amount
@@ -225,7 +225,7 @@ SELECT
     account_id,
     sale_id,
     am_id,
-    product_line,
+    UPPER(TRIM(product_line)) AS product_line,
     CONCAT('FINANCE:', COALESCE(provider, ''), ':', COALESCE(cost_type, '')) AS cost_source,
     CAST(COALESCE(cost_amount, CAST(0 AS DECIMAL(20, 4))) AS DECIMAL(20, 4)) AS cost_amount
 FROM source_dwm_finance_channel_cost_p
@@ -238,10 +238,10 @@ SELECT
     account_id,
     sale_id,
     am_id,
-    CAST(SUM(CASE WHEN product_line = 'ACQUIRING' THEN cost_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS acquiring_cost,
-    CAST(SUM(CASE WHEN product_line = 'GLOBAL_ACCOUNT' THEN cost_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS business_cost,
-    CAST(SUM(CASE WHEN product_line = 'QUANTUM_CARD' THEN cost_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS quantum_cost,
-    CAST(SUM(CASE WHEN product_line = 'CRYPTO_ASSET' THEN cost_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS crypto_cost,
+    CAST(SUM(CASE WHEN UPPER(TRIM(product_line)) = 'ACQUIRING' THEN cost_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS acquiring_cost,
+    CAST(SUM(CASE WHEN UPPER(TRIM(product_line)) = 'GLOBAL_ACCOUNT' THEN cost_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS business_cost,
+    CAST(SUM(CASE WHEN UPPER(TRIM(product_line)) = 'QUANTUM_CARD' THEN cost_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS quantum_cost,
+    CAST(SUM(CASE WHEN UPPER(TRIM(product_line)) = 'CRYPTO_ASSET' THEN cost_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS crypto_cost,
     CAST(SUM(cost_amount) AS DECIMAL(20, 4)) AS total_channel_cost,
     1 AS version,
     CAST(NULL AS STRING) AS remarks,

@@ -316,6 +316,10 @@ FROM source_bi_month_tag t CROSS JOIN v_param p
 INNER JOIN (SELECT DISTINCT product_line, provider, cost_type FROM v_cost_basis) cb
     ON cb.product_line = t.product_line
    AND cb.provider = t.provider
+   AND (
+        (cb.cost_type = 'FIXED_FEE' AND t.tag = 'CHANNEL_COST')
+        OR (cb.cost_type <> 'FIXED_FEE' AND (t.tag <> 'CHANNEL_COST' OR t.tag IS NULL))
+   )
 WHERE t.delete_time IS NULL
   AND CAST(t.statistics_time AS DATE) >= p.source_month
   AND CAST(t.statistics_time AS DATE) < p.next_month

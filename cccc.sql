@@ -1,11 +1,44 @@
- dwm_online_bb_card_transaction_detail_v2-batch-sql
+/Users/martinjiang/martin-dev-log/bi-cost/flink/total_cost/dws_online_total_channel_cost_daily_v2-batch-sql.sql
+还是回到这个来啊 
+quantum_cost= BB+QI+SL成本+sqlB(QUANTUM_CARD)
+acquiring_cost= sqlB:(ACQUIRING )
+crypto_cost= sqlB:(CRYPTO_ASSET)
+business_cost= sqlB:(GLOBAL_ACCOUNT)
+SELECT 
+sum(acquiring_cost) acquiring_cost,
+sum(business_cost) business_cost,
+sum(quantum_cost) quantum_cost, 
+sum(crypto_cost) crypto_cost
+FROM dws.dws_total_channel_cost_daily_2026
+WHERE report_date>='2026-05-01 00:00:00'
+and report_date<'2026-06-01 00:00:00'
 
- [1]:TableSourceScan(table=[[vvp, default, source_quantum_card_transaction_extend, filter=[and(and(and(=(channel_provision, _UTF-16LE'BLUEBANC':VARCHAR(2147483647) CHARACTER SET &quot;UTF-16LE&quot;), IS NULL(delete_time)), OR(=(type, _UTF-16LE'Consumption':VARCHAR(11) CHARACTER SET &quot;UTF-16LE&quot;), =(type, _UTF-16LE'Credit':VARCHAR(11) CHARACTER SET &quot;UTF-16LE&quot;))), AND(&gt;=(business_time, 2026-05-01 00:00:00:TIMESTAMP(6)), &lt;(business_time, 2026-06-01 00:00:00:TIMESTAMP(6))))], project=[id, source_id, card_transaction_id, account_id, country, type, transaction_time, original_completion_time, business_time, business_code_list, remarks, card_id, detail, create_time, update_time]]], fields=[id, source_id, card_transaction_id, account_id, country, type, transaction_time, original_completion_time, business_time, business_code_list, remarks, card_id, detail, create_time, update_time])
+0.0000	3420.5673	945812.9840	3506.3015
 
- [4]:TableSourceScan(table=[[vvp, default, source_qbit_card, filter=[OR(=(type, _UTF-16LE'Master':VARCHAR(6) CHARACTER SET &quot;UTF-16LE&quot;), =(type, _UTF-16LE'VISA':VARCHAR(6) CHARACTER SET &quot;UTF-16LE&quot;))], project=[id, type]]], fields=[id, type])
 
-[12]:TableSourceScan(table=[[vvp, default, source_qbit_card_settlement, filter=[and(=(provider, _UTF-16LE'BlueBancCard':VARCHAR(2147483647) CHARACTER SET &quot;UTF-16LE&quot;), IS NULL(deleteTime))], project=[id, transactionId, qbitCardTransactionId, transactionType, billingAmount, rawData]]], fields=[id, transactionId, qbitCardTransactionId, transactionType, billingAmount, rawData])
-:- [13]:Calc(select=[id, transactionId, transactionType, billingAmount, rawData])
-+- [19]:Calc(select=[id, qbitCardTransactionId, transactionType, billingAmount, rawData])
- 
-  [44]:TableSourceScan(table=[[vvp, default, source_api_account_relation, filter=[IS NULL(delete_time)], project=[account_id, root_id]]], fields=[account_id, root_id])
+sqlB:
+SELECT 
+product_line,
+sum(cost_amount)
+FROM dwm_finance_channel_cost_p
+WHERE report_date>='2026-05-01 00:00:00'
+and report_date<'2026-06-01 00:00:00'
+GROUP BY product_line
+
+
+
+65633.4722	117500.3517	11605.9620	1069431.7529
+
+
+BB:458686
+QI:630568
+LS:267
+
+其他固定:42485
+
+Safeheron	2500
+TZ-wire	4599
+BS	2619
+
+BS	2618.9931
+TZ-wire	9198.0050

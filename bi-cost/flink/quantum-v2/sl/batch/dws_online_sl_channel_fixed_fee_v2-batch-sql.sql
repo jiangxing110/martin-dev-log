@@ -84,7 +84,11 @@ FROM (
         ON t.tag = 'CHANNEL_COST'
        AND t.delete_time IS NULL
        AND t.provider = 'LS'
-       AND (t.statistics_time < CAST(m.next_month AS TIMESTAMP(6)) OR t.detail = 'DEFAULT_FALLBACK')
+       AND (
+              CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = m.report_month
+           OR CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = DATE '2099-01-01'
+           OR t.detail = 'DEFAULT_FALLBACK'
+       )
 ) ranked
 WHERE rn = 1;
 
