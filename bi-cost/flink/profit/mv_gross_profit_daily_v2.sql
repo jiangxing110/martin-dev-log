@@ -8,7 +8,7 @@
 -- ==============================================
 -- 1. 创建物化视图
 -- ==============================================
-CREATE MATERIALIZED VIEW "dws"."mv_gross_profit_daily_v2" AS
+CREATE MATERIALIZED VIEW "dws"."mv_gross_profit_daily" AS
 WITH revenue_daily AS (
     SELECT
         stat_date AS report_date,
@@ -119,36 +119,36 @@ FROM gross_profit_daily
 WITH DATA
 DISTRIBUTED BY (id);
 
-ALTER MATERIALIZED VIEW "dws"."mv_gross_profit_daily_v2" OWNER TO "qbit_admin";
+ALTER MATERIALIZED VIEW "dws"."mv_gross_profit_daily" OWNER TO "qbit_admin";
 
 -- 唯一索引：用于 CONCURRENTLY 刷新
-CREATE UNIQUE INDEX IF NOT EXISTS "idx_mv_gross_profit_daily_v2_id"
-    ON "dws"."mv_gross_profit_daily_v2" ("id");
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_mv_gross_profit_daily_id"
+    ON "dws"."mv_gross_profit_daily" ("id");
 
-CREATE INDEX IF NOT EXISTS "idx_mv_gross_profit_daily_v2_date_category"
-    ON "dws"."mv_gross_profit_daily_v2" ("report_date", "category");
+CREATE INDEX IF NOT EXISTS "idx_mv_gross_profit_daily_date_category"
+    ON "dws"."mv_gross_profit_daily" ("report_date", "category");
 
-CREATE INDEX IF NOT EXISTS "idx_mv_gross_profit_daily_v2_account_dim"
-    ON "dws"."mv_gross_profit_daily_v2" ("account_id", "report_date");
+CREATE INDEX IF NOT EXISTS "idx_mv_gross_profit_daily_account_dim"
+    ON "dws"."mv_gross_profit_daily" ("account_id", "report_date");
 
-COMMENT ON MATERIALIZED VIEW "dws"."mv_gross_profit_daily_v2" IS
+COMMENT ON MATERIALIZED VIEW "dws"."mv_gross_profit_daily" IS
     'DWS物化视图：客户产品线毛利日汇总 v2，渠道成本来源 dws_total_channel_cost_daily_v2_p';
 
 -- ==============================================
 -- 2. 定时刷新（每 5 分钟）
 -- ==============================================
 -- 手动刷新：
--- REFRESH MATERIALIZED VIEW CONCURRENTLY dws.mv_gross_profit_daily_v2;
+-- REFRESH MATERIALIZED VIEW CONCURRENTLY dws.mv_gross_profit_daily;
 
 -- pg_cron 定时任务（每 5 分钟刷新一次）：
 SELECT cron.schedule(
-    'refresh_mv_gross_profit_daily_v2',
+    'refresh_mv_gross_profit_daily',
     '*/5 * * * *',
-    $$REFRESH MATERIALIZED VIEW CONCURRENTLY dws.mv_gross_profit_daily_v2$$
+    $$REFRESH MATERIALIZED VIEW CONCURRENTLY dws.mv_gross_profit_daily$$
 );
 
 -- 查看已创建的定时任务：
 -- SELECT * FROM cron.job;
 
 -- 删除定时任务：
--- SELECT cron.unschedule('refresh_mv_gross_profit_daily_v2');
+-- SELECT cron.unschedule('refresh_mv_gross_profit_daily');

@@ -18,7 +18,18 @@ sum(acquiring_cost) acquiring_cost,
 sum(business_cost) business_cost,
 sum(quantum_cost) quantum_cost, 
 sum(crypto_cost) crypto_cost
-FROM dws.dws_total_channel_cost_daily_2026
+FROM dws.dws_total_channel_cost_daily_v2_p
 WHERE report_date>='2026-05-01 00:00:00'
 and report_date<'2026-06-01 00:00:00'
 69376.0002	120726.1301	1131706.9998	11816.9981
+
+
+
+select sum(channel_cost_amount) from dws.mv_gross_profit_daily
+WHERE report_date>='2026-05-01 00:00:00'
+and report_date<'2026-06-01 00:00:00'
+
+
+select sum(channel_cost_amount) from dws.dws_gross_profit_daily_p
+WHERE report_date>='2026-05-01 00:00:00'
+and report_date<'2026-06-01 00:00:00'
