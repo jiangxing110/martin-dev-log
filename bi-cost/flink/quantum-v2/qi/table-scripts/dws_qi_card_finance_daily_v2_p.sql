@@ -26,6 +26,9 @@ CREATE TABLE "dws"."dws_qi_card_finance_daily_v2_p" (
   "cost_acs_regular_base_amt" numeric(20,4) DEFAULT 0,
   "cost_acs_vip_base_amt" numeric(20,4) DEFAULT 0,
   "cost_vrm_base_amt" numeric(20,4) DEFAULT 0,
+  "cost_hk_regular_base_amt" numeric(20,4) DEFAULT 0,
+  "cost_hk_vip_base_amt" numeric(20,4) DEFAULT 0,
+  "cost_dcsf_base_amt" numeric(20,4) DEFAULT 0,
   "rebate_interchange_base_amt" numeric(20,4) DEFAULT 0,
   "rebate_incentive_base_amt" numeric(20,4) DEFAULT 0,
   "cost_reimbursement_rate" numeric(20,8) DEFAULT 0,
@@ -33,6 +36,9 @@ CREATE TABLE "dws"."dws_qi_card_finance_daily_v2_p" (
   "cost_acs_regular_rate" numeric(20,8) DEFAULT 0,
   "cost_acs_vip_rate" numeric(20,8) DEFAULT 0,
   "cost_vrm_rate" numeric(20,8) DEFAULT 0,
+  "cost_hk_regular_rate" numeric(20,8) DEFAULT 1,
+  "cost_hk_vip_rate" numeric(20,8) DEFAULT 1,
+  "cost_dcsf_rate" numeric(20,8) DEFAULT 1,
   "rebate_interchange_rate" numeric(20,8) DEFAULT 0,
   "rebate_incentive_rate" numeric(20,8) DEFAULT 0,
   "cost_fixed_fee" numeric(20,4) DEFAULT 0,
@@ -62,6 +68,9 @@ COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_service_base_amt"
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_acs_regular_base_amt" IS 'ACS 普通成本计费基数，非港消费按金额阶梯计算';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_acs_vip_base_amt" IS 'ACS VIP 成本计费基数，非港消费且排除特殊码后按金额阶梯计算';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_vrm_base_amt" IS 'VRM 成本计费基数，满足条件笔数 * 0.09';
+COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_hk_regular_base_amt" IS 'HK Regular 成本计费基数，香港消费按金额阶梯计算';
+COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_hk_vip_base_amt" IS 'HK VIP 成本计费基数，香港消费且排除特殊码后按金额阶梯计算';
+COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_dcsf_base_amt" IS 'DCSF 成本计费基数，非港消费且排除特殊码后按金额阶梯计算';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."rebate_interchange_base_amt" IS 'Interchange 返现计费基数，非港消费金额 * 0.02';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."rebate_incentive_base_amt" IS 'Incentive 返现计费基数，消费金额 * 0.0118';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_reimbursement_rate" IS 'Reimbursement 月度系数，来源 ods_bi_month_tag.QI_COST_REIMBURSEMENT_RATE';
@@ -69,6 +78,9 @@ COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_service_rate" IS 
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_acs_regular_rate" IS 'ACS 普通月度系数，来源 ods_bi_month_tag.QI_COST_ACS_REGULAR_RATE';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_acs_vip_rate" IS 'ACS VIP 月度系数，来源 ods_bi_month_tag.QI_COST_ACS_VIP_RATE';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_vrm_rate" IS 'VRM 月度系数，来源 ods_bi_month_tag.QI_COST_VRM_RATE';
+COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_hk_regular_rate" IS 'HK Regular 月度系数，默认 1，来源 ods_bi_month_tag.QI_COST_HK_REGULAR_RATE';
+COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_hk_vip_rate" IS 'HK VIP 月度系数，默认 1，来源 ods_bi_month_tag.QI_COST_HK_VIP_RATE';
+COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_dcsf_rate" IS 'DCSF 月度系数，来源 ods_bi_month_tag.QI_COST_DCSF_RATE';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."rebate_interchange_rate" IS 'Interchange 返现月度系数，来源 ods_bi_month_tag.QI_REBATE_INTERCHANGE_RATE';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."rebate_incentive_rate" IS 'Incentive 返现月度系数，来源 ods_bi_month_tag.QI_REBATE_INCENTIVE_RATE';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_fixed_fee" IS '固定渠道成本分摊金额';

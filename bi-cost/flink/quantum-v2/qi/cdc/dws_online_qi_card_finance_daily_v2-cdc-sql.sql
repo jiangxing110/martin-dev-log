@@ -156,6 +156,25 @@ SELECT
             ELSE 0.56
         END ELSE 0 END) AS DECIMAL(20, 4)) AS cost_acs_vip_base_amt,
     CAST(SUM(CASE WHEN s.is_hk_region = FALSE AND s.business_type = 'Consumption' AND s.has_special_code = FALSE THEN 0.09 ELSE 0 END) AS DECIMAL(20, 4)) AS cost_vrm_base_amt,
+    CAST(SUM(CASE WHEN s.is_hk_region = TRUE AND s.business_type = 'Consumption' AND s.status IN ('Closed', 'Pending') THEN
+        CASE
+            WHEN s.billing_amount < 5 THEN 0.004
+            WHEN s.billing_amount < 50 THEN 0.018
+            ELSE 0.032
+        END ELSE 0 END) AS DECIMAL(20, 4)) AS cost_hk_regular_base_amt,
+    CAST(SUM(CASE WHEN s.is_hk_region = TRUE AND s.business_type = 'Consumption' AND s.status IN ('Closed', 'Pending') AND s.has_special_code = FALSE THEN
+        CASE
+            WHEN s.billing_amount < 5 THEN 0.006
+            WHEN s.billing_amount < 50 THEN 0.027
+            ELSE 0.048
+        END ELSE 0 END) AS DECIMAL(20, 4)) AS cost_hk_vip_base_amt,
+    CAST(SUM(CASE WHEN s.is_hk_region = FALSE AND s.business_type = 'Consumption' AND s.has_special_code = FALSE THEN
+        CASE
+            WHEN s.billing_amount <= 50 THEN 0.025
+            WHEN s.billing_amount <= 1000 THEN s.billing_amount * CAST(0.0005 AS DECIMAL(20, 4))
+            WHEN s.billing_amount > 1000 THEN 0.5
+            ELSE 0
+        END ELSE 0 END) AS DECIMAL(20, 4)) AS cost_dcsf_base_amt,
     CAST(SUM(CASE WHEN s.status IN ('Closed', 'Pending') AND s.is_hk_region = FALSE AND s.business_type = 'Consumption' THEN s.billing_amount * CAST(0.02 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS rebate_interchange_base_amt,
     CAST(SUM(CASE WHEN s.status IN ('Closed', 'Pending') AND s.business_type = 'Consumption' THEN s.billing_amount * CAST(0.0118 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS rebate_incentive_base_amt
 FROM source_dwm_qi_card_transaction_detail_v2_p s
@@ -191,8 +210,9 @@ FROM (
         ON t.provider = 'IQ'
        AND t.delete_time IS NULL
        AND (
-            t.statistics_time < CAST(DATE_FORMAT(CAST(DATE_ADD(m.report_month, 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6))
-         OR t.detail = 'DEFAULT_FALLBACK'
+              CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = m.report_month
+           OR CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = DATE '2099-01-01'
+           OR t.detail = 'DEFAULT_FALLBACK'
        )
 ) ranked_tag
 WHERE rn = 1;
@@ -205,6 +225,9 @@ SELECT
     MAX(CASE WHEN tag = 'QI_COST_ACS_REGULAR_RATE' THEN amount END) AS cost_acs_regular_rate,
     MAX(CASE WHEN tag = 'QI_COST_ACS_VIP_RATE' THEN amount END) AS cost_acs_vip_rate,
     MAX(CASE WHEN tag = 'QI_COST_VRM_RATE' THEN amount END) AS cost_vrm_rate,
+    MAX(CASE WHEN tag = 'QI_COST_HK_REGULAR_RATE' THEN amount END) AS cost_hk_regular_rate,
+    MAX(CASE WHEN tag = 'QI_COST_HK_VIP_RATE' THEN amount END) AS cost_hk_vip_rate,
+    MAX(CASE WHEN tag = 'QI_COST_DCSF_RATE' THEN amount END) AS cost_dcsf_rate,
     MAX(CASE WHEN tag = 'QI_REBATE_INTERCHANGE_RATE' THEN amount END) AS rebate_interchange_rate,
     MAX(CASE WHEN tag = 'QI_REBATE_INCENTIVE_RATE' THEN amount END) AS rebate_incentive_rate
 FROM v_qi_month_tag_ranked
@@ -229,6 +252,9 @@ CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_v2_p (
     cost_acs_regular_base_amt     DECIMAL(20, 4),
     cost_acs_vip_base_amt         DECIMAL(20, 4),
     cost_vrm_base_amt             DECIMAL(20, 4),
+    cost_hk_regular_base_amt      DECIMAL(20, 4),
+    cost_hk_vip_base_amt          DECIMAL(20, 4),
+    cost_dcsf_base_amt            DECIMAL(20, 4),
     rebate_interchange_base_amt   DECIMAL(20, 4),
     rebate_incentive_base_amt     DECIMAL(20, 4),
     cost_reimbursement_rate       DECIMAL(20, 8),
@@ -236,6 +262,9 @@ CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_v2_p (
     cost_acs_regular_rate         DECIMAL(20, 8),
     cost_acs_vip_rate             DECIMAL(20, 8),
     cost_vrm_rate                 DECIMAL(20, 8),
+    cost_hk_regular_rate          DECIMAL(20, 8),
+    cost_hk_vip_rate              DECIMAL(20, 8),
+    cost_dcsf_rate                DECIMAL(20, 8),
     rebate_interchange_rate       DECIMAL(20, 8),
     rebate_incentive_rate         DECIMAL(20, 8),
     cost_fixed_fee                DECIMAL(20, 4),
@@ -281,6 +310,9 @@ SELECT
     b.cost_acs_regular_base_amt,
     b.cost_acs_vip_base_amt,
     b.cost_vrm_base_amt,
+    b.cost_hk_regular_base_amt,
+    b.cost_hk_vip_base_amt,
+    b.cost_dcsf_base_amt,
     b.rebate_interchange_base_amt,
     b.rebate_incentive_base_amt,
     CAST(COALESCE(r.cost_reimbursement_rate, 1) AS DECIMAL(20, 8)) AS cost_reimbursement_rate,
@@ -288,6 +320,9 @@ SELECT
     CAST(COALESCE(r.cost_acs_regular_rate, 1) AS DECIMAL(20, 8)) AS cost_acs_regular_rate,
     CAST(COALESCE(r.cost_acs_vip_rate, 1) AS DECIMAL(20, 8)) AS cost_acs_vip_rate,
     CAST(COALESCE(r.cost_vrm_rate, 1) AS DECIMAL(20, 8)) AS cost_vrm_rate,
+    CAST(COALESCE(r.cost_hk_regular_rate, 1) AS DECIMAL(20, 8)) AS cost_hk_regular_rate,
+    CAST(COALESCE(r.cost_hk_vip_rate, 1) AS DECIMAL(20, 8)) AS cost_hk_vip_rate,
+    CAST(COALESCE(r.cost_dcsf_rate, 1) AS DECIMAL(20, 8)) AS cost_dcsf_rate,
     CAST(COALESCE(r.rebate_interchange_rate, 1) AS DECIMAL(20, 8)) AS rebate_interchange_rate,
     CAST(COALESCE(r.rebate_incentive_rate, 1) AS DECIMAL(20, 8)) AS rebate_incentive_rate,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
