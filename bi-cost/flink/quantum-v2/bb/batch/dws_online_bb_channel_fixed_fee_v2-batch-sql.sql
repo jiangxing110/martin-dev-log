@@ -134,12 +134,14 @@ SELECT
     b.system_type,
     b.sale_id,
     b.am_id,
-    CAST(COALESCE(c.month_fixed_fee / NULLIF(rc.row_count, 0), 0) AS DECIMAL(20, 4)) AS cost_fixed_fee
+    CAST(c.month_fixed_fee / NULLIF(rc.row_count, 0) AS DECIMAL(20, 4)) AS cost_fixed_fee
 FROM v_allocation_base b
-LEFT JOIN v_month_row_count rc
+INNER JOIN v_month_row_count rc
     ON CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = rc.report_month
-LEFT JOIN v_month_channel_cost c
-    ON c.report_month = rc.report_month;
+INNER JOIN v_month_channel_cost c
+    ON c.report_month = rc.report_month
+WHERE c.month_fixed_fee IS NOT NULL
+  AND c.month_fixed_fee <> CAST(0 AS DECIMAL(20, 4));
 
 CREATE TEMPORARY VIEW v_obsolete_fixed_fee_rows AS
 SELECT
