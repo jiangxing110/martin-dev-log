@@ -50,3 +50,6 @@ sum(crypto_cost) crypto_cost
 FROM dws.dws_total_channel_cost_daily_2026
 WHERE report_date>='2026-05-01 00:00:00'
 and report_date<'2026-06-01 00:00:00'
+
+qbit_card_transaction
+quantum_card_transaction_extend

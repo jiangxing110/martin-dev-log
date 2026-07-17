@@ -8,7 +8,7 @@
 --********************************************************************--
 
 CREATE TABLE "dwm"."dwm_qi_card_transaction_detail_v2_p" (
-  "id" uuid NOT NULL,
+  "id" varchar(36) COLLATE "pg_catalog"."default" NOT NULL,
   "transaction_id" varchar(100) COLLATE "pg_catalog"."default" NOT NULL,
   "account_id" varchar(36) COLLATE "pg_catalog"."default" NOT NULL,
   "account_type" varchar(30) COLLATE "pg_catalog"."default",
