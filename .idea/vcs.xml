@@ -2,5 +2,8 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/old_apple/codex-full/vendor_imports/skills" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/old_apple/learn/Obsidian Vault" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/old_apple/数仓" vcs="Git" />
   </component>
 </project>
