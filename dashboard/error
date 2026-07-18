@@ -1,0 +1,38 @@
+ [595]:HashJoin(joinType=[LeftOuterJoin], where=[((cost_key0 = $f22) AND cost_key IS NULL)], select=[report_date, account_id, product_line, provider, cost_type, source_month, source_tag, source_amount, month_day_count, basis_count, month_basis_count, basis_amount, month_basis_amount, allocation_rate, cost_amount, account_type, account_category, system_type, cost_key, sale_id, am_id, $f22, cost_key0, sale_id0, am_id0], build=[right])
++- [596]:Calc(select=[CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', product_line, ':', provider, ':', cost_type, ':', DATE_FORMAT(CAST(source_month AS TIMESTAMP(6)), 'yyyyMMdd'), ':', source_tag, ':', CASE(sale_id IS NOT NULL, CAST(sale_id AS VARCHAR(2147483647)), sale_id0 IS NOT NULL, CAST(sale_id0 AS VARCHAR(2147483647)), ''), ':', CASE(am_id IS NOT NULL, CAST(am_id AS VARCHAR(2147483647)), am_id0 IS NOT NULL, CAST(am_id0 AS VARCHAR(2147483647)), '')))) AS BIGINT) AS id, report_date, account_id, account_type, account_category, system_type, CASE(sale_id IS NOT NULL, sale_id, sale_id0) AS sale_id, CASE(am_id IS NOT NULL, am_id, am_id0) AS am_id, product_line, provider, cost_type, source_month, source_tag, source_amount, month_day_count, basis_count, month_basis_count, basis_amount, month_basis_amount, allocation_rate, cost_amount, 1 AS version, 'quantum_card_bpc_batch' AS remarks, CAST(CURRENT_TIMESTAMP() AS TIMESTAMP(6)) AS create_time, CAST(CURRENT_TIMESTAMP() AS TIMESTAMP(6)) AS update_time, null:TIMESTAMP(6) AS delete_time])
+   +- [597]:ConstraintEnforcer[NotNullEnforcer(fields=[id, report_date])]
+      +- [597]:Sink(table=[vvp.default.sink_dwm_finance_channel_cost_p], fields=[id, report_date, account_id, account_type, account_category, system_type, sale_id, am_id, product_line, provider, cost_type, source_month, source_tag, source_amount, month_day_count, basis_count, month_basis_count, basis_amount, month_basis_amount, allocation_rate, cost_amount, version, remarks, create_time
+
+  dwm_online_quantum_card_bpc_cost-cdc-sql
+  因为的我的阿里云flink任务编排是脚本串行的 所以后面的都失败了     
+
+
+  private async reviewVirtualCardPassed(createKybInput: CreateKybInput, cddKyb: CddKyb, user: User) {
+    if (cddKyb.businessType !== ProductEnum.VirtualCard) return;
+    // 判断主营业务
+    const mainBusiness = createKybInput.cddKybDetails.find(item => item.key === 'mainBusiness')?.value || '';
+    // 判断消费平台
+    const platformOfConsumption = createKybInput.cddKybDetails.find(item => item.key === 'platformOfConsumption')?.value || '';
+    //  量子卡消费目的
+    const purposeOfConsumption = createKybInput.cddKybDetails.find(item => item.key === 'purposeOfConsumption')?.value || '';
+    // 是否有其他消费平台
+    const isOtherPlatformOfConsumption = this.isOtherValue(platformOfConsumption);
+    // 是否有其他主营业务
+    const isOtherMainBusiness = this.isOtherValue(mainBusiness);
+    // 是否有其他量子卡消费目的
+    const isOtherPurposeOfConsumption = this.isOtherValue(purposeOfConsumption);
+    // 量子卡是否允许通过
+    const isReviewVirtualCardPassed =
+      cddKyb.businessType === ProductEnum.VirtualCard && !isOtherPlatformOfConsumption && !isOtherMainBusiness && !isOtherPurposeOfConsumption;
+
+    if (isReviewVirtualCardPassed) {
+      this.reviewKyb(user, {
+        businessType: ProductEnum.VirtualCard,
+        kyCaseId: cddKyb.kyCaseId,
+        status: KyStatus.Passed,
+        message: '',
+        remarks: '量子卡KYB无(其他交易平台，其他主营业务,量子卡消费目的)自动审核通过',
+        attachments: [],
+      });
+    }
+  }

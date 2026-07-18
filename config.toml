@@ -1,0 +1,116 @@
+model = "gpt-5.5"
+model_provider = "openai"
+
+notify = ["/Users/martinjiang/.codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient", "turn-ended"]
+model_reasoning_effort = "medium"
+service_tier = "priority"
+
+[mcp_servers]
+
+[mcp_servers.node_repl]
+args = []
+command = "/Applications/Codex.app/Contents/Resources/cua_node/bin/node_repl"
+startup_timeout_sec = 120
+
+[mcp_servers.node_repl.env]
+NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
+NODE_REPL_NODE_MODULE_DIRS = "/Applications/Codex.app/Contents/Resources/cua_node/lib/node_modules"
+NODE_REPL_NODE_PATH = "/Applications/Codex.app/Contents/Resources/cua_node/bin/node"
+NODE_REPL_TRUSTED_CODE_PATHS = "/Users/martinjiang/.codex"
+CODEX_HOME = "/Users/martinjiang/.codex"
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "60e4902788f207f88fd09344dfeafe07769488bdb2924bbb12b322c3b9d2b999"
+BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
+NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = "Control the in-app browser in conjunction with the Browser Plugin."
+NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative."
+BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod"
+BROWSER_USE_CODEX_APP_VERSION = "26.623.101652"
+CODEX_CLI_PATH = "/Applications/Codex.app/Contents/Resources/codex"
+
+[plugins."superpowers@openai-curated"]
+enabled = true
+
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."pdf@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = false
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = false
+
+[plugins."browser@openai-bundled"]
+enabled = false
+
+[plugins."superpowers@openai-api-curated"]
+enabled = true
+
+[plugins."template-creator@openai-primary-runtime"]
+enabled = true
+
+[projects."/Users/martinjiang/Documents/learn"]
+trust_level = "trusted"
+
+[projects."/Users/martinjiang/IdeaProjects/qbit-assets"]
+trust_level = "trusted"
+
+[projects."/Users/martinjiang/IdeaProjects/white-label-server"]
+trust_level = "trusted"
+
+[projects."/Users/martinjiang/WebstormProjects/qbitpay_service"]
+trust_level = "trusted"
+
+[projects."/Users/martinjiang/Documents/数仓"]
+trust_level = "trusted"
+
+[desktop]
+followUpQueueMode = "steer"
+show-context-window-usage = true
+
+[features]
+js_repl = false
+
+[marketplaces.openai-bundled]
+last_updated = "2026-07-06T02:22:10Z"
+source_type = "local"
+source = "/Users/martinjiang/.codex/.tmp/bundled-marketplaces/openai-bundled"
+
+[marketplaces.openai-primary-runtime]
+last_updated = "2026-07-01T06:56:00Z"
+source_type = "local"
+source = "/Users/martinjiang/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"
+
+[skills]
+
+[[skills.config]]
+path = "/Users/martinjiang/.codex/skills/animejs/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/martinjiang/.codex/skills/css-animations/SKILL.md"
+enabled = false
+
+[[skills.config]]
+path = "/Users/martinjiang/.codex/skills/gsap/SKILL.md"
+enabled = false
+
+[plugins]
+
+[mcp_servers.codebase-memory-mcp]
+command = "/Users/martinjiang/.local/bin/codebase-memory-mcp"
+
+# >>> codebase-memory-mcp SessionStart >>>
+[[hooks.SessionStart]]
+matcher = "startup|resume|clear|compact"
+
+[[hooks.SessionStart.hooks]]
+type = "command"
+command = 'echo "Code discovery: prefer codebase-memory-mcp (search_graph, trace_path, get_code_snippet, query_graph, search_code) over grep/file-read; run index_repository first if the project is not indexed."'
+
+[hooks.state]
+
+[hooks.state."/Users/martinjiang/.codex/config.toml:session_start:0:0"]
+trusted_hash = "sha256:ed997f3f9766959ba56dc2243cd02468d6eadad80d92b7f5a650e6fc0fb0c050"
+# <<< codebase-memory-mcp SessionStart <<<

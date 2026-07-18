@@ -1,0 +1,32 @@
+BEGIN;
+
+UPDATE "oddAccountReview"
+SET "deleteTime" = NOW()
+WHERE "accountId" != 'cb8e047f-7836-407a-b732-f5ebd2203622';
+
+UPDATE "cddKyc"
+SET "deleteTime" = NOW()
+WHERE "kyCaseId" IN (
+    SELECT "kyCaseId"
+    FROM "oddAccountReview"
+    WHERE "accountId" != 'cb8e047f-7836-407a-b732-f5ebd2203622'
+);
+
+UPDATE "cddKyb"
+SET "deleteTime" = NOW()
+WHERE "kyCaseId" IN (
+    SELECT "kyCaseId"
+    FROM "oddAccountReview"
+    WHERE "accountId" != 'cb8e047f-7836-407a-b732-f5ebd2203622'
+);
+
+UPDATE "accountToDo"
+SET "deleteTime" = NOW()
+WHERE "recordId" IN (
+    SELECT "kyCaseId"
+    FROM "oddAccountReview"
+    WHERE "accountId" != 'cb8e047f-7836-407a-b732-f5ebd2203622'
+)
+AND "status" = 'Na';
+
+COMMIT;

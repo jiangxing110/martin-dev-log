@@ -90,3 +90,23 @@ UPDATE "oddAccountReview" SET "deleteTime" = now(),remarks='2025-12-16test' WHER
 
 
 
+
+SELECT * FROM "cddKyb" WHERE "accountId"='566e0fa8-e756-4b35-a8cf-8cd4a0a86a3b' and "businessType" like '%MultiCurrencyAccount%' and "isLatest"='t'
+SELECT * FROM account WHERE "displayId"='138555'
+
+AwaitAdditional
+
+
+SELECT * FROM "cddKyb" WHERE "accountId"='566e0fa8-e756-4b35-a8cf-8cd4a0a86a3b' and "businessType" like '%Odd%'
+
+SELECT * FROM "cddKyc" WHERE "accountId"='566e0fa8-e756-4b35-a8cf-8cd4a0a86a3b' and "kycType"='BusinessOdd'
+
+SELECT * FROM "accountToDo" WHERE "accountId"='566e0fa8-e756-4b35-a8cf-8cd4a0a86a3b' 
+
+SELECT * FROM "messageCenter" WHERE "accountId"='566e0fa8-e756-4b35-a8cf-8cd4a0a86a3b' 
+
+SELECT * FROM "shopAuth" WHERE "accountId"='566e0fa8-e756-4b35-a8cf-8cd4a0a86a3b' 
+
+SELECT * FROM "oddAccountReview" WHERE "accountId"='566e0fa8-e756-4b35-a8cf-8cd4a0a86a3b' 
+
+hasShopUrl

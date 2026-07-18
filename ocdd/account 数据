@@ -1,0 +1,43 @@
+1.历史的odd 如果全球账户代补录的不会创建kyb 那条记录
+2.历史数据 oddAccountReview 创建的代办是 
+
+--查询范围
+SELECT * FROM "oddAccountReview" as oar
+WHERE oar."updateTime"> '2026-07-09 17:00:00' 
+ORDER BY "createTime" desc;
+
+--kyc
+SELECT oar.id,oar."createTime",oar."status",kyc.status
+FROM "oddAccountReview" as oar 
+LEFT JOIN "cddKyc" as kyc ON oar."kyCaseId"::UUID=kyc."kyCaseId"::UUID
+WHERE oar."updateTime"> '2026-07-09 17:00:00' 
+ORDER BY "createTime" desc;
+
+--代办处理
+UPDATE "accountToDo" AS a
+SET
+    "deleteTime" = NOW(),
+    "remarks" = '2026-07-09 修复odd 年审老数据'
+FROM "oddAccountReview" AS oar
+WHERE oar."accountId" = a."accountId"
+  AND oar."updateTime" > '2026-07-09 17:00:00'
+  AND a."createTime" > '2026-07-09 17:00:00'
+  AND a."key" = 'OddAccountReview'
+  AND a."deleteTime" IS NULL;
+
+--通知
+UPDATE "messageCenter"
+SET
+    "deleteTime" = NOW(),
+    "remarks" = '2026-07-09 修复odd 年审老数据'
+WHERE "data"::text LIKE '%您的实名认证信息更新已提交%'
+  AND "updateTime" > '2026-07-09 17:00:00'
+  AND "deleteTime" IS NULL;
+
+--年审记录处理
+UPDATE "oddAccountReview"
+SET
+    "deleteTime" = NOW(),
+    "remarks" = '2026-07-09 修复odd 年审老数据'
+WHERE "deleteTime" IS NULL;
+

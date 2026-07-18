@@ -3,6 +3,7 @@
 CALL "public"."sp_init_qbit_card_settlement_bb_clean_2026"('2026-04-26 00:00:00','2026-05-01 00:00:00',  '8 hours');
 -- 2.清洗transaction表，清洗2026-04-28到2026-05-01的数据，分8小时跑一次
 CALL sp_init_qbit_card_transaction_clean_2026('2026-04-28 00:00:00','2026-05-01 00:00:00');
+
 -- 3.清洗settlement_bb表，清洗2026-04-01到2026-04-06的数据，分6小时跑一次
 call sp_init_qbit_card_settlement_bb_clean_2026_V2('2026-04-01 00:00:00','2026-04-06 00:00:00','6 hours');
 
@@ -28,3 +29,19 @@ CALL sp_sync_bb_card_incremental();
 -- 手动扫描 2026-02-10 全天发生变动的数据
 CALL sp_sync_bb_card_incremental('2026-02-10 00:00:00', '2026-02-11 00:00:00');
 
+
+-- supplement: 销售关系 / SL / 金融渠道成本 / 总成本
+CALL sp_init_dim_sale_account_relation_by_day('2026-04-01', '2026-05-01');
+
+CALL sp_init_bb_card_dws_fast_v2('2026-04-01', '2026-05-01');
+CALL sp_init_qi_card_dws_by_fast_v2('2026-04-01', '2026-05-01');
+
+CALL sp_init_sl_card_dwm_by_fast('2026-04-01', '2026-05-01');
+CALL sp_init_sl_card_dws_by_fast('2026-04-01', '2026-05-01');
+
+CALL sp_init_finance_channel_cost_by_fast('2026-04-01', 'QUANTUM_CARD', 'BPC', '量子卡-QI活跃卡成本', 'ACTIVE_CARD_COST');
+CALL sp_init_finance_channel_cost_by_fast('2026-04-01', 'QUANTUM_CARD', 'SUMSUB', '量子卡-KYC认证成本', 'KYC_COST');
+CALL sp_init_finance_channel_cost_by_fast('2026-04-01', 'QUANTUM_CARD', 'IDEMIA', '量子卡-制卡成本', 'CARD_PRODUCTION_COST');
+CALL sp_init_finance_channel_cost_by_fast('2026-04-01', 'QUANTUM_CARD', 'HZ_BANK', '量子卡-QI消费银行手续费', 'BANK_FEE');
+
+CALL sp_init_total_channel_cost_by_fast('2026-04-01', '2026-05-01');

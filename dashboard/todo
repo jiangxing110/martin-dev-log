@@ -1,0 +1,69 @@
+1.金融渠道成本现在固定写死了时间,我觉得这样不好处理(类似说财务在7月8好先输入了一份6月的渠道成本数据,我们洗到金融渠道成本表会不好处理)
+最好可以感知到ods_bi_month_tag数据的变动自动去清洗历史的数据
+bi-cost/flink/total_cost/finance 金融渠道成本各个业务拆分脚本
+我是希望每天凌晨可以去判断ods_bi_month_tag update_time是前一天的数据 在处理改的那一条数据记录运行脚本
+在自己想要定向修复的时候可以传入只需要在对应的脚本传入月份 或者 startTime endTime就可以批量去洗
+2.bb qi 渠道成本
+bb bi那边制定了新的规则/Users/martinjiang/martin-dev-log/bi-cost/bi_month/BB客户成本-202606.sql
+之前的数据是参考 /Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/product-collaboration/BB-gross-profit.sql
+我们洗出来的
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/dwm_bb_card_transaction_detail_p.sql
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/dws_bb_card_finance_daily_p.sql
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/qbit_card_settlement_bb_clean_2026.sql
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/qbit_card_transaction_clean_2026.sql
+这几个表结构
+和
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/dwm_bb_card_transaction_detail_p.sql
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/dws_bb_card_finance_daily_p.sql
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/qbit_card_settlement_bb_clean_2026.sql
+/Users/martinjiang/martin-dev-log/bi-cost/qbit-card-cost-cleaning/table-scripts/qbit_card_transaction_clean_2026.sql
+这些个方法
+然后我涉及了阿里云实时计算flink 版本
+/Users/martinjiang/martin-dev-log/bi-cost/flink/quantum/bb/dwm_online_bb_card_incremental-cdc-sql.sql
+/Users/martinjiang/martin-dev-log/bi-cost/flink/quantum/bb/dwm_online_bb_card_transaction_detail-batch-sql.sql
+/Users/martinjiang/martin-dev-log/bi-cost/flink/quantum/bb/dws_online_bb_card_finance_daily-batch-sql.sql
+qi成本系数的获取也要根据 ods_bi_month_tag来
+下面这些之前qi 渠道 flink 版本
+/Users/martinjiang/martin-dev-log/bi-cost/flink/quantum/bb/dwm_online_bb_card_incremental-cdc-sql.sql
+/Users/martinjiang/martin-dev-log/bi-cost/flink/quantum/bb/dwm_online_bb_card_transaction_detail-batch-sql.sql
+/Users/martinjiang/martin-dev-log/bi-cost/flink/quantum/bb/dws_online_bb_card_finance_daily-batch-sql.sql
+我们之前也是ods->dwm—>dws
+我们肯定也是任务编排的这一部分 洗数据的脚本也是 两个版本 batch cdc
+如果需要给我一个/Users/martinjiang/martin-dev-log/bi-cost/flink/quantum v2的版本
+
+从数据清洗的角度来说我们的维度应该是到每一个accountId day saleId amId 就是差不多了
+不让你都算到master accountId 不好算成本，
+你可以看看我们sl都逻辑
+
+对，你这个判断更合理。我们应该按 SL 的方式做：
+
+```text
+DWM 明细层：尽量保留交易/结算/Auth 原始因子
+DWS 日汇总层：account_id + report_date + sale_id + am_id
+成本系数：从 ods_bi_month_tag 按月份取，不写死
+母客户汇总：不在清洗层做，后面报表再按账户层级 rollup
+```
+
+我发现
+[568]:HashJoin(joinType=[LeftOuterJoin], where=[((cost_key0 = $f22) AND cost_key IS NULL)], select=[report_date, account_id, product_line, provider, cost_type, source_month, source_tag, source_amount, month_day_count, basis_count, month_basis_count, basis_amount, month_basis_amount, allocation_rate, cost_amount, account_type, account_category, system_type, cost_key, sale_id, am_id, $f22, cost_key0, sale_id0, am_id0], build=[right])
++- [569]:Calc(select=[CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', product_line, ':', provider, ':', cost_type, ':', DATE_FORMAT(CAST(source_month AS TIMESTAMP(6)), 'yyyyMMdd'), ':', source_tag, ':', CASE(sale_id IS NOT NULL, CAST(sale_id AS VARCHAR(2147483647)), sale_id0 IS NOT NULL, CAST(sale_id0 AS VARCHAR(2147483647)), ''), ':', CASE(am_id IS NOT NULL, CAST(am_id AS VARCHAR(2147483647)), am_id0 IS NOT NULL, CAST(am_id0 AS VARCHAR(2147483647)), '')))) AS BIGINT) AS id, report_date, account_id, account_type, account_category, system_type, CASE(sale_id IS NOT NULL, sale_id, sale_id0) AS sale_id, CASE(am_id IS NOT NULL, am_id, am_id0) AS am_id, product_line, provider, cost_type, source_month, source_tag, source_amount, month_day_count, basis_count, month_basis_count, basis_amount, month_basis_amount, allocation_rate, cost_amount, 1 AS version, 'quantum_card_idemia_batch' AS remarks, CAST(CURRENT_TIMESTAMP() AS TIMESTAMP(6)) AS create_time, CAST(CURRENT_TIMESTAMP() AS TIMESTAMP(6)) AS update_time, null:TIMESTAMP(6) AS delete_time])
++- [570]:ConstraintEnforcer[NotNullEnforcer(fields=[id, report_date])]
++- [570]:Sink(table=[vvp.default.sink_dwm_finance_channel_cost_p], fields=[id, report_date, account_id, account_type, account_category, system_type, sale_id, am_id, product_line, provider, cost_type, source_month, source_tag, source_amount, month_day_count, basis_count, month_basis_count, basis_amount, month_basis_amount, allocation_rate, cost_amount, version, remarks, create_time, update_time, delete_time])
+
+好几个都是这样的问题
+dwm_online_quantum_card_idemia_cost-batch-sql
+dwm_online_quantum_card_bpc_cost-batch-sql
+
+[255]:TableSourceScan(table=[[vvp, default, source_qbit_card_transaction, filter=[and(and(IS NULL(delete_time), LIKE(provider, _UTF-16LE'%Qbit%')), OR(OR(=(business_type, _UTF-16LE'Consumption':VARCHAR(11) CHARACTER SET &quot;UTF-16LE&quot;), =(business_type, _UTF-16LE'Credit':VARCHAR(11) CHARACTER SET &quot;UTF-16LE&quot;)), =(business_type, _UTF-16LE'Reversal':VARCHAR(11) CHARACTER SET &quot;UTF-16LE&quot;)))], project=[account_id, business_type, status, settle_amount, transaction_time]]], fields=[account_id, business_type, status, settle_amount, transaction_time])
+
+dwm_online_quantum_card_hz_bank_cost-batch-sql
+
+
+
+目前oddAccountReview
+还存在的问题
+1.目前初始状态是已通知 ,但是我的是request（本质上是通知了的），但是我的没有真正意义上驳回补录的状态（我想的是我这个状态机要怎么改）
+还要关联/Users/martinjiang/WebstormProjects/qbit-admin-v3项目 也要看看这个列表要怎么改
+2.createOddAccountReviewV2 的方法我们要对没有风险评级的账户拿到kyb 或者kyc 状态是代补录或通过状态的最近时间作为baseDate
+
+startDate=2026-06-01%2000%3A00%3A00&endDate=2026-06-30%2023%3A59%3A59&accountId=2cef54b6-51c9-47c8-a56a-66934cbfd619&datetype=month

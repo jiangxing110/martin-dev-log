@@ -1,0 +1,133 @@
+SELECT ae."accountId"
+FROM "CddCompanyBusinessInformation" as cbi
+INNER JOIN "cddKyc" ck ON ck."id" = cbi."kycId"
+INNER JOIN "accountExtend" as ae ON ck."accountId"::UUID=ae."accountId"::UUID
+INNER JOIN "account" as a ON a."id"::UUID=ae."accountId"::UUID
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM "oddAccountReview" oar
+    WHERE oar."accountId"::UUID = ck."accountId"::UUID
+)
+and ae."systemType"='QBIT' and a.status='Active'
+and a."accountType"='Business'
+and a.type='Merchant' 
+GROUP BY ae."accountId"
+
+SELECT * FROM "CddCompanyBusinessInformation" cbi WHERE cbi."kycId"='e84bee03-efd7-47e9-9b9f-fc004d4d61d9'
+SELECT * FROM "cddKyc" WHERE "kyCaseId"='8fa4b339-f031-42bc-81ea-d155469e2eb9'
+SELECT * FROM "oddAccountReview"WHERE "accountId"='18fba800-26eb-41b4-994b-1413319bdf8f'
+
+
+SELECT
+    au."accountId",
+    u.phone
+FROM "accountUser" au
+INNER JOIN "user" u
+    ON au."userId"::UUID = u.id::UUID
+   AND u."userType" = 'Master'
+INNER JOIN "oddAccountReview" oar
+    ON oar."accountId"::UUID = au."accountId"::UUID
+   AND oar."deleteTime" IS NULL
+   AND oar."accountId" != 'cb8e047f-7836-407a-b732-f5ebd2203622'
+LEFT JOIN "accountExtend" ae
+    ON au."accountId"::UUID = ae."accountId"::UUID
+LEFT JOIN "account" a
+    ON a."id"::UUID = ae."accountId"::UUID
+   AND a.status IN ('Active')
+WHERE u."password" = '4c9db0041bc651f65796b073cbe7947c4a1fab92d633b39f00e3fa042607d4e9'
+GROUP BY
+    au."accountId",
+    u.phone,
+    oar."createTime"
+ORDER BY
+    oar."createTime" DESC;
+		
+		SELECT * FROM "faceAuth" WHERE "accountId"='e1b37c82-401f-47ea-9b54-a1fbc3fbb4ea'
+		
+SELECT * FROM "accountToDo" WHERE "accountId"='ef1fa30e-6d99-4986-873f-030169463889'and key='OddAccountReview'
+		
+
+
+        BEGIN;
+
+UPDATE "oddAccountReview"
+SET "deleteTime" = NOW()
+WHERE "accountId" != 'cb8e047f-7836-407a-b732-f5ebd2203622';
+
+UPDATE "cddKyc"
+SET "deleteTime" = NOW()
+WHERE "kyCaseId" IN (
+    SELECT "kyCaseId"
+    FROM "oddAccountReview"
+    WHERE "accountId" != 'cb8e047f-7836-407a-b732-f5ebd2203622'
+);
+
+UPDATE "cddKyb"
+SET "deleteTime" = NOW()
+WHERE "kyCaseId" IN (
+    SELECT "kyCaseId"
+    FROM "oddAccountReview"
+    WHERE "accountId" != 'cb8e047f-7836-407a-b732-f5ebd2203622'
+);
+
+UPDATE "accountToDo"
+SET "deleteTime" = NOW()
+WHERE "recordId" IN (
+    SELECT "kyCaseId"
+    FROM "oddAccountReview"
+    WHERE "accountId" != 'cb8e047f-7836-407a-b732-f5ebd2203622'
+)
+AND "status" = 'Na';
+
+COMMIT;
+
+
+SELECT * FROM "accountUser" WHERE "accountId"='75fd1dc0-da4b-4184-96ec-a550c0bdc5c4'
+SELECT * FROM account WHERE "displayId"='021938'
+SELECT * FROM "user" WHERE id='ff092d3b-26b9-40e3-9972-a096ba7cae8e'
+
+
+
+SELECT * FROM "cddKyc" WHERE "accountId"='75fd1dc0-da4b-4184-96ec-a550c0bdc5c4' and "isLatest"='true' ORDER  BY "createTime" desc;
+SELECT * FROM "CddCompanyBusinessInformation" WHERE "kycId"='455d08f7-5fa1-4cdf-acce-4cfcca94469b';
+
+SELECT "kyCaseId" FROM "oddAccountReview"
+SELECT * FROM "cddKyc" WHERE "kyCaseId" in (SELECT "kyCaseId" FROM "oddAccountReview")
+SELECT * FROM "cddKyb" WHERE "kyCaseId"='48a74b7a-b6c3-419d-8752-044cca0a81e8'
+
+SELECT * FROM "cddKyc" WHERE id='6f002c8f-fa80-47c2-95e6-d7ca662d8110'
+
+
+SELECT a.id,a."kycId",c."accountId" ,a."createTime"
+FROM "CddCompanyBusinessInformation" as a
+LEFT JOIN "cddKyc" as b ON a."kycId"::UUID=b.id::UUID
+LEFT JOIN "accountExtend" as c ON c."accountId"::UUID=b."accountId"::UUID
+LEFT JOIN account as d ON d.id=c."accountId"::UUID
+WHERE c."systemType"='QBIT' and d."accountType"='Business'
+and d.type='Merchant' 
+ORDER BY "createTime" desc
+
+7ec6fb49-e76a-47b6-b22c-0f2f8e960c17
+SELECT * FROM "CddCompanyBusinessInformation" ORDER BY "createTime" desc
+ WHERE id='a32bac43-7794-49e7-af75-3fef31d8a63a'
+
+SELECT * FROM account WHERE id='cb8e047f-7836-407a-b732-f5ebd2203622'
+SELECT * FROM "accountUser" WHERE "accountId"='cb8e047f-7836-407a-b732-f5ebd2203622'
+SELECT * FROM "user" WHERE "id"='0303fa11-51ef-413b-849c-1ab1af3433f1'
+
+SELECT * FROM "faceAuth" WHERE "accountId"='cb8e047f-7836-407a-b732-f5ebd2203622' ORDER BY "createTime" desc
+
+8c3ba147-5fe4-4ab4-8a84-4c71e22ff58a
+
+SELECT * FROM "cddKyc" WHERE "accountId"='cb8e047f-7836-407a-b732-f5ebd2203622' and "isLatest"='t' 
+SELECT * FROM "cddKyb" WHERE "accountId"='cb8e047f-7836-407a-b732-f5ebd2203622' and "isLatest"='t'
+SELECT * FROM "accountToDo" WHERE "accountId"='cb8e047f-7836-407a-b732-f5ebd2203622' and key='OddAccountReview' and "isLatest"='t' ORDER BY "createTime" desc
+SELECT * FROM "cddKyc" WHERE "id" in ('673efdec-100e-4a82-b44b-ed86ba1d0d2d')
+
+SELECT * FROM "oddAccountReview" WHERE "accountId"='cb8e047f-7836-407a-b732-f5ebd2203622'
+
+
+
+
+jiangxing1699@163.com
+Jiangxing@12306

@@ -1,0 +1,39 @@
+身份识别模块自动冻结
+触发case后，合规通知客户，case状态变为已通知，客户提交材料后合规审核，驳回后case状态变为待补录
+【已通知】和【待补录】的case若超过30自然日（从最新的通知/驳回日期来算）状态未有任何变更，将Qbit账户自动冻结，即账户只读（用户功能模块-操作-账户冻结），【冻结时长】为：永久，【冻结原因】为：ODD身份识别超时未更新。
+通知文案修改，触发发一次，27天后发一次，天数设为参数
+
+账户休眠 针对180天未登录导致账户休眠的场景，分别在第173天、177天发送提醒邮件 账户即将被冻结，请及时登录 Action Required: Your Account Will Be Frozen Soon "尊敬的客户 <%verifiedName%>：
+由于您的账户已长时间未登录，根据平台账户管理规则，该账户将于 <YYYY年MM月DD日> 起被冻结。
+为避免影响您的账户正常使用，请您务必在 <YYYY年MM月DD日> 前成功登录账户一次。完成登录后，您的账户将保持正常状态，不会受到本次冻结措施影响。
+感谢您的理解与配合。" "Dear <%verifiedName%>,
+As your account has been inactive for an extended period, it is scheduled to be frozen on <MMMM DD, YYYY> in accordance with our account management policy.
+To keep your account active and avoid any service interruption, please log in to your account successfully before <MMMM DD, YYYY>. Once you have logged in, your account will remain active and no further action will be required.
+Thank you for your cooperation. "
+账户休眠 针对180天未登录导致账户休眠的场景，冻结时的提醒邮件（之前这个场景走的是常规冻结账户邮件，客户不太清楚为什么被冻结） 您的账户已被冻结 Your Account Has Been Frozen "尊敬的客户 <%verifiedName%>：
+由于您的账户长期未登录，根据平台账户管理规则，您的账户已被暂时冻结。
+如需恢复账户使用，请尽快联系您的客户经理或客服团队，我们将协助您完成后续处理。
+感谢您的理解与配合！" "Dear <%verifiedName%>,
+Due to a prolonged period of inactivity, your account has been temporarily frozen in accordance with our account management policy.
+To restore access to your account, please contact your Account Manager or Customer Support team at your earliest convenience. We will be happy to assist you with the next steps.
+Thank you for your understanding and cooperation."
+账户冻结 因未及时更新身份识别模块证件导致的账户冻结，发送次邮件（之前这个场景走的也是常规冻结账户邮件，客户不太清楚为什么被冻结） 账户已被冻结，请及时更新账户相关文件 Action Required: Submit Required Documents to Restore Your Account "尊敬的客户 <%verifiedName%>：
+由于您未及时更新账户相关文件，根据合规要求，您的账户已被暂时冻结。
+为避免影响您的账户后续使用，请尽快登录系统，在【待办事项】中按要求上传文件。
+感谢您的理解与配合！" "Dear <%verifiedName%>,
+Due to the required account documents not being updated in a timely manner, your account has been temporarily frozen in accordance with our compliance requirements.
+To avoid any disruption to your account services, please log in to the platform as soon as possible and upload the required documents through the ""To-Do List"" section.
+Thank you for your understanding and cooperation."
+
+- 历史数据处理
+  历史已通知和待补录的客户（发布前15天之前的已通知、待补录客户），发布当天发送通知邮件，<天数>统一设置为7，7个自然日后若仍未上传，人工处理统一冻结账户
+  发布前15天以内的已通知、待补录客户，视为新客户，走新逻辑，在第27天发邮件通知，若未提交3 天后冻结
+
+科目 分值
+语文 110分
+数学 114分
+英语（含听力） 115分
+科学 150分
+社会（道德与法治、历史与社会） 94分
+体育 30分
+106+106+100+140+90+30

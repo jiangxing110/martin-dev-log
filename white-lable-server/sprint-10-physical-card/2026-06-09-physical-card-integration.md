@@ -1,0 +1,833 @@
+# Infinity Launch 实体卡对接文档
+
+## 1. 背景
+
+本期支持 Infinity Launch 实体卡申请、邮寄地址提交、卡样查询、制卡费查询、运费查询、物流查询、实体卡激活、PIN 设置/修改，以及 Admin 卡类型筛选。
+
+卡片类型复用数据库 `card.type` 字段：
+
+- `VIRTUAL_CARD`：虚拟卡
+- `PHYSICAL_CARD`：实体卡
+
+实体卡专属履约信息保存在 `card_physical_detail`。
+
+## 1.1 2026-07-07 更新
+
+本次补充以下结论与接口调整：
+
+- 会员端不再建议继续使用 `GET /member/api/v1/card/{id}/physical/fee-preview`。
+- 实体卡费用已拆分为 3 个接口：
+  - `GET /member/api/v1/card/physical/designs`
+  - `GET /member/api/v1/card/physical/production-fees`
+  - `GET /member/api/v1/card/physical/shipping-fee`
+- 卡样列表查询条件为 `cardBin + firstSix`。
+- 制卡费用查询条件为 `cardBin + firstSix`。
+- 运费查询条件为 `cardBin + firstSix + country`。
+- 卡样列表结果增加 1 天缓存，缓存 key 为 `cardBin + firstSix`。
+- 查询制卡费、运费时，如果 `cardBin` 和 `firstSix` 同时为空，后端默认回退为 `cardBin = I2c`、`firstSix = 454924`。
+- White Label 调 assets 卡样内部接口时，不能复用老的 `buildNodeHeaders` 签名；`/qbit-assets/internal/physical-card/designs` 需要使用 assets 内部签名头：`x-sign`、`x-timestamp`、`x-nonce-str`。
+- `card_physical_detail` 已补充 `physical_card_material` 字段，创建实体卡和提交邮寄地址时都会保存卡样材质快照。
+- 无论是 White Label 创建卡，还是 assets openApi 创建卡，当前都不会自动生成或返回默认 PIN；PIN 需要在开卡后单独设置。
+- 实体卡 PIN 已拆分为“首次设置”和“修改”两个接口，两者都必须先通过邮箱验证码校验。
+- 当前 PIN 流程不再使用旧 PIN 校验，也不保存 PIN 明文或可回放密文。
+
+## 2. 开卡能力
+
+### 查询开卡能力摘要
+
+`GET /member/api/v1/card/create-capability`
+
+用途：前端判断新增虚拟卡、新增实体卡按钮是否展示。
+
+响应字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| totalAvailableCount | number | 当前账户剩余可开卡数量，实体卡 + 虚拟卡总上限为 3 |
+| virtualCardAvailable | boolean | 是否可创建虚拟卡 |
+| physicalCardAvailable | boolean | 是否可创建实体卡 |
+| physicalCardReason | string | 实体卡不可创建原因 |
+| physicalCardBin | string | 当前账户可用的实体卡 BIN |
+| physicalCardBinId | string | 当前账户可用的实体卡 BIN ID |
+
+`physicalCardReason`：
+
+| 值 | 说明 |
+|---|---|
+| TOTAL_LIMIT_REACHED | 实体卡 + 虚拟卡总数已达 3 |
+| PHYSICAL_LIMIT_REACHED | 已有 1 张实体卡 |
+| BIN_NOT_ALLOWED | 当前账户无可用实体卡卡段权限 |
+
+## 3. 创建卡
+
+### 创建虚拟卡/实体卡
+
+`POST /member/api/v1/card`
+
+请求示例：
+
+```json
+{
+  "cardMode": "PHYSICAL_CARD",
+  "binId": "bin-id-from-create-capability",
+  "physicalCardDesignId": "BZ_SIGNATURE_BLACK_WHITE_PLASTIC",
+  "label": "My Physical Card"
+}
+```
+
+字段说明：
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| cardMode | 否 | `VIRTUAL_CARD` / `PHYSICAL_CARD`，为空默认 `VIRTUAL_CARD` |
+| binId | 实体卡必填 | 使用开卡能力接口返回的实体卡 BIN ID |
+| physicalCardDesignId | 否 | 实体卡样式 ID，未传使用后端默认值，联调需替换为三方真实 ID |
+| label | 否 | 卡片名称 |
+
+创建实体卡规则：
+
+- 实体卡 + 虚拟卡最多 3 张。
+- 实体卡最多 1 张。
+- 当前账户必须有至少 1 个可用实体卡 BIN 权限。
+- 创建成功后本地 `card.type = PHYSICAL_CARD`。
+- 创建成功后生成 `card_physical_detail`，状态为 `PENDING_SHIPPING_ADDRESS`。
+- 创建实体卡详情时同时保存 `physical_card_design_id` 和 `physical_card_material`。
+
+## 4. 卡列表与详情
+
+### 会员端卡列表
+
+`GET /member/api/v1/card/page`
+
+Query 参数：
+
+| 字段 | 说明 |
+|---|---|
+| status | 状态列表 |
+| cardMode | `VIRTUAL_CARD` / `PHYSICAL_CARD` |
+| page | 页码 |
+| size | 每页数量 |
+
+### Admin 卡列表
+
+`GET /admin/api/v1/card/page`
+
+新增 Query 参数：
+
+| 字段 | 说明 |
+|---|---|
+| cardMode | `VIRTUAL_CARD` / `PHYSICAL_CARD` |
+
+### 卡响应新增字段
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| cardMode | string | 卡片类型，`VIRTUAL_CARD` / `PHYSICAL_CARD` |
+| physicalCardStatus | string | 实体卡履约状态，仅实体卡有值 |
+| pinSet | boolean | 是否已设置 PIN，仅实体卡有值 |
+
+实体卡履约状态：
+
+| 状态 | 说明 |
+|---|---|
+| PENDING_SHIPPING_ADDRESS | 已创建实体卡，待提交邮寄地址 |
+| PROCESSING | 已提交邮寄地址，制卡/运输处理中 |
+| SHIPPING | 已查询到物流信息 |
+| ACTIVATED | 已激活 |
+| UNKNOWN | 三方状态无法识别 |
+
+## 5. 实体卡费用
+
+### 5.1 查询实体卡卡样列表
+
+`GET /member/api/v1/card/physical/designs`
+
+Query 参数：
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| cardBin | 是 | 卡段，例如 `I2c` |
+| firstSix | 是 | 卡号前六位，例如 `454924` |
+
+说明：
+
+- 当前 White Label 通过 assets 内部接口 `/qbit-assets/internal/physical-card/designs` 获取卡样列表。
+- assets 内部接口签名规则与老的 node 账户类接口不同，需使用基于 `method + path + timestamp + nonce` 的内部签名。
+- assets 若无匹配卡样，White Label 当前会回退到默认卡样。
+- 卡样列表结果按 `cardBin + firstSix` 缓存 1 天。
+
+### 5.2 查询实体卡制卡费
+
+`GET /member/api/v1/card/physical/production-fees`
+
+Query 参数：
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| cardBin | 否 | 卡段，和 `firstSix` 同时为空时默认 `I2c` |
+| firstSix | 否 | 卡号前六位，和 `cardBin` 同时为空时默认 `454924` |
+
+响应说明：
+
+- 当前返回币种 `USD`。
+- 制卡费需要按实际卡样材质和 API 口径匹配费率。
+- 当前涉及的费率类型至少包括：
+  - `AccountFeeType.QUANTUM_CARD_MAKE_CARD_FEE_BY_API`
+  - `AccountFeeType.QUANTUM_CARD_METAL_MAKE_CARD_FEE`
+  - `AccountFeeType.QUANTUM_CARD_CERAMIC_MAKE_CARD_FEE`
+
+### 5.3 查询实体卡运费
+
+`GET /member/api/v1/card/physical/shipping-fee`
+
+Query 参数：
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| cardBin | 否 | 卡段，和 `firstSix` 同时为空时默认 `I2c` |
+| firstSix | 否 | 卡号前六位，和 `cardBin` 同时为空时默认 `454924` |
+| country | 是 | 邮寄国家，ISO2，例如 `US` |
+
+响应说明：
+
+- 当前返回币种 `USD`。
+- 运费来源为 `AccountFeeType.SHOPPING_FEE`。
+
+费用口径：
+
+| 费用 | AccountFeeType | 说明 |
+|---|---|---|
+| 制卡费 | `QuantumCardMakeCardFeeByApi` | API 口径基础制卡费，对应 `AccountFeeType.QUANTUM_CARD_MAKE_CARD_FEE_BY_API` |
+| 制卡费 | `QuantumCardMetalMakeCardFee` | 金属卡制卡费，对应 `AccountFeeType.QUANTUM_CARD_METAL_MAKE_CARD_FEE` |
+| 制卡费 | `QuantumCardCeramicMakeCardFee` | 陶瓷卡制卡费，对应 `AccountFeeType.QUANTUM_CARD_CERAMIC_MAKE_CARD_FEE` |
+| 邮寄费 | `ShoppingFee` | 对应 `AccountFeeType.SHOPPING_FEE` |
+
+注意：
+
+- 不再建议前端依赖旧的 `fee-preview` 接口。
+- 不使用 `_Caas` 版本费率。
+- 提交邮寄地址时后端会重新计算一次费用，并将 `production_fee`、`shipping_fee`、`total_cost`、`physical_card_material` 快照保存到 `card_physical_detail`。
+- 如果缺少对应材质制卡费或 `ShoppingFee` 配置，提交邮寄地址会失败。
+
+## 6. 邮寄地址
+
+### 提交邮寄地址
+
+`POST /member/api/v1/card/{id}/physical/shipping-address`
+
+请求示例：
+
+```json
+{
+  "firstName": "San",
+  "lastName": "Zhang",
+  "phoneCountryCode": "+86",
+  "phoneNumber": "13800138000",
+  "email": "san.zhang@example.com",
+  "addressLine1": "Room 101, Road 1",
+  "addressLine2": "Building A",
+  "city": "Shanghai",
+  "state": "Shanghai",
+  "country": "CN",
+  "postalCode": "200000"
+}
+```
+
+规则：
+
+- 只能本人账户提交。
+- 只能实体卡提交。
+- 仅 `PENDING_SHIPPING_ADDRESS` 状态可提交。
+- `firstName` / `lastName` 仅支持英文、空格、连字符、撇号。
+- 成功后状态变为 `PROCESSING`。
+- 成功后保存收件人与地址快照、费用快照。
+
+## 7. 物流查询
+
+### 查询物流信息
+
+`GET /member/api/v1/card/{id}/physical/shipping-info`
+
+响应字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| available | boolean | 是否已有物流信息 |
+| expressCompany | string | 快递公司 |
+| trackingNumber | string | 快递单号 |
+| trackingUrl | string | 物流查询地址 |
+| physicalCardStatus | string | 实体卡履约状态 |
+
+规则：
+
+- 无物流信息时返回 `available = false`，不作为异常。
+- 有物流单号时同步快递公司、单号、URL，状态更新为 `SHIPPING`。
+
+## 8. 激活实体卡
+
+### 激活
+
+`POST /member/api/v1/card/{id}/physical/activate`
+
+规则：
+
+- 只能本人账户操作。
+- 必须已提交邮寄地址。
+- `PROCESSING` 或 `SHIPPING` 状态可激活。
+- 成功后 `physicalCardStatus = ACTIVATED`。
+- 成功后同步 `card.status = ACTIVE`。
+
+## 9. 设置/修改 PIN
+
+### 9.1 首次设置 PIN
+
+`POST /member/api/v1/card/{id}/pin/set`
+
+请求示例：
+
+```json
+{
+  "pin": "123456",
+  "verificationCode": "123456"
+}
+```
+
+规则：
+
+- 只能本人账户操作。
+- 仅 `ACTIVATED` 实体卡可设置 PIN。
+- 仅 `pinSet = false` 时允许调用。
+- PIN 当前按 6 位数字校验。
+- 必须先通过邮箱验证码校验，验证码类型为 `UPDATE_PIN`。
+- PIN 不落库、不打印日志。
+- 成功后仅保存 `pin_set = true`。
+
+### 9.2 修改 PIN
+
+`POST /member/api/v1/card/{id}/pin/update`
+
+请求示例：
+
+```json
+{
+  "pin": "123456",
+  "verificationCode": "123456"
+}
+```
+
+规则：
+
+- 只能本人账户操作。
+- 仅 `ACTIVATED` 实体卡可修改 PIN。
+- 仅 `pinSet = true` 时允许调用。
+- PIN 当前按 6 位数字校验。
+- 必须先通过邮箱验证码校验，验证码类型为 `UPDATE_PIN`。
+- 当前不校验旧 PIN，也不会把旧 PIN 透传给上游。
+- PIN 不落库、不打印日志。
+- 成功后保持 `pin_set = true`。
+
+## 10. 冻结/解冻限制
+
+现有接口：
+
+- `POST /member/api/v1/card/freeze/{id}`
+- `POST /member/api/v1/card/unfreeze/{id}`
+- `POST /admin/api/v1/card/freeze/{id}`
+- `POST /admin/api/v1/card/unfreeze/{id}`
+
+实体卡规则：
+
+- `PENDING_SHIPPING_ADDRESS`、`PROCESSING`、`SHIPPING` 状态禁止冻结/解冻。
+- 仅 `ACTIVATED` 状态沿用现有冻结/解冻逻辑。
+
+## 11. Webhook 同步
+
+现有 webhook 入口：
+
+`POST /admin/api/v1/open-api/webhook`
+
+已接入卡生命周期事件：
+
+| 事件 | 处理 |
+|---|---|
+| CARD.CREATED | 同步本地卡基础信息，必要时补实体卡详情 |
+| CARD.UPDATED | 同步本地卡基础信息 |
+| CARD.DELETED | 同步本地卡状态，默认置为 `INACTIVE` |
+| CARD.SETTING.UPDATED | 同步卡设置；能识别 PIN 更新时设置 `pin_set = true` |
+| PHYSICAL_CARD_ACTIVATED | 兜底同步实体卡状态为 `ACTIVATED` |
+
+幂等：
+
+- 继续复用 `webhook_event` 的 `eventId + SUCCESS` 幂等。
+- 找不到本地卡时记录 warn 并返回成功，避免三方持续重试。
+
+## 12. 前端建议流程
+
+1. 进入卡片页，调用 `GET /card/create-capability`。
+2. 根据返回值展示 Add Virtual Card / Add Physical Card。
+3. 创建实体卡时传 `cardMode = PHYSICAL_CARD` 和实体卡 BIN ID。
+4. 创建成功后进入 Shipping Address 页面。
+5. Shipping Address 页面先调用 `GET /card/physical/designs` 获取卡样，再调用 `GET /card/physical/production-fees` 和 `GET /card/physical/shipping-fee` 展示费用；如果前端拿不到 `cardBin/firstSix`，可留空，由后端按默认值补齐。
+6. 用户确认后调用 `POST /card/{id}/physical/shipping-address`。
+7. 详情页按 `physicalCardStatus` 控制按钮展示：
+   - `PENDING_SHIPPING_ADDRESS`：展示填写邮寄地址。
+   - `PROCESSING` / `SHIPPING`：展示物流信息、激活按钮；隐藏冻结/解冻。
+   - `ACTIVATED`：展示设置/修改 PIN、冻结/解冻。
+8. 激活后根据 `pinSet` 分流：
+   - `pinSet = false`：调用 `POST /card/{id}/pin/set`
+   - `pinSet = true`：调用 `POST /card/{id}/pin/update`
+9. PIN 设置和修改都需要先发送并校验邮箱验证码，验证码类型为 `UPDATE_PIN`。
+
+## 13. 待联调确认
+
+- BZ 黑白塑料实体卡真实 `physicalCardDesignId`。
+- PIN 是否确认为 6 位数字。
+- 三方 `CARD.SETTING.UPDATED` resource 是否能明确识别 PIN 更新。
+- 费用配置中 `QuantumCardMakeCardFee`、`ShoppingFee` 是否已为 Infinity Launch 配好最终客户价。
+
+## 14. curl 示例
+
+说明：
+
+- 以下示例使用测试环境域名。
+- `authorization`、`nonce`、`sign`、`timestamp`、`fingerprint` 请按实际登录态和签名规则替换。
+- Member 端示例使用 `platform: member`；Admin 端示例使用 `platform: admin`。
+- 示例里的 `X-Tenant-Id` 使用 `489789`，联调时按实际租户替换。
+
+### 14.1 Member 通用 Header 模板
+
+```bash
+-H 'Accept: application/json, text/plain, */*' \
+-H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+-H 'Connection: keep-alive' \
+-H 'Content-Type: application/json' \
+-H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+-H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+-H 'X-Tenant-Id: 489789' \
+-H 'authorization: Bearer <MEMBER_TOKEN>' \
+-H 'fingerprint: <FINGERPRINT>' \
+-H 'lang: zh_CN' \
+-H 'nonce: <NONCE>' \
+-H 'platform: member' \
+-H 'sign: <SIGN>' \
+-H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.2 Admin 通用 Header 模板
+
+```bash
+-H 'Accept: application/json, text/plain, */*' \
+-H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+-H 'Connection: keep-alive' \
+-H 'Content-Type: application/json' \
+-H 'Origin: https://test-u-app-admin.qbitnetwork.com:26813' \
+-H 'Referer: https://test-u-app-admin.qbitnetwork.com:26813/' \
+-H 'X-Tenant-Id: 489789' \
+-H 'authorization: Bearer <ADMIN_TOKEN>' \
+-H 'fingerprint: <FINGERPRINT>' \
+-H 'lang: zh_CN' \
+-H 'nonce: <NONCE>' \
+-H 'platform: admin' \
+-H 'sign: <SIGN>' \
+-H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.3 查询开卡能力摘要
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/create-capability' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.4 创建实体卡
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>' \
+  --data-raw '{"cardMode":"PHYSICAL_CARD","binId":"<PHYSICAL_CARD_BIN_ID>","physicalCardDesignId":"BZ_SIGNATURE_BLACK_WHITE_PLASTIC","label":"My Physical Card"}'
+```
+
+### 14.5 创建虚拟卡
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>' \
+  --data-raw '{"cardMode":"VIRTUAL_CARD","binId":"<VIRTUAL_CARD_BIN_ID>","label":"My Virtual Card"}'
+```
+
+### 14.6 查询会员端卡列表
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/page?page=1&size=10&cardMode=PHYSICAL_CARD' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.7 查询卡详情
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/<CARD_ID>' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.8 查询实体卡卡样列表
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/physical/designs?cardBin=I2c&firstSix=454924' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.8.1 查询实体卡制卡费
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/physical/production-fees?cardBin=I2c&firstSix=454924' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.8.2 查询实体卡运费
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/physical/shipping-fee?cardBin=I2c&firstSix=454924&country=US' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.9 提交实体卡邮寄地址
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/<CARD_ID>/physical/shipping-address' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>' \
+  --data-raw '{"firstName":"San","lastName":"Zhang","phoneCountryCode":"+86","phoneNumber":"13800138000","email":"san.zhang@example.com","addressLine1":"Room 101, Road 1","addressLine2":"Building A","city":"Shanghai","state":"Shanghai","country":"CN","postalCode":"200000"}'
+```
+
+### 14.10 查询实体卡物流信息
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/<CARD_ID>/physical/shipping-info' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.11 激活实体卡
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/<CARD_ID>/physical/activate' \
+  -X POST \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.12 首次设置实体卡 PIN
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/<CARD_ID>/pin/set' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>' \
+  --data-raw '{"pin":"123456","verificationCode":"123456"}'
+```
+
+### 14.12.1 修改实体卡 PIN
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/<CARD_ID>/pin/update' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>' \
+  --data-raw '{"pin":"123456","verificationCode":"123456"}'
+```
+
+### 14.13 会员端冻结实体卡
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/freeze/<CARD_ID>' \
+  -X POST \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.14 会员端解冻实体卡
+
+```bash
+curl 'https://test-white-label-member.qbitnetwork.com:26811/member/api/v1/card/unfreeze/<CARD_ID>' \
+  -X POST \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-member.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-member.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <MEMBER_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: member' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.15 Admin 查询卡列表
+
+```bash
+curl 'https://test-white-label-admin.qbitnetwork.com:26811/admin/api/v1/card/page?status=ACTIVE&cardMode=PHYSICAL_CARD&page=1&size=10' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-admin.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-admin.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <ADMIN_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: admin' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.16 Admin 查询卡详情
+
+```bash
+curl 'https://test-white-label-admin.qbitnetwork.com:26811/admin/api/v1/card/<CARD_ID>' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-admin.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-admin.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <ADMIN_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: admin' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.17 Admin 冻结卡
+
+```bash
+curl 'https://test-white-label-admin.qbitnetwork.com:26811/admin/api/v1/card/freeze/<CARD_ID>' \
+  -X POST \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-admin.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-admin.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <ADMIN_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: admin' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.18 Admin 解冻卡
+
+```bash
+curl 'https://test-white-label-admin.qbitnetwork.com:26811/admin/api/v1/card/unfreeze/<CARD_ID>' \
+  -X POST \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: https://test-u-app-admin.qbitnetwork.com:26813' \
+  -H 'Referer: https://test-u-app-admin.qbitnetwork.com:26813/' \
+  -H 'X-Tenant-Id: 489789' \
+  -H 'authorization: Bearer <ADMIN_TOKEN>' \
+  -H 'fingerprint: <FINGERPRINT>' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: <NONCE>' \
+  -H 'platform: admin' \
+  -H 'sign: <SIGN>' \
+  -H 'timestamp: <TIMESTAMP>'
+```
+
+### 14.19 Webhook 回放示例
+
+```bash
+curl 'https://test-white-label-admin.qbitnetwork.com:26811/admin/api/v1/open-api/webhook' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Content-Type: application/json' \
+  -H 'X-Tenant-Id: 489789' \
+  --data-raw '{"id":"<WEBHOOK_EVENT_ID>","eventType":"PHYSICAL_CARD_ACTIVATED","apiVersion":"v1","createTime":"2026-06-09T00:00:00Z","code":"000000","message":"success","resource":"{\"id\":\"<OUTER_CARD_ID>\",\"referenceId\":\"<LOCAL_CARD_UNIQUE_KEY>\",\"status\":\"ACTIVE\",\"cardMode\":\"PHYSICAL_CARD\"}"}'
+```

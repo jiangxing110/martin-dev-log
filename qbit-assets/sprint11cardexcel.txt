@@ -1,0 +1,99 @@
+card 查询导出
+路径
+/export/3.0/完整卡号/卡ID查询-20260625112243204.xlsx
+要补充excel的内容
+还是在这个方法
+@PostMapping("/card-number/list")
+@Operation(description = "量子卡私密卡号列表")
+public Result<Boolean> cardNumberList(@Valid @RequestBody CardNumberListDTO request) {
+return Result.ok(quantumCardService.cardNumberList(request));
+}
+
+完整卡号 卡ID 
+displayId verified name
+
+卡创建时间 卡状态
+
+近30天交易总金额
+近30天交易总笔数
+
+    /**
+     * 全量消费数量
+     * 所有客户行为的交易，需要剔除business_code_list包含1001、1008、1009、1011、1103的交易
+     */
+    private BigDecimal allConsumeCount;
+
+    /**
+     * 全量消费金额
+     * 所有客户行为的交易，需要剔除business_code_list包含1001、1008、1009的交易，
+     * 也需减去business_code_list包含1105的交易
+     */
+    private BigDecimal allConsumeAmount;
+
+近30天拒付总金额
+近30天拒付总笔数
+近30天拒付率
+   /**
+     * 拒付数量
+     * 交易类型为消费，交易状态为失败的交易，需剔除business_code_list包含1008、1009、1011的交易
+     */
+    private BigDecimal rejectCount;
+
+    /**
+     * 拒付金额
+     * 交易类型为消费，交易状态为失败的交易，需剔除business_code_list包含1008、1009的交易
+     */
+    private BigDecimal rejectAmount;
+
+近30天强扣总金额
+近30天强扣总笔数
+  /**
+     * 强制扣款交易数量
+     * business_code_list为1001的消费
+     */
+    private BigDecimal mandatoryCount;
+
+    /**
+     * 强制扣款交易金额
+     * business_code_list为1001的消费
+     */
+    private BigDecimal mandatoryAmount;
+
+
+近30天退款总金额
+近30天退款总笔数
+近30天退款率
+    /**
+     * 退款数量
+     * 交易类型为退款，需剔除business_code_list为1105的交易
+     */
+    private BigDecimal creditCount;
+
+    /**
+     * 退款金额
+     * 交易类型为退款，需剔除business_code_list为1105的交易
+     */
+    private BigDecimal creditAmount;
+
+近30天0元授权笔数
+    /**
+     * 0元授权数量
+     * business_code_list为1010且business_code_list不为1011的交易
+     */
+    private BigDecimal zeroAuthCount;
+近30天主要交易商户Details
+近30天ATM取现总金额
+近30天ATM取现总笔数
+
+   
+a2e61fb0-bdd4-462c-bfac-779477e7f126
+e6b54f80-2994-4541-b8eb-517914045379
+85f33548-62d2-43de-ab44-b1c5aebc5d16
+60458af6-224a-488b-84e5-7d323a40f05f
+e0a13c6e-4e5d-40b8-9da2-a9490e945d57
+6093ca00-35e0-40bd-a0b9-82891dbcd16c
+04877f4f-204c-409c-80c2-0d46a4dd9e2f
+9d8deddb-7389-4b21-8c2c-303fb3658d0d
+73c687ce-01bc-4680-ae01-d7292da4df70
+1ac674d8-192f-4c2f-b8ed-64b139573fd3
+2410ac1f-d3d8-485f-a6ac-0364b18f0b26

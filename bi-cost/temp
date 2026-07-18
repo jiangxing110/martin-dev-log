@@ -1,0 +1,86 @@
+目前/Users/martinjiang/martin-dev-log/bi-cost/flink 下的脚本已经整理完毕,并且在阿里云实时计算 Flink版本上已经基本跑完
+现在有下面的几点需要完成
+1.对所有的脚本加备注区分 批处理 还是流处理
+2.对有添加了运行参数的脚本 给我输出来
+3.ods都需要实现原始数据库的表改变了ods的数据要变更dim的也要改变
+
+有些问题 我不知道是怎么处理的
+类似于ods_qbit_card_transaction 
+2026-05-01 交易有 20 笔closed ,10笔 pending ,10 笔 fail
+2026-05-02 交易有 25 笔closed ,0笔 pending ,15 笔 fail
+那我涉及的dwm dws 要怎么处理呢
+
+ff22382b-df2e-4a76-b92e-bc32e3b8b089
+f67cd913-4d76-47bf-b6f6-02c7531a2a69
+
+
+
+--********************************************************************--
+-- Author:         lihuarong
+-- Created Time:   2026-06-07
+-- Description:    转账业务每日汇总（adbpg upsert模式）
+--********************************************************************--
+
+-- 核心运行配置
+SET 'parallelism.default' = '2';
+SET 'pipeline.operator-chaining' = 'false';
+SET 'table.exec.sink.not-null-enforcer' = 'DROP';
+
+-- 重启策略配置
+SET 'restart-strategy.type' = 'fixed-delay';
+SET 'restart-strategy.fixed-delay.attempts' = '3';
+SET 'restart-strategy.fixed-delay.delay' = '60s';
+
+-- ===================== 1. 源表：ods.ods_transfer =====================
+CREATE TEMPORARY TABLE ods_transfer (
+    account_id           STRING,
+    transaction_id       STRING,
+    business_type_detail STRING,
+    business_code        STRING,
+    status               STRING,
+    usd_amount           DECIMAL(18,2),
+    fee                  DECIMAL(18,2),
+    usd_rate             DECIMAL(12,6),
+    currency             STRING,
+    settlement_currency  STRING,
+    create_time_utc8     TIMESTAMP(3),
+    create_time          TIMESTAMP(3),
+    delete_time          TIMESTAMP(3)
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = 'dwd.dwd_transfer',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver'
+);
+
+
+
+-- ===================== 3. 目标表：dwm.dwm_transfer =====================
+CREATE TEMPORARY TABLE dwm_transfer (
+    account_id           STRING,
+    create_date          DATE,
+    business_type_detail STRING,
+    status               STRING,
+    usd_amount     DECIMAL(20,3),
+    fee_amount     DECIMAL(20,3),
+    quantity          BIGINT,
+    sale_id              STRING,
+    am_id                STRING,
+    create_time          TIMESTAMP(6),
+    update_time          TIMESTAMP(6),
+    business_code        STRING,
+    currency             STRING,
+    settlement_currency  STRING,
+    PRIMARY KEY (account_id, create_date, status, business_type_detail, business_code, currency, settlement_currency, sale_id, am_id) NOT ENFORCED
+) WITH (
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'targetSchema' = 'dwm',
+    'tableName' = 'dwm_transfer',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'writeMode' = 'upsert',
+    'batchSize' = '1000'
+);
