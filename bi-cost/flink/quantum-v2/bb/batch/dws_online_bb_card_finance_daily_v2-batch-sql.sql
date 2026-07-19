@@ -13,12 +13,14 @@
 --   3. 固定成本和 Active Card fee 由独立特殊行脚本处理，主链路保持 0。
 --********************************************************************--
 
-SET 'parallelism.default' = '4';
-SET 'taskmanager.memory.network.min' = '1gb';
-SET 'taskmanager.memory.network.max' = '3gb';
-SET 'taskmanager.memory.network.fraction' = '0.2';
-SET 'pipeline.default-parallelism' = '4';
-SET 'table.exec.resource.default-parallelism' = '4';
+SET 'parallelism.default' = '1';
+-- 进程内存由平台侧配置，这里只保留较保守的网络缓冲建议。
+SET 'taskmanager.memory.network.min' = '1536mb';
+SET 'taskmanager.memory.network.max' = '1536mb';
+SET 'taskmanager.memory.network.fraction' = '0.45';
+SET 'taskmanager.network.sort-shuffle.min-buffers' = '64';
+SET 'pipeline.default-parallelism' = '1';
+SET 'table.exec.resource.default-parallelism' = '1';
 SET 'pipeline.operator-chaining' = 'true';
 SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'execution.multi-jobs-in-application.enable' = 'false';
@@ -91,11 +93,11 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_transaction_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, txn_id, settlement_id, source_id, card_transaction_id, account_id, account_type, account_category, system_type, card_id, transaction_time, original_completion_time, business_type, business_code_list, remarks, detail, card_org, tx_country, settle_country, is_dom, resp_code, reason_code, transaction_type, is_valid_settle, is_clearing, is_reversal, is_refund, billing_amount, settlement_post_date, settlement_txn_date, sale_id, am_id, version, create_time, update_time, delete_time FROM dwm.dwm_bb_card_transaction_detail_v2_p) AS dwm_bb_card_transaction_detail_v2_f',
+    'table-name' = '(SELECT t.id, t.txn_id, t.settlement_id, t.source_id, t.card_transaction_id, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.transaction_time, t.original_completion_time, t.business_type, t.business_code_list, t.remarks, t.detail, t.card_org, t.tx_country, t.settle_country, t.is_dom, t.resp_code, t.reason_code, t.transaction_type, t.is_valid_settle, t.is_clearing, t.is_reversal, t.is_refund, t.billing_amount, t.settlement_post_date, t.settlement_txn_date, t.sale_id, t.am_id, t.version, t.create_time, t.update_time, t.delete_time FROM generate_series(date_trunc(''day'', CAST(''${start_date}'' AS TIMESTAMP(6))), date_trunc(''day'', CAST(''${end_date}'' AS TIMESTAMP(6))) - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(day_start) JOIN dwm.dwm_bb_card_transaction_detail_v2_p t ON t.delete_time IS NULL AND t.original_completion_time >= gs.day_start AND t.original_completion_time < LEAST(gs.day_start + INTERVAL ''1 day'', CAST(''${end_date}'' AS TIMESTAMP(6)))) AS dwm_bb_card_transaction_detail_v2_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'scan.fetch-size' = '1000'
 );
 
 CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
@@ -135,11 +137,11 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, auth_txn_guid, card_proxy, account_id, account_type, account_category, system_type, card_id, auth_time, program_name, merchant_country, request_code, request_description, response_code, reason_code, txn_amount, settle_amount, txn_currency, merchant_name, mcc, card_org, is_dom, is_decline, is_account_verification, is_excluded_request, sale_id, am_id, source_table, version, create_time, update_time, delete_time FROM dwm.dwm_bb_card_auth_detail_v2_p) AS dwm_bb_card_auth_detail_v2_f',
+    'table-name' = '(SELECT t.id, t.auth_txn_guid, t.card_proxy, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.auth_time, t.program_name, t.merchant_country, t.request_code, t.request_description, t.response_code, t.reason_code, t.txn_amount, t.settle_amount, t.txn_currency, t.merchant_name, t.mcc, t.card_org, t.is_dom, t.is_decline, t.is_account_verification, t.is_excluded_request, t.sale_id, t.am_id, t.source_table, t.version, t.create_time, t.update_time, t.delete_time FROM generate_series(date_trunc(''day'', CAST(''${start_date}'' AS TIMESTAMP(6))), date_trunc(''day'', CAST(''${end_date}'' AS TIMESTAMP(6))) - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(day_start) JOIN dwm.dwm_bb_card_auth_detail_v2_p t ON t.delete_time IS NULL AND t.auth_time >= gs.day_start AND t.auth_time < LEAST(gs.day_start + INTERVAL ''1 day'', CAST(''${end_date}'' AS TIMESTAMP(6)))) AS dwm_bb_card_auth_detail_v2_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'scan.fetch-size' = '1000'
 );
 
 CREATE TEMPORARY VIEW v_bb_txn_time_rows AS
@@ -323,33 +325,77 @@ GROUP BY report_date, account_id, account_type, account_category, system_type, s
 
 CREATE TEMPORARY VIEW v_bb_count_metrics AS
 SELECT
-    COALESCE(t.report_date, p.report_date) AS report_date,
-    COALESCE(t.account_id, p.account_id) AS account_id,
-    COALESCE(t.account_type, p.account_type) AS account_type,
-    COALESCE(t.account_category, p.account_category) AS account_category,
-    COALESCE(t.system_type, p.system_type) AS system_type,
-    COALESCE(t.m_dom_auth_count, 0) AS m_dom_auth_count,
-    COALESCE(t.m_int_auth_count, 0) AS m_int_auth_count,
-    COALESCE(t.v_dom_auth_count, 0) AS v_dom_auth_count,
-    COALESCE(t.v_int_auth_count, 0) AS v_int_auth_count,
-    COALESCE(t.m_int_reversal_count, 0) AS m_int_reversal_count,
-    COALESCE(t.v_int_reversal_count, 0) AS v_int_reversal_count,
-    COALESCE(t.dom_reversal_count, 0) AS dom_reversal_count,
-    COALESCE(p.m_int_refund_count, 0) AS m_int_refund_count,
-    COALESCE(p.v_int_refund_count, 0) AS v_int_refund_count,
-    COALESCE(p.dom_refund_count, 0) AS dom_refund_count,
-    COALESCE(t.av_m_dom_count, 0) AS av_m_dom_count,
-    COALESCE(t.av_m_int_count, 0) AS av_m_int_count,
-    COALESCE(t.av_v_dom_count, 0) AS av_v_dom_count,
-    COALESCE(t.av_v_int_count, 0) AS av_v_int_count,
-    COALESCE(t.sale_id, p.sale_id) AS sale_id,
-    COALESCE(t.am_id, p.am_id) AS am_id
-FROM v_bb_txn_count_metrics t
-FULL OUTER JOIN v_bb_post_count_metrics p
-    ON t.report_date = p.report_date
-   AND t.account_id = p.account_id
-   AND COALESCE(t.sale_id, '') = COALESCE(p.sale_id, '')
-   AND COALESCE(t.am_id, '') = COALESCE(p.am_id, '');
+    report_date,
+    account_id,
+    account_type,
+    account_category,
+    system_type,
+    CAST(SUM(m_dom_auth_count) AS INT) AS m_dom_auth_count,
+    CAST(SUM(m_int_auth_count) AS INT) AS m_int_auth_count,
+    CAST(SUM(v_dom_auth_count) AS INT) AS v_dom_auth_count,
+    CAST(SUM(v_int_auth_count) AS INT) AS v_int_auth_count,
+    CAST(SUM(m_int_reversal_count) AS INT) AS m_int_reversal_count,
+    CAST(SUM(v_int_reversal_count) AS INT) AS v_int_reversal_count,
+    CAST(SUM(dom_reversal_count) AS INT) AS dom_reversal_count,
+    CAST(SUM(m_int_refund_count) AS INT) AS m_int_refund_count,
+    CAST(SUM(v_int_refund_count) AS INT) AS v_int_refund_count,
+    CAST(SUM(dom_refund_count) AS INT) AS dom_refund_count,
+    CAST(SUM(av_m_dom_count) AS INT) AS av_m_dom_count,
+    CAST(SUM(av_m_int_count) AS INT) AS av_m_int_count,
+    CAST(SUM(av_v_dom_count) AS INT) AS av_v_dom_count,
+    CAST(SUM(av_v_int_count) AS INT) AS av_v_int_count,
+    sale_id,
+    am_id
+FROM (
+    SELECT
+        report_date,
+        account_id,
+        account_type,
+        account_category,
+        system_type,
+        m_dom_auth_count,
+        m_int_auth_count,
+        v_dom_auth_count,
+        v_int_auth_count,
+        m_int_reversal_count,
+        v_int_reversal_count,
+        dom_reversal_count,
+        CAST(0 AS INT) AS m_int_refund_count,
+        CAST(0 AS INT) AS v_int_refund_count,
+        CAST(0 AS INT) AS dom_refund_count,
+        av_m_dom_count,
+        av_m_int_count,
+        av_v_dom_count,
+        av_v_int_count,
+        sale_id,
+        am_id
+    FROM v_bb_txn_count_metrics
+    UNION ALL
+    SELECT
+        report_date,
+        account_id,
+        account_type,
+        account_category,
+        system_type,
+        CAST(0 AS INT) AS m_dom_auth_count,
+        CAST(0 AS INT) AS m_int_auth_count,
+        CAST(0 AS INT) AS v_dom_auth_count,
+        CAST(0 AS INT) AS v_int_auth_count,
+        CAST(0 AS INT) AS m_int_reversal_count,
+        CAST(0 AS INT) AS v_int_reversal_count,
+        CAST(0 AS INT) AS dom_reversal_count,
+        m_int_refund_count,
+        v_int_refund_count,
+        dom_refund_count,
+        CAST(0 AS INT) AS av_m_dom_count,
+        CAST(0 AS INT) AS av_m_int_count,
+        CAST(0 AS INT) AS av_v_dom_count,
+        CAST(0 AS INT) AS av_v_int_count,
+        sale_id,
+        am_id
+    FROM v_bb_post_count_metrics
+) unioned
+GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id;
 
 CREATE TEMPORARY VIEW v_bb_txn_amount_metrics AS
 SELECT
@@ -371,50 +417,112 @@ GROUP BY report_date, account_id, account_type, account_category, system_type, s
 
 CREATE TEMPORARY VIEW v_dws_bb_txn_daily_base AS
 SELECT
-    CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(COALESCE(c.report_date, a.report_date) AS TIMESTAMP(6)), 'yyyyMMdd'), ':', COALESCE(c.account_id, a.account_id), ':', COALESCE(c.sale_id, a.sale_id, ''), ':', COALESCE(c.am_id, a.am_id, '')))) AS BIGINT) AS id,
-    COALESCE(c.report_date, a.report_date) AS report_date,
-    COALESCE(c.account_id, a.account_id) AS account_id,
-    COALESCE(c.account_type, a.account_type) AS account_type,
-    COALESCE(c.account_category, a.account_category) AS account_category,
-    COALESCE(c.system_type, a.system_type) AS system_type,
-    COALESCE(c.m_dom_auth_count, 0) AS m_dom_auth_count,
-    COALESCE(c.m_int_auth_count, 0) AS m_int_auth_count,
-    COALESCE(c.v_dom_auth_count, 0) AS v_dom_auth_count,
-    COALESCE(c.v_int_auth_count, 0) AS v_int_auth_count,
-    CAST(0 AS INT) AS m_int_decline_count,
-    CAST(0 AS INT) AS v_int_decline_count,
-    CAST(0 AS INT) AS dom_decline_count,
-    COALESCE(c.m_int_reversal_count, 0) AS m_int_reversal_count,
-    COALESCE(c.v_int_reversal_count, 0) AS v_int_reversal_count,
-    COALESCE(c.dom_reversal_count, 0) AS dom_reversal_count,
-    COALESCE(c.m_int_refund_count, 0) AS m_int_refund_count,
-    COALESCE(c.v_int_refund_count, 0) AS v_int_refund_count,
-    COALESCE(c.dom_refund_count, 0) AS dom_refund_count,
-    COALESCE(c.av_m_dom_count, 0) AS av_m_dom_count,
-    COALESCE(c.av_m_int_count, 0) AS av_m_int_count,
-    COALESCE(c.av_v_dom_count, 0) AS av_v_dom_count,
-    COALESCE(c.av_v_int_count, 0) AS av_v_int_count,
-    COALESCE(a.m_dom_clearing_vol, CAST(0 AS DECIMAL(20, 4))) AS m_dom_clearing_vol,
-    COALESCE(a.m_int_clearing_vol, CAST(0 AS DECIMAL(20, 4))) AS m_int_clearing_vol,
-    COALESCE(a.v_dom_clearing_vol, CAST(0 AS DECIMAL(20, 4))) AS v_dom_clearing_vol,
-    COALESCE(a.v_int_clearing_vol, CAST(0 AS DECIMAL(20, 4))) AS v_int_clearing_vol,
-    COALESCE(a.bb_rebate_base_amt, CAST(0 AS DECIMAL(20, 4))) AS bb_rebate_base_amt,
-    COALESCE(a.bb_channel_cashback_comm, CAST(0 AS DECIMAL(20, 4))) AS bb_channel_cashback_comm,
+    CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', COALESCE(sale_id, ''), ':', COALESCE(am_id, '')))) AS BIGINT) AS id,
+    report_date,
+    account_id,
+    account_type,
+    account_category,
+    system_type,
+    CAST(SUM(m_dom_auth_count) AS INT) AS m_dom_auth_count,
+    CAST(SUM(m_int_auth_count) AS INT) AS m_int_auth_count,
+    CAST(SUM(v_dom_auth_count) AS INT) AS v_dom_auth_count,
+    CAST(SUM(v_int_auth_count) AS INT) AS v_int_auth_count,
+    CAST(SUM(m_int_decline_count) AS INT) AS m_int_decline_count,
+    CAST(SUM(v_int_decline_count) AS INT) AS v_int_decline_count,
+    CAST(SUM(dom_decline_count) AS INT) AS dom_decline_count,
+    CAST(SUM(m_int_reversal_count) AS INT) AS m_int_reversal_count,
+    CAST(SUM(v_int_reversal_count) AS INT) AS v_int_reversal_count,
+    CAST(SUM(dom_reversal_count) AS INT) AS dom_reversal_count,
+    CAST(SUM(m_int_refund_count) AS INT) AS m_int_refund_count,
+    CAST(SUM(v_int_refund_count) AS INT) AS v_int_refund_count,
+    CAST(SUM(dom_refund_count) AS INT) AS dom_refund_count,
+    CAST(SUM(av_m_dom_count) AS INT) AS av_m_dom_count,
+    CAST(SUM(av_m_int_count) AS INT) AS av_m_int_count,
+    CAST(SUM(av_v_dom_count) AS INT) AS av_v_dom_count,
+    CAST(SUM(av_v_int_count) AS INT) AS av_v_int_count,
+    CAST(SUM(m_dom_clearing_vol) AS DECIMAL(20, 4)) AS m_dom_clearing_vol,
+    CAST(SUM(m_int_clearing_vol) AS DECIMAL(20, 4)) AS m_int_clearing_vol,
+    CAST(SUM(v_dom_clearing_vol) AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
+    CAST(SUM(v_int_clearing_vol) AS DECIMAL(20, 4)) AS v_int_clearing_vol,
+    CAST(SUM(bb_rebate_base_amt) AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
+    CAST(SUM(bb_channel_cashback_comm) AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
     CAST(0 AS INT) AS active_card_count,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
-    COALESCE(c.sale_id, a.sale_id) AS sale_id,
-    COALESCE(c.am_id, a.am_id) AS am_id,
+    sale_id,
+    am_id,
     1 AS version,
     'bb_v2_batch' AS remarks,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
-FROM v_bb_count_metrics c
-FULL OUTER JOIN v_bb_txn_amount_metrics a
-    ON c.report_date = a.report_date
-   AND c.account_id = a.account_id
-   AND COALESCE(c.sale_id, '') = COALESCE(a.sale_id, '')
-   AND COALESCE(c.am_id, '') = COALESCE(a.am_id, '');
+FROM (
+    SELECT
+        report_date,
+        account_id,
+        account_type,
+        account_category,
+        system_type,
+        m_dom_auth_count,
+        m_int_auth_count,
+        v_dom_auth_count,
+        v_int_auth_count,
+        CAST(0 AS INT) AS m_int_decline_count,
+        CAST(0 AS INT) AS v_int_decline_count,
+        CAST(0 AS INT) AS dom_decline_count,
+        m_int_reversal_count,
+        v_int_reversal_count,
+        dom_reversal_count,
+        m_int_refund_count,
+        v_int_refund_count,
+        dom_refund_count,
+        av_m_dom_count,
+        av_m_int_count,
+        av_v_dom_count,
+        av_v_int_count,
+        CAST(0 AS DECIMAL(20, 4)) AS m_dom_clearing_vol,
+        CAST(0 AS DECIMAL(20, 4)) AS m_int_clearing_vol,
+        CAST(0 AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
+        CAST(0 AS DECIMAL(20, 4)) AS v_int_clearing_vol,
+        CAST(0 AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
+        CAST(0 AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
+        sale_id,
+        am_id
+    FROM v_bb_count_metrics
+    UNION ALL
+    SELECT
+        report_date,
+        account_id,
+        account_type,
+        account_category,
+        system_type,
+        CAST(0 AS INT) AS m_dom_auth_count,
+        CAST(0 AS INT) AS m_int_auth_count,
+        CAST(0 AS INT) AS v_dom_auth_count,
+        CAST(0 AS INT) AS v_int_auth_count,
+        CAST(0 AS INT) AS m_int_decline_count,
+        CAST(0 AS INT) AS v_int_decline_count,
+        CAST(0 AS INT) AS dom_decline_count,
+        CAST(0 AS INT) AS m_int_reversal_count,
+        CAST(0 AS INT) AS v_int_reversal_count,
+        CAST(0 AS INT) AS dom_reversal_count,
+        CAST(0 AS INT) AS m_int_refund_count,
+        CAST(0 AS INT) AS v_int_refund_count,
+        CAST(0 AS INT) AS dom_refund_count,
+        CAST(0 AS INT) AS av_m_dom_count,
+        CAST(0 AS INT) AS av_m_int_count,
+        CAST(0 AS INT) AS av_v_dom_count,
+        CAST(0 AS INT) AS av_v_int_count,
+        m_dom_clearing_vol,
+        m_int_clearing_vol,
+        v_dom_clearing_vol,
+        v_int_clearing_vol,
+        bb_rebate_base_amt,
+        bb_channel_cashback_comm,
+        sale_id,
+        am_id
+    FROM v_bb_txn_amount_metrics
+) unioned
+GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id;
 
 CREATE TEMPORARY VIEW v_bb_auth_month_rows AS
 SELECT
@@ -511,50 +619,145 @@ FROM v_bb_auth_count_metrics;
 
 CREATE TEMPORARY VIEW v_dws_bb_daily_base AS
 SELECT
-    COALESCE(t.id, a.id) AS id,
-    COALESCE(t.report_date, a.report_date) AS report_date,
-    COALESCE(t.account_id, a.account_id) AS account_id,
-    COALESCE(t.account_type, a.account_type) AS account_type,
-    COALESCE(t.account_category, a.account_category) AS account_category,
-    COALESCE(t.system_type, a.system_type) AS system_type,
-    COALESCE(t.m_dom_auth_count, 0) + COALESCE(a.m_dom_auth_count, 0) AS m_dom_auth_count,
-    COALESCE(t.m_int_auth_count, 0) + COALESCE(a.m_int_auth_count, 0) AS m_int_auth_count,
-    COALESCE(t.v_dom_auth_count, 0) + COALESCE(a.v_dom_auth_count, 0) AS v_dom_auth_count,
-    COALESCE(t.v_int_auth_count, 0) + COALESCE(a.v_int_auth_count, 0) AS v_int_auth_count,
-    COALESCE(t.m_int_decline_count, 0) + COALESCE(a.m_int_decline_count, 0) AS m_int_decline_count,
-    COALESCE(t.v_int_decline_count, 0) + COALESCE(a.v_int_decline_count, 0) AS v_int_decline_count,
-    COALESCE(t.dom_decline_count, 0) + COALESCE(a.dom_decline_count, 0) AS dom_decline_count,
-    COALESCE(t.m_int_reversal_count, 0) + COALESCE(a.m_int_reversal_count, 0) AS m_int_reversal_count,
-    COALESCE(t.v_int_reversal_count, 0) + COALESCE(a.v_int_reversal_count, 0) AS v_int_reversal_count,
-    COALESCE(t.dom_reversal_count, 0) + COALESCE(a.dom_reversal_count, 0) AS dom_reversal_count,
-    COALESCE(t.m_int_refund_count, 0) + COALESCE(a.m_int_refund_count, 0) AS m_int_refund_count,
-    COALESCE(t.v_int_refund_count, 0) + COALESCE(a.v_int_refund_count, 0) AS v_int_refund_count,
-    COALESCE(t.dom_refund_count, 0) + COALESCE(a.dom_refund_count, 0) AS dom_refund_count,
-    COALESCE(t.av_m_dom_count, 0) + COALESCE(a.av_m_dom_count, 0) AS av_m_dom_count,
-    COALESCE(t.av_m_int_count, 0) + COALESCE(a.av_m_int_count, 0) AS av_m_int_count,
-    COALESCE(t.av_v_dom_count, 0) + COALESCE(a.av_v_dom_count, 0) AS av_v_dom_count,
-    COALESCE(t.av_v_int_count, 0) + COALESCE(a.av_v_int_count, 0) AS av_v_int_count,
-    COALESCE(t.m_dom_clearing_vol, CAST(0 AS DECIMAL(20, 4))) + COALESCE(a.m_dom_clearing_vol, CAST(0 AS DECIMAL(20, 4))) AS m_dom_clearing_vol,
-    COALESCE(t.m_int_clearing_vol, CAST(0 AS DECIMAL(20, 4))) + COALESCE(a.m_int_clearing_vol, CAST(0 AS DECIMAL(20, 4))) AS m_int_clearing_vol,
-    COALESCE(t.v_dom_clearing_vol, CAST(0 AS DECIMAL(20, 4))) + COALESCE(a.v_dom_clearing_vol, CAST(0 AS DECIMAL(20, 4))) AS v_dom_clearing_vol,
-    COALESCE(t.v_int_clearing_vol, CAST(0 AS DECIMAL(20, 4))) + COALESCE(a.v_int_clearing_vol, CAST(0 AS DECIMAL(20, 4))) AS v_int_clearing_vol,
-    COALESCE(t.bb_rebate_base_amt, CAST(0 AS DECIMAL(20, 4))) + COALESCE(a.bb_rebate_base_amt, CAST(0 AS DECIMAL(20, 4))) AS bb_rebate_base_amt,
-    COALESCE(t.bb_channel_cashback_comm, CAST(0 AS DECIMAL(20, 4))) + COALESCE(a.bb_channel_cashback_comm, CAST(0 AS DECIMAL(20, 4))) AS bb_channel_cashback_comm,
+    CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', COALESCE(sale_id, ''), ':', COALESCE(am_id, '')))) AS BIGINT) AS id,
+    report_date,
+    account_id,
+    account_type,
+    account_category,
+    system_type,
+    m_dom_auth_count,
+    m_int_auth_count,
+    v_dom_auth_count,
+    v_int_auth_count,
+    m_int_decline_count,
+    v_int_decline_count,
+    dom_decline_count,
+    m_int_reversal_count,
+    v_int_reversal_count,
+    dom_reversal_count,
+    m_int_refund_count,
+    v_int_refund_count,
+    dom_refund_count,
+    av_m_dom_count,
+    av_m_int_count,
+    av_v_dom_count,
+    av_v_int_count,
+    m_dom_clearing_vol,
+    m_int_clearing_vol,
+    v_dom_clearing_vol,
+    v_int_clearing_vol,
+    bb_rebate_base_amt,
+    bb_channel_cashback_comm,
     CAST(0 AS INT) AS active_card_count,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
-    COALESCE(t.sale_id, a.sale_id) AS sale_id,
-    COALESCE(t.am_id, a.am_id) AS am_id,
+    sale_id,
+    am_id,
     1 AS version,
     'bb_v2_batch' AS remarks,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
-FROM v_dws_bb_txn_daily_base t
-FULL OUTER JOIN v_dws_bb_auth_daily_base a
-    ON t.report_date = a.report_date
-   AND t.account_id = a.account_id
-   AND COALESCE(t.sale_id, '') = COALESCE(a.sale_id, '')
-   AND COALESCE(t.am_id, '') = COALESCE(a.am_id, '');
+FROM (
+    SELECT
+        report_date,
+        account_id,
+        account_type,
+        account_category,
+        system_type,
+        CAST(SUM(m_dom_auth_count) AS INT) AS m_dom_auth_count,
+        CAST(SUM(m_int_auth_count) AS INT) AS m_int_auth_count,
+        CAST(SUM(v_dom_auth_count) AS INT) AS v_dom_auth_count,
+        CAST(SUM(v_int_auth_count) AS INT) AS v_int_auth_count,
+        CAST(SUM(m_int_decline_count) AS INT) AS m_int_decline_count,
+        CAST(SUM(v_int_decline_count) AS INT) AS v_int_decline_count,
+        CAST(SUM(dom_decline_count) AS INT) AS dom_decline_count,
+        CAST(SUM(m_int_reversal_count) AS INT) AS m_int_reversal_count,
+        CAST(SUM(v_int_reversal_count) AS INT) AS v_int_reversal_count,
+        CAST(SUM(dom_reversal_count) AS INT) AS dom_reversal_count,
+        CAST(SUM(m_int_refund_count) AS INT) AS m_int_refund_count,
+        CAST(SUM(v_int_refund_count) AS INT) AS v_int_refund_count,
+        CAST(SUM(dom_refund_count) AS INT) AS dom_refund_count,
+        CAST(SUM(av_m_dom_count) AS INT) AS av_m_dom_count,
+        CAST(SUM(av_m_int_count) AS INT) AS av_m_int_count,
+        CAST(SUM(av_v_dom_count) AS INT) AS av_v_dom_count,
+        CAST(SUM(av_v_int_count) AS INT) AS av_v_int_count,
+        CAST(SUM(m_dom_clearing_vol) AS DECIMAL(20, 4)) AS m_dom_clearing_vol,
+        CAST(SUM(m_int_clearing_vol) AS DECIMAL(20, 4)) AS m_int_clearing_vol,
+        CAST(SUM(v_dom_clearing_vol) AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
+        CAST(SUM(v_int_clearing_vol) AS DECIMAL(20, 4)) AS v_int_clearing_vol,
+        CAST(SUM(bb_rebate_base_amt) AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
+        CAST(SUM(bb_channel_cashback_comm) AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
+        sale_id,
+        am_id
+    FROM (
+        SELECT
+            report_date,
+            account_id,
+        account_type,
+        account_category,
+        system_type,
+        m_dom_auth_count,
+        m_int_auth_count,
+        v_dom_auth_count,
+        v_int_auth_count,
+        CAST(0 AS INT) AS m_int_decline_count,
+        CAST(0 AS INT) AS v_int_decline_count,
+        CAST(0 AS INT) AS dom_decline_count,
+        m_int_reversal_count,
+        v_int_reversal_count,
+        dom_reversal_count,
+        m_int_refund_count,
+        v_int_refund_count,
+        dom_refund_count,
+        av_m_dom_count,
+        av_m_int_count,
+        av_v_dom_count,
+        av_v_int_count,
+        m_dom_clearing_vol,
+        m_int_clearing_vol,
+        v_dom_clearing_vol,
+        v_int_clearing_vol,
+        bb_rebate_base_amt,
+        bb_channel_cashback_comm,
+        sale_id,
+        am_id
+    FROM v_dws_bb_txn_daily_base
+    UNION ALL
+    SELECT
+        report_date,
+        account_id,
+        account_type,
+        account_category,
+        system_type,
+        CAST(0 AS INT) AS m_dom_auth_count,
+        CAST(0 AS INT) AS m_int_auth_count,
+        CAST(0 AS INT) AS v_dom_auth_count,
+        CAST(0 AS INT) AS v_int_auth_count,
+        m_int_decline_count,
+        v_int_decline_count,
+        dom_decline_count,
+        CAST(0 AS INT) AS m_int_reversal_count,
+        CAST(0 AS INT) AS v_int_reversal_count,
+        CAST(0 AS INT) AS dom_reversal_count,
+        CAST(0 AS INT) AS m_int_refund_count,
+        CAST(0 AS INT) AS v_int_refund_count,
+        CAST(0 AS INT) AS dom_refund_count,
+        CAST(0 AS INT) AS av_m_dom_count,
+        CAST(0 AS INT) AS av_m_int_count,
+        CAST(0 AS INT) AS av_v_dom_count,
+        CAST(0 AS INT) AS av_v_int_count,
+        CAST(0 AS DECIMAL(20, 4)) AS m_dom_clearing_vol,
+        CAST(0 AS DECIMAL(20, 4)) AS m_int_clearing_vol,
+        CAST(0 AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
+        CAST(0 AS DECIMAL(20, 4)) AS v_int_clearing_vol,
+        CAST(0 AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
+        CAST(0 AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
+        sale_id,
+        am_id
+    FROM v_dws_bb_auth_daily_base
+    ) unioned
+    GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id
+) aggregated;
 
 CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     id                       BIGINT,

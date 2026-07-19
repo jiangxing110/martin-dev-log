@@ -48,6 +48,19 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
     'scan.fetch-size' = '5000'
 );
 
+CREATE TEMPORARY TABLE source_month_scope (
+    report_month DATE,
+    PRIMARY KEY (report_month) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT CAST(gs.month_start AS DATE) AS report_month FROM generate_series(date_trunc(''month'', CAST(''${start_time}'' AS TIMESTAMP(6))), date_trunc(''month'', CAST(''${end_time}'' AS TIMESTAMP(6))) - INTERVAL ''1 month'', INTERVAL ''1 month'') AS gs(month_start)) AS month_scope_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '100'
+);
+
 CREATE TEMPORARY TABLE source_dws_bb_card_finance_daily_v2_p (
     id               BIGINT,
     report_date      DATE,
@@ -106,20 +119,10 @@ CREATE TEMPORARY TABLE source_api_account_relation (
 );
 
 CREATE TEMPORARY VIEW v_month_scope AS
-SELECT DISTINCT report_month, CAST(DATE_FORMAT(CAST(DATE_ADD(report_month, 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS next_month
-FROM (
-    SELECT CAST(DATE_FORMAT(CAST(auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
-    FROM source_dwm_bb_card_auth_detail_v2_p
-    WHERE auth_time >= CAST('${start_time}' AS TIMESTAMP(6))
-      AND auth_time < CAST('${end_time}' AS TIMESTAMP(6))
-    UNION
-    SELECT CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
-    FROM source_dws_bb_card_finance_daily_v2_p
-    WHERE report_date >= CAST('${start_time}' AS DATE)
-      AND report_date < CAST('${end_time}' AS DATE)
-      AND special_fee_type = 'ACTIVE_CARD_ACCOUNT_FEE'
-) m
-WHERE report_month IS NOT NULL;
+SELECT
+    report_month,
+    CAST(DATE_FORMAT(CAST(DATE_ADD(report_month, 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS next_month
+FROM source_month_scope;
 
 CREATE TEMPORARY VIEW v_active_account_month AS
 SELECT

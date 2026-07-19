@@ -8,12 +8,13 @@
 --   运行参数：start_time, end_time
 --********************************************************************--
 
-SET 'parallelism.default' = '4';
-SET 'taskmanager.memory.network.min' = '1gb';
-SET 'taskmanager.memory.network.max' = '3gb';
-SET 'taskmanager.memory.network.fraction' = '0.2';
-SET 'pipeline.default-parallelism' = '4';
-SET 'table.exec.resource.default-parallelism' = '4';
+SET 'parallelism.default' = '1';
+SET 'taskmanager.memory.network.min' = '1536mb';
+SET 'taskmanager.memory.network.max' = '1536mb';
+SET 'taskmanager.memory.network.fraction' = '0.45';
+SET 'taskmanager.network.sort-shuffle.min-buffers' = '64';
+SET 'pipeline.default-parallelism' = '1';
+SET 'table.exec.resource.default-parallelism' = '1';
 SET 'pipeline.operator-chaining' = 'true';
 SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'execution.application-management.enabled' = 'true';
