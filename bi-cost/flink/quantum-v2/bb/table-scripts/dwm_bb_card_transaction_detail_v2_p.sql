@@ -11,14 +11,14 @@
 CREATE TABLE "dwm"."dwm_bb_card_transaction_detail_v2_p" (
   "id" varchar(128) COLLATE "pg_catalog"."default" NOT NULL,
   "txn_id" int8 NOT NULL,
-  "settlement_id" uuid,
+  "settlement_id" varchar(64) COLLATE "pg_catalog"."default",
   "source_id" varchar(128) COLLATE "pg_catalog"."default",
   "card_transaction_id" varchar(128) COLLATE "pg_catalog"."default",
   "account_id" varchar(36) COLLATE "pg_catalog"."default" NOT NULL,
   "account_type" varchar(30) COLLATE "pg_catalog"."default",
   "account_category" varchar(50) COLLATE "pg_catalog"."default",
   "system_type" varchar(64) COLLATE "pg_catalog"."default",
-  "card_id" uuid NOT NULL,
+  "card_id" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
   "transaction_time" timestamp(6) NOT NULL,
   "original_completion_time" timestamp(6),
   "business_type" varchar(50) COLLATE "pg_catalog"."default",
@@ -54,14 +54,14 @@ PARTITION BY RANGE (
 COMMENT ON TABLE "dwm"."dwm_bb_card_transaction_detail_v2_p" IS 'BB v2 渠道交易结算明细因子层，交易主源为 quantum_card_transaction_extend';
 COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_v2_p"."id" IS '交易+结算明细指纹';
 COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_v2_p"."txn_id" IS 'quantum_card_transaction_extend.id';
-COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_v2_p"."settlement_id" IS 'qbitCardSettlement.id';
+COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_v2_p"."settlement_id" IS 'qbitCardSettlement.id，字符串存储以兼容 Flink 回刷写入';
 COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_v2_p"."source_id" IS 'quantum_card_transaction_extend.source_id';
 COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_v2_p"."card_transaction_id" IS 'quantum_card_transaction_extend.card_transaction_id';
 COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_v2_p"."account_id" IS '账户ID，来源 quantum_card_transaction_extend.account_id';
 COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_v2_p"."account_type" IS '账户类型，来源 dim_account.account_type';
 COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_v2_p"."account_category" IS '账户分类，来源 dim_account.type';
 COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_v2_p"."system_type" IS '系统类型，来源 dim_account.system_type';
-COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_v2_p"."card_id" IS '卡ID，来源 quantum_card_transaction_extend.card_id';
+COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_v2_p"."card_id" IS '卡ID，来源 quantum_card_transaction_extend.card_id，字符串存储以兼容 Flink 回刷写入';
 COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_v2_p"."transaction_time" IS '交易发生时间，授权笔数类指标统计基准';
 COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_v2_p"."original_completion_time" IS '三方完成时间，BB Volume Fee 统计基准';
 COMMENT ON COLUMN "dwm"."dwm_bb_card_transaction_detail_v2_p"."business_type" IS '业务类型，Consumption/Credit 等';
