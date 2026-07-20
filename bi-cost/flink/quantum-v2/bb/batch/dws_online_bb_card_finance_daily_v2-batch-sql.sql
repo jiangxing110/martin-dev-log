@@ -154,6 +154,7 @@ SELECT
     sale_id,
     am_id,
     source_id,
+    settlement_id,
     card_id,
     card_org,
     COALESCE(tx_country, '') AS tx_country,
@@ -169,6 +170,24 @@ SELECT
     is_clearing,
     is_reversal,
     is_refund,
+    COALESCE(settlement_id IN (
+        '234e26db-0e1d-424f-952b-053ab2e42d30',
+        '82ff7fa6-8035-4c7b-8c18-ace860c3dfae',
+        '711e7995-ea26-499f-a1c5-9e4faf15f31f',
+        '5e974989-8792-401f-93b6-b107e0b46e51',
+        '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72',
+        'a97006e9-2609-4e70-a165-2ae6b9f49689',
+        'ad861604-ff4f-4cd1-997e-fe613c67970e',
+        '37959ee2-880f-49ea-8d74-976a69382c90',
+        'bebf7744-ed33-46cd-8ca6-40bc43d928eb',
+        'ece578c8-e8c1-46ec-83b9-116ea049a2e8',
+        '69e04460-0cb4-4d9d-9001-2b786cfc3d7b',
+        '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470',
+        'cff4d9c4-ee01-43fa-9518-62872afbbe91',
+        '160b403b-2a16-4b43-afac-a3b37916c968',
+        '0fd4e8ed-e208-44e5-b463-ece053a915f3',
+        '4a63f4ec-637e-4627-a668-5339fe64b9be'
+    ), FALSE) AS is_excluded_settlement,
     billing_amount
 FROM source_dwm_bb_card_transaction_detail_v2_p
 WHERE delete_time IS NULL
@@ -185,6 +204,7 @@ SELECT
     sale_id,
     am_id,
     source_id,
+    settlement_id,
     card_id,
     card_org,
     COALESCE(tx_country, '') AS tx_country,
@@ -200,6 +220,24 @@ SELECT
     is_clearing,
     is_reversal,
     is_refund,
+    COALESCE(settlement_id IN (
+        '234e26db-0e1d-424f-952b-053ab2e42d30',
+        '82ff7fa6-8035-4c7b-8c18-ace860c3dfae',
+        '711e7995-ea26-499f-a1c5-9e4faf15f31f',
+        '5e974989-8792-401f-93b6-b107e0b46e51',
+        '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72',
+        'a97006e9-2609-4e70-a165-2ae6b9f49689',
+        'ad861604-ff4f-4cd1-997e-fe613c67970e',
+        '37959ee2-880f-49ea-8d74-976a69382c90',
+        'bebf7744-ed33-46cd-8ca6-40bc43d928eb',
+        'ece578c8-e8c1-46ec-83b9-116ea049a2e8',
+        '69e04460-0cb4-4d9d-9001-2b786cfc3d7b',
+        '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470',
+        'cff4d9c4-ee01-43fa-9518-62872afbbe91',
+        '160b403b-2a16-4b43-afac-a3b37916c968',
+        '0fd4e8ed-e208-44e5-b463-ece053a915f3',
+        '4a63f4ec-637e-4627-a668-5339fe64b9be'
+    ), FALSE) AS is_excluded_settlement,
     billing_amount
 FROM source_dwm_bb_card_transaction_detail_v2_p
 WHERE delete_time IS NULL
@@ -216,6 +254,7 @@ SELECT
     sale_id,
     am_id,
     source_id,
+    settlement_id,
     card_id,
     card_org,
     COALESCE(tx_country, '') AS tx_country,
@@ -231,6 +270,24 @@ SELECT
     is_clearing,
     is_reversal,
     is_refund,
+    COALESCE(settlement_id IN (
+        '234e26db-0e1d-424f-952b-053ab2e42d30',
+        '82ff7fa6-8035-4c7b-8c18-ace860c3dfae',
+        '711e7995-ea26-499f-a1c5-9e4faf15f31f',
+        '5e974989-8792-401f-93b6-b107e0b46e51',
+        '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72',
+        'a97006e9-2609-4e70-a165-2ae6b9f49689',
+        'ad861604-ff4f-4cd1-997e-fe613c67970e',
+        '37959ee2-880f-49ea-8d74-976a69382c90',
+        'bebf7744-ed33-46cd-8ca6-40bc43d928eb',
+        'ece578c8-e8c1-46ec-83b9-116ea049a2e8',
+        '69e04460-0cb4-4d9d-9001-2b786cfc3d7b',
+        '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470',
+        'cff4d9c4-ee01-43fa-9518-62872afbbe91',
+        '160b403b-2a16-4b43-afac-a3b37916c968',
+        '0fd4e8ed-e208-44e5-b463-ece053a915f3',
+        '4a63f4ec-637e-4627-a668-5339fe64b9be'
+    ), FALSE) AS is_excluded_settlement,
     billing_amount
 FROM source_dwm_bb_card_transaction_detail_v2_p
 WHERE delete_time IS NULL
@@ -247,20 +304,20 @@ SELECT
     sale_id,
     am_id,
     source_id AS metric_key,
-    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') THEN 1 ELSE 0 END) AS m_dom_auth_count,
-    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') THEN 1 ELSE 0 END) AS m_int_auth_count,
-    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') THEN 1 ELSE 0 END) AS v_dom_auth_count,
-    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') THEN 1 ELSE 0 END) AS v_int_auth_count,
-    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' THEN 1 ELSE 0 END) AS m_int_reversal_count,
-    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' THEN 1 ELSE 0 END) AS v_int_reversal_count,
-    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' THEN 1 ELSE 0 END) AS dom_reversal_count,
+    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS m_dom_auth_count,
+    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS m_int_auth_count,
+    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS v_dom_auth_count,
+    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS v_int_auth_count,
+    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS m_int_reversal_count,
+    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS v_int_reversal_count,
+    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS dom_reversal_count,
     0 AS m_int_refund_count,
     0 AS v_int_refund_count,
     0 AS dom_refund_count,
-    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'Master' AND tx_country IN ('US', 'USA') AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_m_dom_count,
-    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_m_int_count,
-    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'VISA' AND tx_country IN ('US', 'USA') AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_v_dom_count,
-    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_v_int_count
+    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'Master' AND tx_country IN ('US', 'USA') AND is_excluded_settlement = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_m_dom_count,
+    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND is_excluded_settlement = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_m_int_count,
+    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'VISA' AND tx_country IN ('US', 'USA') AND is_excluded_settlement = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_v_dom_count,
+    MAX(CASE WHEN business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND is_excluded_settlement = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_v_int_count
 FROM v_bb_txn_time_rows
 WHERE source_id IS NOT NULL
 GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id, source_id;
@@ -301,9 +358,9 @@ SELECT
     sale_id,
     am_id,
     source_id AS metric_key,
-    MAX(CASE WHEN business_type = 'Credit' AND card_org = 'Master' AND settle_country NOT IN ('US', 'USA') AND transaction_type = 'refund.clearing' AND resp_code = 'APPROVE' THEN 1 ELSE 0 END) AS m_int_refund_count,
-    MAX(CASE WHEN business_type = 'Credit' AND card_org = 'VISA' AND settle_country NOT IN ('US', 'USA') AND transaction_type = 'refund.clearing' AND resp_code = 'APPROVE' THEN 1 ELSE 0 END) AS v_int_refund_count,
-    MAX(CASE WHEN business_type = 'Credit' AND settle_country IN ('US', 'USA') AND transaction_type = 'refund.clearing' AND resp_code = 'APPROVE' THEN 1 ELSE 0 END) AS dom_refund_count
+    MAX(CASE WHEN business_type = 'Credit' AND card_org = 'Master' AND settle_country NOT IN ('US', 'USA') AND transaction_type = 'refund.clearing' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS m_int_refund_count,
+    MAX(CASE WHEN business_type = 'Credit' AND card_org = 'VISA' AND settle_country NOT IN ('US', 'USA') AND transaction_type = 'refund.clearing' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS v_int_refund_count,
+    MAX(CASE WHEN business_type = 'Credit' AND settle_country IN ('US', 'USA') AND transaction_type = 'refund.clearing' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS dom_refund_count
 FROM v_bb_post_rows
 WHERE source_id IS NOT NULL
 GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id, source_id;
@@ -404,12 +461,12 @@ SELECT
     account_type,
     account_category,
     system_type,
-    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_dom_clearing_vol,
-    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_int_clearing_vol,
-    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
-    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_int_clearing_vol,
-    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
-    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
+    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_dom_clearing_vol,
+    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_int_clearing_vol,
+    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
+    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_int_clearing_vol,
+    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
+    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
     sale_id,
     am_id
 FROM v_bb_completion_rows

@@ -1,370 +1,108 @@
 --********************************************************************--
 -- Author:         Codex
 -- Created Time:   2026-07-20
--- Description:    BB 成本口径对账 SQL
+-- Description:    BB V2 成本口径独立排查 SQL
 -- Purpose:
---   1. 对比 bi_month/BB客户成本-202606.sql 的原始口径与 V2 基数口径。
---   2. 检查为什么 V2 明细里只有少数成本项有值。
---   3. 输出每个成本项的 original_value / v2_value / diff。
+--   1. 不依赖 bi_month 脚本中的 tmp_* 临时表，可单独执行。
+--   2. 优先排查差异大的 Dollar Volume / Volume Fee Cost。
+--   3. 优先排查为 0 的 Refund 三项。
 -- Usage:
---   1. 修改 params 中的 start_date / end_date。
---   2. 统一按 report month 维度汇总对账。
+--   1. 修改 params 中的 start_time / end_time。
+--   2. 分段执行每个 SELECT，部分客户端不支持一次执行多个结果集。
 --********************************************************************--
 
+-- =========================================================
+-- 1. DWS 当前成本项汇总：对齐 query_bb_card_cost_detail_v2.sql
+-- =========================================================
 WITH params AS (
     SELECT
         DATE '2026-06-01' AS start_date,
-        DATE '2026-07-01' AS end_date,
-        '2026-06'::text AS month_label,
-        0.1::numeric AS active_card_rate
+        DATE '2026-07-01' AS end_date
 ),
-
--- =========================================================
--- Original 202606 logic: aggregated from the monthly script
--- =========================================================
-orig_base AS (
+bb_base AS (
     SELECT
-        COALESCE(SUM(q1.master_dom_txn_count), 0) AS master_dom_txn_count,
-        COALESCE(SUM(q1.master_int_txn_count), 0) AS master_int_txn_count,
-        COALESCE(SUM(q1.visa_dom_txn_count), 0) AS visa_dom_txn_count,
-        COALESCE(SUM(q1.visa_int_txn_count), 0) AS visa_int_txn_count,
-
-        COALESCE(SUM(q2.ac_master_dom_count), 0) AS ac_master_dom_count,
-        COALESCE(SUM(q2.ac_master_int_count), 0) AS ac_master_int_count,
-        COALESCE(SUM(q2.ac_visa_dom_count), 0) AS ac_visa_dom_count,
-        COALESCE(SUM(q2.ac_visa_int_count), 0) AS ac_visa_int_count,
-
-        COALESCE(SUM(q3.master_dom_net_amount), 0) AS master_dom_net_amount,
-        COALESCE(SUM(q3.master_int_net_amount), 0) AS master_int_net_amount,
-        COALESCE(SUM(q3.visa_dom_net_amount), 0) AS visa_dom_net_amount,
-        COALESCE(SUM(q3.visa_int_net_amount), 0) AS visa_int_net_amount,
-
-        COALESCE(SUM(q4.master_int_reversal_count), 0) AS master_int_reversal_count,
-        COALESCE(SUM(q4.visa_int_reversal_count), 0) AS visa_int_reversal_count,
-        COALESCE(SUM(q4.dom_reversal_count), 0) AS dom_reversal_count,
-
-        COALESCE(SUM(q5.master_int_refund_count), 0) AS master_int_refund_count,
-        COALESCE(SUM(q5.visa_int_refund_count), 0) AS visa_int_refund_count,
-        COALESCE(SUM(q5.dom_refund_count), 0) AS dom_refund_count,
-
-        COALESCE(SUM(q6.master_int_decline_count), 0) AS master_int_decline_count,
-        COALESCE(SUM(q6.visa_int_decline_count), 0) AS visa_int_decline_count,
-        COALESCE(SUM(q6.dom_decline_count), 0) AS dom_decline_count,
-
-        COALESCE(SUM(q7.ac_master_int_decline_count), 0) AS ac_master_int_decline_count,
-        COALESCE(SUM(q7.ac_visa_int_decline_count), 0) AS ac_visa_int_decline_count,
-        COALESCE(SUM(q7.ac_dom_decline_count), 0) AS ac_dom_decline_count,
-
-        COALESCE(SUM(q8.active_card_account_fee), 0) AS active_card_account_fee
-    FROM (
-        SELECT
-            master_client_id,
-            master_dom_txn_count,
-            master_int_txn_count,
-            visa_dom_txn_count,
-            visa_int_txn_count
-        FROM (
-            SELECT
-                AM.master_client_id,
-                COUNT(DISTINCT CASE WHEN T.country IN ('US', 'USA') AND T.card_type = 'Master' THEN T.source_id END) AS master_dom_txn_count,
-                COUNT(DISTINCT CASE WHEN T.country NOT IN ('US', 'USA') AND T.card_type = 'Master' THEN T.source_id END) AS master_int_txn_count,
-                COUNT(DISTINCT CASE WHEN T.country IN ('US', 'USA') AND T.card_type = 'VISA' THEN T.source_id END) AS visa_dom_txn_count,
-                COUNT(DISTINCT CASE WHEN T.country NOT IN ('US', 'USA') AND T.card_type = 'VISA' THEN T.source_id END) AS visa_int_txn_count
-            FROM tmp_txn_base T
-            INNER JOIN tmp_account_master AM ON T.account_id = AM.account_id
-            LEFT JOIN tmp_settlement_base S ON T.source_id = S.transaction_id
-            CROSS JOIN params p
-            WHERE T.type = 'Consumption'
-              AND T.business_code_list::TEXT NOT LIKE '%1010%'
-              AND T.transaction_time >= p.start_date
-              AND T.transaction_time < p.end_date
-              AND (S.settlement_id IS NOT NULL OR T.remarks = '超时自动关单')
-              AND S.response_code = 'APPROVE'
-              AND S.transaction_type IN ('authorization.clearing', 'authorization.reversal')
-              AND NOT EXISTS (SELECT 1 FROM tmp_excluded_settlement_ids E WHERE E.settlement_id = S.settlement_id)
-            GROUP BY AM.master_client_id
-        ) q1
-        GROUP BY master_client_id, master_dom_txn_count, master_int_txn_count, visa_dom_txn_count, visa_int_txn_count
-    ) q1
-    FULL OUTER JOIN (
-        SELECT
-            AM.master_client_id,
-            COUNT(DISTINCT CASE WHEN T.country IN ('US', 'USA') AND T.card_type = 'Master' THEN T.source_id END) AS ac_master_dom_count,
-            COUNT(DISTINCT CASE WHEN T.country NOT IN ('US', 'USA') AND T.card_type = 'Master' THEN T.source_id END) AS ac_master_int_count,
-            COUNT(DISTINCT CASE WHEN T.country IN ('US', 'USA') AND T.card_type = 'VISA' THEN T.source_id END) AS ac_visa_dom_count,
-            COUNT(DISTINCT CASE WHEN T.country NOT IN ('US', 'USA') AND T.card_type = 'VISA' THEN T.source_id END) AS ac_visa_int_count
-        FROM tmp_txn_base T
-        INNER JOIN tmp_account_master AM ON T.account_id = AM.account_id
-        LEFT JOIN tmp_settlement_base S ON T.source_id = S.transaction_id
-        CROSS JOIN params p
-        WHERE T.type = 'Consumption'
-          AND T.business_code_list::TEXT LIKE '%1010%'
-          AND T.transaction_time >= p.start_date
-          AND T.transaction_time < p.end_date
-          AND (S.settlement_id IS NULL
-               OR (NOT EXISTS (SELECT 1 FROM tmp_excluded_settlement_ids E WHERE E.settlement_id = S.settlement_id)
-                   AND (S.response_code IS NULL OR S.response_code != 'DECLINE')))
-        GROUP BY AM.master_client_id
-    ) q2 ON TRUE
-    FULL OUTER JOIN (
-        SELECT
-            AM.master_client_id,
-            -COALESCE(SUM(CASE WHEN region = 'Domestic' AND card_type = 'Master' THEN net_amount END), 0) AS master_dom_net_amount,
-            -COALESCE(SUM(CASE WHEN region = 'International' AND card_type = 'Master' THEN net_amount END), 0) AS master_int_net_amount,
-            -COALESCE(SUM(CASE WHEN region = 'Domestic' AND card_type = 'VISA' THEN net_amount END), 0) AS visa_dom_net_amount,
-            -COALESCE(SUM(CASE WHEN region = 'International' AND card_type = 'VISA' THEN net_amount END), 0) AS visa_int_net_amount
-        FROM (
-            SELECT
-                AM.master_client_id,
-                CASE WHEN RIGHT(S.txn_location, 2) IN ('US','USA') THEN 'Domestic' ELSE 'International' END AS region,
-                T.card_type,
-                COALESCE(SUM(S.billing_amount), 0) AS net_amount
-            FROM tmp_txn_base T
-            INNER JOIN tmp_account_master AM ON T.account_id = AM.account_id
-            LEFT JOIN tmp_settlement_base S
-                ON T.card_transaction_id = S.qbit_card_transaction_id
-               AND S.provider = 'BlueBancCard'
-               AND S.transaction_type = 'authorization.clearing'
-               AND NOT EXISTS (SELECT 1 FROM tmp_excluded_settlement_ids E WHERE E.settlement_id = S.settlement_id)
-            CROSS JOIN params p
-            WHERE T.type IN ('Credit','Consumption')
-              AND T.original_completion_time >= p.start_date
-              AND T.original_completion_time < p.end_date
-              AND S.response_code = 'APPROVE'
-              AND T.card_type IN ('Master', 'VISA')
-            GROUP BY AM.master_client_id, region, T.card_type
-            UNION ALL
-            SELECT
-                AM.master_client_id,
-                CASE WHEN RIGHT(S.txn_location, 2) IN ('US','USA') THEN 'Domestic' ELSE 'International' END AS region,
-                T.card_type,
-                COALESCE(SUM(S.billing_amount), 0) AS net_amount
-            FROM tmp_txn_base T
-            INNER JOIN tmp_account_master AM ON T.account_id = AM.account_id
-            LEFT JOIN tmp_settlement_base S
-                ON T.card_transaction_id = S.qbit_card_transaction_id
-               AND S.provider = 'BlueBancCard'
-               AND S.transaction_type = 'refund.clearing'
-               AND NOT EXISTS (SELECT 1 FROM tmp_excluded_settlement_ids E WHERE E.settlement_id = S.settlement_id)
-            CROSS JOIN params p
-            WHERE T.type IN ('Credit','Consumption')
-              AND T.original_completion_time >= p.start_date
-              AND T.original_completion_time < p.end_date
-              AND S.response_code = 'APPROVE'
-              AND T.card_type IN ('Master', 'VISA')
-            GROUP BY AM.master_client_id, region, T.card_type
-        ) amount_detail
-        INNER JOIN tmp_account_master AM ON 1 = 1
-        GROUP BY AM.master_client_id
-    ) q3 ON TRUE
-    FULL OUTER JOIN (
-        SELECT
-            AM.master_client_id,
-            COUNT(DISTINCT CASE WHEN T.country NOT IN ('US', 'USA') AND T.card_type = 'Master' AND T.transaction_type = 'authorization.reversal' AND T.resp_code = 'APPROVE' AND T.reason_code = 'APPROVE' THEN T.source_id END) AS master_int_reversal_count,
-            COUNT(DISTINCT CASE WHEN T.country NOT IN ('US', 'USA') AND T.card_type = 'VISA' AND T.transaction_type = 'authorization.reversal' AND T.resp_code = 'APPROVE' AND T.reason_code = 'APPROVE' THEN T.source_id END) AS visa_int_reversal_count,
-            COUNT(DISTINCT CASE WHEN T.country IN ('US', 'USA') AND T.transaction_type = 'authorization.reversal' AND T.resp_code = 'APPROVE' AND T.reason_code = 'APPROVE' THEN T.source_id END) AS dom_reversal_count
-        FROM tmp_txn_base T
-        INNER JOIN tmp_account_master AM ON T.account_id = AM.account_id
-        CROSS JOIN params p
-        WHERE T.type = 'Consumption'
-          AND T.business_code_list::TEXT NOT LIKE '%1010%'
-          AND T.transaction_time >= p.start_date
-          AND T.transaction_time < p.end_date
-        GROUP BY AM.master_client_id
-    ) q4 ON TRUE
-    FULL OUTER JOIN (
-        SELECT
-            AM.master_client_id,
-            COUNT(DISTINCT CASE WHEN T.card_org = 'Master' AND T.settle_country NOT IN ('US', 'USA') AND T.transaction_type = 'refund.clearing' AND T.resp_code = 'APPROVE' THEN T.source_id END) AS master_int_refund_count,
-            COUNT(DISTINCT CASE WHEN T.card_org = 'VISA' AND T.settle_country NOT IN ('US', 'USA') AND T.transaction_type = 'refund.clearing' AND T.resp_code = 'APPROVE' THEN T.source_id END) AS visa_int_refund_count,
-            COUNT(DISTINCT CASE WHEN T.settle_country IN ('US', 'USA') AND T.transaction_type = 'refund.clearing' AND T.resp_code = 'APPROVE' THEN T.source_id END) AS dom_refund_count
-        FROM tmp_txn_base T
-        INNER JOIN tmp_account_master AM ON T.account_id = AM.account_id
-        CROSS JOIN params p
-        WHERE T.type IN ('Credit','Consumption')
-          AND T.original_completion_time >= p.start_date
-          AND T.original_completion_time < p.end_date
-        GROUP BY AM.master_client_id
-    ) q5 ON TRUE
-    FULL OUTER JOIN (
-        SELECT
-            AM.master_client_id,
-            COUNT(DISTINCT CASE WHEN T.card_org = 'Master' AND T.tx_country NOT IN ('US', 'USA') AND T.resp_code = 'DECLINE' THEN T.source_id END) AS master_int_decline_count,
-            COUNT(DISTINCT CASE WHEN T.card_org = 'VISA' AND T.tx_country NOT IN ('US', 'USA') AND T.resp_code = 'DECLINE' THEN T.source_id END) AS visa_int_decline_count,
-            COUNT(DISTINCT CASE WHEN T.tx_country IN ('US', 'USA') AND T.resp_code = 'DECLINE' THEN T.source_id END) AS dom_decline_count
-        FROM tmp_txn_base T
-        INNER JOIN tmp_account_master AM ON T.account_id = AM.account_id
-        CROSS JOIN params p
-        WHERE T.type = 'Consumption'
-          AND T.business_code_list::TEXT NOT LIKE '%1010%'
-          AND T.transaction_time >= p.start_date
-          AND T.transaction_time < p.end_date
-        GROUP BY AM.master_client_id
-    ) q6 ON TRUE
-    FULL OUTER JOIN (
-        SELECT
-            AM.master_client_id,
-            COUNT(DISTINCT CASE WHEN T.card_org = 'Master' AND T.tx_country NOT IN ('US', 'USA') AND T.is_account_verification = TRUE AND T.is_decline = TRUE THEN T.auth_txn_guid END) AS ac_master_int_decline_count,
-            COUNT(DISTINCT CASE WHEN T.card_org = 'VISA' AND T.tx_country NOT IN ('US', 'USA') AND T.is_account_verification = TRUE AND T.is_decline = TRUE THEN T.auth_txn_guid END) AS ac_visa_int_decline_count,
-            COUNT(DISTINCT CASE WHEN T.tx_country IN ('US', 'USA') AND T.is_account_verification = TRUE AND T.is_decline = TRUE THEN T.auth_txn_guid END) AS ac_dom_decline_count
-        FROM tmp_txn_base T
-        INNER JOIN tmp_account_master AM ON T.account_id = AM.account_id
-        CROSS JOIN params p
-        WHERE T.type = 'Consumption'
-          AND T.business_code_list::TEXT LIKE '%1010%'
-          AND T.transaction_time >= p.start_date
-          AND T.transaction_time < p.end_date
-        GROUP BY AM.master_client_id
-    ) q7 ON TRUE
-    FULL OUTER JOIN (
-        SELECT
-            AM.master_client_id,
-            COUNT(DISTINCT A."Card Proxy") * p.active_card_rate AS active_card_account_fee
-        FROM "account" A
-        INNER JOIN tmp_account_master AM ON A."id" = AM.account_id
-        CROSS JOIN params p
-        GROUP BY AM.master_client_id, p.active_card_rate
-    ) q8 ON TRUE
+        COALESCE(SUM(bb.m_dom_auth_count * 0.1090), 0) AS mastercard_domestic_count_fee,
+        COALESCE(SUM(bb.m_int_auth_count * 0.4845), 0) AS mastercard_international_count_fee,
+        COALESCE(SUM(bb.v_dom_auth_count * 0.0725), 0) AS visa_domestic_count_fee,
+        COALESCE(SUM(bb.v_int_auth_count * 0.4770), 0) AS visa_international_count_fee,
+        COALESCE(SUM(bb.av_m_dom_count * 0.1090), 0) AS ac_mastercard_domestic_count_fee,
+        COALESCE(SUM(bb.av_m_int_count * 0.4845), 0) AS ac_mastercard_international_count_fee,
+        COALESCE(SUM(bb.av_v_dom_count * 0.0725), 0) AS ac_visa_domestic_count_fee,
+        COALESCE(SUM(bb.av_v_int_count * 0.4770), 0) AS ac_visa_international_count_fee,
+        COALESCE(SUM(bb.m_dom_clearing_vol * 0.0021), 0) AS mastercard_domestic_dollar_volume_fee,
+        COALESCE(SUM(bb.m_int_clearing_vol * 0.0111), 0) AS mastercard_international_dollar_volume_fee,
+        COALESCE(SUM(bb.v_dom_clearing_vol * 0.0016), 0) AS visa_domestic_dollar_volume_fee,
+        COALESCE(SUM(bb.v_int_clearing_vol * 0.0116), 0) AS visa_international_dollar_volume_fee,
+        COALESCE(SUM(bb.m_int_reversal_count * 0.7190), 0) AS mastercard_international_reversal_fee,
+        COALESCE(SUM(bb.v_int_reversal_count * 0.7140), 0) AS visa_international_reversal_fee,
+        COALESCE(SUM(bb.dom_reversal_count * 0.1780), 0) AS domestic_reversal_fee,
+        COALESCE(SUM(bb.m_int_refund_count * 0.4845), 0) AS mastercard_international_refund_fee,
+        COALESCE(SUM(bb.v_int_refund_count * 0.4770), 0) AS visa_international_refund_fee,
+        COALESCE(SUM(bb.dom_refund_count * 0.1090), 0) AS domestic_refund_fee,
+        COALESCE(SUM(bb.m_int_decline_count * 0.3595), 0) AS mastercard_international_decline_fee,
+        COALESCE(SUM(bb.v_int_decline_count * 0.3570), 0) AS visa_international_decline_fee,
+        COALESCE(SUM(bb.dom_decline_count * 0.0890), 0) AS domestic_decline_fee,
+        COALESCE(SUM(bb.ac_m_int_decline_count * 0.3595), 0) AS ac_mastercard_international_decline_fee,
+        COALESCE(SUM(bb.ac_v_int_decline_count * 0.3570), 0) AS ac_visa_international_decline_fee,
+        COALESCE(SUM(bb.ac_dom_decline_count * 0.0890), 0) AS ac_domestic_decline_fee,
+        COALESCE(SUM(bb.active_card_count * 0.1), 0) AS active_card_account_fee,
+        COALESCE(SUM(bb.total_net_amount), 0) AS total_net_amount
+    FROM dws.dws_bb_card_finance_daily_v2_p bb
+    CROSS JOIN params p
+    WHERE bb.delete_time IS NULL
+      AND bb.report_date >= p.start_date
+      AND bb.report_date < p.end_date
 ),
-
-orig_cost AS (
-    SELECT 'bbMasterDomCnt' AS cost_item, COALESCE(master_dom_txn_count, 0) * 0.1090 AS original_value FROM orig_base
-    UNION ALL SELECT 'bbMasterIntCnt', COALESCE(master_int_txn_count, 0) * 0.4845 FROM orig_base
-    UNION ALL SELECT 'bbVisaDomCnt', COALESCE(visa_dom_txn_count, 0) * 0.0725 FROM orig_base
-    UNION ALL SELECT 'bbVisaIntCnt', COALESCE(visa_int_txn_count, 0) * 0.4770 FROM orig_base
-    UNION ALL SELECT 'bbMasterIntDecline', COALESCE(master_int_decline_count, 0) * 0.3595 FROM orig_base
-    UNION ALL SELECT 'bbVisaIntDecline', COALESCE(visa_int_decline_count, 0) * 0.3570 FROM orig_base
-    UNION ALL SELECT 'bbDomDecline', COALESCE(dom_decline_count, 0) * 0.0890 FROM orig_base
-    UNION ALL SELECT 'bbMasterIntReversal', COALESCE(master_int_reversal_count, 0) * 0.7190 FROM orig_base
-    UNION ALL SELECT 'bbVisaIntReversal', COALESCE(visa_int_reversal_count, 0) * 0.7140 FROM orig_base
-    UNION ALL SELECT 'bbDomReversal', COALESCE(dom_reversal_count, 0) * 0.1780 FROM orig_base
-    UNION ALL SELECT 'bbMasterIntRefund', COALESCE(master_int_refund_count, 0) * 0.4845 FROM orig_base
-    UNION ALL SELECT 'bbVisaIntRefund', COALESCE(visa_int_refund_count, 0) * 0.4770 FROM orig_base
-    UNION ALL SELECT 'bbDomRefund', COALESCE(dom_refund_count, 0) * 0.1090 FROM orig_base
-    UNION ALL SELECT 'bbAcMasterDomCnt', COALESCE(ac_master_dom_count, 0) * 0.1090 FROM orig_base
-    UNION ALL SELECT 'bbAcMasterIntCnt', COALESCE(ac_master_int_count, 0) * 0.4845 FROM orig_base
-    UNION ALL SELECT 'bbAcVisaDomCnt', COALESCE(ac_visa_dom_count, 0) * 0.0725 FROM orig_base
-    UNION ALL SELECT 'bbAcVisaIntCnt', COALESCE(ac_visa_int_count, 0) * 0.4770 FROM orig_base
-    UNION ALL SELECT 'bbAcMasterIntDecline', COALESCE(ac_master_int_decline_count, 0) * 0.3595 FROM orig_base
-    UNION ALL SELECT 'bbAcVisaIntDecline', COALESCE(ac_visa_int_decline_count, 0) * 0.3570 FROM orig_base
-    UNION ALL SELECT 'bbAcDomDecline', COALESCE(ac_dom_decline_count, 0) * 0.0890 FROM orig_base
-    UNION ALL SELECT 'bbMasterDomVol', COALESCE(master_dom_net_amount, 0) * -0.0021 FROM orig_base
-    UNION ALL SELECT 'bbMasterIntVol', COALESCE(master_int_net_amount, 0) * -0.0111 FROM orig_base
-    UNION ALL SELECT 'bbVisaDomVol', COALESCE(visa_dom_net_amount, 0) * -0.0016 FROM orig_base
-    UNION ALL SELECT 'bbVisaIntVol', COALESCE(visa_int_net_amount, 0) * -0.0116 FROM orig_base
-    UNION ALL SELECT 'bbActiveCardFee', COALESCE(active_card_account_fee, 0) FROM orig_base
-),
-
--- =========================================================
--- V2 logic: from dws.dws_bb_card_finance_daily_v2_p
--- =========================================================
-v2_cost AS (
-    SELECT 'bbMasterDomCnt' AS cost_item, COALESCE(SUM(bb.m_dom_auth_count), 0) * 0.1090 AS v2_value
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbMasterIntCnt', COALESCE(SUM(bb.m_int_auth_count), 0) * 0.4845
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbVisaDomCnt', COALESCE(SUM(bb.v_dom_auth_count), 0) * 0.0725
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbVisaIntCnt', COALESCE(SUM(bb.v_int_auth_count), 0) * 0.4770
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbMasterIntDecline', COALESCE(SUM(bb.m_int_decline_count), 0) * 0.3595
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbVisaIntDecline', COALESCE(SUM(bb.v_int_decline_count), 0) * 0.3570
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbDomDecline', COALESCE(SUM(bb.dom_decline_count), 0) * 0.0890
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbMasterIntReversal', COALESCE(SUM(bb.m_int_reversal_count), 0) * 0.7190
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbVisaIntReversal', COALESCE(SUM(bb.v_int_reversal_count), 0) * 0.7140
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbDomReversal', COALESCE(SUM(bb.dom_reversal_count), 0) * 0.1780
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbMasterIntRefund', COALESCE(SUM(bb.m_int_refund_count), 0) * 0.4845
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbVisaIntRefund', COALESCE(SUM(bb.v_int_refund_count), 0) * 0.4770
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbDomRefund', COALESCE(SUM(bb.dom_refund_count), 0) * 0.1090
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbAcMasterDomCnt', COALESCE(SUM(bb.av_m_dom_count), 0) * 0.1090
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbAcMasterIntCnt', COALESCE(SUM(bb.av_m_int_count), 0) * 0.4845
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbAcVisaDomCnt', COALESCE(SUM(bb.av_v_dom_count), 0) * 0.0725
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbAcVisaIntCnt', COALESCE(SUM(bb.av_v_int_count), 0) * 0.4770
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbAcMasterIntDecline', COALESCE(SUM(bb.ac_m_int_decline_count), 0) * 0.3595
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbAcVisaIntDecline', COALESCE(SUM(bb.ac_v_int_decline_count), 0) * 0.3570
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbAcDomDecline', COALESCE(SUM(bb.ac_dom_decline_count), 0) * 0.0890
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbMasterDomVol', COALESCE(SUM(bb.m_dom_clearing_vol), 0) * -0.0021
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbMasterIntVol', COALESCE(SUM(bb.m_int_clearing_vol), 0) * -0.0111
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbVisaDomVol', COALESCE(SUM(bb.v_dom_clearing_vol), 0) * -0.0016
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbVisaIntVol', COALESCE(SUM(bb.v_int_clearing_vol), 0) * -0.0116
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-    UNION ALL SELECT 'bbActiveCardFee', COALESCE(SUM(bb.active_card_count), 0) * 0.1
-    FROM dws.dws_bb_card_finance_daily_v2_p bb CROSS JOIN params p
-    WHERE bb.delete_time IS NULL AND bb.report_date >= p.start_date AND bb.report_date < p.end_date
-),
-
-check_rows AS (
+bb_detail AS (
     SELECT
-        COALESCE(o.cost_item, v.cost_item) AS cost_item,
-        ROUND(COALESCE(o.original_value, 0)::numeric, 4) AS original_value,
-        ROUND(COALESCE(v.v2_value, 0)::numeric, 4) AS v2_value,
-        ROUND((COALESCE(v.v2_value, 0) - COALESCE(o.original_value, 0))::numeric, 4) AS diff
-    FROM orig_cost o
-    FULL OUTER JOIN v2_cost v
-        ON o.cost_item = v.cost_item
+        *,
+        CASE
+            WHEN total_net_amount = 0 THEN 0
+            WHEN total_net_amount <= 5000000 THEN total_net_amount * 0.0055
+            WHEN total_net_amount <= 10000000 THEN 5000000 * 0.0055 + (total_net_amount - 5000000) * 0.0045
+            ELSE 5000000 * 0.0055 + 5000000 * 0.0045 + (total_net_amount - 10000000) * 0.004
+        END AS volume_fee_cost
+    FROM bb_base
+),
+cost_rows AS (
+    SELECT 1 AS sort_no, 'Mastercard Domestic Count Fee' AS cost_item, mastercard_domestic_count_fee AS cost_amount FROM bb_detail
+    UNION ALL SELECT 2, 'Mastercard International Count Fee', mastercard_international_count_fee FROM bb_detail
+    UNION ALL SELECT 3, 'VISA Domestic Count Fee', visa_domestic_count_fee FROM bb_detail
+    UNION ALL SELECT 4, 'VISA International Count Fee', visa_international_count_fee FROM bb_detail
+    UNION ALL SELECT 5, 'AC Mastercard Domestic Count Fee', ac_mastercard_domestic_count_fee FROM bb_detail
+    UNION ALL SELECT 6, 'AC Mastercard International Count Fee', ac_mastercard_international_count_fee FROM bb_detail
+    UNION ALL SELECT 7, 'AC VISA Domestic Count Fee', ac_visa_domestic_count_fee FROM bb_detail
+    UNION ALL SELECT 8, 'AC VISA International Count Fee', ac_visa_international_count_fee FROM bb_detail
+    UNION ALL SELECT 9, 'Mastercard Domestic Dollar Volume Fee', mastercard_domestic_dollar_volume_fee FROM bb_detail
+    UNION ALL SELECT 10, 'Mastercard International Dollar Volume Fee', mastercard_international_dollar_volume_fee FROM bb_detail
+    UNION ALL SELECT 11, 'Visa Domestic Dollar Volume Fee', visa_domestic_dollar_volume_fee FROM bb_detail
+    UNION ALL SELECT 12, 'Visa International Dollar Volume Fee', visa_international_dollar_volume_fee FROM bb_detail
+    UNION ALL SELECT 13, 'Mastercard International Reversal Fee', mastercard_international_reversal_fee FROM bb_detail
+    UNION ALL SELECT 14, 'Visa International Reversal Fee', visa_international_reversal_fee FROM bb_detail
+    UNION ALL SELECT 15, 'Domestic Reversal Fee', domestic_reversal_fee FROM bb_detail
+    UNION ALL SELECT 16, 'Mastercard International Refund Fee', mastercard_international_refund_fee FROM bb_detail
+    UNION ALL SELECT 17, 'VISA International Refund Fee', visa_international_refund_fee FROM bb_detail
+    UNION ALL SELECT 18, 'Domestic Refund Fee', domestic_refund_fee FROM bb_detail
+    UNION ALL SELECT 19, 'Mastercard International Decline Fee', mastercard_international_decline_fee FROM bb_detail
+    UNION ALL SELECT 20, 'Visa International Decline Fee', visa_international_decline_fee FROM bb_detail
+    UNION ALL SELECT 21, 'Domestic Decline Fee', domestic_decline_fee FROM bb_detail
+    UNION ALL SELECT 22, 'AC Mastercard International Decline Fee', ac_mastercard_international_decline_fee FROM bb_detail
+    UNION ALL SELECT 23, 'AC Visa International Decline Fee', ac_visa_international_decline_fee FROM bb_detail
+    UNION ALL SELECT 24, 'AC Domestic Decline Fee', ac_domestic_decline_fee FROM bb_detail
+    UNION ALL SELECT 25, 'Active Card Account Fee', active_card_account_fee FROM bb_detail
+    UNION ALL SELECT 26, 'Volume Fee Cost', volume_fee_cost FROM bb_detail
 )
-
 SELECT
+    sort_no,
     cost_item,
-    original_value,
-    v2_value,
-    diff
-FROM check_rows
-ORDER BY
-    CASE cost_item WHEN 'bbActiveCardFee' THEN 999 ELSE 1 END,
-    cost_item;
+    CAST(cost_amount AS NUMERIC(20, 4)) AS cost_amount
+FROM cost_rows
+ORDER BY sort_no;
 
 -- =========================================================
--- Refund 专项排查
--- 目的：
---   1. raw_refund_by_post_date：按月度 SQL q5 的核心 ODS 口径查原始 refund。
---   2. dwm_refund_by_post_date：检查 DWM 是否已经沉淀 refund 明细。
---   3. dws_refund_by_report_date：检查 DWS 是否汇总出 refund 基数。
--- 如果 raw 有值但 dwm 为 0，优先重跑 dwm_online_bb_card_transaction_detail_v2-batch-sql.sql。
--- 如果 dwm 有值但 dws 为 0，优先重跑 dws_online_bb_card_finance_daily_v2-batch-sql.sql。
+-- 2. Refund 专项排查：raw -> dwm -> dws
+-- 如果 raw 有值但 dwm 为 0，先重跑 DWM transaction batch。
+-- 如果 dwm 有值但 dws 为 0，先重跑 DWS finance daily batch。
 -- =========================================================
 WITH params AS (
     SELECT
@@ -374,21 +112,9 @@ WITH params AS (
 raw_refund_by_post_date AS (
     SELECT
         'raw_refund_by_post_date' AS layer,
-        COUNT(DISTINCT CASE
-            WHEN RIGHT(s.raw_data::json->>'txnLocation', 2) NOT IN ('US', 'USA')
-             AND c."type" = 'Master'
-            THEN t.source_id
-        END) AS master_int_refund_count,
-        COUNT(DISTINCT CASE
-            WHEN RIGHT(s.raw_data::json->>'txnLocation', 2) NOT IN ('US', 'USA')
-             AND c."type" = 'VISA'
-            THEN t.source_id
-        END) AS visa_int_refund_count,
-        COUNT(DISTINCT CASE
-            WHEN RIGHT(s.raw_data::json->>'txnLocation', 2) IN ('US', 'USA')
-             AND c."type" IN ('Master', 'VISA')
-            THEN t.source_id
-        END) AS dom_refund_count
+        COUNT(DISTINCT CASE WHEN RIGHT(s.raw_data::json->>'txnLocation', 2) NOT IN ('US', 'USA') AND c."type" = 'Master' THEN t.source_id END) AS master_int_refund_count,
+        COUNT(DISTINCT CASE WHEN RIGHT(s.raw_data::json->>'txnLocation', 2) NOT IN ('US', 'USA') AND c."type" = 'VISA' THEN t.source_id END) AS visa_int_refund_count,
+        COUNT(DISTINCT CASE WHEN RIGHT(s.raw_data::json->>'txnLocation', 2) IN ('US', 'USA') AND c."type" IN ('Master', 'VISA') THEN t.source_id END) AS dom_refund_count
     FROM public.quantum_card_transaction_extend t
     INNER JOIN public."qbitCard" c
         ON c."id" = t.card_id
@@ -406,24 +132,31 @@ raw_refund_by_post_date AS (
       AND s.raw_data::json->>'responseCode' = 'APPROVE'
       AND CAST(s.raw_data::json->>'postDate' AS timestamp) >= p.start_time
       AND CAST(s.raw_data::json->>'postDate' AS timestamp) < p.end_time
+      AND s.id NOT IN (
+          '234e26db-0e1d-424f-952b-053ab2e42d30',
+          '82ff7fa6-8035-4c7b-8c18-ace860c3dfae',
+          '711e7995-ea26-499f-a1c5-9e4faf15f31f',
+          '5e974989-8792-401f-93b6-b107e0b46e51',
+          '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72',
+          'a97006e9-2609-4e70-a165-2ae6b9f49689',
+          'ad861604-ff4f-4cd1-997e-fe613c67970e',
+          '37959ee2-880f-49ea-8d74-976a69382c90',
+          'bebf7744-ed33-46cd-8ca6-40bc43d928eb',
+          'ece578c8-e8c1-46ec-83b9-116ea049a2e8',
+          '69e04460-0cb4-4d9d-9001-2b786cfc3d7b',
+          '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470',
+          'cff4d9c4-ee01-43fa-9518-62872afbbe91',
+          '160b403b-2a16-4b43-afac-a3b37916c968',
+          '0fd4e8ed-e208-44e5-b463-ece053a915f3',
+          '4a63f4ec-637e-4627-a668-5339fe64b9be'
+      )
 ),
 dwm_refund_by_post_date AS (
     SELECT
         'dwm_refund_by_post_date' AS layer,
-        COUNT(DISTINCT CASE
-            WHEN card_org = 'Master'
-             AND settle_country NOT IN ('US', 'USA')
-            THEN source_id
-        END) AS master_int_refund_count,
-        COUNT(DISTINCT CASE
-            WHEN card_org = 'VISA'
-             AND settle_country NOT IN ('US', 'USA')
-            THEN source_id
-        END) AS visa_int_refund_count,
-        COUNT(DISTINCT CASE
-            WHEN settle_country IN ('US', 'USA')
-            THEN source_id
-        END) AS dom_refund_count
+        COUNT(DISTINCT CASE WHEN card_org = 'Master' AND settle_country NOT IN ('US', 'USA') THEN source_id END) AS master_int_refund_count,
+        COUNT(DISTINCT CASE WHEN card_org = 'VISA' AND settle_country NOT IN ('US', 'USA') THEN source_id END) AS visa_int_refund_count,
+        COUNT(DISTINCT CASE WHEN settle_country IN ('US', 'USA') THEN source_id END) AS dom_refund_count
     FROM dwm.dwm_bb_card_transaction_detail_v2_p t
     CROSS JOIN params p
     WHERE t.delete_time IS NULL
@@ -432,6 +165,24 @@ dwm_refund_by_post_date AS (
       AND t.resp_code = 'APPROVE'
       AND t.settlement_post_date >= p.start_time
       AND t.settlement_post_date < p.end_time
+      AND t.settlement_id NOT IN (
+          '234e26db-0e1d-424f-952b-053ab2e42d30',
+          '82ff7fa6-8035-4c7b-8c18-ace860c3dfae',
+          '711e7995-ea26-499f-a1c5-9e4faf15f31f',
+          '5e974989-8792-401f-93b6-b107e0b46e51',
+          '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72',
+          'a97006e9-2609-4e70-a165-2ae6b9f49689',
+          'ad861604-ff4f-4cd1-997e-fe613c67970e',
+          '37959ee2-880f-49ea-8d74-976a69382c90',
+          'bebf7744-ed33-46cd-8ca6-40bc43d928eb',
+          'ece578c8-e8c1-46ec-83b9-116ea049a2e8',
+          '69e04460-0cb4-4d9d-9001-2b786cfc3d7b',
+          '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470',
+          'cff4d9c4-ee01-43fa-9518-62872afbbe91',
+          '160b403b-2a16-4b43-afac-a3b37916c968',
+          '0fd4e8ed-e208-44e5-b463-ece053a915f3',
+          '4a63f4ec-637e-4627-a668-5339fe64b9be'
+      )
 ),
 dws_refund_by_report_date AS (
     SELECT
@@ -453,3 +204,73 @@ FROM dwm_refund_by_post_date
 UNION ALL
 SELECT *
 FROM dws_refund_by_report_date;
+
+-- =========================================================
+-- 3. 大差异专项排查：Dollar Volume / Volume Fee Cost
+-- 看 16 个手工排除 settlement id 对金额差异的贡献。
+-- =========================================================
+WITH params AS (
+    SELECT
+        TIMESTAMP '2026-06-01 00:00:00' AS start_time,
+        TIMESTAMP '2026-07-01 00:00:00' AS end_time
+),
+dwm_amount AS (
+    SELECT
+        COUNT(*) AS settlement_rows,
+        SUM(CASE WHEN settlement_id IN (
+            '234e26db-0e1d-424f-952b-053ab2e42d30',
+            '82ff7fa6-8035-4c7b-8c18-ace860c3dfae',
+            '711e7995-ea26-499f-a1c5-9e4faf15f31f',
+            '5e974989-8792-401f-93b6-b107e0b46e51',
+            '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72',
+            'a97006e9-2609-4e70-a165-2ae6b9f49689',
+            'ad861604-ff4f-4cd1-997e-fe613c67970e',
+            '37959ee2-880f-49ea-8d74-976a69382c90',
+            'bebf7744-ed33-46cd-8ca6-40bc43d928eb',
+            'ece578c8-e8c1-46ec-83b9-116ea049a2e8',
+            '69e04460-0cb4-4d9d-9001-2b786cfc3d7b',
+            '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470',
+            'cff4d9c4-ee01-43fa-9518-62872afbbe91',
+            '160b403b-2a16-4b43-afac-a3b37916c968',
+            '0fd4e8ed-e208-44e5-b463-ece053a915f3',
+            '4a63f4ec-637e-4627-a668-5339fe64b9be'
+        ) THEN 1 ELSE 0 END) AS excluded_rows,
+        COALESCE(SUM(CASE WHEN card_org = 'Master' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE 0 END), 0) AS m_dom_vol_before_exclude,
+        COALESCE(SUM(CASE WHEN card_org = 'Master' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE 0 END), 0) AS m_int_vol_before_exclude,
+        COALESCE(SUM(CASE WHEN card_org = 'VISA' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE 0 END), 0) AS v_dom_vol_before_exclude,
+        COALESCE(SUM(CASE WHEN card_org = 'VISA' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE 0 END), 0) AS v_int_vol_before_exclude,
+        COALESCE(SUM(CASE WHEN card_org = 'Master' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' AND settlement_id NOT IN (
+            '234e26db-0e1d-424f-952b-053ab2e42d30', '82ff7fa6-8035-4c7b-8c18-ace860c3dfae', '711e7995-ea26-499f-a1c5-9e4faf15f31f', '5e974989-8792-401f-93b6-b107e0b46e51', '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72', 'a97006e9-2609-4e70-a165-2ae6b9f49689', 'ad861604-ff4f-4cd1-997e-fe613c67970e', '37959ee2-880f-49ea-8d74-976a69382c90', 'bebf7744-ed33-46cd-8ca6-40bc43d928eb', 'ece578c8-e8c1-46ec-83b9-116ea049a2e8', '69e04460-0cb4-4d9d-9001-2b786cfc3d7b', '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470', 'cff4d9c4-ee01-43fa-9518-62872afbbe91', '160b403b-2a16-4b43-afac-a3b37916c968', '0fd4e8ed-e208-44e5-b463-ece053a915f3', '4a63f4ec-637e-4627-a668-5339fe64b9be'
+        ) THEN -billing_amount ELSE 0 END), 0) AS m_dom_vol_after_exclude,
+        COALESCE(SUM(CASE WHEN card_org = 'Master' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' AND settlement_id NOT IN (
+            '234e26db-0e1d-424f-952b-053ab2e42d30', '82ff7fa6-8035-4c7b-8c18-ace860c3dfae', '711e7995-ea26-499f-a1c5-9e4faf15f31f', '5e974989-8792-401f-93b6-b107e0b46e51', '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72', 'a97006e9-2609-4e70-a165-2ae6b9f49689', 'ad861604-ff4f-4cd1-997e-fe613c67970e', '37959ee2-880f-49ea-8d74-976a69382c90', 'bebf7744-ed33-46cd-8ca6-40bc43d928eb', 'ece578c8-e8c1-46ec-83b9-116ea049a2e8', '69e04460-0cb4-4d9d-9001-2b786cfc3d7b', '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470', 'cff4d9c4-ee01-43fa-9518-62872afbbe91', '160b403b-2a16-4b43-afac-a3b37916c968', '0fd4e8ed-e208-44e5-b463-ece053a915f3', '4a63f4ec-637e-4627-a668-5339fe64b9be'
+        ) THEN -billing_amount ELSE 0 END), 0) AS m_int_vol_after_exclude,
+        COALESCE(SUM(CASE WHEN card_org = 'VISA' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' AND settlement_id NOT IN (
+            '234e26db-0e1d-424f-952b-053ab2e42d30', '82ff7fa6-8035-4c7b-8c18-ace860c3dfae', '711e7995-ea26-499f-a1c5-9e4faf15f31f', '5e974989-8792-401f-93b6-b107e0b46e51', '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72', 'a97006e9-2609-4e70-a165-2ae6b9f49689', 'ad861604-ff4f-4cd1-997e-fe613c67970e', '37959ee2-880f-49ea-8d74-976a69382c90', 'bebf7744-ed33-46cd-8ca6-40bc43d928eb', 'ece578c8-e8c1-46ec-83b9-116ea049a2e8', '69e04460-0cb4-4d9d-9001-2b786cfc3d7b', '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470', 'cff4d9c4-ee01-43fa-9518-62872afbbe91', '160b403b-2a16-4b43-afac-a3b37916c968', '0fd4e8ed-e208-44e5-b463-ece053a915f3', '4a63f4ec-637e-4627-a668-5339fe64b9be'
+        ) THEN -billing_amount ELSE 0 END), 0) AS v_dom_vol_after_exclude,
+        COALESCE(SUM(CASE WHEN card_org = 'VISA' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' AND settlement_id NOT IN (
+            '234e26db-0e1d-424f-952b-053ab2e42d30', '82ff7fa6-8035-4c7b-8c18-ace860c3dfae', '711e7995-ea26-499f-a1c5-9e4faf15f31f', '5e974989-8792-401f-93b6-b107e0b46e51', '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72', 'a97006e9-2609-4e70-a165-2ae6b9f49689', 'ad861604-ff4f-4cd1-997e-fe613c67970e', '37959ee2-880f-49ea-8d74-976a69382c90', 'bebf7744-ed33-46cd-8ca6-40bc43d928eb', 'ece578c8-e8c1-46ec-83b9-116ea049a2e8', '69e04460-0cb4-4d9d-9001-2b786cfc3d7b', '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470', 'cff4d9c4-ee01-43fa-9518-62872afbbe91', '160b403b-2a16-4b43-afac-a3b37916c968', '0fd4e8ed-e208-44e5-b463-ece053a915f3', '4a63f4ec-637e-4627-a668-5339fe64b9be'
+        ) THEN -billing_amount ELSE 0 END), 0) AS v_int_vol_after_exclude
+    FROM dwm.dwm_bb_card_transaction_detail_v2_p t
+    CROSS JOIN params p
+    WHERE t.delete_time IS NULL
+      AND t.original_completion_time >= p.start_time
+      AND t.original_completion_time < p.end_time
+      AND t.business_type IN ('Credit', 'Consumption')
+)
+SELECT
+    settlement_rows,
+    excluded_rows,
+    m_dom_vol_before_exclude * 0.0021 AS m_dom_fee_before_exclude,
+    m_dom_vol_after_exclude * 0.0021 AS m_dom_fee_after_exclude,
+    (m_dom_vol_before_exclude - m_dom_vol_after_exclude) * 0.0021 AS m_dom_fee_excluded_delta,
+    m_int_vol_before_exclude * 0.0111 AS m_int_fee_before_exclude,
+    m_int_vol_after_exclude * 0.0111 AS m_int_fee_after_exclude,
+    (m_int_vol_before_exclude - m_int_vol_after_exclude) * 0.0111 AS m_int_fee_excluded_delta,
+    v_dom_vol_before_exclude * 0.0016 AS v_dom_fee_before_exclude,
+    v_dom_vol_after_exclude * 0.0016 AS v_dom_fee_after_exclude,
+    (v_dom_vol_before_exclude - v_dom_vol_after_exclude) * 0.0016 AS v_dom_fee_excluded_delta,
+    v_int_vol_before_exclude * 0.0116 AS v_int_fee_before_exclude,
+    v_int_vol_after_exclude * 0.0116 AS v_int_fee_after_exclude,
+    (v_int_vol_before_exclude - v_int_vol_after_exclude) * 0.0116 AS v_int_fee_excluded_delta
+FROM dwm_amount;
