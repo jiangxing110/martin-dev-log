@@ -7,6 +7,7 @@
 --   2. end_date 使用左闭右开，不包含当天。
 --   3. 直接读取 dws.dws_bb_card_finance_daily_v2_p 的基数字段。
 --   4. active card fee 按 active_card_count * 0.1 计算。
+--   5. 固定成本按 cost_fixed_fee 汇总。
 --********************************************************************--
 
 WITH params AS (
@@ -40,7 +41,8 @@ bb_detail AS (
         COALESCE(SUM(bb.m_int_clearing_vol * -0.0111), 0) AS "bbMasterIntVol",
         COALESCE(SUM(bb.v_dom_clearing_vol * -0.0016), 0) AS "bbVisaDomVol",
         COALESCE(SUM(bb.v_int_clearing_vol * -0.0116), 0) AS "bbVisaIntVol",
-        COALESCE(SUM(bb.active_card_count * 0.1), 0) AS "bbActiveCardFee"
+        COALESCE(SUM(bb.active_card_count * 0.1), 0) AS "bbActiveCardFee",
+        COALESCE(SUM(bb.cost_fixed_fee), 0) AS "bbFixedFee"
     FROM dws.dws_bb_card_finance_daily_v2_p bb
     CROSS JOIN params p
     WHERE bb.delete_time IS NULL
@@ -73,6 +75,7 @@ bb_cost_item AS (
     UNION ALL SELECT 'bbVisaDomVol', "bbVisaDomVol" FROM bb_detail
     UNION ALL SELECT 'bbVisaIntVol', "bbVisaIntVol" FROM bb_detail
     UNION ALL SELECT 'bbActiveCardFee', "bbActiveCardFee" FROM bb_detail
+    UNION ALL SELECT 'bbFixedFee', "bbFixedFee" FROM bb_detail
 ),
 result_detail AS (
     SELECT cost_item, CAST(COALESCE(cost_amount, 0) AS NUMERIC(20, 4)) AS cost_amount
