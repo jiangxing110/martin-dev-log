@@ -42,31 +42,6 @@ CREATE TABLE "dws"."dws_bb_card_finance_daily_v2_p" (
   "bb_rebate_base_amt" numeric(20,4) DEFAULT 0,
   "bb_channel_cashback_comm" numeric(20,4) DEFAULT 0,
   "active_card_count" int4 DEFAULT 0,
-  "m_dom_auth_fee" numeric(20,4) DEFAULT 0,
-  "m_int_auth_fee" numeric(20,4) DEFAULT 0,
-  "v_dom_auth_fee" numeric(20,4) DEFAULT 0,
-  "v_int_auth_fee" numeric(20,4) DEFAULT 0,
-  "av_m_dom_fee" numeric(20,4) DEFAULT 0,
-  "av_m_int_fee" numeric(20,4) DEFAULT 0,
-  "av_v_dom_fee" numeric(20,4) DEFAULT 0,
-  "av_v_int_fee" numeric(20,4) DEFAULT 0,
-  "m_dom_clearing_fee" numeric(20,4) DEFAULT 0,
-  "m_int_clearing_fee" numeric(20,4) DEFAULT 0,
-  "v_dom_clearing_fee" numeric(20,4) DEFAULT 0,
-  "v_int_clearing_fee" numeric(20,4) DEFAULT 0,
-  "m_int_reversal_fee" numeric(20,4) DEFAULT 0,
-  "v_int_reversal_fee" numeric(20,4) DEFAULT 0,
-  "dom_reversal_fee" numeric(20,4) DEFAULT 0,
-  "m_int_refund_fee" numeric(20,4) DEFAULT 0,
-  "v_int_refund_fee" numeric(20,4) DEFAULT 0,
-  "dom_refund_fee" numeric(20,4) DEFAULT 0,
-  "m_int_decline_fee" numeric(20,4) DEFAULT 0,
-  "v_int_decline_fee" numeric(20,4) DEFAULT 0,
-  "dom_decline_fee" numeric(20,4) DEFAULT 0,
-  "ac_m_int_decline_fee" numeric(20,4) DEFAULT 0,
-  "ac_v_int_decline_fee" numeric(20,4) DEFAULT 0,
-  "ac_dom_decline_fee" numeric(20,4) DEFAULT 0,
-  "active_card_account_fee" numeric(20,4) DEFAULT 0,
   "total_net_amount" numeric(20,4) DEFAULT 0,
   "volume_fee_cost" numeric(20,4) DEFAULT 0,
   "cashback_rate" numeric(20,8) DEFAULT 0,
@@ -120,31 +95,6 @@ COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."v_int_clearing_vol" IS
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."bb_rebate_base_amt" IS 'BB 返现/收入基数金额，按 approved clearing/refund 净额计算';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."bb_channel_cashback_comm" IS 'BB 渠道 cashback 计算基数，当前口径等于 bb_rebate_base_amt';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."active_card_count" IS '月度 active card 去重数，不能按日累加';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."m_dom_auth_fee" IS 'm_dom_auth_count * 0.1090';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."m_int_auth_fee" IS 'm_int_auth_count * 0.4845';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."v_dom_auth_fee" IS 'v_dom_auth_count * 0.0725';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."v_int_auth_fee" IS 'v_int_auth_count * 0.4770';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."av_m_dom_fee" IS 'av_m_dom_count * 0.1090';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."av_m_int_fee" IS 'av_m_int_count * 0.4845';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."av_v_dom_fee" IS 'av_v_dom_count * 0.0725';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."av_v_int_fee" IS 'av_v_int_count * 0.4770';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."m_dom_clearing_fee" IS 'm_dom_clearing_vol * 0.0021';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."m_int_clearing_fee" IS 'm_int_clearing_vol * 0.0111';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."v_dom_clearing_fee" IS 'v_dom_clearing_vol * 0.0016';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."v_int_clearing_fee" IS 'v_int_clearing_vol * 0.0116';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."m_int_reversal_fee" IS 'm_int_reversal_count * 0.7190';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."v_int_reversal_fee" IS 'v_int_reversal_count * 0.7140';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."dom_reversal_fee" IS 'dom_reversal_count * 0.1780';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."m_int_refund_fee" IS 'm_int_refund_count * 0.4845';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."v_int_refund_fee" IS 'v_int_refund_count * 0.4770';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."dom_refund_fee" IS 'dom_refund_count * 0.1090';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."m_int_decline_fee" IS 'm_int_decline_count * 0.3595';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."v_int_decline_fee" IS 'v_int_decline_count * 0.3570';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."dom_decline_fee" IS 'dom_decline_count * 0.0890';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."ac_m_int_decline_fee" IS 'ac_m_int_decline_count * 0.3595';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."ac_v_int_decline_fee" IS 'ac_v_int_decline_count * 0.3570';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."ac_dom_decline_fee" IS 'ac_dom_decline_count * 0.0890';
-COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."active_card_account_fee" IS 'BB 活跃卡费用字段，当前 v2 口径不在 active count 独立脚本计算，默认保持 0';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."total_net_amount" IS 'BB 当行总净额，用于 Volume Fee Cost 和 Cashback Income';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."volume_fee_cost" IS '按全月 total_net_amount 阶梯后按行净额占比分摊';
 COMMENT ON COLUMN "dws"."dws_bb_card_finance_daily_v2_p"."cashback_rate" IS 'BB 月度 Cashback 费率，建议来源 ods_bi_month_tag';

@@ -7,7 +7,7 @@
 --   运行方式：默认重算当前月；如昨天 Auth DWM 变更，也重算对应月份
 --   运行参数：无
 -- Notes:
---   1. 只维护 active_card_count，不计算 active_card_account_fee。
+--   1. 只维护 active_card_count。
 --   2. 只落每月 1 号特殊行，special_fee_type = ACTIVE_CARD_ACCOUNT_FEE。
 --   3. 销售归属取执行时客户最新有效关系，不按 auth_time 历史关系拆分。
 --********************************************************************--
@@ -189,7 +189,6 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     account_category           STRING,
     system_type                STRING,
     active_card_count          INT,
-    active_card_account_fee    DECIMAL(20, 4),
     cost_fixed_fee             DECIMAL(20, 4),
     special_fee_type           STRING,
     sale_id                    STRING,
@@ -229,7 +228,6 @@ SELECT
     account_category,
     system_type,
     active_card_count,
-    CAST(0 AS DECIMAL(20, 4)) AS active_card_account_fee,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
     'ACTIVE_CARD_ACCOUNT_FEE' AS special_fee_type,
     sale_id,

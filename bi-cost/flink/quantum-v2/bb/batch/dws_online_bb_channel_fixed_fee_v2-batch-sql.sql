@@ -6,6 +6,9 @@
 --   作业类型：批处理
 --   运行方式：按 start_time/end_time 覆盖月份删除并重算 BB 固定成本特殊行
 --   运行参数：start_time, end_time
+-- Notes:
+--   1. 只写入 cost_fixed_fee 和 special_fee_type，不再使用 active_card_account_fee。
+--   2. 依赖 dws_bb_card_finance_daily_v2_p 的最新基数表结构。
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
