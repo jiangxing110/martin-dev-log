@@ -5,12 +5,12 @@
 -- 作业元信息：
 --   作业类型：批处理
 --   运行方式：按月导入存在的 bb_card_auth_detail_yyyy-mm
---   运行参数：auth_table_name
+--   运行参数：auth_table_name, start_time, end_time
 -- Notes:
 --   1. Auth 原始表是月表，单月通常 200w+。
 --   2. auth_table_name 只传裸表名，例如 bb_card_auth_detail_2026-05。
 --   3. JDBC source 直接读取指定 Auth 月表，避免函数入口在 Flink JDBC 中解析不稳定。
---   4. Auth 月表名已经代表账单月份，不再按 Trans Date / Time 做自然月过滤，避免误过滤月初/月末边界数据。
+--   4. Auth 月表名代表账单月份；实际回刷按 start_time/end_time 分片执行，避免单次扫描整月。
 --   5. DWM 通过 upsert 覆盖，不做删除。
 --********************************************************************--
 
@@ -59,7 +59,7 @@ CREATE TEMPORARY TABLE source_bb_card_auth_detail (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT CAST(TO_TIMESTAMP("Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') AS timestamp) AS auth_time, "Trans Date / Time" AS trans_date_time, "Program GUID" AS program_guid, "Program Name" AS program_name, "Card Proxy" AS card_proxy, "Person Name" AS person_name, "Request Code" AS request_code, "Request Description" AS request_description, "Local Trans Date / Time" AS local_trans_date_time, "Auth Txn GUID" AS auth_txn_guid, "Response Code" AS response_code, "Reason Code" AS reason_code, "Txn Amount" AS txn_amount, "Settle Amount" AS settle_amount, "Txn Currency" AS txn_currency, "Merchant Country" AS merchant_country, "Transmission Date" AS transmission_date, "Merchant Name" AS merchant_name, pos_service_code, "MCC" AS mcc, authorization_id_code, ''public."${auth_table_name}"'' AS source_table FROM public."${auth_table_name}") AS bb_auth_detail_f',
+    'table-name' = '(SELECT CAST(TO_TIMESTAMP("Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') AS timestamp) AS auth_time, "Trans Date / Time" AS trans_date_time, "Program GUID" AS program_guid, "Program Name" AS program_name, "Card Proxy" AS card_proxy, "Person Name" AS person_name, "Request Code" AS request_code, "Request Description" AS request_description, "Local Trans Date / Time" AS local_trans_date_time, "Auth Txn GUID" AS auth_txn_guid, "Response Code" AS response_code, "Reason Code" AS reason_code, "Txn Amount" AS txn_amount, "Settle Amount" AS settle_amount, "Txn Currency" AS txn_currency, "Merchant Country" AS merchant_country, "Transmission Date" AS transmission_date, "Merchant Name" AS merchant_name, pos_service_code, "MCC" AS mcc, authorization_id_code, ''public."${auth_table_name}"'' AS source_table FROM public."${auth_table_name}" WHERE TO_TIMESTAMP("Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND TO_TIMESTAMP("Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') < CAST(''${end_time}'' AS TIMESTAMP(6))) AS bb_auth_detail_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -76,7 +76,7 @@ CREATE TEMPORARY TABLE source_qbit_card (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT c.id, c.token, c.account_id, c.type AS "type" FROM ods.ods_qbit_card c WHERE c.delete_time IS NULL AND EXISTS (SELECT 1 FROM public."${auth_table_name}" a WHERE a."Card Proxy" = c.token)) AS ods_qbit_card_f',
+    'table-name' = '(SELECT c.id, c.token, c.account_id, c.type AS "type" FROM ods.ods_qbit_card c WHERE c.delete_time IS NULL AND EXISTS (SELECT 1 FROM public."${auth_table_name}" a WHERE a."Card Proxy" = c.token AND TO_TIMESTAMP(a."Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND TO_TIMESTAMP(a."Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') < CAST(''${end_time}'' AS TIMESTAMP(6)))) AS ods_qbit_card_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
