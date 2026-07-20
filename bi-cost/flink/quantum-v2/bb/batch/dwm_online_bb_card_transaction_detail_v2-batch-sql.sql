@@ -89,6 +89,34 @@ CREATE TEMPORARY TABLE source_bb_quantum_card_transaction_extend_oc (
     'scan.auto-commit' = 'false'
 );
 
+CREATE TEMPORARY TABLE source_bb_quantum_card_transaction_extend_post (
+    id                       BIGINT,
+    source_id                STRING,
+    card_transaction_id      STRING,
+    account_id               STRING,
+    country                  STRING,
+    `type`                   STRING,
+    transaction_time         TIMESTAMP(6),
+    original_completion_time TIMESTAMP(6),
+    business_code_list       STRING,
+    remarks                  STRING,
+    card_id                  STRING,
+    detail                   STRING,
+    create_time              TIMESTAMP(6),
+    update_time              TIMESTAMP(6),
+    card_org                 STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT t.id, t.source_id, t.card_transaction_id::text AS card_transaction_id, t.account_id::text AS account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, CAST(t.business_code_list AS text) AS business_code_list, t.remarks, t.card_id::text AS card_id, t.detail, t.create_time, t.update_time, c."type" AS card_org FROM public.quantum_card_transaction_extend t INNER JOIN public."qbitCard" c ON t.card_id = c."id" WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND EXISTS (SELECT 1 FROM ods.ods_qbit_card_settlement s WHERE s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND s.transaction_type = ''refund.clearing'' AND CAST(s.raw_data::json->>''postDate'' AS timestamp) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND CAST(s.raw_data::json->>''postDate'' AS timestamp) < CAST(''${end_time}'' AS TIMESTAMP(6)) AND t.card_transaction_id::text = s.qbit_card_transaction_id)) AS quantum_card_transaction_extend_post_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000',
+    'scan.auto-commit' = 'false'
+);
+
 -- 结算源拆成两个等值命中路径，避免 EXISTS + OR 触发大范围回扫。
 CREATE TEMPORARY TABLE source_qbit_card_settlement_tx (
     id                      STRING,
@@ -130,6 +158,26 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement_oc (
     'scan.auto-commit' = 'false'
 );
 
+CREATE TEMPORARY TABLE source_qbit_card_settlement_post (
+    id                      STRING,
+    transaction_id          STRING,
+    qbit_card_transaction_id STRING,
+    transaction_type        STRING,
+    billing_amount          DOUBLE,
+    raw_data                STRING,
+    create_time             TIMESTAMP(6),
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT s.id, s.transaction_id, s.qbit_card_transaction_id, s.transaction_type, s.billing_amount, s.raw_data, s.create_time FROM ods.ods_qbit_card_settlement s WHERE s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND s.transaction_type = ''refund.clearing'' AND CAST(s.raw_data::json->>''postDate'' AS timestamp) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND CAST(s.raw_data::json->>''postDate'' AS timestamp) < CAST(''${end_time}'' AS TIMESTAMP(6)) AND EXISTS (SELECT 1 FROM public.quantum_card_transaction_extend t INNER JOIN public."qbitCard" c ON t.card_id = c."id" WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND t.card_transaction_id::text = s.qbit_card_transaction_id)) AS ods_qbit_card_settlement_post_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000',
+    'scan.auto-commit' = 'false'
+);
+
 -- 账户维度：只取 DWM 需要落表的账户分类字段。
 CREATE TEMPORARY TABLE source_dim_account (
     id                STRING,
@@ -156,7 +204,7 @@ CREATE TEMPORARY TABLE source_bb_sale_relation (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(WITH tx AS (SELECT t.id::text AS tx_id, t.account_id::text AS account_id, COALESCE(t.transaction_time, t.original_completion_time) AS transaction_time FROM public.quantum_card_transaction_extend t WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND ((t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6))) OR (t.original_completion_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''${end_time}'' AS TIMESTAMP(6))))), direct_rel AS (SELECT DISTINCT ON (tx.tx_id) tx.tx_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id FROM tx INNER JOIN dim.dim_sale_account_relation_p sr ON sr.delete_time IS NULL AND sr.relation_account_id::text = tx.account_id AND sr.relation_start_time < CAST(''${end_time}'' AS TIMESTAMP(6)) AND (sr.relation_end_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) OR sr.relation_end_time IS NULL) AND tx.transaction_time >= sr.relation_start_time AND (tx.transaction_time < sr.relation_end_time OR sr.relation_end_time IS NULL) ORDER BY tx.tx_id, sr.relation_start_time DESC), root_rel AS (SELECT DISTINCT ON (tx.tx_id) tx.tx_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id FROM tx INNER JOIN ods.ods_api_account_relation aar ON aar.delete_time IS NULL AND aar.account_id::text = tx.account_id INNER JOIN dim.dim_sale_account_relation_p sr ON sr.delete_time IS NULL AND sr.relation_account_id::text = aar.root_id::text AND sr.relation_start_time < CAST(''${end_time}'' AS TIMESTAMP(6)) AND (sr.relation_end_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) OR sr.relation_end_time IS NULL) AND tx.transaction_time >= sr.relation_start_time AND (tx.transaction_time < sr.relation_end_time OR sr.relation_end_time IS NULL) ORDER BY tx.tx_id, sr.relation_start_time DESC) SELECT tx.tx_id, COALESCE(direct_rel.sale_id, root_rel.sale_id) AS sale_id, COALESCE(direct_rel.am_id, root_rel.am_id) AS am_id FROM tx LEFT JOIN direct_rel ON direct_rel.tx_id = tx.tx_id LEFT JOIN root_rel ON root_rel.tx_id = tx.tx_id) AS bb_sale_relation_f',
+    'table-name' = '(WITH tx AS (SELECT t.id::text AS tx_id, t.account_id::text AS account_id, COALESCE(t.transaction_time, t.original_completion_time) AS transaction_time FROM public.quantum_card_transaction_extend t WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND (((t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6))) OR (t.original_completion_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''${end_time}'' AS TIMESTAMP(6)))) OR EXISTS (SELECT 1 FROM ods.ods_qbit_card_settlement s WHERE s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND s.transaction_type = ''refund.clearing'' AND CAST(s.raw_data::json->>''postDate'' AS timestamp) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND CAST(s.raw_data::json->>''postDate'' AS timestamp) < CAST(''${end_time}'' AS TIMESTAMP(6)) AND t.card_transaction_id::text = s.qbit_card_transaction_id))), direct_rel AS (SELECT DISTINCT ON (tx.tx_id) tx.tx_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id FROM tx INNER JOIN dim.dim_sale_account_relation_p sr ON sr.delete_time IS NULL AND sr.relation_account_id::text = tx.account_id AND sr.relation_start_time < CAST(''${end_time}'' AS TIMESTAMP(6)) AND (sr.relation_end_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) OR sr.relation_end_time IS NULL) AND tx.transaction_time >= sr.relation_start_time AND (tx.transaction_time < sr.relation_end_time OR sr.relation_end_time IS NULL) ORDER BY tx.tx_id, sr.relation_start_time DESC), root_rel AS (SELECT DISTINCT ON (tx.tx_id) tx.tx_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id FROM tx INNER JOIN ods.ods_api_account_relation aar ON aar.delete_time IS NULL AND aar.account_id::text = tx.account_id INNER JOIN dim.dim_sale_account_relation_p sr ON sr.delete_time IS NULL AND sr.relation_account_id::text = aar.root_id::text AND sr.relation_start_time < CAST(''${end_time}'' AS TIMESTAMP(6)) AND (sr.relation_end_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) OR sr.relation_end_time IS NULL) AND tx.transaction_time >= sr.relation_start_time AND (tx.transaction_time < sr.relation_end_time OR sr.relation_end_time IS NULL) ORDER BY tx.tx_id, sr.relation_start_time DESC) SELECT tx.tx_id, COALESCE(direct_rel.sale_id, root_rel.sale_id) AS sale_id, COALESCE(direct_rel.am_id, root_rel.am_id) AS am_id FROM tx LEFT JOIN direct_rel ON direct_rel.tx_id = tx.tx_id LEFT JOIN root_rel ON root_rel.tx_id = tx.tx_id) AS bb_sale_relation_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -173,7 +221,11 @@ FROM source_bb_quantum_card_transaction_extend_tx
 UNION
 SELECT
     *
-FROM source_bb_quantum_card_transaction_extend_oc;
+FROM source_bb_quantum_card_transaction_extend_oc
+UNION
+SELECT
+    *
+FROM source_bb_quantum_card_transaction_extend_post;
 
 CREATE TEMPORARY VIEW v_qbit_card_settlement AS
 SELECT
@@ -182,7 +234,11 @@ FROM source_qbit_card_settlement_tx
 UNION
 SELECT
     *
-FROM source_qbit_card_settlement_oc;
+FROM source_qbit_card_settlement_oc
+UNION
+SELECT
+    *
+FROM source_qbit_card_settlement_post;
 
 -- 结算匹配拆成两条等值路径再合并，避免 OR join 触发低效计划。
 -- 同一笔交易可能同时命中两个键，使用 UNION 去重，保持最终明细不重复。

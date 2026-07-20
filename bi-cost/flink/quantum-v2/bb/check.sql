@@ -356,3 +356,100 @@ FROM check_rows
 ORDER BY
     CASE cost_item WHEN 'bbActiveCardFee' THEN 999 ELSE 1 END,
     cost_item;
+
+-- =========================================================
+-- Refund 专项排查
+-- 目的：
+--   1. raw_refund_by_post_date：按月度 SQL q5 的核心 ODS 口径查原始 refund。
+--   2. dwm_refund_by_post_date：检查 DWM 是否已经沉淀 refund 明细。
+--   3. dws_refund_by_report_date：检查 DWS 是否汇总出 refund 基数。
+-- 如果 raw 有值但 dwm 为 0，优先重跑 dwm_online_bb_card_transaction_detail_v2-batch-sql.sql。
+-- 如果 dwm 有值但 dws 为 0，优先重跑 dws_online_bb_card_finance_daily_v2-batch-sql.sql。
+-- =========================================================
+WITH params AS (
+    SELECT
+        TIMESTAMP '2026-06-01 00:00:00' AS start_time,
+        TIMESTAMP '2026-07-01 00:00:00' AS end_time
+),
+raw_refund_by_post_date AS (
+    SELECT
+        'raw_refund_by_post_date' AS layer,
+        COUNT(DISTINCT CASE
+            WHEN RIGHT(s.raw_data::json->>'txnLocation', 2) NOT IN ('US', 'USA')
+             AND c."type" = 'Master'
+            THEN t.source_id
+        END) AS master_int_refund_count,
+        COUNT(DISTINCT CASE
+            WHEN RIGHT(s.raw_data::json->>'txnLocation', 2) NOT IN ('US', 'USA')
+             AND c."type" = 'VISA'
+            THEN t.source_id
+        END) AS visa_int_refund_count,
+        COUNT(DISTINCT CASE
+            WHEN RIGHT(s.raw_data::json->>'txnLocation', 2) IN ('US', 'USA')
+             AND c."type" IN ('Master', 'VISA')
+            THEN t.source_id
+        END) AS dom_refund_count
+    FROM public.quantum_card_transaction_extend t
+    INNER JOIN public."qbitCard" c
+        ON c."id" = t.card_id
+    INNER JOIN ods.ods_qbit_card_settlement s
+        ON t.card_transaction_id::text = s.qbit_card_transaction_id
+    CROSS JOIN params p
+    WHERE t.channel_provision = 'BLUEBANC'
+      AND t.delete_time IS NULL
+      AND t.type = 'Credit'
+      AND c."type" IN ('Master', 'VISA')
+      AND (t.detail IS NULL OR t.detail NOT LIKE 'AUTO CLASS CAR RENTAL%')
+      AND s.delete_time IS NULL
+      AND s.provider = 'BlueBancCard'
+      AND s.transaction_type = 'refund.clearing'
+      AND s.raw_data::json->>'responseCode' = 'APPROVE'
+      AND CAST(s.raw_data::json->>'postDate' AS timestamp) >= p.start_time
+      AND CAST(s.raw_data::json->>'postDate' AS timestamp) < p.end_time
+),
+dwm_refund_by_post_date AS (
+    SELECT
+        'dwm_refund_by_post_date' AS layer,
+        COUNT(DISTINCT CASE
+            WHEN card_org = 'Master'
+             AND settle_country NOT IN ('US', 'USA')
+            THEN source_id
+        END) AS master_int_refund_count,
+        COUNT(DISTINCT CASE
+            WHEN card_org = 'VISA'
+             AND settle_country NOT IN ('US', 'USA')
+            THEN source_id
+        END) AS visa_int_refund_count,
+        COUNT(DISTINCT CASE
+            WHEN settle_country IN ('US', 'USA')
+            THEN source_id
+        END) AS dom_refund_count
+    FROM dwm.dwm_bb_card_transaction_detail_v2_p t
+    CROSS JOIN params p
+    WHERE t.delete_time IS NULL
+      AND t.business_type = 'Credit'
+      AND t.transaction_type = 'refund.clearing'
+      AND t.resp_code = 'APPROVE'
+      AND t.settlement_post_date >= p.start_time
+      AND t.settlement_post_date < p.end_time
+),
+dws_refund_by_report_date AS (
+    SELECT
+        'dws_refund_by_report_date' AS layer,
+        COALESCE(SUM(m_int_refund_count), 0) AS master_int_refund_count,
+        COALESCE(SUM(v_int_refund_count), 0) AS visa_int_refund_count,
+        COALESCE(SUM(dom_refund_count), 0) AS dom_refund_count
+    FROM dws.dws_bb_card_finance_daily_v2_p d
+    CROSS JOIN params p
+    WHERE d.delete_time IS NULL
+      AND d.report_date >= CAST(p.start_time AS date)
+      AND d.report_date < CAST(p.end_time AS date)
+)
+SELECT *
+FROM raw_refund_by_post_date
+UNION ALL
+SELECT *
+FROM dwm_refund_by_post_date
+UNION ALL
+SELECT *
+FROM dws_refund_by_report_date;
