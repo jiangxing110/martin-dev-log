@@ -214,6 +214,9 @@ SELECT
     CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND is_valid_settle = TRUE AND resp_code = 'DECLINE' THEN 1 ELSE 0 END) AS INT) AS m_int_decline_count,
     CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND is_valid_settle = TRUE AND is_dom = FALSE AND resp_code = 'DECLINE' THEN 1 ELSE 0 END) AS INT) AS v_int_decline_count,
     CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND tx_country NOT IN ('US', 'USA') AND is_valid_settle = TRUE AND resp_code = 'DECLINE' THEN 1 ELSE 0 END) AS INT) AS dom_decline_count,
+    CAST(0 AS INT) AS ac_m_int_decline_count,
+    CAST(0 AS INT) AS ac_v_int_decline_count,
+    CAST(0 AS INT) AS ac_dom_decline_count,
     CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND card_org = 'Master' AND is_valid_settle = TRUE AND is_dom = FALSE AND is_reversal = TRUE AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND request_code IN ('ST-AUTH_REV', 'ST-PARTIAL_REV') THEN 1 ELSE 0 END) AS INT) AS m_int_reversal_count,
     CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND card_org = 'VISA' AND is_valid_settle = TRUE AND tx_country NOT IN ('US', 'USA') AND is_reversal = TRUE AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND request_code IN ('ST-AUTH_REV', 'ST-PARTIAL_REV') THEN 1 ELSE 0 END) AS INT) AS v_int_reversal_count,
     CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND is_dom = TRUE AND is_valid_settle = TRUE AND is_reversal = TRUE AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND request_code IN ('ST-AUTH_REV', 'ST-PARTIAL_REV') THEN 1 ELSE 0 END) AS INT) AS dom_reversal_count,
@@ -274,6 +277,9 @@ SELECT
     CAST(COUNT(DISTINCT CASE WHEN is_decline = TRUE AND is_account_verification = FALSE AND is_excluded_request = FALSE AND card_org = 'Master' AND is_dom = FALSE THEN auth_txn_guid END) AS INT) AS m_int_decline_count,
     CAST(COUNT(DISTINCT CASE WHEN is_decline = TRUE AND is_account_verification = FALSE AND is_excluded_request = FALSE AND card_org = 'VISA' AND is_dom = FALSE THEN auth_txn_guid END) AS INT) AS v_int_decline_count,
     CAST(COUNT(DISTINCT CASE WHEN is_decline = TRUE AND is_account_verification = FALSE AND is_excluded_request = FALSE AND is_dom = TRUE THEN auth_txn_guid END) AS INT) AS dom_decline_count,
+    CAST(COUNT(DISTINCT CASE WHEN is_decline = TRUE AND is_account_verification = TRUE AND is_excluded_request = FALSE AND card_org = 'Master' AND is_dom = FALSE THEN auth_txn_guid END) AS INT) AS ac_m_int_decline_count,
+    CAST(COUNT(DISTINCT CASE WHEN is_decline = TRUE AND is_account_verification = TRUE AND is_excluded_request = FALSE AND card_org = 'VISA' AND is_dom = FALSE THEN auth_txn_guid END) AS INT) AS ac_v_int_decline_count,
+    CAST(COUNT(DISTINCT CASE WHEN is_decline = TRUE AND is_account_verification = TRUE AND is_excluded_request = FALSE AND is_dom = TRUE THEN auth_txn_guid END) AS INT) AS ac_dom_decline_count,
     CAST(0 AS INT) AS m_int_reversal_count,
     CAST(0 AS INT) AS v_int_reversal_count,
     CAST(0 AS INT) AS dom_reversal_count,
@@ -317,6 +323,9 @@ SELECT
     COALESCE(t.m_int_decline_count, 0) + COALESCE(a.m_int_decline_count, 0) AS m_int_decline_count,
     COALESCE(t.v_int_decline_count, 0) + COALESCE(a.v_int_decline_count, 0) AS v_int_decline_count,
     COALESCE(t.dom_decline_count, 0) + COALESCE(a.dom_decline_count, 0) AS dom_decline_count,
+    COALESCE(t.ac_m_int_decline_count, 0) + COALESCE(a.ac_m_int_decline_count, 0) AS ac_m_int_decline_count,
+    COALESCE(t.ac_v_int_decline_count, 0) + COALESCE(a.ac_v_int_decline_count, 0) AS ac_v_int_decline_count,
+    COALESCE(t.ac_dom_decline_count, 0) + COALESCE(a.ac_dom_decline_count, 0) AS ac_dom_decline_count,
     COALESCE(t.m_int_reversal_count, 0) + COALESCE(a.m_int_reversal_count, 0) AS m_int_reversal_count,
     COALESCE(t.v_int_reversal_count, 0) + COALESCE(a.v_int_reversal_count, 0) AS v_int_reversal_count,
     COALESCE(t.dom_reversal_count, 0) + COALESCE(a.dom_reversal_count, 0) AS dom_reversal_count,
@@ -334,6 +343,17 @@ SELECT
     COALESCE(t.bb_rebate_base_amt, CAST(0 AS DECIMAL(20, 4))) + COALESCE(a.bb_rebate_base_amt, CAST(0 AS DECIMAL(20, 4))) AS bb_rebate_base_amt,
     COALESCE(t.bb_channel_cashback_comm, CAST(0 AS DECIMAL(20, 4))) + COALESCE(a.bb_channel_cashback_comm, CAST(0 AS DECIMAL(20, 4))) AS bb_channel_cashback_comm,
     CAST(0 AS INT) AS active_card_count,
+    CAST(
+        COALESCE(t.m_dom_clearing_vol, CAST(0 AS DECIMAL(20, 4)))
+      + COALESCE(a.m_dom_clearing_vol, CAST(0 AS DECIMAL(20, 4)))
+      + COALESCE(t.m_int_clearing_vol, CAST(0 AS DECIMAL(20, 4)))
+      + COALESCE(a.m_int_clearing_vol, CAST(0 AS DECIMAL(20, 4)))
+      + COALESCE(t.v_dom_clearing_vol, CAST(0 AS DECIMAL(20, 4)))
+      + COALESCE(a.v_dom_clearing_vol, CAST(0 AS DECIMAL(20, 4)))
+      + COALESCE(t.v_int_clearing_vol, CAST(0 AS DECIMAL(20, 4)))
+      + COALESCE(a.v_int_clearing_vol, CAST(0 AS DECIMAL(20, 4)))
+      AS DECIMAL(20, 4)
+    ) AS total_net_amount,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
     COALESCE(t.sale_id, a.sale_id) AS sale_id,
     COALESCE(t.am_id, a.am_id) AS am_id,
@@ -363,6 +383,9 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     m_int_decline_count      INT,
     v_int_decline_count      INT,
     dom_decline_count        INT,
+    ac_m_int_decline_count   INT,
+    ac_v_int_decline_count   INT,
+    ac_dom_decline_count     INT,
     m_int_reversal_count     INT,
     v_int_reversal_count     INT,
     dom_reversal_count       INT,
@@ -380,6 +403,7 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     bb_rebate_base_amt       DECIMAL(20, 4),
     bb_channel_cashback_comm DECIMAL(20, 4),
     active_card_count        INT,
+    total_net_amount         DECIMAL(20, 4),
     cost_fixed_fee           DECIMAL(20, 4),
     special_fee_type         STRING,
     sale_id                  STRING,
@@ -425,6 +449,9 @@ SELECT
     m_int_decline_count,
     v_int_decline_count,
     dom_decline_count,
+    ac_m_int_decline_count,
+    ac_v_int_decline_count,
+    ac_dom_decline_count,
     m_int_reversal_count,
     v_int_reversal_count,
     dom_reversal_count,
@@ -442,6 +469,7 @@ SELECT
     bb_rebate_base_amt,
     bb_channel_cashback_comm,
     active_card_count,
+    total_net_amount,
     cost_fixed_fee,
     CAST(NULL AS STRING) AS special_fee_type,
     sale_id,
