@@ -465,6 +465,151 @@ SELECT cost_item, ROUND(extra_cost, 6) AS extra_cost
 FROM result
 ORDER BY cost_item;
 
+-- =========================================================
+-- 6.7 只读基于 DWM 复现五月 q1/q2/q4，不写入/清洗 DWS
+-- 用于判断剩余 Count/Reversal 差额发生在 DWM 还是 DWS。
+-- =========================================================
+WITH params AS (
+    SELECT
+        TIMESTAMP '2026-05-01 08:00:00' AS txn_start,
+        TIMESTAMP '2026-06-01 08:00:00' AS txn_end
+),
+base AS MATERIALIZED (
+    SELECT
+        d.*,
+        COALESCE(d.settlement_id IN (
+            '234e26db-0e1d-424f-952b-053ab2e42d30',
+            '82ff7fa6-8035-4c7b-8c18-ace860c3dfae',
+            '711e7995-ea26-499f-a1c5-9e4faf15f31f',
+            '5e974989-8792-401f-93b6-b107e0b46e51',
+            '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72',
+            'a97006e9-2609-4e70-a165-2ae6b9f49689',
+            'ad861604-ff4f-4cd1-997e-fe613c67970e',
+            '37959ee2-880f-49ea-8d74-976a69382c90',
+            'bebf7744-ed33-46cd-8ca6-40bc43d928eb',
+            'ece578c8-e8c1-46ec-83b9-116ea049a2e8',
+            '69e04460-0cb4-4d9d-9001-2b786cfc3d7b',
+            '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470',
+            'cff4d9c4-ee01-43fa-9518-62872afbbe91',
+            '160b403b-2a16-4b43-afac-a3b37916c968',
+            '0fd4e8ed-e208-44e5-b463-ece053a915f3',
+            '4a63f4ec-637e-4627-a668-5339fe64b9be'
+        ), FALSE) AS is_excluded
+    FROM dwm.dwm_bb_card_transaction_detail_v2_p d
+    CROSS JOIN params p
+    WHERE d.delete_time IS NULL
+      AND d.business_type = 'Consumption'
+      AND d.transaction_time >= p.txn_start
+      AND d.transaction_time < p.txn_end
+      AND d.source_id IS NOT NULL
+),
+metric AS (
+    SELECT
+        COUNT(DISTINCT source_id) FILTER (
+            WHERE business_code_list NOT LIKE '%1010%'
+              AND card_org = 'Master'
+              AND tx_country IN ('US', 'USA')
+              AND resp_code = 'APPROVE'
+              AND transaction_type IN ('authorization.clearing', 'authorization.reversal')
+              AND is_excluded = FALSE
+        ) AS master_dom_count,
+        COUNT(DISTINCT source_id) FILTER (
+            WHERE business_code_list NOT LIKE '%1010%'
+              AND card_org = 'Master'
+              AND tx_country NOT IN ('US', 'USA')
+              AND resp_code = 'APPROVE'
+              AND transaction_type IN ('authorization.clearing', 'authorization.reversal')
+              AND is_excluded = FALSE
+        ) AS master_int_count,
+        COUNT(DISTINCT source_id) FILTER (
+            WHERE business_code_list NOT LIKE '%1010%'
+              AND card_org = 'VISA'
+              AND tx_country IN ('US', 'USA')
+              AND resp_code = 'APPROVE'
+              AND transaction_type IN ('authorization.clearing', 'authorization.reversal')
+              AND is_excluded = FALSE
+        ) AS visa_dom_count,
+        COUNT(DISTINCT source_id) FILTER (
+            WHERE business_code_list NOT LIKE '%1010%'
+              AND card_org = 'VISA'
+              AND tx_country NOT IN ('US', 'USA')
+              AND resp_code = 'APPROVE'
+              AND transaction_type IN ('authorization.clearing', 'authorization.reversal')
+              AND is_excluded = FALSE
+        ) AS visa_int_count,
+        COUNT(DISTINCT source_id) FILTER (
+            WHERE business_code_list LIKE '%1010%'
+              AND card_org = 'Master'
+              AND tx_country IN ('US', 'USA')
+              AND is_excluded = FALSE
+              AND (resp_code IS NULL OR resp_code <> 'DECLINE')
+        ) AS ac_master_dom_count,
+        COUNT(DISTINCT source_id) FILTER (
+            WHERE business_code_list LIKE '%1010%'
+              AND card_org = 'Master'
+              AND tx_country NOT IN ('US', 'USA')
+              AND is_excluded = FALSE
+              AND (resp_code IS NULL OR resp_code <> 'DECLINE')
+        ) AS ac_master_int_count,
+        COUNT(DISTINCT source_id) FILTER (
+            WHERE business_code_list LIKE '%1010%'
+              AND card_org = 'VISA'
+              AND tx_country IN ('US', 'USA')
+              AND is_excluded = FALSE
+              AND (resp_code IS NULL OR resp_code <> 'DECLINE')
+        ) AS ac_visa_dom_count,
+        COUNT(DISTINCT source_id) FILTER (
+            WHERE business_code_list LIKE '%1010%'
+              AND card_org = 'VISA'
+              AND tx_country NOT IN ('US', 'USA')
+              AND is_excluded = FALSE
+              AND (resp_code IS NULL OR resp_code <> 'DECLINE')
+        ) AS ac_visa_int_count,
+        COUNT(DISTINCT source_id) FILTER (
+            WHERE business_code_list NOT LIKE '%1010%'
+              AND card_org = 'Master'
+              AND tx_country NOT IN ('US', 'USA')
+              AND resp_code = 'APPROVE'
+              AND reason_code = 'APPROVE'
+              AND transaction_type = 'authorization.reversal'
+              AND is_excluded = FALSE
+        ) AS master_int_reversal_count,
+        COUNT(DISTINCT source_id) FILTER (
+            WHERE business_code_list NOT LIKE '%1010%'
+              AND card_org = 'VISA'
+              AND tx_country NOT IN ('US', 'USA')
+              AND resp_code = 'APPROVE'
+              AND reason_code = 'APPROVE'
+              AND transaction_type = 'authorization.reversal'
+              AND is_excluded = FALSE
+        ) AS visa_int_reversal_count,
+        COUNT(DISTINCT source_id) FILTER (
+            WHERE business_code_list NOT LIKE '%1010%'
+              AND tx_country IN ('US', 'USA')
+              AND resp_code = 'APPROVE'
+              AND reason_code = 'APPROVE'
+              AND transaction_type = 'authorization.reversal'
+              AND is_excluded = FALSE
+        ) AS dom_reversal_count
+    FROM base
+),
+result AS (
+    SELECT 'Mastercard Domestic Count Fee' AS cost_item, master_dom_count AS base_count, master_dom_count * 0.1090 AS cost_amount FROM metric
+    UNION ALL SELECT 'Mastercard International Count Fee', master_int_count, master_int_count * 0.4845 FROM metric
+    UNION ALL SELECT 'VISA Domestic Count Fee', visa_dom_count, visa_dom_count * 0.0725 FROM metric
+    UNION ALL SELECT 'VISA International Count Fee', visa_int_count, visa_int_count * 0.4770 FROM metric
+    UNION ALL SELECT 'AC Mastercard Domestic Count Fee', ac_master_dom_count, ac_master_dom_count * 0.1090 FROM metric
+    UNION ALL SELECT 'AC Mastercard International Count Fee', ac_master_int_count, ac_master_int_count * 0.4845 FROM metric
+    UNION ALL SELECT 'AC VISA Domestic Count Fee', ac_visa_dom_count, ac_visa_dom_count * 0.0725 FROM metric
+    UNION ALL SELECT 'AC VISA International Count Fee', ac_visa_int_count, ac_visa_int_count * 0.4770 FROM metric
+    UNION ALL SELECT 'Mastercard International Reversal Fee', master_int_reversal_count, master_int_reversal_count * 0.7190 FROM metric
+    UNION ALL SELECT 'Visa International Reversal Fee', visa_int_reversal_count, visa_int_reversal_count * 0.7140 FROM metric
+    UNION ALL SELECT 'Domestic Reversal Fee', dom_reversal_count, dom_reversal_count * 0.1780 FROM metric
+)
+SELECT cost_item, base_count, ROUND(cost_amount, 6) AS cost_amount
+FROM result
+ORDER BY cost_item;
+
 -- 6.4 验证当前 DWM 额外纳入的 detail IS NULL 交易金额。
 WITH params AS (
     SELECT
@@ -1154,3 +1299,337 @@ WHERE t.channel_provision = 'BLUEBANC'
       '0fd4e8ed-e208-44e5-b463-ece053a915f3',
       '4a63f4ec-637e-4627-a668-5339fe64b9be'
   );
+-- =========================================================
+-- 6.8 检查 DWS 写入键冲突
+-- DWS 按 account_type/account_category/system_type 分组，但写入主键不包含这些字段。
+-- 同一 account_id + sale_id + am_id 存在多套维度时，ADBPG upsert 会互相覆盖。
+-- =========================================================
+WITH params AS (
+    SELECT
+        TIMESTAMP '2026-05-01 08:00:00' AS txn_start,
+        TIMESTAMP '2026-06-01 08:00:00' AS txn_end
+),
+metric_rows AS MATERIALIZED (
+    SELECT
+        DATE '2026-05-01' AS report_date,
+        d.account_id,
+        d.account_type,
+        d.account_category,
+        d.system_type,
+        d.sale_id,
+        d.am_id,
+        d.source_id,
+        MAX(CASE WHEN d.business_type = 'Consumption' AND d.business_code_list NOT LIKE '%1010%' AND d.card_org = 'Master' AND COALESCE(d.tx_country, '') IN ('US', 'USA') AND d.resp_code = 'APPROVE' AND d.transaction_type IN ('authorization.clearing', 'authorization.reversal') THEN 1 ELSE 0 END) AS m_dom_auth_count,
+        MAX(CASE WHEN d.business_type = 'Consumption' AND d.business_code_list NOT LIKE '%1010%' AND d.card_org = 'Master' AND COALESCE(d.tx_country, '') NOT IN ('US', 'USA') AND d.resp_code = 'APPROVE' AND d.transaction_type IN ('authorization.clearing', 'authorization.reversal') THEN 1 ELSE 0 END) AS m_int_auth_count,
+        MAX(CASE WHEN d.business_type = 'Consumption' AND d.business_code_list NOT LIKE '%1010%' AND d.card_org = 'VISA' AND COALESCE(d.tx_country, '') IN ('US', 'USA') AND d.resp_code = 'APPROVE' AND d.transaction_type IN ('authorization.clearing', 'authorization.reversal') THEN 1 ELSE 0 END) AS v_dom_auth_count,
+        MAX(CASE WHEN d.business_type = 'Consumption' AND d.business_code_list NOT LIKE '%1010%' AND d.card_org = 'VISA' AND COALESCE(d.tx_country, '') NOT IN ('US', 'USA') AND d.resp_code = 'APPROVE' AND d.transaction_type IN ('authorization.clearing', 'authorization.reversal') THEN 1 ELSE 0 END) AS v_int_auth_count,
+        MAX(CASE WHEN d.business_type = 'Consumption' AND d.business_code_list NOT LIKE '%1010%' AND d.card_org = 'Master' AND COALESCE(d.tx_country, '') NOT IN ('US', 'USA') AND d.resp_code = 'APPROVE' AND d.reason_code = 'APPROVE' AND d.transaction_type = 'authorization.reversal' THEN 1 ELSE 0 END) AS m_int_reversal_count,
+        MAX(CASE WHEN d.business_type = 'Consumption' AND d.business_code_list NOT LIKE '%1010%' AND d.card_org = 'VISA' AND COALESCE(d.tx_country, '') NOT IN ('US', 'USA') AND d.resp_code = 'APPROVE' AND d.reason_code = 'APPROVE' AND d.transaction_type = 'authorization.reversal' THEN 1 ELSE 0 END) AS v_int_reversal_count,
+        MAX(CASE WHEN d.business_type = 'Consumption' AND d.business_code_list NOT LIKE '%1010%' AND COALESCE(d.tx_country, '') IN ('US', 'USA') AND d.resp_code = 'APPROVE' AND d.reason_code = 'APPROVE' AND d.transaction_type = 'authorization.reversal' THEN 1 ELSE 0 END) AS dom_reversal_count,
+        MAX(CASE WHEN d.business_type = 'Consumption' AND d.business_code_list LIKE '%1010%' AND d.card_org = 'Master' AND COALESCE(d.tx_country, '') IN ('US', 'USA') AND (d.resp_code IS NULL OR d.resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_m_dom_count,
+        MAX(CASE WHEN d.business_type = 'Consumption' AND d.business_code_list LIKE '%1010%' AND d.card_org = 'Master' AND COALESCE(d.tx_country, '') NOT IN ('US', 'USA') AND (d.resp_code IS NULL OR d.resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_m_int_count,
+        MAX(CASE WHEN d.business_type = 'Consumption' AND d.business_code_list LIKE '%1010%' AND d.card_org = 'VISA' AND COALESCE(d.tx_country, '') IN ('US', 'USA') AND (d.resp_code IS NULL OR d.resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_v_dom_count,
+        MAX(CASE WHEN d.business_type = 'Consumption' AND d.business_code_list LIKE '%1010%' AND d.card_org = 'VISA' AND COALESCE(d.tx_country, '') NOT IN ('US', 'USA') AND (d.resp_code IS NULL OR d.resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_v_int_count
+    FROM dwm.dwm_bb_card_transaction_detail_v2_p d
+    CROSS JOIN params p
+    WHERE d.delete_time IS NULL
+      AND d.source_id IS NOT NULL
+      AND d.transaction_time >= p.txn_start
+      AND d.transaction_time < p.txn_end
+      AND COALESCE(d.settlement_id NOT IN (
+          '234e26db-0e1d-424f-952b-053ab2e42d30', '82ff7fa6-8035-4c7b-8c18-ace860c3dfae',
+          '711e7995-ea26-499f-a1c5-9e4faf15f31f', '5e974989-8792-401f-93b6-b107e0b46e51',
+          '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72', 'a97006e9-2609-4e70-a165-2ae6b9f49689',
+          'ad861604-ff4f-4cd1-997e-fe613c67970e', '37959ee2-880f-49ea-8d74-976a69382c90',
+          'bebf7744-ed33-46cd-8ca6-40bc43d928eb', 'ece578c8-e8c1-46ec-83b9-116ea049a2e8',
+          '69e04460-0cb4-4d9d-9001-2b786cfc3d7b', '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470',
+          'cff4d9c4-ee01-43fa-9518-62872afbbe91', '160b403b-2a16-4b43-afac-a3b37916c968',
+          '0fd4e8ed-e208-44e5-b463-ece053a915f3', '4a63f4ec-637e-4627-a668-5339fe64b9be'
+      ), TRUE)
+    GROUP BY d.account_id, d.account_type, d.account_category, d.system_type,
+             d.sale_id, d.am_id, d.source_id
+),
+dws_groups AS MATERIALIZED (
+    SELECT
+        report_date,
+        account_id,
+        account_type,
+        account_category,
+        system_type,
+        sale_id,
+        am_id,
+        SUM(m_dom_auth_count) AS m_dom_auth_count,
+        SUM(m_int_auth_count) AS m_int_auth_count,
+        SUM(v_dom_auth_count) AS v_dom_auth_count,
+        SUM(v_int_auth_count) AS v_int_auth_count,
+        SUM(m_int_reversal_count) AS m_int_reversal_count,
+        SUM(v_int_reversal_count) AS v_int_reversal_count,
+        SUM(dom_reversal_count) AS dom_reversal_count,
+        SUM(av_m_dom_count) AS av_m_dom_count,
+        SUM(av_m_int_count) AS av_m_int_count,
+        SUM(av_v_dom_count) AS av_v_dom_count,
+        SUM(av_v_int_count) AS av_v_int_count
+    FROM metric_rows
+    GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id
+),
+key_conflicts AS (
+    SELECT
+        report_date,
+        account_id,
+        sale_id,
+        am_id,
+        COUNT(*) AS rows_with_same_sink_key,
+        SUM(m_dom_auth_count) AS m_dom_auth_count,
+        SUM(m_int_auth_count) AS m_int_auth_count,
+        SUM(v_dom_auth_count) AS v_dom_auth_count,
+        SUM(v_int_auth_count) AS v_int_auth_count,
+        SUM(m_int_reversal_count) AS m_int_reversal_count,
+        SUM(v_int_reversal_count) AS v_int_reversal_count,
+        SUM(dom_reversal_count) AS dom_reversal_count,
+        SUM(av_m_dom_count) AS av_m_dom_count,
+        SUM(av_m_int_count) AS av_m_int_count,
+        SUM(av_v_dom_count) AS av_v_dom_count,
+        SUM(av_v_int_count) AS av_v_int_count
+    FROM dws_groups
+    GROUP BY report_date, account_id, sale_id, am_id
+    HAVING COUNT(*) > 1
+)
+SELECT
+    COUNT(*) AS conflicting_sink_keys,
+    SUM(rows_with_same_sink_key) AS conflicting_output_rows,
+    SUM(m_dom_auth_count) AS affected_m_dom_auth_count,
+    SUM(m_int_auth_count) AS affected_m_int_auth_count,
+    SUM(v_dom_auth_count) AS affected_v_dom_auth_count,
+    SUM(v_int_auth_count) AS affected_v_int_auth_count,
+    SUM(m_int_reversal_count) AS affected_m_int_reversal_count,
+    SUM(v_int_reversal_count) AS affected_v_int_reversal_count,
+    SUM(dom_reversal_count) AS affected_dom_reversal_count,
+    SUM(av_m_dom_count) AS affected_av_m_dom_count,
+    SUM(av_m_int_count) AS affected_av_m_int_count,
+    SUM(av_v_dom_count) AS affected_av_v_dom_count,
+    SUM(av_v_int_count) AS affected_av_v_int_count
+FROM key_conflicts;
+
+-- 冲突键明细：确认同一个写入键对应了哪些不同账户维度。
+WITH grouped AS (
+    SELECT
+        DATE '2026-05-01' AS report_date,
+        account_id,
+        sale_id,
+        am_id,
+        account_type,
+        account_category,
+        system_type,
+        COUNT(DISTINCT source_id) AS source_count
+    FROM dwm.dwm_bb_card_transaction_detail_v2_p
+    WHERE delete_time IS NULL
+      AND source_id IS NOT NULL
+      AND transaction_time >= TIMESTAMP '2026-05-01 08:00:00'
+      AND transaction_time < TIMESTAMP '2026-06-01 08:00:00'
+    GROUP BY account_id, sale_id, am_id, account_type, account_category, system_type
+), conflict_keys AS (
+    SELECT report_date, account_id, sale_id, am_id
+    FROM grouped
+    GROUP BY report_date, account_id, sale_id, am_id
+    HAVING COUNT(*) > 1
+)
+SELECT g.*
+FROM grouped g
+INNER JOIN conflict_keys k
+    ON k.report_date = g.report_date
+   AND k.account_id = g.account_id
+   AND k.sale_id IS NOT DISTINCT FROM g.sale_id
+   AND k.am_id IS NOT DISTINCT FROM g.am_id
+ORDER BY g.account_id, g.sale_id, g.am_id, g.source_count DESC
+LIMIT 200;
+
+-- =========================================================
+-- 6.9 确认 DWS 五月数据版本，并逐客户对账 DWM -> DWS
+-- 先执行第一条轻量查询；普通成本行应全部是最新 remarks。
+-- =========================================================
+SELECT
+    COALESCE(special_fee_type, 'NORMAL') AS row_type,
+    remarks,
+    COUNT(*) AS row_count,
+    MIN(update_time) AS min_update_time,
+    MAX(update_time) AS max_update_time,
+    SUM(m_dom_auth_count) AS m_dom_auth_count,
+    SUM(m_int_auth_count) AS m_int_auth_count,
+    SUM(v_dom_auth_count) AS v_dom_auth_count,
+    SUM(v_int_auth_count) AS v_int_auth_count,
+    SUM(m_int_reversal_count) AS m_int_reversal_count,
+    SUM(v_int_reversal_count) AS v_int_reversal_count,
+    SUM(dom_reversal_count) AS dom_reversal_count,
+    SUM(av_m_dom_count) AS av_m_dom_count,
+    SUM(av_m_int_count) AS av_m_int_count,
+    SUM(av_v_dom_count) AS av_v_dom_count,
+    SUM(av_v_int_count) AS av_v_int_count
+FROM dws.dws_bb_card_finance_daily_v2_p
+WHERE delete_time IS NULL
+  AND report_date = DATE '2026-05-01'
+GROUP BY COALESCE(special_fee_type, 'NORMAL'), remarks
+ORDER BY row_type, remarks;
+
+-- 差额最大的客户。expected_* 是按 DWS 业务条件从 DWM 直接计算，actual_* 是 DWS 落表值。
+WITH base AS MATERIALIZED (
+    SELECT
+        d.account_id,
+        d.sale_id,
+        d.am_id,
+        d.source_id,
+        COALESCE(d.business_code_list, '') AS business_code_list,
+        d.card_org,
+        COALESCE(d.tx_country, '') AS tx_country,
+        d.resp_code,
+        d.reason_code,
+        d.transaction_type,
+        COALESCE(d.settlement_id IN (
+            '234e26db-0e1d-424f-952b-053ab2e42d30', '82ff7fa6-8035-4c7b-8c18-ace860c3dfae',
+            '711e7995-ea26-499f-a1c5-9e4faf15f31f', '5e974989-8792-401f-93b6-b107e0b46e51',
+            '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72', 'a97006e9-2609-4e70-a165-2ae6b9f49689',
+            'ad861604-ff4f-4cd1-997e-fe613c67970e', '37959ee2-880f-49ea-8d74-976a69382c90',
+            'bebf7744-ed33-46cd-8ca6-40bc43d928eb', 'ece578c8-e8c1-46ec-83b9-116ea049a2e8',
+            '69e04460-0cb4-4d9d-9001-2b786cfc3d7b', '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470',
+            'cff4d9c4-ee01-43fa-9518-62872afbbe91', '160b403b-2a16-4b43-afac-a3b37916c968',
+            '0fd4e8ed-e208-44e5-b463-ece053a915f3', '4a63f4ec-637e-4627-a668-5339fe64b9be'
+        ), FALSE) AS is_excluded
+    FROM dwm.dwm_bb_card_transaction_detail_v2_p d
+    WHERE d.delete_time IS NULL
+      AND d.business_type = 'Consumption'
+      AND d.source_id IS NOT NULL
+      AND d.transaction_time >= TIMESTAMP '2026-05-01 08:00:00'
+      AND d.transaction_time < TIMESTAMP '2026-06-01 08:00:00'
+), expected AS (
+    SELECT
+        account_id,
+        sale_id,
+        am_id,
+        COUNT(DISTINCT source_id) FILTER (WHERE business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded = FALSE) AS m_dom_auth_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded = FALSE) AS m_int_auth_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded = FALSE) AS v_dom_auth_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded = FALSE) AS v_int_auth_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' AND is_excluded = FALSE) AS m_int_reversal_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' AND is_excluded = FALSE) AS v_int_reversal_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE business_code_list NOT LIKE '%1010%' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' AND is_excluded = FALSE) AS dom_reversal_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE business_code_list LIKE '%1010%' AND card_org = 'Master' AND tx_country IN ('US', 'USA') AND is_excluded = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE')) AS av_m_dom_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE business_code_list LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND is_excluded = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE')) AS av_m_int_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE business_code_list LIKE '%1010%' AND card_org = 'VISA' AND tx_country IN ('US', 'USA') AND is_excluded = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE')) AS av_v_dom_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE business_code_list LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND is_excluded = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE')) AS av_v_int_count
+    FROM base
+    GROUP BY account_id, sale_id, am_id
+), actual AS (
+    SELECT
+        account_id,
+        sale_id,
+        am_id,
+        SUM(m_dom_auth_count) AS m_dom_auth_count,
+        SUM(m_int_auth_count) AS m_int_auth_count,
+        SUM(v_dom_auth_count) AS v_dom_auth_count,
+        SUM(v_int_auth_count) AS v_int_auth_count,
+        SUM(m_int_reversal_count) AS m_int_reversal_count,
+        SUM(v_int_reversal_count) AS v_int_reversal_count,
+        SUM(dom_reversal_count) AS dom_reversal_count,
+        SUM(av_m_dom_count) AS av_m_dom_count,
+        SUM(av_m_int_count) AS av_m_int_count,
+        SUM(av_v_dom_count) AS av_v_dom_count,
+        SUM(av_v_int_count) AS av_v_int_count
+    FROM dws.dws_bb_card_finance_daily_v2_p
+    WHERE delete_time IS NULL
+      AND report_date = DATE '2026-05-01'
+      AND special_fee_type IS NULL
+    GROUP BY account_id, sale_id, am_id
+), comparison AS (
+    SELECT
+        COALESCE(e.account_id, a.account_id) AS account_id,
+        COALESCE(e.sale_id, a.sale_id) AS sale_id,
+        COALESCE(e.am_id, a.am_id) AS am_id,
+        COALESCE(e.m_dom_auth_count, 0) - COALESCE(a.m_dom_auth_count, 0) AS diff_m_dom,
+        COALESCE(e.m_int_auth_count, 0) - COALESCE(a.m_int_auth_count, 0) AS diff_m_int,
+        COALESCE(e.v_dom_auth_count, 0) - COALESCE(a.v_dom_auth_count, 0) AS diff_v_dom,
+        COALESCE(e.v_int_auth_count, 0) - COALESCE(a.v_int_auth_count, 0) AS diff_v_int,
+        COALESCE(e.m_int_reversal_count, 0) - COALESCE(a.m_int_reversal_count, 0) AS diff_m_int_reversal,
+        COALESCE(e.v_int_reversal_count, 0) - COALESCE(a.v_int_reversal_count, 0) AS diff_v_int_reversal,
+        COALESCE(e.dom_reversal_count, 0) - COALESCE(a.dom_reversal_count, 0) AS diff_dom_reversal,
+        COALESCE(e.av_m_dom_count, 0) - COALESCE(a.av_m_dom_count, 0) AS diff_av_m_dom,
+        COALESCE(e.av_m_int_count, 0) - COALESCE(a.av_m_int_count, 0) AS diff_av_m_int,
+        COALESCE(e.av_v_dom_count, 0) - COALESCE(a.av_v_dom_count, 0) AS diff_av_v_dom,
+        COALESCE(e.av_v_int_count, 0) - COALESCE(a.av_v_int_count, 0) AS diff_av_v_int
+    FROM expected e
+    FULL JOIN actual a
+      ON a.account_id = e.account_id
+     AND a.sale_id IS NOT DISTINCT FROM e.sale_id
+     AND a.am_id IS NOT DISTINCT FROM e.am_id
+)
+SELECT
+    *,
+    ABS(diff_m_dom) + ABS(diff_m_int) + ABS(diff_v_dom) + ABS(diff_v_int)
+      + ABS(diff_m_int_reversal) + ABS(diff_v_int_reversal) + ABS(diff_dom_reversal)
+      + ABS(diff_av_m_dom) + ABS(diff_av_m_int) + ABS(diff_av_v_dom) + ABS(diff_av_v_int) AS total_abs_diff
+FROM comparison
+WHERE diff_m_dom <> 0 OR diff_m_int <> 0 OR diff_v_dom <> 0 OR diff_v_int <> 0
+   OR diff_m_int_reversal <> 0 OR diff_v_int_reversal <> 0 OR diff_dom_reversal <> 0
+   OR diff_av_m_dom <> 0 OR diff_av_m_int <> 0 OR diff_av_v_dom <> 0 OR diff_av_v_int <> 0
+ORDER BY total_abs_diff DESC
+LIMIT 100;
+
+-- =========================================================
+-- 6.10 检查 DWS 运行后 DWM 是否仍在补写
+-- cutoff 使用 6.9 查到的五月 NORMAL 行 max_update_time。
+-- BEFORE_DWS 若等于 DWS、ALL_DWM 等于 6.7，说明 DWS 启动早于 DWM 完成。
+-- =========================================================
+WITH params AS (
+    SELECT
+        TIMESTAMP '2026-05-01 08:00:00' AS txn_start,
+        TIMESTAMP '2026-06-01 08:00:00' AS txn_end,
+        TIMESTAMP '2026-07-21 17:00:02.906' AS dws_cutoff
+), base AS MATERIALIZED (
+    SELECT
+        d.*,
+        COALESCE(d.business_code_list, '') AS normalized_business_code_list,
+        COALESCE(d.tx_country, '') AS normalized_tx_country,
+        COALESCE(d.settlement_id IN (
+            '234e26db-0e1d-424f-952b-053ab2e42d30', '82ff7fa6-8035-4c7b-8c18-ace860c3dfae',
+            '711e7995-ea26-499f-a1c5-9e4faf15f31f', '5e974989-8792-401f-93b6-b107e0b46e51',
+            '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72', 'a97006e9-2609-4e70-a165-2ae6b9f49689',
+            'ad861604-ff4f-4cd1-997e-fe613c67970e', '37959ee2-880f-49ea-8d74-976a69382c90',
+            'bebf7744-ed33-46cd-8ca6-40bc43d928eb', 'ece578c8-e8c1-46ec-83b9-116ea049a2e8',
+            '69e04460-0cb4-4d9d-9001-2b786cfc3d7b', '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470',
+            'cff4d9c4-ee01-43fa-9518-62872afbbe91', '160b403b-2a16-4b43-afac-a3b37916c968',
+            '0fd4e8ed-e208-44e5-b463-ece053a915f3', '4a63f4ec-637e-4627-a668-5339fe64b9be'
+        ), FALSE) AS is_excluded
+    FROM dwm.dwm_bb_card_transaction_detail_v2_p d
+    CROSS JOIN params p
+    WHERE d.delete_time IS NULL
+      AND d.business_type = 'Consumption'
+      AND d.source_id IS NOT NULL
+      AND d.transaction_time >= p.txn_start
+      AND d.transaction_time < p.txn_end
+), versions AS (
+    SELECT 'ALL_DWM' AS data_version, * FROM base
+    UNION ALL
+    SELECT 'BEFORE_DWS' AS data_version, b.*
+    FROM base b
+    CROSS JOIN params p
+    WHERE b.update_time <= p.dws_cutoff
+), metric AS (
+    SELECT
+        data_version,
+        COUNT(DISTINCT source_id) FILTER (WHERE normalized_business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND normalized_tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded = FALSE) AS m_dom_auth_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE normalized_business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND normalized_tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded = FALSE) AS m_int_auth_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE normalized_business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND normalized_tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded = FALSE) AS v_dom_auth_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE normalized_business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND normalized_tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded = FALSE) AS v_int_auth_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE normalized_business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND normalized_tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' AND is_excluded = FALSE) AS m_int_reversal_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE normalized_business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND normalized_tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' AND is_excluded = FALSE) AS v_int_reversal_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE normalized_business_code_list NOT LIKE '%1010%' AND normalized_tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' AND is_excluded = FALSE) AS dom_reversal_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE normalized_business_code_list LIKE '%1010%' AND card_org = 'Master' AND normalized_tx_country IN ('US', 'USA') AND is_excluded = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE')) AS av_m_dom_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE normalized_business_code_list LIKE '%1010%' AND card_org = 'Master' AND normalized_tx_country NOT IN ('US', 'USA') AND is_excluded = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE')) AS av_m_int_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE normalized_business_code_list LIKE '%1010%' AND card_org = 'VISA' AND normalized_tx_country IN ('US', 'USA') AND is_excluded = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE')) AS av_v_dom_count,
+        COUNT(DISTINCT source_id) FILTER (WHERE normalized_business_code_list LIKE '%1010%' AND card_org = 'VISA' AND normalized_tx_country NOT IN ('US', 'USA') AND is_excluded = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE')) AS av_v_int_count,
+        MIN(update_time) AS min_dwm_update_time,
+        MAX(update_time) AS max_dwm_update_time
+    FROM versions
+    GROUP BY data_version
+)
+SELECT *
+FROM metric
+ORDER BY data_version;

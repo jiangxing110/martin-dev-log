@@ -150,7 +150,9 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
 
 CREATE TEMPORARY VIEW v_bb_txn_time_rows AS
 SELECT
-    CAST(DATE_FORMAT(CAST(transaction_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
+    -- Count/Reversal 采用北京时间月窗口 [月初 08:00, 次月月初 08:00)，
+    -- 窗口末尾 8 小时仍属于本次成本月，不能按 transaction_time 自然月归到次月。
+    CAST('${start_date}' AS DATE) AS report_date,
     account_id,
     account_type,
     account_category,
