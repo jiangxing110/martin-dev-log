@@ -178,6 +178,57 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement_post (
     'scan.auto-commit' = 'false'
 );
 
+-- Refund 专用直接关联源：按原始月度 SQL 的 qbit_card_transaction_id 直接关联交易。
+-- 该分支用于避免拆分读取 transaction/settlement 后在 Flink 二次关联时漏掉 Refund。
+CREATE TEMPORARY TABLE source_qbit_card_settlement_refund_direct (
+    id                       STRING,
+    transaction_id           STRING,
+    qbit_card_transaction_id STRING,
+    transaction_type        STRING,
+    billing_amount           DOUBLE,
+    raw_data                 STRING,
+    create_time              TIMESTAMP(6),
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT DISTINCT s.id, s.transaction_id, s.qbit_card_transaction_id, s.transaction_type, s.billing_amount, s.raw_data, s.create_time FROM ods.ods_qbit_card_settlement s INNER JOIN public.quantum_card_transaction_extend t ON t.card_transaction_id::text = s.qbit_card_transaction_id INNER JOIN public."qbitCard" c ON c."id" = t.card_id WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type = ''Credit'' AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND s.transaction_type = ''refund.clearing'' AND s.raw_data::json->>''responseCode'' = ''APPROVE'' AND CAST(s.raw_data::json->>''postDate'' AS timestamp) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND CAST(s.raw_data::json->>''postDate'' AS timestamp) < CAST(''${end_time}'' AS TIMESTAMP(6))) AS ods_qbit_card_settlement_refund_direct_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000',
+    'scan.auto-commit' = 'false'
+);
+
+-- Refund 交易专用直接关联源，确保 postDate 命中的 Credit 交易进入 v_bb_tx。
+CREATE TEMPORARY TABLE source_bb_quantum_card_transaction_refund_direct (
+    id                       BIGINT,
+    source_id                STRING,
+    card_transaction_id      STRING,
+    account_id               STRING,
+    country                  STRING,
+    `type`                   STRING,
+    transaction_time         TIMESTAMP(6),
+    original_completion_time TIMESTAMP(6),
+    business_code_list       STRING,
+    remarks                  STRING,
+    card_id                  STRING,
+    detail                   STRING,
+    create_time              TIMESTAMP(6),
+    update_time              TIMESTAMP(6),
+    card_org                 STRING,
+    PRIMARY KEY (id, card_transaction_id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT DISTINCT t.id, t.source_id, t.card_transaction_id::text AS card_transaction_id, t.account_id::text AS account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, CAST(t.business_code_list AS text) AS business_code_list, t.remarks, t.card_id::text AS card_id, t.detail, t.create_time, t.update_time, c."type" AS card_org FROM public.quantum_card_transaction_extend t INNER JOIN public."qbitCard" c ON c."id" = t.card_id INNER JOIN ods.ods_qbit_card_settlement s ON t.card_transaction_id::text = s.qbit_card_transaction_id WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type = ''Credit'' AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND s.transaction_type = ''refund.clearing'' AND s.raw_data::json->>''responseCode'' = ''APPROVE'' AND CAST(s.raw_data::json->>''postDate'' AS timestamp) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND CAST(s.raw_data::json->>''postDate'' AS timestamp) < CAST(''${end_time}'' AS TIMESTAMP(6))) AS quantum_card_transaction_refund_direct_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000',
+    'scan.auto-commit' = 'false'
+);
+
 -- 账户维度：只取 DWM 需要落表的账户分类字段。
 CREATE TEMPORARY TABLE source_dim_account (
     id                STRING,
@@ -225,7 +276,14 @@ FROM source_bb_quantum_card_transaction_extend_oc
 UNION
 SELECT
     *
-FROM source_bb_quantum_card_transaction_extend_post;
+FROM source_bb_quantum_card_transaction_extend_post
+UNION
+SELECT
+    *
+FROM source_bb_quantum_card_transaction_refund_direct;
+
+CREATE TEMPORARY VIEW v_qbit_card_settlement_refund_direct AS
+SELECT * FROM source_qbit_card_settlement_refund_direct;
 
 CREATE TEMPORARY VIEW v_qbit_card_settlement AS
 SELECT
@@ -238,7 +296,11 @@ FROM source_qbit_card_settlement_oc
 UNION
 SELECT
     *
-FROM source_qbit_card_settlement_post;
+FROM source_qbit_card_settlement_post
+UNION
+SELECT
+    *
+FROM v_qbit_card_settlement_refund_direct;
 
 -- 结算匹配拆成两条等值路径再合并，避免 OR join 触发低效计划。
 -- 同一笔交易可能同时命中两个键，使用 UNION 去重，保持最终明细不重复。
@@ -271,7 +333,7 @@ INNER JOIN v_qbit_card_settlement s
 
 -- 交易基础明细层：把交易、结算、账户维度合并成 DWM 主体字段。
 -- 成本指标不在这里计算，这里只沉淀可复用明细和判断标识。
-CREATE TEMPORARY VIEW v_bb_base AS
+CREATE TEMPORARY VIEW v_bb_base_normal AS
 SELECT
     t.id AS txn_id,
     s.id AS settlement_id,
@@ -311,6 +373,53 @@ LEFT JOIN v_matched_settle s
     ON s.txn_id = t.id
 LEFT JOIN source_dim_account da
     ON da.id = t.account_id;
+
+-- 直接关联的 Refund base：不依赖 v_matched_settle，确保 settlement 字段完整落入 DWM。
+CREATE TEMPORARY VIEW v_bb_refund_direct_base AS
+SELECT
+    t.id AS txn_id,
+    s.id AS settlement_id,
+    t.source_id,
+    t.card_transaction_id,
+    t.account_id,
+    da.account_type,
+    da.`type` AS account_category,
+    da.system_type,
+    t.card_id,
+    COALESCE(t.transaction_time, t.original_completion_time) AS transaction_time,
+    t.original_completion_time,
+    t.`type` AS business_type,
+    t.business_code_list,
+    t.remarks,
+    t.detail,
+    t.card_org,
+    t.country AS tx_country,
+    RIGHT(JSON_VALUE(s.raw_data, '$.txnLocation'), 2) AS settle_country,
+    COALESCE(RIGHT(JSON_VALUE(s.raw_data, '$.txnLocation'), 2), t.country) IN ('US', 'USA') AS is_dom,
+    JSON_VALUE(s.raw_data, '$.responseCode') AS resp_code,
+    JSON_VALUE(s.raw_data, '$.reasonCode') AS reason_code,
+    s.transaction_type AS transaction_type,
+    TRUE AS is_valid_settle,
+    FALSE AS is_clearing,
+    FALSE AS is_reversal,
+    TRUE AS is_refund,
+    CAST(COALESCE(s.billing_amount, CAST(0 AS DOUBLE)) AS DECIMAL(20, 4)) AS billing_amount,
+    CAST(JSON_VALUE(s.raw_data, '$.postDate') AS TIMESTAMP(6)) AS settlement_post_date,
+    CAST(JSON_VALUE(s.raw_data, '$.txnDate') AS TIMESTAMP(6)) AS settlement_txn_date,
+    1 AS version,
+    COALESCE(t.create_time, CURRENT_TIMESTAMP) AS create_time,
+    COALESCE(t.update_time, t.create_time, CURRENT_TIMESTAMP) AS update_time,
+    CAST(NULL AS TIMESTAMP(6)) AS delete_time
+FROM source_bb_quantum_card_transaction_refund_direct t
+INNER JOIN source_qbit_card_settlement_refund_direct s
+    ON t.card_transaction_id = s.qbit_card_transaction_id
+LEFT JOIN source_dim_account da
+    ON da.id = t.account_id;
+
+CREATE TEMPORARY VIEW v_bb_base AS
+SELECT * FROM v_bb_base_normal
+UNION ALL
+SELECT * FROM v_bb_refund_direct_base;
 
 -- 最终 DWM 明细：销售关系按 direct 优先、root 兜底后的唯一结果写入 upsert sink。
 CREATE TEMPORARY VIEW v_dwm_bb_card_transaction_detail_v2 AS
