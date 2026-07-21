@@ -12,6 +12,7 @@ CREATE TABLE "dwm"."dwm_bb_card_transaction_detail_v2_p" (
   "id" varchar(128) COLLATE "pg_catalog"."default" NOT NULL,
   "txn_id" int8 NOT NULL,
   "settlement_id" varchar(64) COLLATE "pg_catalog"."default",
+  "settlement_match_type" varchar(32) COLLATE "pg_catalog"."default",
   "source_id" varchar(255) COLLATE "pg_catalog"."default",
   "card_transaction_id" varchar(255) COLLATE "pg_catalog"."default",
   "account_id" varchar(36) COLLATE "pg_catalog"."default" NOT NULL,

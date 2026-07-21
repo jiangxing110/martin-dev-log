@@ -313,7 +313,8 @@ SELECT
     s.transaction_type,
     s.billing_amount,
     s.raw_data,
-    s.create_time
+    s.create_time,
+    'source_id' AS settlement_match_type
 FROM v_bb_tx t
 INNER JOIN v_qbit_card_settlement s
     ON t.source_id = s.transaction_id
@@ -326,7 +327,8 @@ SELECT
     s.transaction_type,
     s.billing_amount,
     s.raw_data,
-    s.create_time
+    s.create_time,
+    'card_transaction_id' AS settlement_match_type
 FROM v_bb_tx t
 INNER JOIN v_qbit_card_settlement s
     ON t.card_transaction_id = s.qbit_card_transaction_id;
@@ -337,6 +339,7 @@ CREATE TEMPORARY VIEW v_bb_base_normal AS
 SELECT
     t.id AS txn_id,
     s.id AS settlement_id,
+    s.settlement_match_type,
     t.source_id,
     t.card_transaction_id,
     t.account_id,
@@ -379,6 +382,7 @@ CREATE TEMPORARY VIEW v_bb_refund_direct_base AS
 SELECT
     t.id AS txn_id,
     s.id AS settlement_id,
+    'card_transaction_id' AS settlement_match_type,
     t.source_id,
     t.card_transaction_id,
     t.account_id,
@@ -427,6 +431,7 @@ SELECT
     CAST(ABS(HASH_CODE(CONCAT(CAST(b.txn_id AS STRING), ':', COALESCE(b.settlement_id, 'NO_SETTLEMENT')))) AS STRING) AS id,
     b.txn_id,
     b.settlement_id,
+    b.settlement_match_type,
     b.source_id,
     b.card_transaction_id,
     b.account_id,
@@ -468,6 +473,7 @@ CREATE TEMPORARY TABLE sink_dwm_bb_card_transaction_detail_v2_p (
     id                       STRING,
     txn_id                   BIGINT,
     settlement_id            STRING,
+    settlement_match_type    STRING,
     source_id                STRING,
     card_transaction_id      STRING,
     account_id               STRING,
