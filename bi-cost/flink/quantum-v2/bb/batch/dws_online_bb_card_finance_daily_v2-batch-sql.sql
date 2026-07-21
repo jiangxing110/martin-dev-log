@@ -28,6 +28,9 @@ SET 'table.dml-sync' = 'true';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
+-- DWM JDBC 扫描和多路聚合可能长时间占满 TM CPU，避免 JM 过早判定 TM 失联。
+SET 'heartbeat.interval' = '30 s';
+SET 'heartbeat.timeout' = '600 s';
 -- 禁止将同源 JDBC 表扫描合并为 Expand，因 JDBC connector 不支持该物理算子
 SET 'table.optimizer.union-any-expand' = 'false';
 
