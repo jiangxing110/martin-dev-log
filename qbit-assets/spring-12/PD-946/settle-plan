@@ -1,0 +1,13 @@
+对帐单优化功能
+我们存在 资金流水对账单 ,业务明细对账单
+本次改造主要针对自己流水对账单
+1:业务明细重新导出
+'https://circle-test.qbitnetwork.com/api/statement/month-bill/export'  
+--data-raw '{"time":"2026-06"}'
+2:资金流水对账单
+'https://circle-test.qbitnetwork.com/api/statement/customer-settle?startDate=2026-06-01%2000%3A00%3A00&endDate=2026-06-30%2023%3A59%3A59&accountId=6ec73b85-998b-4d2d-bbef-67fe25e557b6&datetype=month' \
+
+我们现在资金流水单对账单也是和业务明细一样 异步导出
+但是我们少了 
+中间状态下的 "部分交易信息仍在同步中，月度对账单暂时无法生成，请稍后"
+还有任务进度条的处理

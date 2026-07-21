@@ -1,0 +1,22 @@
+关联/Users/martinjiang/WebstormProjects/qbit-admin-v3项目
+1.关于oddAccountReview年审的cdd kyc kyb 状态同步
+- ODD模块内【已通过/待后补】状态的的KYC、KYB信息及状态，覆盖【CDD】内对应模块的信息及状态，比如客户ODD内的KYC通过，
+KYB未通过（待审核、待补录），则只更新KYC的信息和状态到CDD模块，KYB还是初始信息和状态
+
+2.关于账号
+OddAccountReviewResultEnum 这个
+要调查通过,完结处置,风险处置 我们现在初始状态应该是Na
+需要补一个调查通过 
+curl 'https://global.service.test.qbitnetwork.com/admin-graphql' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRjNWVlNzA1LTFkYjgtNDcyOS04OTU0LTJiY2I4NjZiNmZkZCIsImFjY291bnQiOiIrODYxODU1ODI0MTQ0MCIsInJvbGUiOiJBZG1pbiIsImFjY291bnRJZCI6ImZjMzgyN2VjLTU4ZTktNGY0Mi1hNjYxLWEzYWE2NThjM2U2MSIsInBob25lIjoiKzg2MTg1NTgyNDE0NDAiLCJpc01vcmUiOmZhbHNlLCJpYXQiOjE3ODQ2MzU2NTMsImV4cCI6MTc4NDcyMjA1M30.4JdRLmY8psef2B3qAOOVLFHf7evM5QuWrFQSqoeklcI' \
+  -H 'Referer: https://test-admin-v3.qbitnetwork.com/' \
+  -H 'fingerprint: 901aaab3ea524de187e73c7c1ed9d966' \
+  -H 'sec-ch-ua: "Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36' \
+  -H 'accept: */*' \
+  -H 'content-type: application/json' \
+  --data-raw $'{"operationName":"reviewOddAccountReview","variables":{"data":{"caseId":"a7c6b031-1ff4-4af2-825a-22e389453e73","remarks":"速度速度","accountRiskLevel":null,"isUpdateAccountRiskLevel":false,"companySurvival":"宣传宣传","accountBehavior":null,"analysis":null,"attachment":[],"reviewResult":"Success","status":"Closed"}},"query":"mutation reviewOddAccountReview($data: ReviewOddAccountReviewInput\u0021) {\\n  reviewOddAccountReview(data: $data)\\n}"}'
+  目前前端端处理这个还是 Success
+
