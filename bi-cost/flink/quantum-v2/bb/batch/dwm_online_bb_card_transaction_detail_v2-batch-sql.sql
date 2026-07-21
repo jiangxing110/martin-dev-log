@@ -53,7 +53,7 @@ CREATE TEMPORARY TABLE source_bb_quantum_card_transaction_extend_tx (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT t.id, t.source_id, t.card_transaction_id::text AS card_transaction_id, t.account_id::text AS account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, CAST(t.business_code_list AS text) AS business_code_list, t.remarks, t.card_id::text AS card_id, t.detail, t.create_time, t.update_time, c."type" AS card_org FROM public.quantum_card_transaction_extend t INNER JOIN public."qbitCard" c ON t.card_id = c."id" WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6))) AS quantum_card_transaction_extend_tx_f',
+    'table-name' = '(SELECT t.id, t.source_id, t.card_transaction_id::text AS card_transaction_id, t.account_id::text AS account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, CAST(t.business_code_list AS text) AS business_code_list, t.remarks, t.card_id::text AS card_id, t.detail, t.create_time, t.update_time, c."type" AS card_org FROM public.quantum_card_transaction_extend t INNER JOIN public."qbitCard" c ON t.card_id = c."id" WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR) AS quantum_card_transaction_extend_tx_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -109,7 +109,7 @@ CREATE TEMPORARY TABLE source_bb_quantum_card_transaction_extend_post (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT t.id, t.source_id, t.card_transaction_id::text AS card_transaction_id, t.account_id::text AS account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, CAST(t.business_code_list AS text) AS business_code_list, t.remarks, t.card_id::text AS card_id, t.detail, t.create_time, t.update_time, c."type" AS card_org FROM public.quantum_card_transaction_extend t INNER JOIN public."qbitCard" c ON t.card_id = c."id" WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND EXISTS (SELECT 1 FROM ods.ods_qbit_card_settlement s WHERE s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND s.transaction_type = ''refund.clearing'' AND CAST(s.raw_data::json->>''postDate'' AS timestamp) >= CAST(''${start_time}'' AS TIMESTAMP(6)) - INTERVAL ''1'' MONTH AND CAST(s.raw_data::json->>''postDate'' AS timestamp) < CAST(''${end_time}'' AS TIMESTAMP(6)) + INTERVAL ''1'' MONTH AND t.card_transaction_id::text = s.qbit_card_transaction_id)) AS quantum_card_transaction_extend_post_f',
+    'table-name' = '(SELECT t.id, t.source_id, t.card_transaction_id::text AS card_transaction_id, t.account_id::text AS account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, CAST(t.business_code_list AS text) AS business_code_list, t.remarks, t.card_id::text AS card_id, t.detail, t.create_time, t.update_time, c."type" AS card_org FROM public.quantum_card_transaction_extend t INNER JOIN public."qbitCard" c ON t.card_id = c."id" WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND EXISTS (SELECT 1 FROM (SELECT "id"::text AS id, "transactionId"::text AS transaction_id, "qbitCardTransactionId"::text AS qbit_card_transaction_id, "transactionType" AS transaction_type, "billingAmount" AS billing_amount, CAST("rawData" AS text) AS raw_data, "createTime" AS create_time, "deleteTime" AS delete_time, "provider" AS provider FROM public."qbitCardSettlement" WHERE "createTime" >= CAST(''${start_time}'' AS TIMESTAMP(6)) - INTERVAL ''1'' MONTH AND "createTime" < CAST(''${end_time}'' AS TIMESTAMP(6)) + INTERVAL ''1'' MONTH AND CAST("rawData" AS text) NOT LIKE ''%\\u0000%'') s WHERE s.provider = ''BlueBancCard'' AND s.transaction_type = ''refund.clearing'' AND CAST(s.raw_data::json->>''postDate'' AS timestamp) >= CAST(''${start_time}'' AS TIMESTAMP(6)) - INTERVAL ''1'' MONTH AND CAST(s.raw_data::json->>''postDate'' AS timestamp) < CAST(''${end_time}'' AS TIMESTAMP(6)) + INTERVAL ''1'' MONTH AND t.card_transaction_id::text = s.qbit_card_transaction_id)) AS quantum_card_transaction_extend_post_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -130,7 +130,7 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement_tx (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT s.id, s.transaction_id, s.qbit_card_transaction_id, s.transaction_type, s.billing_amount, s.raw_data, s.create_time FROM ods.ods_qbit_card_settlement s WHERE s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND EXISTS (SELECT 1 FROM public.quantum_card_transaction_extend t INNER JOIN public."qbitCard" c ON t.card_id = c."id" WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6)) AND t.source_id = s.transaction_id)) AS ods_qbit_card_settlement_tx_f',
+    'table-name' = '(SELECT s.id, s.transaction_id, s.qbit_card_transaction_id, s.transaction_type, s.billing_amount, s.raw_data, s.create_time FROM (SELECT "id"::text AS id, "transactionId"::text AS transaction_id, "qbitCardTransactionId"::text AS qbit_card_transaction_id, "transactionType" AS transaction_type, "billingAmount" AS billing_amount, CAST("rawData" AS text) AS raw_data, "createTime" AS create_time, "deleteTime" AS delete_time, "provider" AS provider FROM public."qbitCardSettlement" WHERE "createTime" >= CAST(''${start_time}'' AS TIMESTAMP(6)) - INTERVAL ''1'' MONTH AND "createTime" < CAST(''${end_time}'' AS TIMESTAMP(6)) + INTERVAL ''1'' MONTH AND CAST("rawData" AS text) NOT LIKE ''%\\u0000%'') s WHERE s.provider = ''BlueBancCard'' AND EXISTS (SELECT 1 FROM public.quantum_card_transaction_extend t INNER JOIN public."qbitCard" c ON t.card_id = c."id" WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR AND t.source_id = s.transaction_id)) AS qbit_card_settlement_tx_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -150,7 +150,7 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement_oc (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT s.id, s.transaction_id, s.qbit_card_transaction_id, s.transaction_type, s.billing_amount, s.raw_data, s.create_time FROM ods.ods_qbit_card_settlement s WHERE s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND EXISTS (SELECT 1 FROM public.quantum_card_transaction_extend t INNER JOIN public."qbitCard" c ON t.card_id = c."id" WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND ((t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6))) OR (t.original_completion_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''${end_time}'' AS TIMESTAMP(6)))) AND t.card_transaction_id::text = s.qbit_card_transaction_id)) AS ods_qbit_card_settlement_oc_f',
+    'table-name' = '(SELECT s.id, s.transaction_id, s.qbit_card_transaction_id, s.transaction_type, s.billing_amount, s.raw_data, s.create_time FROM (SELECT "id"::text AS id, "transactionId"::text AS transaction_id, "qbitCardTransactionId"::text AS qbit_card_transaction_id, "transactionType" AS transaction_type, "billingAmount" AS billing_amount, CAST("rawData" AS text) AS raw_data, "createTime" AS create_time, "deleteTime" AS delete_time, "provider" AS provider FROM public."qbitCardSettlement" WHERE "createTime" >= CAST(''${start_time}'' AS TIMESTAMP(6)) - INTERVAL ''1'' MONTH AND "createTime" < CAST(''${end_time}'' AS TIMESTAMP(6)) + INTERVAL ''1'' MONTH AND CAST("rawData" AS text) NOT LIKE ''%\\u0000%'') s WHERE s.provider = ''BlueBancCard'' AND EXISTS (SELECT 1 FROM public.quantum_card_transaction_extend t INNER JOIN public."qbitCard" c ON t.card_id = c."id" WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND ((t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR) OR (t.original_completion_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''${end_time}'' AS TIMESTAMP(6)))) AND t.card_transaction_id::text = s.qbit_card_transaction_id)) AS qbit_card_settlement_oc_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -170,7 +170,7 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement_post (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT s.id, s.transaction_id, s.qbit_card_transaction_id, s.transaction_type, s.billing_amount, s.raw_data, s.create_time FROM ods.ods_qbit_card_settlement s WHERE s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND s.transaction_type = ''refund.clearing'' AND CAST(s.raw_data::json->>''postDate'' AS timestamp) >= CAST(''${start_time}'' AS TIMESTAMP(6)) - INTERVAL ''1'' MONTH AND CAST(s.raw_data::json->>''postDate'' AS timestamp) < CAST(''${end_time}'' AS TIMESTAMP(6)) + INTERVAL ''1'' MONTH AND EXISTS (SELECT 1 FROM public.quantum_card_transaction_extend t INNER JOIN public."qbitCard" c ON t.card_id = c."id" WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND t.card_transaction_id::text = s.qbit_card_transaction_id)) AS ods_qbit_card_settlement_post_f',
+    'table-name' = '(SELECT s.id, s.transaction_id, s.qbit_card_transaction_id, s.transaction_type, s.billing_amount, s.raw_data, s.create_time FROM (SELECT "id"::text AS id, "transactionId"::text AS transaction_id, "qbitCardTransactionId"::text AS qbit_card_transaction_id, "transactionType" AS transaction_type, "billingAmount" AS billing_amount, CAST("rawData" AS text) AS raw_data, "createTime" AS create_time, "deleteTime" AS delete_time, "provider" AS provider FROM public."qbitCardSettlement" WHERE "createTime" >= CAST(''${start_time}'' AS TIMESTAMP(6)) - INTERVAL ''1'' MONTH AND "createTime" < CAST(''${end_time}'' AS TIMESTAMP(6)) + INTERVAL ''1'' MONTH AND CAST("rawData" AS text) NOT LIKE ''%\\u0000%'') s WHERE s.provider = ''BlueBancCard'' AND s.transaction_type = ''refund.clearing'' AND CAST(s.raw_data::json->>''postDate'' AS timestamp) >= CAST(''${start_time}'' AS TIMESTAMP(6)) - INTERVAL ''1'' MONTH AND CAST(s.raw_data::json->>''postDate'' AS timestamp) < CAST(''${end_time}'' AS TIMESTAMP(6)) + INTERVAL ''1'' MONTH AND EXISTS (SELECT 1 FROM public.quantum_card_transaction_extend t INNER JOIN public."qbitCard" c ON t.card_id = c."id" WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type IN (''Consumption'', ''Credit'') AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND t.card_transaction_id::text = s.qbit_card_transaction_id)) AS qbit_card_settlement_post_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -192,7 +192,7 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement_refund_direct (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT DISTINCT s.id, s.transaction_id, s.qbit_card_transaction_id, s.transaction_type, s.billing_amount, s.raw_data, s.create_time FROM ods.ods_qbit_card_settlement s INNER JOIN public.quantum_card_transaction_extend t ON t.card_transaction_id::text = s.qbit_card_transaction_id INNER JOIN public."qbitCard" c ON c."id" = t.card_id WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type = ''Credit'' AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND s.transaction_type = ''refund.clearing'' AND s.raw_data::json->>''responseCode'' = ''APPROVE'' AND CAST(s.raw_data::json->>''postDate'' AS timestamp) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND CAST(s.raw_data::json->>''postDate'' AS timestamp) < CAST(''${end_time}'' AS TIMESTAMP(6))) AS ods_qbit_card_settlement_refund_direct_f',
+    'table-name' = '(SELECT DISTINCT s.id, s.transaction_id, s.qbit_card_transaction_id, s.transaction_type, s.billing_amount, s.raw_data, s.create_time FROM (SELECT "id"::text AS id, "transactionId"::text AS transaction_id, "qbitCardTransactionId"::text AS qbit_card_transaction_id, "transactionType" AS transaction_type, "billingAmount" AS billing_amount, CAST("rawData" AS text) AS raw_data, "createTime" AS create_time, "deleteTime" AS delete_time, "provider" AS provider FROM public."qbitCardSettlement" WHERE "createTime" >= CAST(''${start_time}'' AS TIMESTAMP(6)) - INTERVAL ''1'' MONTH AND "createTime" < CAST(''${end_time}'' AS TIMESTAMP(6)) + INTERVAL ''1'' MONTH AND CAST("rawData" AS text) NOT LIKE ''%\\u0000%'') s INNER JOIN public.quantum_card_transaction_extend t ON t.card_transaction_id::text = s.qbit_card_transaction_id INNER JOIN public."qbitCard" c ON c."id" = t.card_id WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type = ''Credit'' AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND s.provider = ''BlueBancCard'' AND s.transaction_type = ''refund.clearing'' AND s.raw_data::json->>''responseCode'' = ''APPROVE'' AND CAST(s.raw_data::json->>''postDate'' AS timestamp) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND CAST(s.raw_data::json->>''postDate'' AS timestamp) < CAST(''${end_time}'' AS TIMESTAMP(6))) AS qbit_card_settlement_refund_direct_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -221,7 +221,7 @@ CREATE TEMPORARY TABLE source_bb_quantum_card_transaction_refund_direct (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT DISTINCT t.id, t.source_id, t.card_transaction_id::text AS card_transaction_id, t.account_id::text AS account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, CAST(t.business_code_list AS text) AS business_code_list, t.remarks, t.card_id::text AS card_id, t.detail, t.create_time, t.update_time, c."type" AS card_org FROM public.quantum_card_transaction_extend t INNER JOIN public."qbitCard" c ON c."id" = t.card_id INNER JOIN ods.ods_qbit_card_settlement s ON t.card_transaction_id::text = s.qbit_card_transaction_id WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type = ''Credit'' AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND s.transaction_type = ''refund.clearing'' AND s.raw_data::json->>''responseCode'' = ''APPROVE'' AND CAST(s.raw_data::json->>''postDate'' AS timestamp) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND CAST(s.raw_data::json->>''postDate'' AS timestamp) < CAST(''${end_time}'' AS TIMESTAMP(6))) AS quantum_card_transaction_refund_direct_f',
+    'table-name' = '(SELECT DISTINCT t.id, t.source_id, t.card_transaction_id::text AS card_transaction_id, t.account_id::text AS account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, CAST(t.business_code_list AS text) AS business_code_list, t.remarks, t.card_id::text AS card_id, t.detail, t.create_time, t.update_time, c."type" AS card_org FROM public.quantum_card_transaction_extend t INNER JOIN public."qbitCard" c ON c."id" = t.card_id INNER JOIN (SELECT "id"::text AS id, "transactionId"::text AS transaction_id, "qbitCardTransactionId"::text AS qbit_card_transaction_id, "transactionType" AS transaction_type, "billingAmount" AS billing_amount, CAST("rawData" AS text) AS raw_data, "createTime" AS create_time, "deleteTime" AS delete_time, "provider" AS provider FROM public."qbitCardSettlement" WHERE "createTime" >= CAST(''${start_time}'' AS TIMESTAMP(6)) - INTERVAL ''1'' MONTH AND "createTime" < CAST(''${end_time}'' AS TIMESTAMP(6)) + INTERVAL ''1'' MONTH AND CAST("rawData" AS text) NOT LIKE ''%\\u0000%'') s ON t.card_transaction_id::text = s.qbit_card_transaction_id WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND t.type = ''Credit'' AND c."type" IN (''Master'', ''VISA'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND s.provider = ''BlueBancCard'' AND s.transaction_type = ''refund.clearing'' AND s.raw_data::json->>''responseCode'' = ''APPROVE'' AND CAST(s.raw_data::json->>''postDate'' AS timestamp) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND CAST(s.raw_data::json->>''postDate'' AS timestamp) < CAST(''${end_time}'' AS TIMESTAMP(6))) AS quantum_card_transaction_refund_direct_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -255,7 +255,7 @@ CREATE TEMPORARY TABLE source_bb_sale_relation (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(WITH tx AS (SELECT t.id::text AS tx_id, t.account_id::text AS account_id, COALESCE(t.transaction_time, t.original_completion_time) AS transaction_time FROM public.quantum_card_transaction_extend t WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND (((t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6))) OR (t.original_completion_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''${end_time}'' AS TIMESTAMP(6)))) OR EXISTS (SELECT 1 FROM ods.ods_qbit_card_settlement s WHERE s.delete_time IS NULL AND s.provider = ''BlueBancCard'' AND s.transaction_type = ''refund.clearing'' AND CAST(s.raw_data::json->>''postDate'' AS timestamp) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND CAST(s.raw_data::json->>''postDate'' AS timestamp) < CAST(''${end_time}'' AS TIMESTAMP(6)) AND t.card_transaction_id::text = s.qbit_card_transaction_id))), direct_rel AS (SELECT DISTINCT ON (tx.tx_id) tx.tx_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id FROM tx INNER JOIN dim.dim_sale_account_relation_p sr ON sr.delete_time IS NULL AND sr.relation_account_id::text = tx.account_id AND sr.relation_start_time < CAST(''${end_time}'' AS TIMESTAMP(6)) AND (sr.relation_end_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) OR sr.relation_end_time IS NULL) AND tx.transaction_time >= sr.relation_start_time AND (tx.transaction_time < sr.relation_end_time OR sr.relation_end_time IS NULL) ORDER BY tx.tx_id, sr.relation_start_time DESC), root_rel AS (SELECT DISTINCT ON (tx.tx_id) tx.tx_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id FROM tx INNER JOIN ods.ods_api_account_relation aar ON aar.delete_time IS NULL AND aar.account_id::text = tx.account_id INNER JOIN dim.dim_sale_account_relation_p sr ON sr.delete_time IS NULL AND sr.relation_account_id::text = aar.root_id::text AND sr.relation_start_time < CAST(''${end_time}'' AS TIMESTAMP(6)) AND (sr.relation_end_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) OR sr.relation_end_time IS NULL) AND tx.transaction_time >= sr.relation_start_time AND (tx.transaction_time < sr.relation_end_time OR sr.relation_end_time IS NULL) ORDER BY tx.tx_id, sr.relation_start_time DESC) SELECT tx.tx_id, COALESCE(direct_rel.sale_id, root_rel.sale_id) AS sale_id, COALESCE(direct_rel.am_id, root_rel.am_id) AS am_id FROM tx LEFT JOIN direct_rel ON direct_rel.tx_id = tx.tx_id LEFT JOIN root_rel ON root_rel.tx_id = tx.tx_id) AS bb_sale_relation_f',
+    'table-name' = '(WITH tx AS (SELECT t.id::text AS tx_id, t.account_id::text AS account_id, COALESCE(t.transaction_time, t.original_completion_time) AS transaction_time FROM public.quantum_card_transaction_extend t WHERE t.channel_provision = ''BLUEBANC'' AND t.delete_time IS NULL AND (((t.transaction_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR AND t.transaction_time < CAST(''${end_time}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR) OR (t.original_completion_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''${end_time}'' AS TIMESTAMP(6)))) OR EXISTS (SELECT 1 FROM (SELECT "id"::text AS id, "transactionId"::text AS transaction_id, "qbitCardTransactionId"::text AS qbit_card_transaction_id, "transactionType" AS transaction_type, "billingAmount" AS billing_amount, CAST("rawData" AS text) AS raw_data, "createTime" AS create_time, "deleteTime" AS delete_time, "provider" AS provider FROM public."qbitCardSettlement" WHERE "createTime" >= CAST(''${start_time}'' AS TIMESTAMP(6)) - INTERVAL ''1'' MONTH AND "createTime" < CAST(''${end_time}'' AS TIMESTAMP(6)) + INTERVAL ''1'' MONTH AND CAST("rawData" AS text) NOT LIKE ''%\\u0000%'') s WHERE s.provider = ''BlueBancCard'' AND s.transaction_type = ''refund.clearing'' AND CAST(s.raw_data::json->>''postDate'' AS timestamp) >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND CAST(s.raw_data::json->>''postDate'' AS timestamp) < CAST(''${end_time}'' AS TIMESTAMP(6)) AND t.card_transaction_id::text = s.qbit_card_transaction_id))), direct_rel AS (SELECT DISTINCT ON (tx.tx_id) tx.tx_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id FROM tx INNER JOIN dim.dim_sale_account_relation_p sr ON sr.delete_time IS NULL AND sr.relation_account_id::text = tx.account_id AND sr.relation_start_time < CAST(''${end_time}'' AS TIMESTAMP(6)) AND (sr.relation_end_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) OR sr.relation_end_time IS NULL) AND tx.transaction_time >= sr.relation_start_time AND (tx.transaction_time < sr.relation_end_time OR sr.relation_end_time IS NULL) ORDER BY tx.tx_id, sr.relation_start_time DESC), root_rel AS (SELECT DISTINCT ON (tx.tx_id) tx.tx_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id FROM tx INNER JOIN ods.ods_api_account_relation aar ON aar.delete_time IS NULL AND aar.account_id::text = tx.account_id INNER JOIN dim.dim_sale_account_relation_p sr ON sr.delete_time IS NULL AND sr.relation_account_id::text = aar.root_id::text AND sr.relation_start_time < CAST(''${end_time}'' AS TIMESTAMP(6)) AND (sr.relation_end_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) OR sr.relation_end_time IS NULL) AND tx.transaction_time >= sr.relation_start_time AND (tx.transaction_time < sr.relation_end_time OR sr.relation_end_time IS NULL) ORDER BY tx.tx_id, sr.relation_start_time DESC) SELECT tx.tx_id, COALESCE(direct_rel.sale_id, root_rel.sale_id) AS sale_id, COALESCE(direct_rel.am_id, root_rel.am_id) AS am_id FROM tx LEFT JOIN direct_rel ON direct_rel.tx_id = tx.tx_id LEFT JOIN root_rel ON root_rel.tx_id = tx.tx_id) AS bb_sale_relation_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -283,28 +283,39 @@ SELECT
 FROM source_bb_quantum_card_transaction_refund_direct;
 
 CREATE TEMPORARY VIEW v_qbit_card_settlement_refund_direct AS
-SELECT * FROM source_qbit_card_settlement_refund_direct;
+SELECT *
+FROM source_qbit_card_settlement_refund_direct
+WHERE create_time >= CAST('${start_time}' AS TIMESTAMP(6)) - INTERVAL '1' MONTH
+  AND create_time < CAST('${end_time}' AS TIMESTAMP(6)) + INTERVAL '1' MONTH;
 
 CREATE TEMPORARY VIEW v_qbit_card_settlement AS
 SELECT
     *
 FROM source_qbit_card_settlement_tx
+WHERE create_time >= CAST('${start_time}' AS TIMESTAMP(6)) - INTERVAL '1' MONTH
+  AND create_time < CAST('${end_time}' AS TIMESTAMP(6)) + INTERVAL '1' MONTH
 UNION
 SELECT
     *
 FROM source_qbit_card_settlement_oc
+WHERE create_time >= CAST('${start_time}' AS TIMESTAMP(6)) - INTERVAL '1' MONTH
+  AND create_time < CAST('${end_time}' AS TIMESTAMP(6)) + INTERVAL '1' MONTH
 UNION
 SELECT
     *
 FROM source_qbit_card_settlement_post
+WHERE create_time >= CAST('${start_time}' AS TIMESTAMP(6)) - INTERVAL '1' MONTH
+  AND create_time < CAST('${end_time}' AS TIMESTAMP(6)) + INTERVAL '1' MONTH
 UNION
 SELECT
     *
-FROM v_qbit_card_settlement_refund_direct;
+FROM v_qbit_card_settlement_refund_direct
+WHERE create_time >= CAST('${start_time}' AS TIMESTAMP(6)) - INTERVAL '1' MONTH
+  AND create_time < CAST('${end_time}' AS TIMESTAMP(6)) + INTERVAL '1' MONTH;
 
 -- 结算匹配拆成两条等值路径再合并，避免 OR join 触发低效计划。
 -- 同一笔交易可能同时命中两个键，使用 UNION 去重，保持最终明细不重复。
-CREATE TEMPORARY VIEW v_matched_settle AS
+CREATE TEMPORARY VIEW v_matched_settle_candidates AS
 SELECT
     t.id AS txn_id,
     s.id,
@@ -318,7 +329,7 @@ SELECT
 FROM v_bb_tx t
 INNER JOIN v_qbit_card_settlement s
     ON t.source_id = s.transaction_id
-UNION
+UNION ALL
 SELECT
     t.id AS txn_id,
     s.id,
@@ -332,6 +343,34 @@ SELECT
 FROM v_bb_tx t
 INNER JOIN v_qbit_card_settlement s
     ON t.card_transaction_id = s.qbit_card_transaction_id;
+
+-- 同一交易和 settlement 同时命中两个键时只保留一行，并稳定优先 card_transaction_id。
+-- DWM sink 主键不包含匹配类型，必须在写入前消除随机覆盖。
+CREATE TEMPORARY VIEW v_matched_settle AS
+SELECT
+    txn_id,
+    id,
+    transaction_id,
+    qbit_card_transaction_id,
+    transaction_type,
+    billing_amount,
+    raw_data,
+    create_time,
+    CASE
+        WHEN MAX(CASE WHEN settlement_match_type = 'card_transaction_id' THEN 1 ELSE 0 END) = 1
+        THEN 'card_transaction_id'
+        ELSE 'source_id'
+    END AS settlement_match_type
+FROM v_matched_settle_candidates
+GROUP BY
+    txn_id,
+    id,
+    transaction_id,
+    qbit_card_transaction_id,
+    transaction_type,
+    billing_amount,
+    raw_data,
+    create_time;
 
 -- 交易基础明细层：把交易、结算、账户维度合并成 DWM 主体字段。
 -- 成本指标不在这里计算，这里只沉淀可复用明细和判断标识。
@@ -415,7 +454,7 @@ SELECT
     COALESCE(t.update_time, t.create_time, CURRENT_TIMESTAMP) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM source_bb_quantum_card_transaction_refund_direct t
-INNER JOIN source_qbit_card_settlement_refund_direct s
+INNER JOIN v_qbit_card_settlement_refund_direct s
     ON t.card_transaction_id = s.qbit_card_transaction_id
 LEFT JOIN source_dim_account da
     ON da.id = t.account_id;

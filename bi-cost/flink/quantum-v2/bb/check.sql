@@ -355,6 +355,616 @@ WHERE t.delete_time IS NULL
   );
 
 -- =========================================================
+-- 6.3 验证 settle_end 过宽是否造成 Dollar Volume 偏高
+-- 只计算原始五月 SQL 不包含、但上一版 DWM 包含的 createTime 区间：
+-- [2026-06-09, 2026-07-01)。结果应直接与“当前 - Excel”比较。
+-- =========================================================
+WITH params AS (
+    SELECT
+        TIMESTAMP '2026-05-01 00:00:00' AS month_start,
+        TIMESTAMP '2026-06-01 00:00:00' AS month_end,
+        TIMESTAMP '2026-06-09 00:00:00' AS extra_settle_start,
+        TIMESTAMP '2026-07-01 00:00:00' AS extra_settle_end
+),
+excluded_settlement AS (
+    SELECT unnest(ARRAY[
+        '234e26db-0e1d-424f-952b-053ab2e42d30',
+        '82ff7fa6-8035-4c7b-8c18-ace860c3dfae',
+        '711e7995-ea26-499f-a1c5-9e4faf15f31f',
+        '5e974989-8792-401f-93b6-b107e0b46e51',
+        '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72',
+        'a97006e9-2609-4e70-a165-2ae6b9f49689',
+        'ad861604-ff4f-4cd1-997e-fe613c67970e',
+        '37959ee2-880f-49ea-8d74-976a69382c90',
+        'bebf7744-ed33-46cd-8ca6-40bc43d928eb',
+        'ece578c8-e8c1-46ec-83b9-116ea049a2e8',
+        '69e04460-0cb4-4d9d-9001-2b786cfc3d7b',
+        '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470',
+        'cff4d9c4-ee01-43fa-9518-62872afbbe91',
+        '160b403b-2a16-4b43-afac-a3b37916c968',
+        '0fd4e8ed-e208-44e5-b463-ece053a915f3',
+        '4a63f4ec-637e-4627-a668-5339fe64b9be'
+    ]) AS settlement_id
+),
+extra_settlement AS MATERIALIZED (
+    SELECT
+        s."id"::text AS settlement_id,
+        s."qbitCardTransactionId"::text AS qbit_card_transaction_id,
+        s."transactionType" AS transaction_type,
+        s."billingAmount"::numeric AS billing_amount,
+        s."rawData"->>'responseCode' AS response_code,
+        RIGHT(s."rawData"->>'txnLocation', 2) AS settle_country
+    FROM public."qbitCardSettlement" s
+    CROSS JOIN params p
+    WHERE s."provider" = 'BlueBancCard'
+      AND s."createTime" >= p.extra_settle_start
+      AND s."createTime" < p.extra_settle_end
+      AND s."transactionType" IN ('authorization.clearing', 'refund.clearing')
+      AND s."rawData"::text NOT LIKE '%\\u0000%'
+),
+extra_amount AS (
+    SELECT
+        c."type" AS card_org,
+        CASE
+            WHEN s.settle_country IN ('US', 'USA') THEN 'Domestic'
+            ELSE 'International'
+        END AS region,
+        -SUM(s.billing_amount) AS net_amount
+    FROM public.quantum_card_transaction_extend t
+    INNER JOIN public."qbitCard" c ON c."id" = t.card_id
+    INNER JOIN extra_settlement s
+        ON t.card_transaction_id::text = s.qbit_card_transaction_id
+    CROSS JOIN params p
+    WHERE t.channel_provision = 'BLUEBANC'
+      AND t.delete_time IS NULL
+      AND t.type IN ('Credit', 'Consumption')
+      AND t.original_completion_time >= p.month_start
+      AND t.original_completion_time < p.month_end
+      AND t.detail NOT LIKE 'AUTO CLASS CAR RENTAL%'
+      AND c."type" IN ('Master', 'VISA')
+      AND s.response_code = 'APPROVE'
+      AND NOT EXISTS (
+          SELECT 1
+          FROM excluded_settlement e
+          WHERE e.settlement_id = s.settlement_id
+      )
+    GROUP BY c."type", region
+),
+result AS (
+    SELECT
+        'Mastercard Domestic Dollar Volume Fee' AS cost_item,
+        COALESCE(SUM(net_amount) FILTER (WHERE card_org = 'Master' AND region = 'Domestic'), 0) * 0.0021 AS extra_cost
+    FROM extra_amount
+    UNION ALL
+    SELECT
+        'Mastercard International Dollar Volume Fee',
+        COALESCE(SUM(net_amount) FILTER (WHERE card_org = 'Master' AND region = 'International'), 0) * 0.0111
+    FROM extra_amount
+    UNION ALL
+    SELECT
+        'Visa Domestic Dollar Volume Fee',
+        COALESCE(SUM(net_amount) FILTER (WHERE card_org = 'VISA' AND region = 'Domestic'), 0) * 0.0016
+    FROM extra_amount
+    UNION ALL
+    SELECT
+        'Visa International Dollar Volume Fee',
+        COALESCE(SUM(net_amount) FILTER (WHERE card_org = 'VISA' AND region = 'International'), 0) * 0.0116
+    FROM extra_amount
+    UNION ALL
+    SELECT
+        'Extra Total Net Amount',
+        COALESCE(SUM(net_amount), 0)
+    FROM extra_amount
+    UNION ALL
+    SELECT
+        'Expected Volume Fee Cost Impact',
+        COALESCE(SUM(net_amount), 0) * 0.004
+    FROM extra_amount
+)
+SELECT cost_item, ROUND(extra_cost, 6) AS extra_cost
+FROM result
+ORDER BY cost_item;
+
+-- 6.4 验证当前 DWM 额外纳入的 detail IS NULL 交易金额。
+WITH params AS (
+    SELECT
+        TIMESTAMP '2026-05-01 00:00:00' AS month_start,
+        TIMESTAMP '2026-06-01 00:00:00' AS month_end,
+        TIMESTAMP '2026-04-01 00:00:00' AS settle_start,
+        TIMESTAMP '2026-06-09 00:00:00' AS settle_end
+),
+settlement AS MATERIALIZED (
+    SELECT
+        s."id"::text AS settlement_id,
+        s."qbitCardTransactionId"::text AS qbit_card_transaction_id,
+        s."transactionType" AS transaction_type,
+        s."billingAmount"::numeric AS billing_amount,
+        s."rawData"->>'responseCode' AS response_code,
+        RIGHT(s."rawData"->>'txnLocation', 2) AS settle_country
+    FROM public."qbitCardSettlement" s
+    CROSS JOIN params p
+    WHERE s."provider" = 'BlueBancCard'
+      AND s."createTime" >= p.settle_start
+      AND s."createTime" < p.settle_end
+      AND s."transactionType" IN ('authorization.clearing', 'refund.clearing')
+      AND s."rawData"::text NOT LIKE '%\\u0000%'
+),
+null_detail_amount AS (
+    SELECT
+        c."type" AS card_org,
+        CASE WHEN s.settle_country IN ('US', 'USA') THEN 'Domestic' ELSE 'International' END AS region,
+        -SUM(s.billing_amount) AS net_amount
+    FROM public.quantum_card_transaction_extend t
+    INNER JOIN public."qbitCard" c ON c."id" = t.card_id
+    INNER JOIN settlement s ON t.card_transaction_id::text = s.qbit_card_transaction_id
+    CROSS JOIN params p
+    WHERE t.channel_provision = 'BLUEBANC'
+      AND t.delete_time IS NULL
+      AND t.type IN ('Credit', 'Consumption')
+      AND t.original_completion_time >= p.month_start
+      AND t.original_completion_time < p.month_end
+      AND t.detail IS NULL
+      AND c."type" IN ('Master', 'VISA')
+      AND s.response_code = 'APPROVE'
+      AND s.settlement_id NOT IN (
+          '234e26db-0e1d-424f-952b-053ab2e42d30',
+          '82ff7fa6-8035-4c7b-8c18-ace860c3dfae',
+          '711e7995-ea26-499f-a1c5-9e4faf15f31f',
+          '5e974989-8792-401f-93b6-b107e0b46e51',
+          '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72',
+          'a97006e9-2609-4e70-a165-2ae6b9f49689',
+          'ad861604-ff4f-4cd1-997e-fe613c67970e',
+          '37959ee2-880f-49ea-8d74-976a69382c90',
+          'bebf7744-ed33-46cd-8ca6-40bc43d928eb',
+          'ece578c8-e8c1-46ec-83b9-116ea049a2e8',
+          '69e04460-0cb4-4d9d-9001-2b786cfc3d7b',
+          '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470',
+          'cff4d9c4-ee01-43fa-9518-62872afbbe91',
+          '160b403b-2a16-4b43-afac-a3b37916c968',
+          '0fd4e8ed-e208-44e5-b463-ece053a915f3',
+          '4a63f4ec-637e-4627-a668-5339fe64b9be'
+      )
+    GROUP BY c."type", region
+)
+SELECT
+    card_org,
+    region,
+    ROUND(net_amount, 4) AS extra_net_amount,
+    ROUND(
+        net_amount * CASE
+            WHEN card_org = 'Master' AND region = 'Domestic' THEN 0.0021
+            WHEN card_org = 'Master' AND region = 'International' THEN 0.0111
+            WHEN card_org = 'VISA' AND region = 'Domestic' THEN 0.0016
+            WHEN card_org = 'VISA' AND region = 'International' THEN 0.0116
+            ELSE 0
+        END,
+        6
+    ) AS extra_volume_fee
+FROM null_detail_amount
+ORDER BY card_org, region;
+
+-- 6.5 原始 q3 与 DWM q3 分组成分对比：定位多出的净金额属于哪种 settlement。
+WITH params AS (
+    SELECT
+        TIMESTAMP '2026-05-01 00:00:00' AS month_start,
+        TIMESTAMP '2026-06-01 00:00:00' AS month_end,
+        TIMESTAMP '2026-04-01 00:00:00' AS settle_start,
+        TIMESTAMP '2026-06-09 00:00:00' AS settle_end
+),
+excluded_settlement AS (
+    SELECT unnest(ARRAY[
+        '234e26db-0e1d-424f-952b-053ab2e42d30',
+        '82ff7fa6-8035-4c7b-8c18-ace860c3dfae',
+        '711e7995-ea26-499f-a1c5-9e4faf15f31f',
+        '5e974989-8792-401f-93b6-b107e0b46e51',
+        '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72',
+        'a97006e9-2609-4e70-a165-2ae6b9f49689',
+        'ad861604-ff4f-4cd1-997e-fe613c67970e',
+        '37959ee2-880f-49ea-8d74-976a69382c90',
+        'bebf7744-ed33-46cd-8ca6-40bc43d928eb',
+        'ece578c8-e8c1-46ec-83b9-116ea049a2e8',
+        '69e04460-0cb4-4d9d-9001-2b786cfc3d7b',
+        '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470',
+        'cff4d9c4-ee01-43fa-9518-62872afbbe91',
+        '160b403b-2a16-4b43-afac-a3b37916c968',
+        '0fd4e8ed-e208-44e5-b463-ece053a915f3',
+        '4a63f4ec-637e-4627-a668-5339fe64b9be'
+    ]) AS settlement_id
+),
+raw_settlement AS MATERIALIZED (
+    SELECT
+        s."id"::text AS settlement_id,
+        s."qbitCardTransactionId"::text AS qbit_card_transaction_id,
+        s."transactionType" AS transaction_type,
+        s."billingAmount"::numeric AS billing_amount,
+        s."rawData"->>'responseCode' AS response_code,
+        RIGHT(s."rawData"->>'txnLocation', 2) AS settle_country
+    FROM public."qbitCardSettlement" s
+    CROSS JOIN params p
+    WHERE s."provider" = 'BlueBancCard'
+      AND s."createTime" >= p.settle_start
+      AND s."createTime" < p.settle_end
+      AND s."transactionType" IN ('authorization.clearing', 'refund.clearing')
+      AND s."rawData"::text NOT LIKE '%\\u0000%'
+),
+raw_q3 AS (
+    SELECT
+        'RAW_Q3' AS source_layer,
+        s.transaction_type,
+        c."type" AS card_org,
+        CASE WHEN s.settle_country IN ('US', 'USA') THEN 'Domestic' ELSE 'International' END AS region,
+        COUNT(*) AS joined_rows,
+        COUNT(DISTINCT CONCAT(t.id::text, ':', s.settlement_id)) AS distinct_pairs,
+        -SUM(s.billing_amount) AS net_amount
+    FROM public.quantum_card_transaction_extend t
+    INNER JOIN public."qbitCard" c ON c."id" = t.card_id
+    INNER JOIN raw_settlement s ON t.card_transaction_id::text = s.qbit_card_transaction_id
+    CROSS JOIN params p
+    WHERE t.channel_provision = 'BLUEBANC'
+      AND t.delete_time IS NULL
+      AND t.type IN ('Credit', 'Consumption')
+      AND t.original_completion_time >= p.month_start
+      AND t.original_completion_time < p.month_end
+      AND t.detail NOT LIKE 'AUTO CLASS CAR RENTAL%'
+      AND c."type" IN ('Master', 'VISA')
+      AND s.response_code = 'APPROVE'
+      AND NOT EXISTS (
+          SELECT 1 FROM excluded_settlement e WHERE e.settlement_id = s.settlement_id
+      )
+    GROUP BY s.transaction_type, c."type", region
+),
+dwm_q3 AS (
+    SELECT
+        'DWM_Q3' AS source_layer,
+        d.transaction_type,
+        d.card_org,
+        CASE WHEN d.settle_country IN ('US', 'USA') THEN 'Domestic' ELSE 'International' END AS region,
+        COUNT(*) AS joined_rows,
+        COUNT(DISTINCT CONCAT(d.txn_id::text, ':', d.settlement_id)) AS distinct_pairs,
+        -SUM(d.billing_amount) AS net_amount
+    FROM dwm.dwm_bb_card_transaction_detail_v2_p d
+    CROSS JOIN params p
+    WHERE d.delete_time IS NULL
+      AND d.business_type IN ('Credit', 'Consumption')
+      AND d.original_completion_time >= p.month_start
+      AND d.original_completion_time < p.month_end
+      AND d.transaction_type IN ('authorization.clearing', 'refund.clearing')
+      AND d.settlement_match_type = 'card_transaction_id'
+      AND d.resp_code = 'APPROVE'
+      AND d.card_org IN ('Master', 'VISA')
+      AND NOT EXISTS (
+          SELECT 1 FROM excluded_settlement e WHERE e.settlement_id = d.settlement_id
+      )
+    GROUP BY d.transaction_type, d.card_org, region
+),
+combined AS (
+    SELECT * FROM raw_q3
+    UNION ALL
+    SELECT * FROM dwm_q3
+)
+SELECT
+    source_layer,
+    transaction_type,
+    card_org,
+    region,
+    joined_rows,
+    distinct_pairs,
+    joined_rows - distinct_pairs AS duplicate_rows,
+    ROUND(net_amount, 4) AS net_amount,
+    ROUND(
+        net_amount * CASE
+            WHEN card_org = 'Master' AND region = 'Domestic' THEN 0.0021
+            WHEN card_org = 'Master' AND region = 'International' THEN 0.0111
+            WHEN card_org = 'VISA' AND region = 'Domestic' THEN 0.0016
+            WHEN card_org = 'VISA' AND region = 'International' THEN 0.0116
+            ELSE 0
+        END,
+        6
+    ) AS volume_fee
+FROM combined
+ORDER BY transaction_type, card_org, region, source_layer;
+
+-- =========================================================
+-- 6.6 只读基于 DWM 复现五月 q3，不写入/清洗 DWS
+-- 输出四个 Dollar Volume Fee、净金额和 Volume Fee Cost。
+-- =========================================================
+WITH params AS (
+    SELECT
+        TIMESTAMP '2026-05-01 00:00:00' AS month_start,
+        TIMESTAMP '2026-06-01 00:00:00' AS month_end
+),
+dwm_q3 AS (
+    SELECT
+        COALESCE(SUM(CASE
+            WHEN d.card_org = 'Master' AND d.settle_country IN ('US', 'USA')
+            THEN -d.billing_amount ELSE 0
+        END), 0) AS master_dom_net_amount,
+        COALESCE(SUM(CASE
+            WHEN d.card_org = 'Master' AND d.settle_country NOT IN ('US', 'USA')
+            THEN -d.billing_amount ELSE 0
+        END), 0) AS master_int_net_amount,
+        COALESCE(SUM(CASE
+            WHEN d.card_org = 'VISA' AND d.settle_country IN ('US', 'USA')
+            THEN -d.billing_amount ELSE 0
+        END), 0) AS visa_dom_net_amount,
+        COALESCE(SUM(CASE
+            WHEN d.card_org = 'VISA' AND d.settle_country NOT IN ('US', 'USA')
+            THEN -d.billing_amount ELSE 0
+        END), 0) AS visa_int_net_amount
+    FROM dwm.dwm_bb_card_transaction_detail_v2_p d
+    CROSS JOIN params p
+    WHERE d.delete_time IS NULL
+      AND d.business_type IN ('Credit', 'Consumption')
+      AND d.original_completion_time >= p.month_start
+      AND d.original_completion_time < p.month_end
+      AND d.detail NOT LIKE 'AUTO CLASS CAR RENTAL%'
+      AND d.card_org IN ('Master', 'VISA')
+      AND d.transaction_type IN ('authorization.clearing', 'refund.clearing')
+      AND d.settlement_match_type = 'card_transaction_id'
+      AND d.resp_code = 'APPROVE'
+      AND d.settlement_id NOT IN (
+          '234e26db-0e1d-424f-952b-053ab2e42d30',
+          '82ff7fa6-8035-4c7b-8c18-ace860c3dfae',
+          '711e7995-ea26-499f-a1c5-9e4faf15f31f',
+          '5e974989-8792-401f-93b6-b107e0b46e51',
+          '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72',
+          'a97006e9-2609-4e70-a165-2ae6b9f49689',
+          'ad861604-ff4f-4cd1-997e-fe613c67970e',
+          '37959ee2-880f-49ea-8d74-976a69382c90',
+          'bebf7744-ed33-46cd-8ca6-40bc43d928eb',
+          'ece578c8-e8c1-46ec-83b9-116ea049a2e8',
+          '69e04460-0cb4-4d9d-9001-2b786cfc3d7b',
+          '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470',
+          'cff4d9c4-ee01-43fa-9518-62872afbbe91',
+          '160b403b-2a16-4b43-afac-a3b37916c968',
+          '0fd4e8ed-e208-44e5-b463-ece053a915f3',
+          '4a63f4ec-637e-4627-a668-5339fe64b9be'
+      )
+),
+amount AS (
+    SELECT
+        master_dom_net_amount,
+        master_int_net_amount,
+        visa_dom_net_amount,
+        visa_int_net_amount,
+        master_dom_net_amount
+          + master_int_net_amount
+          + visa_dom_net_amount
+          + visa_int_net_amount AS total_net_amount
+    FROM dwm_q3
+),
+result AS (
+    SELECT 'Mastercard Domestic Dollar Volume Fee' AS cost_item,
+           master_dom_net_amount * 0.0021 AS cost_amount FROM amount
+    UNION ALL
+    SELECT 'Mastercard International Dollar Volume Fee',
+           master_int_net_amount * 0.0111 FROM amount
+    UNION ALL
+    SELECT 'Visa Domestic Dollar Volume Fee',
+           visa_dom_net_amount * 0.0016 FROM amount
+    UNION ALL
+    SELECT 'Visa International Dollar Volume Fee',
+           visa_int_net_amount * 0.0116 FROM amount
+    UNION ALL
+    SELECT 'Total Net Amount', total_net_amount FROM amount
+    UNION ALL
+    SELECT 'Volume Fee Cost',
+        CASE
+            WHEN total_net_amount <= 5000000 THEN total_net_amount * 0.0055
+            WHEN total_net_amount <= 10000000 THEN
+                5000000 * 0.0055 + (total_net_amount - 5000000) * 0.0045
+            ELSE
+                5000000 * 0.0055
+                + 5000000 * 0.0045
+                + (total_net_amount - 10000000) * 0.004
+        END
+    FROM amount
+)
+SELECT
+    cost_item,
+    ROUND(cost_amount, 6) AS cost_amount
+FROM result
+ORDER BY cost_item;
+
+-- =========================================================
+-- 6. 五月原始 SQL / ODS / DWM 三层 settlement 对比
+-- 唯一基准：bi_month/bb-202605.sql。
+-- 原始 settlement 扩窗按 createTime，而 Refund Count 再按 postDate 限定五月。
+-- =========================================================
+WITH params AS (
+    SELECT
+        TIMESTAMP '2026-05-01 00:00:00' AS month_start,
+        TIMESTAMP '2026-06-01 00:00:00' AS month_end,
+        TIMESTAMP '2026-05-01 08:00:00' AS txn_start,
+        TIMESTAMP '2026-06-01 08:00:00' AS txn_end,
+        TIMESTAMP '2026-04-01 00:00:00' AS settle_start,
+        TIMESTAMP '2026-06-09 00:00:00' AS settle_end
+),
+raw_txn AS MATERIALIZED (
+    SELECT
+        t.id,
+        t.source_id,
+        t.card_transaction_id::text AS card_transaction_id,
+        t.country,
+        t.type,
+        t.transaction_time,
+        t.original_completion_time,
+        t.business_code_list,
+        c."type" AS card_org
+    FROM public.quantum_card_transaction_extend t
+    INNER JOIN public."qbitCard" c ON c."id" = t.card_id
+    CROSS JOIN params p
+    WHERE t.channel_provision = 'BLUEBANC'
+      AND t.delete_time IS NULL
+      AND t.type IN ('Consumption', 'Credit')
+      AND c."type" IN ('Master', 'VISA')
+      AND t.detail NOT LIKE 'AUTO CLASS CAR RENTAL%'
+      AND (
+          (t.transaction_time >= p.txn_start AND t.transaction_time < p.txn_end)
+          OR
+          (t.original_completion_time >= p.month_start AND t.original_completion_time < p.month_end)
+      )
+),
+raw_settle AS MATERIALIZED (
+    SELECT
+        s."id"::text AS settlement_id,
+        s."transactionId"::text AS transaction_id,
+        s."qbitCardTransactionId"::text AS qbit_card_transaction_id,
+        s."transactionType" AS transaction_type,
+        s."billingAmount"::numeric AS billing_amount,
+        s."createTime" AS create_time,
+        s."rawData"->>'responseCode' AS response_code,
+        s."rawData"->>'reasonCode' AS reason_code,
+        RIGHT(s."rawData"->>'txnLocation', 2) AS settle_country,
+        (s."rawData"->>'postDate')::timestamp AS post_date
+    FROM public."qbitCardSettlement" s
+    CROSS JOIN params p
+    WHERE s."provider" = 'BlueBancCard'
+      AND s."createTime" >= p.settle_start
+      AND s."createTime" < p.settle_end
+      AND s."rawData"::text NOT LIKE '%\\u0000%'
+),
+ods_settle_text AS MATERIALIZED (
+    SELECT s.*
+    FROM ods.ods_qbit_card_settlement s
+    CROSS JOIN params p
+    WHERE s.delete_time IS NULL
+      AND s.provider = 'BlueBancCard'
+      AND s.create_time >= p.settle_start
+      AND s.create_time < p.settle_end
+      AND s.raw_data NOT LIKE '%\\u0000%'
+),
+ods_settle AS MATERIALIZED (
+    SELECT
+        s.id::text AS settlement_id,
+        s.transaction_id::text AS transaction_id,
+        s.qbit_card_transaction_id::text AS qbit_card_transaction_id,
+        s.transaction_type,
+        s.billing_amount::numeric AS billing_amount,
+        s.create_time,
+        s.raw_data::json->>'responseCode' AS response_code,
+        s.raw_data::json->>'reasonCode' AS reason_code,
+        RIGHT(s.raw_data::json->>'txnLocation', 2) AS settle_country,
+        (s.raw_data::json->>'postDate')::timestamp AS post_date
+    FROM ods_settle_text s
+),
+layer_summary AS (
+    SELECT
+        'RAW_SETTLEMENT' AS source_layer,
+        transaction_type,
+        COUNT(*) AS row_count,
+        COUNT(DISTINCT settlement_id) AS settlement_count,
+        COALESCE(SUM(billing_amount), 0) AS billing_amount
+    FROM raw_settle
+    GROUP BY transaction_type
+
+    UNION ALL
+
+    SELECT
+        'ODS_SETTLEMENT',
+        transaction_type,
+        COUNT(*),
+        COUNT(DISTINCT settlement_id),
+        COALESCE(SUM(billing_amount), 0)
+    FROM ods_settle
+    GROUP BY transaction_type
+
+    UNION ALL
+
+    SELECT
+        'DWM',
+        transaction_type,
+        COUNT(*),
+        COUNT(DISTINCT settlement_id),
+        COALESCE(SUM(billing_amount), 0)
+    FROM dwm.dwm_bb_card_transaction_detail_v2_p d
+    CROSS JOIN params p
+    WHERE d.delete_time IS NULL
+      AND (
+          (d.transaction_time >= p.txn_start AND d.transaction_time < p.txn_end)
+          OR
+          (d.original_completion_time >= p.month_start AND d.original_completion_time < p.month_end)
+          OR
+          (d.settlement_post_date >= p.month_start AND d.settlement_post_date < p.month_end)
+      )
+      AND d.settlement_id IS NOT NULL
+    GROUP BY transaction_type
+)
+SELECT *
+FROM layer_summary
+WHERE transaction_type IN (
+    'authorization.clearing',
+    'authorization.reversal',
+    'refund.clearing'
+)
+ORDER BY transaction_type, source_layer;
+
+-- 6.2 原表存在但 ODS 不存在，以及 ODS 存在但 DWM 不存在的 settlement 数量。
+WITH params AS (
+    SELECT
+        TIMESTAMP '2026-04-01 00:00:00' AS settle_start,
+        TIMESTAMP '2026-06-09 00:00:00' AS settle_end,
+        TIMESTAMP '2026-05-01 00:00:00' AS month_start,
+        TIMESTAMP '2026-06-01 00:00:00' AS month_end,
+        TIMESTAMP '2026-05-01 08:00:00' AS txn_start,
+        TIMESTAMP '2026-06-01 08:00:00' AS txn_end
+),
+raw_ids AS MATERIALIZED (
+    SELECT s."id"::text AS settlement_id
+    FROM public."qbitCardSettlement" s
+    CROSS JOIN params p
+    WHERE s."provider" = 'BlueBancCard'
+      AND s."createTime" >= p.settle_start
+      AND s."createTime" < p.settle_end
+      AND s."transactionType" IN (
+          'authorization.clearing',
+          'authorization.reversal',
+          'refund.clearing'
+      )
+      AND s."rawData"::text NOT LIKE '%\\u0000%'
+),
+ods_ids AS MATERIALIZED (
+    SELECT s.id::text AS settlement_id
+    FROM ods.ods_qbit_card_settlement s
+    CROSS JOIN params p
+    WHERE s.delete_time IS NULL
+      AND s.provider = 'BlueBancCard'
+      AND s.create_time >= p.settle_start
+      AND s.create_time < p.settle_end
+      AND s.transaction_type IN (
+          'authorization.clearing',
+          'authorization.reversal',
+          'refund.clearing'
+      )
+),
+dwm_ids AS MATERIALIZED (
+    SELECT DISTINCT d.settlement_id
+    FROM dwm.dwm_bb_card_transaction_detail_v2_p d
+    CROSS JOIN params p
+    WHERE d.delete_time IS NULL
+      AND d.settlement_id IS NOT NULL
+      AND d.transaction_type IN (
+          'authorization.clearing',
+          'authorization.reversal',
+          'refund.clearing'
+      )
+      AND (
+          (d.transaction_time >= p.txn_start AND d.transaction_time < p.txn_end)
+          OR
+          (d.original_completion_time >= p.month_start AND d.original_completion_time < p.month_end)
+          OR
+          (d.settlement_post_date >= p.month_start AND d.settlement_post_date < p.month_end)
+      )
+)
+SELECT
+    (SELECT COUNT(*) FROM raw_ids r LEFT JOIN ods_ids o USING (settlement_id) WHERE o.settlement_id IS NULL)
+        AS raw_missing_in_ods,
+    (SELECT COUNT(*) FROM ods_ids o LEFT JOIN raw_ids r USING (settlement_id) WHERE r.settlement_id IS NULL)
+        AS ods_missing_in_raw,
+    (SELECT COUNT(*) FROM ods_ids o LEFT JOIN dwm_ids d USING (settlement_id) WHERE d.settlement_id IS NULL)
+        AS ods_missing_in_dwm;
+
+-- =========================================================
 -- 5. 只读模拟 DWM Refund 链路，不写入任何表
 -- 用 WITH 复现 DWM：原始交易 -> settlement 直接关联 -> DWM 字段 -> 三项计数。
 -- =========================================================

@@ -80,7 +80,8 @@ CREATE TEMPORARY TABLE flink_source_qbit_card_settlement (
     'schema-name' = 'public',
     'table-name' = 'qbitCardSettlement',
 
-    'slot.name' = 'flink_slot_qbit_card_settlement_ods_v1',
+    -- v2 重新执行 initial snapshot，补齐旧作业被 createTime 条件过滤的历史 settlement。
+    'slot.name' = 'flink_slot_qbit_card_settlement_ods_v2',
     'decoding.plugin.name' = 'pgoutput',
     'debezium.publication.name' = 'flink_cdc_publication',
     'debezium.connector.pgout.publication.autocreate' = 'false',
@@ -199,6 +200,6 @@ SELECT
     wallet,
     mcc
 FROM flink_source_qbit_card_settlement
-WHERE createTime > '2026-06-1'
+WHERE createTime >= TIMESTAMP '2024-01-01 00:00:00'
 ;
 END;

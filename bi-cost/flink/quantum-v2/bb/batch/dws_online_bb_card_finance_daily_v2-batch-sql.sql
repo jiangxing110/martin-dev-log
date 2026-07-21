@@ -97,7 +97,7 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_transaction_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT t.id, t.txn_id, t.settlement_id, t.settlement_match_type, t.source_id, t.card_transaction_id, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.transaction_time, t.original_completion_time, t.business_type, t.business_code_list, t.remarks, t.detail, t.card_org, t.tx_country, t.settle_country, t.is_dom, t.resp_code, t.reason_code, t.transaction_type, t.is_valid_settle, t.is_clearing, t.is_reversal, t.is_refund, t.billing_amount, t.settlement_post_date, t.settlement_txn_date, t.sale_id, t.am_id, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_transaction_detail_v2_p t WHERE t.delete_time IS NULL AND ((t.transaction_time >= CAST(''${start_date}'' AS TIMESTAMP(6)) AND t.transaction_time < CAST(''${end_date}'' AS TIMESTAMP(6))) OR (t.original_completion_time >= CAST(''${start_date}'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''${end_date}'' AS TIMESTAMP(6))) OR (t.settlement_post_date >= CAST(''${start_date}'' AS TIMESTAMP(6)) AND t.settlement_post_date < CAST(''${end_date}'' AS TIMESTAMP(6)))) ) AS dwm_bb_card_transaction_detail_v2_f',
+    'table-name' = '(SELECT t.id, t.txn_id, t.settlement_id, t.settlement_match_type, t.source_id, t.card_transaction_id, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.transaction_time, t.original_completion_time, t.business_type, t.business_code_list, t.remarks, t.detail, t.card_org, t.tx_country, t.settle_country, t.is_dom, t.resp_code, t.reason_code, t.transaction_type, t.is_valid_settle, t.is_clearing, t.is_reversal, t.is_refund, t.billing_amount, t.settlement_post_date, t.settlement_txn_date, t.sale_id, t.am_id, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_transaction_detail_v2_p t WHERE t.delete_time IS NULL AND ((t.transaction_time >= CAST(''${start_date}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR AND t.transaction_time < CAST(''${end_date}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR) OR (t.original_completion_time >= CAST(''${start_date}'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''${end_date}'' AS TIMESTAMP(6))) OR (t.settlement_post_date >= CAST(''${start_date}'' AS TIMESTAMP(6)) AND t.settlement_post_date < CAST(''${end_date}'' AS TIMESTAMP(6)))) ) AS dwm_bb_card_transaction_detail_v2_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -141,7 +141,7 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT t.id, t.auth_txn_guid, t.card_proxy, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.auth_time, t.program_name, t.merchant_country, t.request_code, t.request_description, t.response_code, t.reason_code, t.txn_amount, t.settle_amount, t.txn_currency, t.merchant_name, t.mcc, t.card_org, t.is_dom, t.is_decline, t.is_account_verification, t.is_excluded_request, t.sale_id, t.am_id, t.source_table, t.version, t.create_time, t.update_time, t.delete_time FROM generate_series(date_trunc(''day'', CAST(''${start_date}'' AS TIMESTAMP(6))), date_trunc(''day'', CAST(''${end_date}'' AS TIMESTAMP(6))) - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(day_start) JOIN dwm.dwm_bb_card_auth_detail_v2_p t ON t.delete_time IS NULL AND t.auth_time >= gs.day_start AND t.auth_time < LEAST(gs.day_start + INTERVAL ''1 day'', CAST(''${end_date}'' AS TIMESTAMP(6)))) AS dwm_bb_card_auth_detail_v2_f',
+    'table-name' = '(SELECT t.id, t.auth_txn_guid, t.card_proxy, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.auth_time, t.program_name, t.merchant_country, t.request_code, t.request_description, t.response_code, t.reason_code, t.txn_amount, t.settle_amount, t.txn_currency, t.merchant_name, t.mcc, t.card_org, t.is_dom, t.is_decline, t.is_account_verification, t.is_excluded_request, t.sale_id, t.am_id, t.source_table, t.version, t.create_time, t.update_time, t.delete_time FROM generate_series(date_trunc(''day'', CAST(''${start_date}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR), date_trunc(''day'', CAST(''${end_date}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR) - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(day_start) JOIN dwm.dwm_bb_card_auth_detail_v2_p t ON t.delete_time IS NULL AND t.auth_time >= gs.day_start AND t.auth_time < LEAST(gs.day_start + INTERVAL ''1 day'', CAST(''${end_date}'' AS TIMESTAMP(6)))) AS dwm_bb_card_auth_detail_v2_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -197,8 +197,8 @@ SELECT
     billing_amount
 FROM source_dwm_bb_card_transaction_detail_v2_p
 WHERE delete_time IS NULL
-  AND transaction_time >= CAST('${start_date}' AS TIMESTAMP(6))
-  AND transaction_time < CAST('${end_date}' AS TIMESTAMP(6));
+  AND transaction_time >= CAST('${start_date}' AS TIMESTAMP(6)) + INTERVAL '8' HOUR
+  AND transaction_time < CAST('${end_date}' AS TIMESTAMP(6)) + INTERVAL '8' HOUR;
 
 CREATE TEMPORARY VIEW v_bb_completion_rows AS
 SELECT
@@ -313,8 +313,7 @@ SELECT
     system_type,
     sale_id,
     am_id,
-    -- 部分 DWM 交易没有 source_id；回退到 card_transaction_id，不能因此丢弃计数。
-    COALESCE(source_id, card_transaction_id) AS metric_key,
+    source_id AS metric_key,
     MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS m_dom_auth_count,
     MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS m_int_auth_count,
     MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS v_dom_auth_count,
@@ -330,9 +329,8 @@ SELECT
     MAX(CASE WHEN business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'VISA' AND tx_country IN ('US', 'USA') AND is_excluded_settlement = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_v_dom_count,
     MAX(CASE WHEN business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND is_excluded_settlement = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_v_int_count
 FROM v_bb_txn_time_rows
-WHERE COALESCE(source_id, card_transaction_id) IS NOT NULL
-GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id,
-         COALESCE(source_id, card_transaction_id);
+WHERE source_id IS NOT NULL
+GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id, source_id;
 
 CREATE TEMPORARY VIEW v_bb_txn_count_metrics AS
 SELECT
@@ -473,7 +471,7 @@ SELECT
     account_type,
     account_category,
     system_type,
-    -- q3 同时汇总 authorization.clearing 和 refund.clearing，保持与月度原始 SQL 一致。
+    -- 对齐 bb-202605.sql q3：authorization.clearing 与 refund.clearing 共同形成净金额。
     CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_dom_clearing_vol,
     CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_int_clearing_vol,
     CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
@@ -523,7 +521,7 @@ SELECT
     sale_id,
     am_id,
     1 AS version,
-    'bb_v2_batch' AS remarks,
+    'bb_v2_batch_q3_refund_net_20260721' AS remarks,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
@@ -748,7 +746,7 @@ SELECT
     sale_id,
     am_id,
     1 AS version,
-    'bb_v2_batch' AS remarks,
+    'bb_v2_batch_q3_refund_net_20260721' AS remarks,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
