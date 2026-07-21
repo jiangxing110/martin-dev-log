@@ -158,6 +158,7 @@ SELECT
     sale_id,
     am_id,
     source_id,
+    card_transaction_id,
     settlement_id,
     settlement_match_type,
     card_id,
@@ -209,6 +210,7 @@ SELECT
     sale_id,
     am_id,
     source_id,
+    card_transaction_id,
     settlement_id,
     settlement_match_type,
     card_id,
@@ -260,6 +262,7 @@ SELECT
     sale_id,
     am_id,
     source_id,
+    card_transaction_id,
     settlement_id,
     settlement_match_type,
     card_id,
@@ -310,7 +313,8 @@ SELECT
     system_type,
     sale_id,
     am_id,
-    source_id AS metric_key,
+    -- 部分 DWM 交易没有 source_id；回退到 card_transaction_id，不能因此丢弃计数。
+    COALESCE(source_id, card_transaction_id) AS metric_key,
     MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS m_dom_auth_count,
     MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS m_int_auth_count,
     MAX(CASE WHEN business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND transaction_type IN ('authorization.clearing', 'authorization.reversal') AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS v_dom_auth_count,
@@ -326,8 +330,9 @@ SELECT
     MAX(CASE WHEN business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'VISA' AND tx_country IN ('US', 'USA') AND is_excluded_settlement = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_v_dom_count,
     MAX(CASE WHEN business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND is_excluded_settlement = FALSE AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS av_v_int_count
 FROM v_bb_txn_time_rows
-WHERE source_id IS NOT NULL
-GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id, source_id;
+WHERE COALESCE(source_id, card_transaction_id) IS NOT NULL
+GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id,
+         COALESCE(source_id, card_transaction_id);
 
 CREATE TEMPORARY VIEW v_bb_txn_count_metrics AS
 SELECT
@@ -468,12 +473,11 @@ SELECT
     account_type,
     account_category,
     system_type,
-    -- 金额口径对齐 BB客户成本-202606.sql 的 q3：只统计 authorization.clearing。
-    -- refund.clearing 只参与 Refund 笔数，不进入 Dollar Volume/total_net_amount。
-    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country IN ('US', 'USA') AND transaction_type = 'authorization.clearing' AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_dom_clearing_vol,
-    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country NOT IN ('US', 'USA') AND transaction_type = 'authorization.clearing' AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_int_clearing_vol,
-    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country IN ('US', 'USA') AND transaction_type = 'authorization.clearing' AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
-    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country NOT IN ('US', 'USA') AND transaction_type = 'authorization.clearing' AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_int_clearing_vol,
+    -- q3 同时汇总 authorization.clearing 和 refund.clearing，保持与月度原始 SQL 一致。
+    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_dom_clearing_vol,
+    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_int_clearing_vol,
+    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
+    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_int_clearing_vol,
     CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND transaction_type = 'authorization.clearing' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
     CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND transaction_type = 'authorization.clearing' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
     sale_id,

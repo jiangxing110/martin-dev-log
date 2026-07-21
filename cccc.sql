@@ -29,3 +29,13 @@
 | 字段明细合计                                 | 458,686.464652 | 447,014.3719 | -11,672.092752 |
 
 
+| 重点字段                                       |       Excel 合计 |        当前版本 |        当前 - Excel |
+| ------------------------------------------ | -------------: | ----------: | ----------------: |
+| Mastercard International Dollar Volume Fee | 102,317.917440 | 97,677.1534 | -4,640.764040 |
+| Mastercard International Count Fee         |  82,461.415500 | 78,373.2045 | -4,088.211000 |
+| Volume Fee Cost                            |  76,534.360080 | 74,487.5348 | -2,046.825280 |
+| VISA International Count Fee               |  17,488.251000 | 17,153.8740 |   -334.377000 |
+| Mastercard Domestic Count Fee              |  10,143.976000 |  9,875.5090 |   -268.467000 |
+| Mastercard Domestic Dollar Volume Fee      |  11,170.805268 | 10,925.0142 |   -245.791068 |
+| AC Mastercard Domestic Count Fee           |  11,691.449000 | 11,914.2450 |   +222.796000 |
+| Mastercard International Refund Fee        |   1,724.335500 |  1,565.4195 |   -158.916000 |
