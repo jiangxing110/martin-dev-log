@@ -1,6 +1,0 @@
-历史的 bb成本计算:
-/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/total_cost/query_bb_card_cost_detail.sql
-但是我们已经改了BB V2的版本所以我们也要写一个query_bb_card_cost_detail的v2版本
-/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/quantum-v2/bb 
-具体乘的值要参考/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/bi_month/BB客户成本-202606.sql
-
