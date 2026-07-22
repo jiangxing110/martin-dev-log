@@ -1,3 +1,19 @@
+  if (availableCount <= 0) {
+            response.setPhysicalCardAvailable(false);
+            response.setPhysicalCardReason(PhysicalCardConstants.REASON_TOTAL_LIMIT_REACHED);
+        } else if (physicalCount >= PhysicalCardConstants.PHYSICAL_CARD_LIMIT) {
+            response.setPhysicalCardAvailable(false);
+            response.setPhysicalCardReason(PhysicalCardConstants.REASON_PHYSICAL_LIMIT_REACHED);
+        } else if (physicalCardBin == null) {
+            response.setPhysicalCardAvailable(false);
+            response.setPhysicalCardReason(PhysicalCardConstants.REASON_BIN_NOT_ALLOWED);
+        } else {
+            response.setPhysicalCardAvailable(physicalCardBin.isSupportPhysicalCard());
+        }
+这个isSupportPhysicalCard直接从physicalCardBin.isSupportPhysicalCard()不要availableCount这个判断
+还有assets 里要判断是否支持开实体卡要 先判断 card_bin里面是否支持。如果支持在判断 account_card_bin_permission 里是否支持is_creatable 
+在判断 is_physical_card
+
 
   ---
   调用链全景图
