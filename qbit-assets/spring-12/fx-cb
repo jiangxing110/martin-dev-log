@@ -1,0 +1,23 @@
+当前逻辑：
+fx fee、cb fee这两个费率目前被拆解成两部分，一部分passthrough，一部分markup。
+当前计算逻辑是分别计算passthrough和markup部分的fee且分别进位扣费，导致会多收客户钱。
+调整后逻辑：
+先汇总passthrough 和 markup 的fee value，然后拿total fee value去计算手续费，并扣费。
+我们要关注月结部分
+入口
+private List<ApiClientFeeDTO> consumptionExtendFee(QbitCardTransaction data) {
+    BigDecimal markUpFee = this.getMarkUpFee(data, qbitCard);
+    BigDecimal crossBorderFee = this.getCrossBorderFee(data, qbitCard);
+    if (crossBorderFee.compareTo(markUpFee) >= 0) {
+        apiClientFees.add(new ApiClientFeeDTO(crossBorderFee, "USD", CROSS_BORDER_FEE));
+    } else {
+        apiClientFees.add(new ApiClientFeeDTO(markUpFee, "USD", FX_FEE));
+    }
+关联项目/Users/martinjiang/WebstormProjects/qbitpay_service
+account-fee.controller.ts    
+主要看看
+ private async getCrossBorderFee(body: ApiClientMonthFeeInput) {
+ private async getMarkUpFee(body: ApiClientMonthFeeInput) {
+    我们主要看 BB QI PC BZ 三个卡段
+修改逻辑参考 
+https://github.com/PalmDrive/qbitpay_service/pull/9957/changes   

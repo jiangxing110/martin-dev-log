@@ -1,0 +1,64 @@
+
+  ---
+  调用链全景图
+
+  Controller: OpenApiCardV3Controller.getAvailableCardBinList()
+    │
+    └─ Service: OpenApiCardServiceImpl.getAvailableCardBinList()
+         │
+         ├─ ① getCardBinsWithPermission(accountId)
+         │    ├─ 查 account_relation 表验证账户关系存在
+         │    └─ 调用 getCardBinList(accountId)
+         │         ├─ 构建 MyBatis-Plus Wrapper，查询条件：
+         │         │   · status = Available（可用状态）
+         │         │   · delete_time IS NULL（未删除）
+         │         │   · orderBy create_time DESC
+         │         ├─ applyCardBinPermissionFilter()  精细化权限过滤
+         │         │    │
+         │         │    ├─ getAccountCardBinPermissions(accountId, OPENAPI)  递归查找权限
+         │         │    │    ├─ ① 先查 account_card_bin_permission 表，看当前账户自身有无配置
+         │         │    │    ├─ ② 有配置 → 直接返回
+         │         │    │    ├─ ③ OPENAPI scope 走 getApiAccountCardBinPermissions()
+         │         │    │    │    ├─ 查 api_account_relation 判断层级（rootId / parentAccountId）
+         │         │    │    │    ├─ 查根账户的 account_extend.access_type 判断：
+         │         │    │    │    │   DISTRIBUTOR（三层结构）：
+         │         │    │    │    │     · 第二层 → 不继承，返回 null
+         │         │    │    │    │     · 第三层 → 继承父账户（第二层）权限
+         │         │    │    │    │   其他 → 向上递归继承
+         │         │    │    │    └─ 递归深度上限 3 层，防止死循环
+         │         │    │    └─ ④ 其他 scope → 继承直接父账户权限
+         │         │    │
+         │         │    └─ applyCardBinPermissionFilter(wrapper, permissionList)  组装 SQL 条件
+         │         │         ├─ 无精细化配置 → 不叠加任何限制（返回全部可用卡BIN）
+         │         │         └─ 有精细化配置 → 叠加 SQL AND 条件：
+         │         │              · Channel + binIds 都在白名单中的才返回
+         │         │              · 按 QbitCardProviderEnum -> CardChannelProvisionEnum 映射分组
+         │         │              · 某个 Channel 下 binId=null 表示该 Channel 全选
+         │         │              · 某个 Channel 下 set 为空 → 该 Channel 无权限（过滤掉）
+         │         │
+         │         └─ cardBinMapper.selectList(wrapper)  执行 SQL 查询 card_bin 表
+         │
+         ├─ ② convertToCardInfoDTO()  Stream 转换
+         │    ├─ bin、supportPhysicalCard 直接映射
+         │    ├─ type: CardBinTypeEnum → APICardBinTypeEnum (BudgetCard / PrepaidCard)
+         │    ├─ currencies ← settlementCurrency
+         │    └─ network ← CardBinNetworkEnum
+         │
+         └─ ③ paginateResult(list, page, limit)  内存分页
+              ├─ 计算 total = list.size()
+              └─ 根据 offset / limit 截取子列表
+
+  ---
+  关键数据表
+  
+  ┌──────────────┬─────────────────────────────┐
+  │     步骤     │             表              │
+  ├──────────────┼─────────────────────────────┤
+  │ 账户关系校验 │ account_relation            │
+  ├──────────────┼─────────────────────────────┤
+  │ 卡 BIN 查询  │ card_bin                    │
+  ├──────────────┼─────────────────────────────┤
+  │ 精细化权限   │ account_card_bin_permission │
+  ├──────────────┼─────────────────────────────┤
+  │ 账户层级判断 │ account_extend              │
+  └──────────────┴─────────────────────────────┘

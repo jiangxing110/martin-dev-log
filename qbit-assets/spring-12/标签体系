@@ -1,0 +1,19 @@
+DO $$
+DECLARE
+    v_parent_id BIGINT;
+    v_operator_user_id VARCHAR := 'ff5a149a-fd64-4e3d-9e76-d6603607c071';
+BEGIN
+    v_parent_id := generate_snowflake_id();
+
+    INSERT INTO "public"."system_tag"
+    ("id", "create_time", "update_time", "delete_time", "version", "remarks", "tag_type", "tag_grade", "status", "name", "parent_id", "operation_user_id", "category_type")
+    VALUES
+    (v_parent_id, NOW(), NOW(), NULL, 1, '', 'business', 'first', 'Active', '客户价值分层', NULL, v_operator_user_id, 'customer_type');
+
+    INSERT INTO "public"."system_tag"
+    ("id", "create_time", "update_time", "delete_time", "version", "remarks", "tag_type", "tag_grade", "status", "name", "parent_id", "operation_user_id", "category_type")
+    VALUES
+    (generate_snowflake_id(), NOW(), NOW(), NULL, 1, '重点维护客户，通常具备较高交易价值或战略价值', 'business', 'second', 'Active', 'VIP客户', v_parent_id, v_operator_user_id, 'customer_type'),
+    (generate_snowflake_id(), NOW(), NOW(), NULL, 1, '当前规模有限，但将来发展很有潜力的客户', 'business', 'second', 'Active', '高潜客户', v_parent_id, v_operator_user_id, 'customer_type'),
+    (generate_snowflake_id(), NOW(), NOW(), NULL, 1, '常规客户，无需特殊运营', 'business', 'second', 'Active', '普通客户', v_parent_id, v_operator_user_id, 'customer_type');
+END $$;
