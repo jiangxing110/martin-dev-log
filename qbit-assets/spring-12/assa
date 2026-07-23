@@ -1,17 +1,21 @@
-CREATE TABLE "dws"."dws_qi_card_finance_daily_p" (
-  "id" int8 NOT NULL,
-  "report_date" date NOT NULL,
-  "version" int4 DEFAULT 1,
-  "remarks" varchar(255) COLLATE "pg_catalog"."default",
-  "create_time" timestamp(6) NOT NULL DEFAULT now(),
-  "update_time" timestamp(6) NOT NULL DEFAULT now(),
-  "delete_time" timestamp(6),
-  "sale_id" varchar(64) COLLATE "pg_catalog"."default",
-  CONSTRAINT "dws_qi_daily_pkey" PRIMARY KEY ("id", "report_date")
-)
-PARTITION BY RANGE (
-  "report_date" "pg_catalog"."date_ops"
-);
 
-CREATE TABLE "dws"."dws_qi_daily_2026" PARTITION OF "dws"."dws_qi_card_finance_daily_p"
-FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+主表
+1.三个时间问题我觉得保留settlement_month这个就可以了
+report_date
+settlement_month
+snapshot_generated_at
+2.状态拿来干嘛,role_type这个拿来没有用的记录一个salaId 这个记录的是am sale的数据不需要区分am |sale
+snapshot_status
+role_type
+明细表
+1.时间问题我觉得保留settlement_month这个就可以了
+report_date
+settlement_month
+2. customer_id 命名规范 account_id
+3.这两个枚举有哪些
+source_type
+product_type
+4.这个有哪些
+rule_code 
+
+还有一个问题是 api月账单要20号生成 就是右边的那个 
