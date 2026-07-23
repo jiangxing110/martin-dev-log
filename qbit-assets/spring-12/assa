@@ -1,19 +1,17 @@
-当前时间6月10号
-6月12号发5月薪水
-我的钱包部分: 
-1.发薪状态
-2.回款来源月份饼图
-3.已回款毛利明细
-4.实际发佣金合计
-5.上个月发放（说明）这个只是一个说明
-我的绩效部分:
-1.绩效活动视图
-2.下月发薪
-3.未来发薪
+CREATE TABLE "dws"."dws_qi_card_finance_daily_p" (
+  "id" int8 NOT NULL,
+  "report_date" date NOT NULL,
+  "version" int4 DEFAULT 1,
+  "remarks" varchar(255) COLLATE "pg_catalog"."default",
+  "create_time" timestamp(6) NOT NULL DEFAULT now(),
+  "update_time" timestamp(6) NOT NULL DEFAULT now(),
+  "delete_time" timestamp(6),
+  "sale_id" varchar(64) COLLATE "pg_catalog"."default",
+  CONSTRAINT "dws_qi_daily_pkey" PRIMARY KEY ("id", "report_date")
+)
+PARTITION BY RANGE (
+  "report_date" "pg_catalog"."date_ops"
+);
 
-
-给我列出这两部分有哪些内容 数据来源
-
-我理解未来发薪是什么意思了
-因为4月的 api 月账单 是5月20号给客户发的
-所以6月12 可以收 5
+CREATE TABLE "dws"."dws_qi_daily_2026" PARTITION OF "dws"."dws_qi_card_finance_daily_p"
+FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
