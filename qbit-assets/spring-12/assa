@@ -1,23 +1,13 @@
+/Users/martinjiang/IdeaProjects/qbit-assets/qbit-core/src/main/java/com/qbit/admin/analysis/controller/statistics/ReportStaticsController.java
+我想参考QueryFilterDTO 支持
+  /**
+     * 销售id
+     */
+    private String saleId;
 
-主表
-1.三个时间问题我觉得保留settlement_month这个就可以了
-report_date
-settlement_month
-snapshot_generated_at
-2.状态拿来干嘛,role_type这个拿来没有用的记录一个salaId 这个记录的是am sale的数据不需要区分am |sale
-snapshot_status
-role_type
-明细表
-1.时间问题我觉得保留settlement_month这个就可以了
-report_date
-settlement_month
-2. customer_id 命名规范 account_id
-3.这两个枚举有哪些
-source_type
-product_type
+    /**
+     * 部门ID
+     */
+    private String departmentId;
 
-我想要预留接口虽然页面没有
-1.一个导出excel的记录我的钱包里面涉及的客户返佣金
-  异步,支持进度条
-2.已汇款明细想要一个可以查看 明细的可以看到各业务明细的 
-3.我的绩效活动视图也要看到各个产品线的明细
+    
