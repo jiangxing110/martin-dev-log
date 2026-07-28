@@ -11,4 +11,27 @@
 1.正常查询（当前月 和 8号之前查上个月的数据 按实时的来）
 2.八号以后查历史的 按保存下来规定的查询 
   得有一份明细 和汇总的两种维度的数据
-  v
+  
+
+  "product" 
+   
+  "provider" 
+  
+  "income"
+  
+  "cash_back"
+  
+  "speclai_cost"
+  
+
+"product" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
+  "provider" varchar(255) COLLATE "pg_catalog"."default",
+
+  "item" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
+
+  "sale_id" varchar(64) COLLATE "pg_catalog"."default",
+  "operation_manager_id" varchar(64) COLLATE "pg_catalog"."default",
+  "am_id" varchar(64) COLLATE "pg_catalog"."default",
+
+
+  
