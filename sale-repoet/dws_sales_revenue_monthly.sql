@@ -5,10 +5,10 @@ CREATE TABLE "dws"."dws_sales_revenue_monthly" (
   "product" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
   "metric_code" varchar(50) COLLATE "pg_catalog"."default" NOT NULL,
   "provider" varchar(255) COLLATE "pg_catalog"."default" NOT NULL,
-  "sale_id" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "sale_department" varchar(100) COLLATE "pg_catalog"."default" NOT NULL,
-  "operation_manager_id" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
-  "am_id" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
+  "sale_id" varchar(64) COLLATE "pg_catalog"."default",
+  "sale_department" varchar(100) COLLATE "pg_catalog"."default",
+  "operation_manager_id" varchar(64) COLLATE "pg_catalog"."default",
+  "am_id" varchar(64) COLLATE "pg_catalog"."default",
   "income_value" numeric(20,3) NOT NULL,
   "real_income_value" numeric(20,3),
   "loaded_at" timestamp(6) NOT NULL,
@@ -23,11 +23,7 @@ CREATE TABLE "dws"."dws_sales_revenue_monthly" (
     "settlement_month",
     "product",
     "metric_code",
-    "provider",
-    "sale_id",
-    "sale_department",
-    "operation_manager_id",
-    "am_id"
+    "provider"
   )
 )
 PARTITION BY RANGE (
