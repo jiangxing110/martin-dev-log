@@ -6,7 +6,7 @@
 --   1. 本物化视图承载8号前页面查询和半天刷新结果。
 --   2. 每次刷新保留近三个月 settlement_month 数据。
 --   3. 每月8号快照任务从本物化视图读取目标 settlement_month 并固化到快照表。
---   4. 成本接入点为 v_cost_by_account_product，需继续补齐全球账户、量子卡、BPC、加密承兑成本。
+--   4. 成本接入点为 v_cost_by_account_product；当前已接入加密承兑特殊成本，其他成本继续补齐。
 --********************************************************************--
 
 DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_sales_commission_recent_estimate";
@@ -48,9 +48,34 @@ WITH revenue_base AS (
   FROM "dws"."dws_sales_revenue_monthly"
   WHERE delete_time IS NULL
     AND settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND metric_code NOT IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero')
   GROUP BY
     settlement_month, root_account_id, product, provider, metric_code, sale_id,
     sale_department, operation_manager_id, am_id
+),
+crypto_acceptance_cost AS (
+  SELECT
+    settlement_month,
+    root_account_id,
+    product,
+    provider,
+    SUM(
+      CASE
+        WHEN sale_department = '1851130772357509121'
+         AND metric_code IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero')
+          THEN COALESCE(real_income_value, income_value, 0) * 0.0009
+        WHEN sale_department <> '1851130772357509121'
+         AND metric_code = 'assets_acceptance_fee_gt_zero'
+          THEN COALESCE(real_income_value, income_value, 0) * 0.0009
+        ELSE 0
+      END
+    )::numeric(20,4) AS cogs
+  FROM "dws"."dws_sales_revenue_monthly"
+  WHERE delete_time IS NULL
+    AND settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND product = 'crypto'
+    AND metric_code IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero')
+  GROUP BY settlement_month, root_account_id, product, provider
 ),
 v_cost_by_account_product AS (
   SELECT
@@ -58,8 +83,25 @@ v_cost_by_account_product AS (
     root_account_id,
     product,
     provider,
-    0::numeric(20,4) AS cogs
-  FROM revenue_base
+    SUM(cogs)::numeric(20,4) AS cogs
+  FROM (
+    SELECT
+      settlement_month,
+      root_account_id,
+      product,
+      provider,
+      0::numeric(20,4) AS cogs
+    FROM revenue_base
+    GROUP BY settlement_month, root_account_id, product, provider
+    UNION ALL
+    SELECT
+      settlement_month,
+      root_account_id,
+      product,
+      provider,
+      cogs
+    FROM crypto_acceptance_cost
+  ) cost_union
   GROUP BY settlement_month, root_account_id, product, provider
 ),
 estimate_base AS (
