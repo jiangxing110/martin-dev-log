@@ -378,3 +378,32 @@ ScanToPay
 这两个先不管
 
 end_time这个默认2099年1月1号
+
+
+开始建表吧 正对八号之前的物化视图
+八号后的快照
+我想要和 /Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/quantum-v2这个一样
+保持 batch cdc table-scripts
+生成文件到/Users/martinjiang/VsCodeProjects/martin-dev-log/sale-repoet
+
+
+/Users/martinjiang/VsCodeProjects/martin-dev-log/sale-repoet/sales-commission/
+  table-scripts/
+    dim_sales_commission_rule.sql 
+    dws_sales_commission_recent_estimate_p.sql
+    dws_sales_commission_snapshot_p.sql
+    dws_sales_commission_snapshot_detail_p.sql
+  batch/
+    dws_sales_commission_recent_estimate-batch-sql.sql
+    dws_sales_commission_snapshot-batch-sql.sql
+  cdc/
+    dws_sales_commission_recent_estimate-cdc-sql.sql
+
+
+dws_sales_commission_recent_estimate_p.sql
+
+八号之前的物化视图的
+cdc 刷新
+八号以后的快照是
+一个batch 
+一个cdc 不不过这个cdc是固定八号执行查询上个月的时间
