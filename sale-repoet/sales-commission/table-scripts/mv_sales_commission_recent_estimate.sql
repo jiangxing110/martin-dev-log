@@ -20,46 +20,77 @@ WITH account_root_relation AS (
   FROM "ods"."ods_api_account_relation"
   WHERE delete_time IS NULL
 ),
+rule_departments AS (
+  SELECT DISTINCT
+    department_id
+  FROM "dim"."dim_sales_commission_rule"
+  WHERE enabled = true
+    AND delete_time IS NULL
+),
+sale_department_mapping AS (
+  SELECT
+    sale_id,
+    department_id
+  FROM (
+    SELECT
+      sud.user_id::text AS sale_id,
+      sud.department_id::text AS department_id,
+      ROW_NUMBER() OVER (
+        PARTITION BY sud.user_id::text
+        ORDER BY
+          CASE WHEN rd.department_id IS NOT NULL THEN 0 ELSE 1 END,
+          sud.update_time DESC,
+          sud.id DESC
+      ) AS rn
+    FROM "public"."system_user_department" sud
+    LEFT JOIN rule_departments rd
+      ON rd.department_id = sud.department_id::text
+    WHERE sud.delete_time IS NULL
+  ) ranked
+  WHERE rn = 1
+),
 revenue_base AS (
   SELECT
     CURRENT_DATE AS report_date,
-    settlement_month,
-    root_account_id,
-    product,
-    provider,
+    r.settlement_month,
+    r.root_account_id,
+    r.product,
+    r.provider,
     CASE
-      WHEN product = 'open_api' AND metric_code IN ('api_one_time_fee', 'api_monthly_fee') THEN metric_code
+      WHEN r.product = 'open_api' AND r.metric_code IN ('api_one_time_fee', 'api_monthly_fee') THEN r.metric_code
       ELSE NULL
     END AS item,
     CASE
-      WHEN product = 'open_api' AND metric_code = 'api_monthly_fee' THEN 'api_monthly_billing'
-      WHEN metric_code = 'past_due_invoice' THEN 'past_due_invoice'
-      WHEN metric_code = 'billing_decline_fee' THEN 'billing_decline_fee'
+      WHEN r.product = 'open_api' AND r.metric_code = 'api_monthly_fee' THEN 'api_monthly_billing'
+      WHEN r.metric_code = 'past_due_invoice' THEN 'past_due_invoice'
+      WHEN r.metric_code = 'billing_decline_fee' THEN 'billing_decline_fee'
       ELSE 'real_time_processing_fee'
     END AS source_type,
     CASE
-      WHEN product = 'open_api' AND metric_code = 'api_monthly_fee' THEN 'future_payout'
+      WHEN r.product = 'open_api' AND r.metric_code = 'api_monthly_fee' THEN 'future_payout'
       ELSE 'current_payout'
     END AS commission_stage,
-    sale_id,
-    sale_department AS department_id,
-    operation_manager_id,
-    am_id,
-    settlement_month AS activity_month,
-    settlement_month AS collection_month,
+    r.sale_id,
+    COALESCE(r.sale_department, sdm.department_id) AS department_id,
+    r.operation_manager_id,
+    r.am_id,
+    r.settlement_month AS activity_month,
+    r.settlement_month AS collection_month,
     CASE
-      WHEN product = 'open_api' AND metric_code = 'api_monthly_fee'
-        THEN date_trunc('month', settlement_month + interval '1 month')::date
-      ELSE settlement_month
+      WHEN r.product = 'open_api' AND r.metric_code = 'api_monthly_fee'
+        THEN date_trunc('month', r.settlement_month + interval '1 month')::date
+      ELSE r.settlement_month
     END AS payable_settlement_month,
-    SUM(COALESCE(real_income_value, income_value, 0))::numeric(20,4) AS effective_revenue
-  FROM "dws"."dws_sales_revenue_monthly"
-  WHERE delete_time IS NULL
-    AND settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
-    AND metric_code NOT IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero', 'physical_card_cost')
+    SUM(COALESCE(r.real_income_value, r.income_value, 0))::numeric(20,4) AS effective_revenue
+  FROM "dws"."dws_sales_revenue_monthly" r
+  LEFT JOIN sale_department_mapping sdm
+    ON sdm.sale_id = COALESCE(r.sale_id, r.am_id)
+  WHERE r.delete_time IS NULL
+    AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND r.metric_code NOT IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero', 'physical_card_cost')
   GROUP BY
-    settlement_month, root_account_id, product, provider, metric_code, sale_id,
-    sale_department, operation_manager_id, am_id
+    r.settlement_month, r.root_account_id, r.product, r.provider, r.metric_code, r.sale_id,
+    COALESCE(r.sale_department, sdm.department_id), r.operation_manager_id, r.am_id
 ),
 global_account_channel_cost AS (
   SELECT
@@ -174,43 +205,47 @@ qbit_card_bpc_cost AS (
 ),
 qbit_card_physical_cost AS (
   SELECT
-    settlement_month,
-    root_account_id,
+    r.settlement_month,
+    r.root_account_id,
     'qbit_card' AS product,
-    provider,
-    SUM(COALESCE(real_income_value, income_value, 0))::numeric(20,4) AS cogs
-  FROM "dws"."dws_sales_revenue_monthly"
-  WHERE delete_time IS NULL
-    AND settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
-    AND product = 'qbit_card'
-    AND provider = 'QI'
-    AND metric_code = 'physical_card_cost'
-    AND sale_department IN ('1740319905791647746', '1740319923059597313')
-  GROUP BY settlement_month, root_account_id, provider
+    r.provider,
+    SUM(COALESCE(r.real_income_value, r.income_value, 0))::numeric(20,4) AS cogs
+  FROM "dws"."dws_sales_revenue_monthly" r
+  LEFT JOIN sale_department_mapping sdm
+    ON sdm.sale_id = COALESCE(r.sale_id, r.am_id)
+  WHERE r.delete_time IS NULL
+    AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND r.product = 'qbit_card'
+    AND r.provider = 'QI'
+    AND r.metric_code = 'physical_card_cost'
+    AND COALESCE(r.sale_department, sdm.department_id) IN ('1740319905791647746', '1740319923059597313')
+  GROUP BY r.settlement_month, r.root_account_id, r.provider
 ),
 crypto_acceptance_cost AS (
   SELECT
-    settlement_month,
-    root_account_id,
-    product,
-    provider,
+    r.settlement_month,
+    r.root_account_id,
+    r.product,
+    r.provider,
     SUM(
       CASE
-        WHEN sale_department = '1851130772357509121'
-         AND metric_code IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero')
-          THEN COALESCE(real_income_value, income_value, 0) * 0.0009
-        WHEN COALESCE(sale_department, '') <> '1851130772357509121'
-         AND metric_code = 'assets_acceptance_fee_gt_zero'
-          THEN COALESCE(real_income_value, income_value, 0) * 0.0009
+        WHEN COALESCE(r.sale_department, sdm.department_id) = '1851130772357509121'
+         AND r.metric_code IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero')
+          THEN COALESCE(r.real_income_value, r.income_value, 0) * 0.0009
+        WHEN COALESCE(r.sale_department, sdm.department_id, '') <> '1851130772357509121'
+         AND r.metric_code = 'assets_acceptance_fee_gt_zero'
+          THEN COALESCE(r.real_income_value, r.income_value, 0) * 0.0009
         ELSE 0
       END
     )::numeric(20,4) AS cogs
-  FROM "dws"."dws_sales_revenue_monthly"
-  WHERE delete_time IS NULL
-    AND settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
-    AND product = 'crypto'
-    AND metric_code IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero')
-  GROUP BY settlement_month, root_account_id, product, provider
+  FROM "dws"."dws_sales_revenue_monthly" r
+  LEFT JOIN sale_department_mapping sdm
+    ON sdm.sale_id = COALESCE(r.sale_id, r.am_id)
+  WHERE r.delete_time IS NULL
+    AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND r.product = 'crypto'
+    AND r.metric_code IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero')
+  GROUP BY r.settlement_month, r.root_account_id, r.product, r.provider
 ),
 qbit_card_channel_rebate AS (
   SELECT
