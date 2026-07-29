@@ -9,6 +9,7 @@
 -- Notes:
 --   1. 从 dws.mv_sales_commission_recent_estimate 固化指定 settlement_month。
 --   2. snapshot_date 通常为每月8号。
+--   3. settlement_month 参数使用 yyyy-MM 格式，例如 2026-05；脚本内部转成 2026-05-01。
 --********************************************************************--
 
 SET 'parallelism.default' = '2';
@@ -53,7 +54,7 @@ CREATE TEMPORARY TABLE source_recent_estimate (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, report_date, settlement_month, root_account_id, product, provider, item, source_type, commission_stage, sale_id, operation_manager_id, am_id, department_id, invite_type, activity_month, collection_month, payable_settlement_month, effective_revenue, cogs, gp, commission_base, commission_rate, estimated_commission, active_days, rule_code, 1 AS version, ''snapshot source from materialized view'' AS remarks, refreshed_at AS create_time, refreshed_at AS update_time, NULL::timestamp AS delete_time FROM dws.mv_sales_commission_recent_estimate WHERE settlement_month = CAST(''${settlement_month}'' AS date)) AS recent_estimate_f',
+    'table-name' = '(SELECT id, report_date, settlement_month, root_account_id, product, provider, item, source_type, commission_stage, sale_id, operation_manager_id, am_id, department_id, invite_type, activity_month, collection_month, payable_settlement_month, effective_revenue, cogs, gp, commission_base, commission_rate, estimated_commission, active_days, rule_code, 1 AS version, ''snapshot source from materialized view'' AS remarks, refreshed_at AS create_time, refreshed_at AS update_time, NULL::timestamp AS delete_time FROM dws.mv_sales_commission_recent_estimate WHERE settlement_month = CAST(CONCAT(''${settlement_month}'', ''-01'') AS date)) AS recent_estimate_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

@@ -22,7 +22,7 @@ SET 'table.dml-sync' = 'true';
 -- 月度固化任务复用 batch 快照脚本。
 -- 调度平台传参建议：
 --   snapshot_date    = CURRENT_DATE
---   settlement_month = 当前日期所在月份往前推1个月的月初
+--   settlement_month = 当前日期所在月份往前推1个月，格式 yyyy-MM
 -- 示例：
---   2026-06-08 执行时 snapshot_date=2026-06-08, settlement_month=2026-05-01
+--   2026-06-08 执行时 snapshot_date=2026-06-08, settlement_month=2026-05
 -- 可直接提交 batch/dws_online_sales_commission_snapshot-batch-sql.sql。
