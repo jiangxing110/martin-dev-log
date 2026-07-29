@@ -33,6 +33,7 @@ CREATE TEMPORARY TABLE source_account (
     `verifiedName`     STRING,
     `type`             STRING,
     status             STRING,
+    `referralCodeId`   STRING,
     `createTime`       TIMESTAMP(6),
     `updateTime`       TIMESTAMP(6),
     `deleteTime`       TIMESTAMP(6),
@@ -69,6 +70,28 @@ CREATE TEMPORARY TABLE source_account_extend (
     'schema-name' = 'public',
     'table-name' = 'accountExtend',
     'slot.name' = 'flink_slot_account_analysis_account_extend',
+    'decoding.plugin.name' = 'pgoutput',
+    'debezium.publication.name' = 'flink_cdc_publication',
+    'debezium.slot.drop.on.stop' = 'true',
+    'scan.startup.mode' = 'initial',
+    'scan.incremental.snapshot.enabled' = 'false'
+);
+
+CREATE TEMPORARY TABLE source_referral_code (
+    id           STRING,
+    `userId`     STRING,
+    `deleteTime` TIMESTAMP(6),
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'postgres-cdc',
+    'hostname' = '${secret_values.PG_TEST_HOST}',
+    'port' = '${secret_values.PG_TEST_PORT1}',
+    'username' = '${secret_values.PG_TEST_USERNAME}',
+    'password' = '${secret_values.PG_TEST_PASSWORD}',
+    'database-name' = '${secret_values.PG_TEST_DATABASE}',
+    'schema-name' = 'public',
+    'table-name' = 'referralCode',
+    'slot.name' = 'flink_slot_account_analysis_referral_code',
     'decoding.plugin.name' = 'pgoutput',
     'debezium.publication.name' = 'flink_cdc_publication',
     'debezium.slot.drop.on.stop' = 'true',
@@ -368,6 +391,7 @@ SELECT
     cae.mor_type,
     cae.mor_type_extra,
     crr.`accountRiskLevel` AS account_risk_level,
+    rc.`userId` AS referral_user_id,
     ca.card_active_time,
     ga.global_active_time,
     cra.crypto_active_time,
@@ -386,6 +410,9 @@ LEFT JOIN source_caas_open_api_extend cae
 LEFT JOIN source_cdd_risk_rating crr
     ON crr.`accountId` = a.id
    AND crr.`deleteTime` IS NULL
+LEFT JOIN source_referral_code rc
+    ON rc.id = a.`referralCodeId`
+   AND rc.`deleteTime` IS NULL
 LEFT JOIN v_card_active ca
     ON ca.root_account_id = a.id
 LEFT JOIN v_global_active ga
@@ -409,6 +436,7 @@ CREATE TEMPORARY TABLE sink_dim_account_analysis (
     mor_type             STRING,
     mor_type_extra       STRING,
     account_risk_level   STRING,
+    referral_user_id     STRING,
     card_active_time     TIMESTAMP(6),
     global_active_time   TIMESTAMP(6),
     crypto_active_time   TIMESTAMP(6),

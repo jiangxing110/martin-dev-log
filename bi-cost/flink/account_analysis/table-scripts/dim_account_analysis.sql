@@ -20,6 +20,7 @@ CREATE TABLE "dim"."dim_account_analysis" (
   "mor_type" varchar(128) COLLATE "pg_catalog"."default",
   "mor_type_extra" text COLLATE "pg_catalog"."default",
   "account_risk_level" varchar(64) COLLATE "pg_catalog"."default",
+  "referral_user_id" varchar(64) COLLATE "pg_catalog"."default",
   "card_active_time" timestamp(6),
   "global_active_time" timestamp(6),
   "crypto_active_time" timestamp(6),
@@ -45,6 +46,7 @@ COMMENT ON COLUMN "dim"."dim_account_analysis"."access_type" IS '对接模式，
 COMMENT ON COLUMN "dim"."dim_account_analysis"."mor_type" IS 'MOR类别，来源 caas_open_api_extend.mor_type';
 COMMENT ON COLUMN "dim"."dim_account_analysis"."mor_type_extra" IS 'MOR类别扩展字段，来源 caas_open_api_extend.mor_type_extra';
 COMMENT ON COLUMN "dim"."dim_account_analysis"."account_risk_level" IS '客户风险等级，来源 cddRiskRating.accountRiskLevel';
+COMMENT ON COLUMN "dim"."dim_account_analysis"."referral_user_id" IS '邀请码归属用户ID，来源 public.account.referralCodeId 关联 public.referralCode.userId；直邀/非直邀在佣金快照计算时按当期销售关系判断';
 COMMENT ON COLUMN "dim"."dim_account_analysis"."card_active_time" IS '客户量子卡激活时间：卡钱包入金累计首次超过5000的交易时间';
 COMMENT ON COLUMN "dim"."dim_account_analysis"."global_active_time" IS '客户全球账户激活时间：transfer 最早交易时间';
 COMMENT ON COLUMN "dim"."dim_account_analysis"."crypto_active_time" IS '客户加密资产激活时间：sell/Closed/hidden=false 累计USD首次超过200000的交易时间';
@@ -66,4 +68,8 @@ CREATE INDEX "idx_dim_account_analysis_active_times" ON "dim"."dim_account_analy
   "crypto_active_time" "pg_catalog"."timestamp_ops" ASC NULLS LAST,
   "api_active_time" "pg_catalog"."timestamp_ops" ASC NULLS LAST,
   "treasury_active_time" "pg_catalog"."timestamp_ops" ASC NULLS LAST
+);
+
+CREATE INDEX "idx_dim_account_analysis_referral" ON "dim"."dim_account_analysis" USING btree (
+  "referral_user_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
 );

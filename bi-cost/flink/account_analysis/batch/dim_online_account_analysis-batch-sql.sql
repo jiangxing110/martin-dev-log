@@ -100,6 +100,38 @@ CREATE TEMPORARY TABLE source_cdd_risk_rating (
     'scan.auto-commit' = 'false'
 );
 
+CREATE TEMPORARY TABLE source_account_referral (
+    account_id       STRING,
+    referral_code_id STRING,
+    delete_time      TIMESTAMP(6),
+    PRIMARY KEY (account_id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT id::text AS account_id, "referralCodeId"::text AS referral_code_id, "deleteTime" AS delete_time FROM public.account WHERE "deleteTime" IS NULL) AS account_referral_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000',
+    'scan.auto-commit' = 'false'
+);
+
+CREATE TEMPORARY TABLE source_referral_code (
+    id          STRING,
+    user_id     STRING,
+    delete_time TIMESTAMP(6),
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT id::text AS id, "userId"::text AS user_id, "deleteTime" AS delete_time FROM public."referralCode" WHERE "deleteTime" IS NULL) AS referral_code_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000',
+    'scan.auto-commit' = 'false'
+);
+
 CREATE TEMPORARY TABLE source_qbit_card_wallet_transaction (
     id               STRING,
     account_id       STRING,
@@ -325,6 +357,7 @@ SELECT
     cae.mor_type,
     cae.mor_type_extra,
     crr.account_risk_level,
+    rc.user_id AS referral_user_id,
     ca.card_active_time,
     ga.global_active_time,
     cra.crypto_active_time,
@@ -338,6 +371,12 @@ LEFT JOIN source_caas_open_api_extend cae
     ON cae.account_id = da.id
 LEFT JOIN source_cdd_risk_rating crr
     ON crr.account_id = da.id
+LEFT JOIN source_account_referral ar
+    ON ar.account_id = da.id
+   AND ar.delete_time IS NULL
+LEFT JOIN source_referral_code rc
+    ON rc.id = ar.referral_code_id
+   AND rc.delete_time IS NULL
 LEFT JOIN v_card_active ca
     ON ca.root_account_id = da.id
 LEFT JOIN v_global_active ga
@@ -360,6 +399,7 @@ CREATE TEMPORARY TABLE sink_dim_account_analysis (
     mor_type             STRING,
     mor_type_extra       STRING,
     account_risk_level   STRING,
+    referral_user_id     STRING,
     card_active_time     TIMESTAMP(6),
     global_active_time   TIMESTAMP(6),
     crypto_active_time   TIMESTAMP(6),
