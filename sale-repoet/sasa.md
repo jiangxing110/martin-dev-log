@@ -369,3 +369,12 @@ SELECT * FROM "user" WHERE id='cfd8b2a8-af2d-474a-9923-3a5ef0335f52'
 SELECT * FROM "salesAccountRelation" 
 WHERE "accountId"='286d8d9b-cba7-4f6b-9d09-d5f8a314ddc2'
 就是邀请码对应的userId 是否和salesAccountRelation的salesId 一样
+
+
+gp_1740319905791647746_group_account_181_365 rule_code 不要绑定部门ID
+department_code 字段改名 department_id 
+收单
+ScanToPay
+这两个先不管
+
+end_time这个默认2099年1月1号
