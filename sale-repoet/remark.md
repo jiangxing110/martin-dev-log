@@ -433,3 +433,59 @@ and provider= 'BPC' 这个也是量子卡qi的成本
 我想你每一个产品线都写一个总结的成本计算的
 crypto_acceptance_cost
 注意渠道返现金
+
+OK 哪让我们回到assets 项目 public class SaleCommissionController看看这个我们之前只是写了mock的数据 
+现在 物化视图有了 快照也有了 看看我们应该怎么写真实的数据接口
+
+1.命名规范化这这部分都要加Dws
+SaleCommissionMapper.java
+SaleCommissionMapper.xml
+2.真实查询也要判断筛选的月份 在快照表有没有不是
+3.关于权限你看看下面这个方法能不能有借鉴意义
+    private BiDwsSalesIncomeSearchDTO getDefault(QueryFilterDTO body) {
+        BiDwsSalesIncomeSearchDTO searchDTO = new BiDwsSalesIncomeSearchDTO();
+        List<String> salesIds = body.getSalesIds();
+        List<String> salesIdList = null;
+        User user = UserContext.getUser();
+        if (StringUtils.isEmpty(body.getDepartmentId())) {
+            if (Boolean.TRUE.equals(user.getSystemSales())) {
+                // 自己id
+                salesIdList = Lists.newArrayList(user.getId());
+            }
+        } else {
+            Long departmentId = Long.parseLong(body.getDepartmentId());
+            DeptDataPermissionRespDTO deptDataPermissionRespDTO = user.getDeptDataPermissionRespDTO();
+            if (deptDataPermissionRespDTO.getAll() || deptDataPermissionRespDTO.getDeptIds().contains(departmentId)) {
+                // 查询用户id
+                salesIdList = systemUserDepartmentMapper.selectUserIdsByDepartmentId(departmentId);
+            } else {
+                if (user.getSystemDepartmentIds().contains(departmentId) && Boolean.TRUE.equals(user.getSystemSales())) {
+                    // 自己id
+                    salesIdList = Lists.newArrayList(user.getId());
+                }
+            }
+        }
+
+        body.setSalesIds(salesIdList);
+        if (CollectionUtil.isNotEmpty(salesIds)) {
+            body.setSalesIds(Lists.newArrayList(salesIds));
+            body.setDepartmentId(null);
+        }
+        // 默认时间
+        if (StringUtils.isBlank(body.getStartDate()) && StringUtils.isBlank(body.getEndDate())) {
+            String startTime = DateUtil.DATE_FORMAT_4.format(new Date());
+            body.setDateType(Constant.DATE_TYPE_MONTH);
+            body.setStartDate(DateUtil.getMonthStartTime(startTime));
+            body.setEndDate(DateUtil.DATE_FORMAT_4.format(DateUtil.getMonthEndTime(new Date())));
+        }
+        // 默认时间
+        if (StringUtils.isNotBlank(body.getStartDate()) && StringUtils.isNotBlank(body.getEndDate())) {
+            DateTime start = cn.hutool.core.date.DateUtil.parse(body.getStartDate(), com.qbit.common.utils.DateUtil.PATTERN);
+            DateTime end = cn.hutool.core.date.DateUtil.parse(body.getEndDate(), com.qbit.common.utils.DateUtil.PATTERN);
+            body.setTimeRange(List.of(start, end));
+            body.setStartTime(body.getStartDate());
+            body.setEndTime(body.getEndDate());
+        }
+        BeanUtil.copyProperties(body, searchDTO);
+        return searchDTO;
+    }
