@@ -4,7 +4,7 @@
 -- Description:    销售佣金8号前预估物化视图
 -- Notes:
 --   1. 本物化视图承载8号前页面查询和半天刷新结果。
---   2. 每次刷新保留近三个月 settlement_month 数据。
+--   2. 当前 mock/验证阶段从 2026-01-01 起刷新 settlement_month 数据。
 --   3. 每月8号快照任务从本物化视图读取目标 settlement_month 并固化到快照表。
 --   4. 成本按 settlement_month + root_account_id + product + provider 汇总后，再按收入占比分摊到明细行。
 --   5. 量子卡渠道返现金作为收入加回；最终 GP 小于 0 时按 0 计佣。
@@ -86,7 +86,7 @@ revenue_base AS (
   LEFT JOIN sale_department_mapping sdm
     ON sdm.sale_id = COALESCE(r.sale_id, r.am_id)
   WHERE r.delete_time IS NULL
-    AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND r.settlement_month >= date '2026-01-01'
     AND r.metric_code NOT IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero', 'physical_card_cost')
   GROUP BY
     r.settlement_month, r.root_account_id, r.product, r.provider, r.metric_code, r.sale_id,
@@ -103,7 +103,7 @@ global_account_channel_cost AS (
   LEFT JOIN account_root_relation aar
     ON aar.account_id = c.account_id
   WHERE c.delete_time IS NULL
-    AND c.source_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND c.source_month >= date '2026-01-01'
     AND c.product_line = 'GLOBAL_ACCOUNT'
     AND c.provider IN ('BZ', 'CL')
   GROUP BY c.source_month, COALESCE(aar.root_id, c.account_id), c.provider
@@ -146,7 +146,7 @@ qbit_card_bb_cost AS (
   LEFT JOIN account_root_relation aar
     ON aar.account_id = b.account_id
   WHERE b.delete_time IS NULL
-    AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND b.report_date >= date '2026-01-01'
   GROUP BY date_trunc('month', b.report_date)::date, COALESCE(aar.root_id, b.account_id)
 ),
 qbit_card_qi_cost AS (
@@ -170,7 +170,7 @@ qbit_card_qi_cost AS (
   LEFT JOIN account_root_relation aar
     ON aar.account_id = q.account_id
   WHERE q.delete_time IS NULL
-    AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND q.report_date >= date '2026-01-01'
   GROUP BY date_trunc('month', q.report_date)::date, COALESCE(aar.root_id, q.account_id)
 ),
 qbit_card_sl_cost AS (
@@ -184,7 +184,7 @@ qbit_card_sl_cost AS (
   LEFT JOIN account_root_relation aar
     ON aar.account_id = s.account_id
   WHERE s.delete_time IS NULL
-    AND s.report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND s.report_date >= date '2026-01-01'
   GROUP BY date_trunc('month', s.report_date)::date, COALESCE(aar.root_id, s.account_id)
 ),
 qbit_card_bpc_cost AS (
@@ -198,7 +198,7 @@ qbit_card_bpc_cost AS (
   LEFT JOIN account_root_relation aar
     ON aar.account_id = c.account_id
   WHERE c.delete_time IS NULL
-    AND c.source_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND c.source_month >= date '2026-01-01'
     AND c.product_line = 'QUANTUM_CARD'
     AND c.provider = 'BPC'
   GROUP BY c.source_month, COALESCE(aar.root_id, c.account_id)
@@ -214,7 +214,7 @@ qbit_card_physical_cost AS (
   LEFT JOIN sale_department_mapping sdm
     ON sdm.sale_id = COALESCE(r.sale_id, r.am_id)
   WHERE r.delete_time IS NULL
-    AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND r.settlement_month >= date '2026-01-01'
     AND r.product = 'qbit_card'
     AND r.provider = 'QI'
     AND r.metric_code = 'physical_card_cost'
@@ -242,7 +242,7 @@ crypto_acceptance_cost AS (
   LEFT JOIN sale_department_mapping sdm
     ON sdm.sale_id = COALESCE(r.sale_id, r.am_id)
   WHERE r.delete_time IS NULL
-    AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND r.settlement_month >= date '2026-01-01'
     AND r.product = 'crypto'
     AND r.metric_code IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero')
   GROUP BY r.settlement_month, r.root_account_id, r.product, r.provider
@@ -265,7 +265,7 @@ qbit_card_channel_rebate AS (
     LEFT JOIN account_root_relation aar
       ON aar.account_id = b.account_id
     WHERE b.delete_time IS NULL
-      AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+      AND b.report_date >= date '2026-01-01'
     GROUP BY date_trunc('month', b.report_date)::date, COALESCE(aar.root_id, b.account_id)
     UNION ALL
     SELECT
@@ -281,7 +281,7 @@ qbit_card_channel_rebate AS (
     LEFT JOIN account_root_relation aar
       ON aar.account_id = q.account_id
     WHERE q.delete_time IS NULL
-      AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+      AND q.report_date >= date '2026-01-01'
     GROUP BY date_trunc('month', q.report_date)::date, COALESCE(aar.root_id, q.account_id)
   ) rebate_union
   GROUP BY settlement_month, root_account_id, product, provider
@@ -467,7 +467,7 @@ WITH DATA;
 ALTER MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate"
   OWNER TO "flink_cdc_user";
 
-COMMENT ON MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate" IS '销售佣金8号前预估物化视图，半天刷新近三个月数据';
+COMMENT ON MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate" IS '销售佣金8号前预估物化视图，mock/验证阶段从2026-01-01起刷新数据';
 
 CREATE INDEX "idx_mv_sales_commission_recent_estimate_query" ON "dws"."mv_sales_commission_recent_estimate" (
   "settlement_month",

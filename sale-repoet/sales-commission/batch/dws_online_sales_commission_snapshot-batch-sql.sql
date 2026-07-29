@@ -198,8 +198,12 @@ CREATE TEMPORARY TABLE sink_snapshot (
     'batchSize' = '1000'
 );
 
+-- 两张快照表必须在同一个 Flink 作业里提交，避免 batch application 模式下多 INSERT 报错。
+EXECUTE STATEMENT SET
+BEGIN
 INSERT INTO sink_snapshot_detail
 SELECT * FROM v_snapshot_detail;
 
 INSERT INTO sink_snapshot
 SELECT * FROM v_snapshot;
+END;

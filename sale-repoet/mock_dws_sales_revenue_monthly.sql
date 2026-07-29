@@ -25,19 +25,27 @@ WITH account_base AS (
   GROUP BY
     COALESCE(aar.root_id::text, qi.account_id::text)
 ),
-report_dates AS (
-  SELECT DISTINCT report_date::date
+mock_months AS (
+  SELECT generate_series(date '2026-01-01', date '2026-07-01', interval '1 month')::date AS month_start
+),
+date_offsets AS (
+  SELECT *
   FROM (
     VALUES
-      ('2026-05-02'),
-      ('2026-05-08'),
-      ('2026-05-25'),
-      ('2026-05-30'),
-      ('2026-06-02'),
-      ('2026-06-08'),
-      ('2026-06-25'),
-      ('2026-05-30')
-  ) AS v(report_date)
+      (2),
+      (8),
+      (25),
+      (30)
+  ) AS v(day_of_month)
+),
+report_dates AS (
+  SELECT DISTINCT
+    LEAST(
+      m.month_start + (d.day_of_month - 1),
+      (m.month_start + interval '1 month' - interval '1 day')::date
+    ) AS report_date
+  FROM mock_months m
+  CROSS JOIN date_offsets d
 ),
 metric_map AS (
   SELECT *

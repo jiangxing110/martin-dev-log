@@ -119,7 +119,7 @@ generated_rules AS (
       ELSE p.rate_366_1095
     END AS commission_rate,
     'all' AS invite_type,
-    timestamp '2026-06-01 00:00:00' AS start_time,
+    timestamp '2026-01-01 00:00:00' AS start_time,
     timestamp '2099-01-01 00:00:00' AS end_time,
     100 AS priority,
     true AS enabled,
@@ -138,7 +138,25 @@ SELECT
   commission_base_type, active_days_min, active_days_max, commission_rate,
   invite_type, start_time, end_time, priority, enabled, remarks
 FROM generated_rules
-ON CONFLICT ("id") DO NOTHING;
+ON CONFLICT ("id") DO UPDATE SET
+  "rule_code" = EXCLUDED."rule_code",
+  "rule_name" = EXCLUDED."rule_name",
+  "department_id" = EXCLUDED."department_id",
+  "product" = EXCLUDED."product",
+  "provider" = EXCLUDED."provider",
+  "item" = EXCLUDED."item",
+  "commission_base_type" = EXCLUDED."commission_base_type",
+  "active_days_min" = EXCLUDED."active_days_min",
+  "active_days_max" = EXCLUDED."active_days_max",
+  "commission_rate" = EXCLUDED."commission_rate",
+  "invite_type" = EXCLUDED."invite_type",
+  "start_time" = EXCLUDED."start_time",
+  "end_time" = EXCLUDED."end_time",
+  "priority" = EXCLUDED."priority",
+  "enabled" = EXCLUDED."enabled",
+  "remarks" = EXCLUDED."remarks",
+  "update_time" = now(),
+  "delete_time" = NULL;
 
 -- OpenAPI一次性费用：按实际收费15%。
 WITH normal_departments(department_id, department_name) AS (
@@ -170,7 +188,7 @@ generated_rules AS (
     NULL::int4 AS active_days_max,
     0.150000::numeric AS commission_rate,
     'all' AS invite_type,
-    timestamp '2026-06-01 00:00:00' AS start_time,
+    timestamp '2026-01-01 00:00:00' AS start_time,
     timestamp '2099-01-01 00:00:00' AS end_time,
     100 AS priority,
     true AS enabled,
@@ -188,7 +206,25 @@ SELECT
   commission_base_type, active_days_min, active_days_max, commission_rate,
   invite_type, start_time, end_time, priority, enabled, remarks
 FROM generated_rules
-ON CONFLICT ("id") DO NOTHING;
+ON CONFLICT ("id") DO UPDATE SET
+  "rule_code" = EXCLUDED."rule_code",
+  "rule_name" = EXCLUDED."rule_name",
+  "department_id" = EXCLUDED."department_id",
+  "product" = EXCLUDED."product",
+  "provider" = EXCLUDED."provider",
+  "item" = EXCLUDED."item",
+  "commission_base_type" = EXCLUDED."commission_base_type",
+  "active_days_min" = EXCLUDED."active_days_min",
+  "active_days_max" = EXCLUDED."active_days_max",
+  "commission_rate" = EXCLUDED."commission_rate",
+  "invite_type" = EXCLUDED."invite_type",
+  "start_time" = EXCLUDED."start_time",
+  "end_time" = EXCLUDED."end_time",
+  "priority" = EXCLUDED."priority",
+  "enabled" = EXCLUDED."enabled",
+  "remarks" = EXCLUDED."remarks",
+  "update_time" = now(),
+  "delete_time" = NULL;
 
 -- OpenAPI月费：0-365天10%，366-1095天0%，按实际收费计佣。
 WITH normal_departments(department_id, department_name) AS (
@@ -221,7 +257,7 @@ generated_rules AS (
     r.active_days_max,
     r.rate AS commission_rate,
     'all' AS invite_type,
-    timestamp '2026-06-01 00:00:00' AS start_time,
+    timestamp '2026-01-01 00:00:00' AS start_time,
     timestamp '2099-01-01 00:00:00' AS end_time,
     100 AS priority,
     true AS enabled,
@@ -239,7 +275,25 @@ SELECT
   commission_base_type, active_days_min, active_days_max, commission_rate,
   invite_type, start_time, end_time, priority, enabled, remarks
 FROM generated_rules
-ON CONFLICT ("id") DO NOTHING;
+ON CONFLICT ("id") DO UPDATE SET
+  "rule_code" = EXCLUDED."rule_code",
+  "rule_name" = EXCLUDED."rule_name",
+  "department_id" = EXCLUDED."department_id",
+  "product" = EXCLUDED."product",
+  "provider" = EXCLUDED."provider",
+  "item" = EXCLUDED."item",
+  "commission_base_type" = EXCLUDED."commission_base_type",
+  "active_days_min" = EXCLUDED."active_days_min",
+  "active_days_max" = EXCLUDED."active_days_max",
+  "commission_rate" = EXCLUDED."commission_rate",
+  "invite_type" = EXCLUDED."invite_type",
+  "start_time" = EXCLUDED."start_time",
+  "end_time" = EXCLUDED."end_time",
+  "priority" = EXCLUDED."priority",
+  "enabled" = EXCLUDED."enabled",
+  "remarks" = EXCLUDED."remarks",
+  "update_time" = now(),
+  "delete_time" = NULL;
 
 -- 海外业务销售部 - 2：直邀客户20%，非直邀客户10%，按GP计佣，优先级高于普通规则。
 INSERT INTO "dim"."dim_sales_commission_rule" (
@@ -261,7 +315,7 @@ VALUES
     NULL,
     0.200000,
     'direct',
-    timestamp '2026-06-01 00:00:00',
+    timestamp '2026-01-01 00:00:00',
     timestamp '2099-01-01 00:00:00',
     10,
     true,
@@ -280,10 +334,28 @@ VALUES
     NULL,
     0.100000,
     'non_direct',
-    timestamp '2026-06-01 00:00:00',
+    timestamp '2026-01-01 00:00:00',
     timestamp '2099-01-01 00:00:00',
     10,
     true,
     '海外业务销售部-2非直邀客户按GP 10%计佣'
   )
-ON CONFLICT ("id") DO NOTHING;
+ON CONFLICT ("id") DO UPDATE SET
+  "rule_code" = EXCLUDED."rule_code",
+  "rule_name" = EXCLUDED."rule_name",
+  "department_id" = EXCLUDED."department_id",
+  "product" = EXCLUDED."product",
+  "provider" = EXCLUDED."provider",
+  "item" = EXCLUDED."item",
+  "commission_base_type" = EXCLUDED."commission_base_type",
+  "active_days_min" = EXCLUDED."active_days_min",
+  "active_days_max" = EXCLUDED."active_days_max",
+  "commission_rate" = EXCLUDED."commission_rate",
+  "invite_type" = EXCLUDED."invite_type",
+  "start_time" = EXCLUDED."start_time",
+  "end_time" = EXCLUDED."end_time",
+  "priority" = EXCLUDED."priority",
+  "enabled" = EXCLUDED."enabled",
+  "remarks" = EXCLUDED."remarks",
+  "update_time" = now(),
+  "delete_time" = NULL;
