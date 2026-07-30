@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-23
+-- Updated Time:   2026-07-30 15:36:57
 -- 历史名称：sp_init_quantum_card_bpc_cost.sql
 -- Description:    金融渠道成本 DWM 批量初始化 - QUANTUM_CARD / BPC
 -- 作业元信息：
@@ -12,7 +13,7 @@
 -- 执行前置：
 --   UPDATE dwm.dwm_finance_channel_cost_p
 --   SET delete_time = NOW(), update_time = NOW()
---   WHERE source_month IN (由 update_time 窗口推导的月份集合)
+--   WHERE source_month IN (由 statistics_time 窗口推导的月份集合)
 --     AND product_line = 'QUANTUM_CARD'
 --     AND delete_time IS NULL;
 --********************************************************************--
@@ -157,8 +158,8 @@ FROM (
     FROM source_bi_month_tag t
     CROSS JOIN v_runtime r
     WHERE t.delete_time IS NULL
-      AND t.update_time >= r.start_time
-      AND t.update_time < r.end_time
+      AND t.statistics_time >= r.start_time
+      AND t.statistics_time < r.end_time
 ) p;
 
 CREATE TEMPORARY VIEW v_month_days AS
@@ -177,7 +178,8 @@ INNER JOIN v_day_numbers d
 CREATE TEMPORARY VIEW v_bpc_accounts AS
 SELECT
     p.source_month,
-    q.account_id
+    q.account_id,
+    COUNT(q.id) AS active_card_count
 FROM source_qbit_card q CROSS JOIN v_param p
 WHERE q.provider LIKE '%Qbit%'
   AND (q.delete_card_time > CAST(p.source_month AS TIMESTAMP(6)) OR q.delete_card_time IS NULL)
@@ -191,7 +193,7 @@ SELECT
     'QUANTUM_CARD' AS product_line,
     'BPC' AS provider,
     'ACTIVE_CARD_COST' AS cost_type,
-    CAST(1 AS DECIMAL(20, 4)) AS basis_count,
+    CAST(a.active_card_count AS DECIMAL(20, 4)) AS basis_count,
     CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
     d.month_day_count
 FROM v_bpc_accounts a

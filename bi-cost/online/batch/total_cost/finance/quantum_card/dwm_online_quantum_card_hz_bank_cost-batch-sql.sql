@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-23
+-- Updated Time:   2026-07-30 15:36:57
 -- 历史名称：sp_init_quantum_card_hz_bank_cost.sql
 -- Description:    金融渠道成本 DWM 批量初始化 - QUANTUM_CARD / HZ_BANK
 -- 作业元信息：
@@ -12,7 +13,7 @@
 -- 执行前置：
 --   UPDATE dwm.dwm_finance_channel_cost_p
 --   SET delete_time = NOW(), update_time = NOW()
---   WHERE source_month IN (由 update_time 窗口推导的月份集合)
+--   WHERE source_month IN (由 statistics_time 窗口推导的月份集合)
 --     AND product_line = 'QUANTUM_CARD'
 --     AND delete_time IS NULL;
 --********************************************************************--
@@ -123,7 +124,7 @@ CREATE TEMPORARY TABLE source_hz_bank_basis (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT source_month, report_date, account_id, basis_amount FROM (SELECT p.source_month, tr.transaction_time::date AS report_date, tr.account_id, CAST(SUM(CASE WHEN tr.business_type = ''Consumption'' AND tr.status IN (''Closed'', ''Pending'') THEN COALESCE(tr.settle_amount, 0) ELSE 0 END) - SUM(CASE WHEN tr.business_type = ''Reversal'' AND tr.status IN (''Closed'', ''Pending'') THEN COALESCE(tr.settle_amount, 0) ELSE 0 END) - SUM(CASE WHEN tr.business_type = ''Credit'' AND tr.status = ''Closed'' THEN COALESCE(tr.settle_amount, 0) ELSE 0 END) AS DECIMAL(20, 4)) AS basis_amount FROM ods.ods_qbit_card_transaction tr INNER JOIN (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= COALESCE(NULLIF(''${start_time}'', '''')::timestamp, (CURRENT_DATE - INTERVAL ''1 day'')::timestamp) AND update_time < COALESCE(NULLIF(''${end_time}'', '''')::timestamp, CURRENT_DATE::timestamp)) p ON tr.transaction_time >= p.source_month::timestamp AND tr.transaction_time < p.next_month::timestamp WHERE tr.delete_time IS NULL AND tr.provider LIKE ''%Qbit%'' AND tr.business_type IN (''Credit'', ''Consumption'', ''Reversal'') GROUP BY p.source_month, tr.account_id, tr.transaction_time::date) hz_basis WHERE basis_amount <> 0) AS hz_bank_basis_f',
+    'table-name' = '(SELECT source_month, report_date, account_id, basis_amount FROM (SELECT p.source_month, tr.transaction_time::date AS report_date, tr.account_id, CAST(SUM(CASE WHEN tr.business_type = ''Consumption'' AND tr.status IN (''Closed'', ''Pending'') THEN COALESCE(tr.settle_amount, 0) ELSE 0 END) - SUM(CASE WHEN tr.business_type = ''Reversal'' AND tr.status IN (''Closed'', ''Pending'') THEN COALESCE(tr.settle_amount, 0) ELSE 0 END) - SUM(CASE WHEN tr.business_type = ''Credit'' AND tr.status = ''Closed'' THEN COALESCE(tr.settle_amount, 0) ELSE 0 END) AS DECIMAL(20, 4)) AS basis_amount FROM ods.ods_qbit_card_transaction tr INNER JOIN (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND statistics_time >= COALESCE(NULLIF(''${start_time}'', '''')::timestamp, (CURRENT_DATE - INTERVAL ''1 day'')::timestamp) AND statistics_time < COALESCE(NULLIF(''${end_time}'', '''')::timestamp, CURRENT_DATE::timestamp)) p ON tr.transaction_time >= p.source_month::timestamp AND tr.transaction_time < p.next_month::timestamp WHERE tr.delete_time IS NULL AND tr.provider LIKE ''%Qbit%'' AND tr.business_type IN (''Credit'', ''Consumption'', ''Reversal'') GROUP BY p.source_month, tr.account_id, tr.transaction_time::date) hz_basis WHERE basis_amount <> 0) AS hz_bank_basis_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -155,8 +156,8 @@ FROM (
     FROM source_bi_month_tag t
     CROSS JOIN v_runtime r
     WHERE t.delete_time IS NULL
-      AND t.update_time >= r.start_time
-      AND t.update_time < r.end_time
+      AND t.statistics_time >= r.start_time
+      AND t.statistics_time < r.end_time
 ) p;
 
 CREATE TEMPORARY VIEW v_month_days AS

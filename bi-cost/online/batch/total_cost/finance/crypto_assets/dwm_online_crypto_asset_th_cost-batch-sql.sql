@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-23
+-- Updated Time:   2026-07-30 15:36:57
 -- 历史名称：sp_init_crypto_asset_th_cost.sql
 -- Description:    金融渠道成本 DWM 批量初始化 - CRYPTO_ASSET / TH (Thunes)
 -- 作业元信息：
@@ -12,7 +13,7 @@
 -- 执行前置：
 --   UPDATE dwm.dwm_finance_channel_cost_p
 --   SET delete_time = NOW(), update_time = NOW()
---   WHERE source_month IN (由 update_time 窗口推导的月份集合)
+--   WHERE source_month IN (由 statistics_time 窗口推导的月份集合)
 --     AND product_line = 'CRYPTO_ASSET'
 --     AND delete_time IS NULL;
 --********************************************************************--
@@ -167,8 +168,8 @@ FROM (
     FROM source_bi_month_tag t
     CROSS JOIN v_runtime r
     WHERE t.delete_time IS NULL
-      AND t.update_time >= r.start_time
-      AND t.update_time < r.end_time
+      AND t.statistics_time >= r.start_time
+      AND t.statistics_time < r.end_time
 ) p;
 
 CREATE TEMPORARY VIEW v_month_days AS

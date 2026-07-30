@@ -178,7 +178,8 @@ INNER JOIN v_day_numbers d
 CREATE TEMPORARY VIEW v_bpc_accounts AS
 SELECT
     p.source_month,
-    q.account_id
+    q.account_id,
+    COUNT(q.id) AS active_card_count
 FROM source_qbit_card q CROSS JOIN v_param p
 WHERE q.provider LIKE '%Qbit%'
   AND (q.delete_card_time > CAST(p.source_month AS TIMESTAMP(6)) OR q.delete_card_time IS NULL)
@@ -192,7 +193,7 @@ SELECT
     'QUANTUM_CARD' AS product_line,
     'BPC' AS provider,
     'ACTIVE_CARD_COST' AS cost_type,
-    CAST(1 AS DECIMAL(20, 4)) AS basis_count,
+    CAST(a.active_card_count AS DECIMAL(20, 4)) AS basis_count,
     CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
     d.month_day_count
 FROM v_bpc_accounts a
