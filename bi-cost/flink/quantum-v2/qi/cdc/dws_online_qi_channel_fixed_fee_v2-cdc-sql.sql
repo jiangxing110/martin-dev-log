@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-16
+-- Updated Time:   2026-07-30 16:12:12
 -- Description:    QI v2 渠道固定成本 CDC 每日维护
 --********************************************************************--
 
@@ -42,6 +43,7 @@ CREATE TEMPORARY TABLE source_dws_qi_card_finance_daily_v2_p (
     system_type STRING,
     sale_id STRING,
     am_id STRING,
+    rebate_incentive_base_amt DECIMAL(20, 4),
     special_fee_type STRING,
     delete_time TIMESTAMP(6),
     PRIMARY KEY (id, report_date) NOT ENFORCED
@@ -96,8 +98,10 @@ WHERE delete_time IS NULL
   AND (special_fee_type IS NULL OR special_fee_type <> 'CHANNEL_FIXED_FEE')
   AND EXISTS (SELECT 1 FROM v_month_scope m WHERE report_date >= m.report_month AND report_date < m.next_month);
 
-CREATE TEMPORARY VIEW v_month_row_count AS
-SELECT CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month, COUNT(*) AS row_count
+CREATE TEMPORARY VIEW v_month_net_amount AS
+SELECT
+    CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month,
+    CAST(SUM(COALESCE(rebate_incentive_base_amt, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS month_total_net_amount
 FROM v_allocation_base
 GROUP BY CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE);
 
@@ -111,12 +115,13 @@ SELECT
     b.system_type,
     b.sale_id,
     b.am_id,
-    CAST(c.month_fixed_fee / NULLIF(rc.row_count, 0) AS DECIMAL(20, 4)) AS cost_fixed_fee
+    CAST(c.month_fixed_fee * COALESCE(b.rebate_incentive_base_amt, CAST(0 AS DECIMAL(20, 4))) / NULLIF(na.month_total_net_amount, 0) AS DECIMAL(20, 4)) AS cost_fixed_fee
 FROM v_allocation_base b
-INNER JOIN v_month_row_count rc ON CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = rc.report_month
-INNER JOIN v_month_channel_cost c ON c.report_month = rc.report_month
+INNER JOIN v_month_net_amount na ON CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = na.report_month
+INNER JOIN v_month_channel_cost c ON c.report_month = na.report_month
 WHERE c.month_fixed_fee IS NOT NULL
-  AND c.month_fixed_fee <> CAST(0 AS DECIMAL(20, 4));
+  AND c.month_fixed_fee <> CAST(0 AS DECIMAL(20, 4))
+  AND na.month_total_net_amount <> CAST(0 AS DECIMAL(20, 4));
 
 CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_v2_p (
     id BIGINT,
