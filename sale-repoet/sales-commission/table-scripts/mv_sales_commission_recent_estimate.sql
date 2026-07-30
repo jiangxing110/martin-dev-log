@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-29
+-- Updated Time:   2026-07-30 17:18:14
 -- Description:    销售佣金8号前预估物化视图
 -- Notes:
 --   1. 本物化视图承载8号前页面查询结果。
@@ -330,13 +331,13 @@ v_cost_by_account_product AS (
 revenue_cost_allocated AS (
   SELECT
     x.*,
-    (
+    GREATEST((
       x.effective_revenue
       + CASE
           WHEN x.product_effective_revenue <> 0 THEN x.total_channel_rebate * x.effective_revenue / x.product_effective_revenue
           ELSE 0
         END
-    )::numeric(20,4) AS allocated_effective_revenue,
+    ), 0)::numeric(20,4) AS allocated_effective_revenue,
     (
       CASE
         WHEN x.product_effective_revenue <> 0 THEN x.total_cogs * x.effective_revenue / x.product_effective_revenue

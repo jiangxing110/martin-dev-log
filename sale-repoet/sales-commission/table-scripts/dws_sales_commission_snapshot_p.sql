@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-29
+-- Updated Time:   2026-07-30 17:18:14
 -- Description:    销售佣金发薪快照主表
 -- Notes:
 --   1. 每月8号固化上个月 settlement_month 的佣金汇总。
