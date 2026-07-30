@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-29
--- Updated Time:   2026-07-30 17:18:14
+-- Updated Time:   2026-07-30 17:45:00
 -- Description:    销售佣金8号前预估物化视图
 -- Notes:
 --   1. 本物化视图承载8号前页面查询结果。
@@ -263,7 +263,7 @@ qbit_card_channel_rebate AS (
       COALESCE(aar.root_id, b.account_id) AS root_account_id,
       'qbit_card' AS product,
       'BB' AS provider,
-      SUM(COALESCE(b.bb_channel_cashback_comm, 0))::numeric(20,4) AS channel_rebate
+      ABS(SUM(COALESCE(b.bb_channel_cashback_comm, 0)))::numeric(20,4) AS channel_rebate
     FROM "dws"."dws_bb_card_finance_daily_p" b
     LEFT JOIN account_root_relation aar
       ON aar.account_id = b.account_id
@@ -276,10 +276,10 @@ qbit_card_channel_rebate AS (
       COALESCE(aar.root_id, q.account_id) AS root_account_id,
       'qbit_card' AS product,
       'QI' AS provider,
-      SUM(
+      ABS(SUM(
           COALESCE(q.rebate_interchange_base_amt, 0) * COALESCE(q.rebate_interchange_rate, 0)
         + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 0)
-      )::numeric(20,4) AS channel_rebate
+      ))::numeric(20,4) AS channel_rebate
     FROM "dws"."dws_qi_card_finance_daily_v2_p" q
     LEFT JOIN account_root_relation aar
       ON aar.account_id = q.account_id
@@ -471,11 +471,22 @@ DISTRIBUTED BY (id);
 ALTER MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate"
   OWNER TO "flink_cdc_user";
 
-COMMENT ON MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate" IS '销售佣金8号前预估物化视图，复杂CTE计算不适用于ADBPG增量物化视图';
+COMMENT ON MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate" IS '销售佣金8号前预估物化视图，普通物化视图，通过pg_cron定时REFRESH刷新';
 
-CREATE INDEX "idx_mv_sales_commission_recent_estimate_query" ON "dws"."mv_sales_commission_recent_estimate" (
+CREATE INDEX IF NOT EXISTS "idx_mv_sales_commission_recent_estimate_query" ON "dws"."mv_sales_commission_recent_estimate" (
   "settlement_month",
   "sale_id",
   "am_id",
   "commission_stage"
+);
+
+CREATE INDEX IF NOT EXISTS "idx_mv_sales_commission_recent_estimate_payable" ON "dws"."mv_sales_commission_recent_estimate" (
+  "payable_settlement_month",
+  "sale_id",
+  "am_id"
+);
+
+CREATE INDEX IF NOT EXISTS "idx_mv_sales_commission_recent_estimate_account" ON "dws"."mv_sales_commission_recent_estimate" (
+  "root_account_id",
+  "settlement_month"
 );

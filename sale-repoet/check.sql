@@ -1,425 +1,572 @@
--- 销售佣金物化视图无数据排查脚本
--- 方式：一段一段执行，不要整文件一次性全跑。
+-- 销售佣金 effective_revenue 排查脚本
+-- 执行方式：一段一段执行，不要整文件一次性全跑。
 --
--- 当前先执行【第 1 段】。
--- 第 1 段只回答一个问题：
---   dws.dws_sales_revenue_monthly 在当前物化视图的近三个月窗口里，到底有没有可用收入数据？
---
--- 如果你要指定月份，把下面 settlement_month_filter 从 NULL 改成月初日期，例如：
---   '2026-06-01'::date AS settlement_month_filter
+-- 固定排查条件：
+--   settlement_month = 2026-05-01
+--   sale_id = edfc4d0a-2131-440f-87a3-f3781767fa7f
+
 
 -- =========================
--- 第 1 段：源收入是否存在
+-- 第 1 段：源收入 vs 当前物化视图结果
 -- =========================
+-- 用途：
+--   对比 dws_sales_revenue_monthly 分摊前源收入和 mv_sales_commission_recent_estimate 当前结果。
 WITH params AS (
   SELECT
-    date_trunc('month', CURRENT_DATE - interval '3 months')::date AS min_settlement_month,
-    NULL::date AS settlement_month_filter
+    DATE '2026-05-01' AS settlement_month_filter,
+    'edfc4d0a-2131-440f-87a3-f3781767fa7f'::varchar AS sale_id_filter
 ),
 source_rows AS (
   SELECT
-    r.*
-  FROM "dws"."dws_sales_revenue_monthly" r
+    r.settlement_month,
+    r.sale_id,
+    r.operation_manager_id,
+    r.am_id,
+    CASE
+      WHEN r.product = 'open_api' AND r.metric_code = 'api_monthly_fee' THEN 'api_monthly_billing'
+      WHEN r.product = 'open_api' AND r.metric_code = 'month_receivable' THEN 'billing_decline_fee'
+      WHEN r.product = 'open_api' AND r.metric_code = 'month_revenue' THEN 'past_due_invoice'
+      WHEN r.metric_code = 'past_due_invoice' THEN 'past_due_invoice'
+      WHEN r.metric_code = 'billing_decline_fee' THEN 'billing_decline_fee'
+      ELSE 'real_time_processing_fee'
+    END AS source_type,
+    COALESCE(r.real_income_value, r.income_value, 0) AS effective_revenue
+  FROM dws.dws_sales_revenue_monthly r
   CROSS JOIN params p
   WHERE r.delete_time IS NULL
-    AND r.settlement_month >= p.min_settlement_month
-    AND (p.settlement_month_filter IS NULL OR r.settlement_month = p.settlement_month_filter)
-)
-SELECT
-  'source_total' AS check_step,
-  COUNT(*) AS row_count,
-  COUNT(DISTINCT settlement_month) AS month_count,
-  MIN(settlement_month) AS min_settlement_month,
-  MAX(settlement_month) AS max_settlement_month,
-  COUNT(DISTINCT root_account_id) AS root_account_count,
-  SUM(COALESCE(real_income_value, income_value, 0))::numeric(20,4) AS income_amount
-FROM source_rows;
-
--- 第 1 段结果怎么看：
--- 1. row_count = 0：
---    近三个月窗口没有收入源数据。先查 dws_sales_revenue_monthly 是否加载、settlement_month 是否在窗口内。
--- 2. row_count > 0：
---    源收入存在。下一步再执行“第 2 段：收入过滤后是否还有数据”。
-
-
--- =========================
--- 第 2 段：过滤掉成本/特殊指标后是否还有可计佣收入
--- =========================
-WITH params AS (
-  SELECT
-    date_trunc('month', CURRENT_DATE - interval '3 months')::date AS min_settlement_month,
-    NULL::date AS settlement_month_filter
-),
-source_rows AS (
-  SELECT
-    r.*
-  FROM "dws"."dws_sales_revenue_monthly" r
-  CROSS JOIN params p
-  WHERE r.delete_time IS NULL
-    AND r.settlement_month >= p.min_settlement_month
-    AND (p.settlement_month_filter IS NULL OR r.settlement_month = p.settlement_month_filter)
-),
-revenue_rows AS (
-  SELECT
-    *
-  FROM source_rows
-  WHERE metric_code NOT IN (
-    'assets_acceptance_fee_gt_zero',
-    'assets_acceptance_fee_eq_zero',
-    'physical_card_cost'
-  )
-)
-SELECT
-  'revenue_after_metric_filter' AS check_step,
-  COUNT(*) AS row_count,
-  COUNT(DISTINCT settlement_month) AS month_count,
-  MIN(settlement_month) AS min_settlement_month,
-  MAX(settlement_month) AS max_settlement_month,
-  COUNT(DISTINCT root_account_id) AS root_account_count,
-  COUNT(*) FILTER (WHERE sale_department IS NULL) AS sale_department_null_count,
-  COUNT(*) FILTER (WHERE sale_department IS NOT NULL) AS sale_department_not_null_count,
-  COUNT(DISTINCT sale_department) FILTER (WHERE sale_department IS NOT NULL) AS sale_department_count,
-  SUM(COALESCE(real_income_value, income_value, 0))::numeric(20,4) AS income_amount
-FROM revenue_rows;
-
--- 第 2 段结果怎么看：
--- 1. row_count = 0：
---    数据都被 metric_code 过滤掉了，需要看源表 metric_code 是否全是成本/特殊项。
--- 2. row_count > 0 且 sale_department_null_count = row_count：
---    收入还在，但部门全为空。最终会因为规则表按 department_id 匹配而没有数据。
--- 3. row_count > 0 且 sale_department_not_null_count > 0：
---    继续执行第 3 段，看部门 ID 是否能命中规则表。
-
-
--- =========================
--- 第 3 段：部门为空时，销售 / AM 字段是否还在
--- =========================
--- 第 2 段已经看到 sale_department 全为空，所以最终规则 join 必然没有数据。
--- 第 3 段只确认还有没有 sale_id / am_id，可以决定后面是修源表写 department_id，
--- 还是在物化视图里临时通过销售维表补 department_id。
-WITH params AS (
-  SELECT
-    date_trunc('month', CURRENT_DATE - interval '3 months')::date AS min_settlement_month,
-    NULL::date AS settlement_month_filter
-),
-revenue_rows AS (
-  SELECT
-    r.*
-  FROM "dws"."dws_sales_revenue_monthly" r
-  CROSS JOIN params p
-  WHERE r.delete_time IS NULL
-    AND r.settlement_month >= p.min_settlement_month
-    AND (p.settlement_month_filter IS NULL OR r.settlement_month = p.settlement_month_filter)
-    AND r.metric_code NOT IN (
-      'assets_acceptance_fee_gt_zero',
-      'assets_acceptance_fee_eq_zero',
-      'physical_card_cost'
-    )
-)
-SELECT
-  'sales_field_probe' AS check_step,
-  settlement_month,
-  product,
-  COUNT(*) AS row_count,
-  COUNT(*) FILTER (WHERE sale_id IS NULL) AS sale_id_null_count,
-  COUNT(*) FILTER (WHERE sale_id IS NOT NULL) AS sale_id_not_null_count,
-  COUNT(DISTINCT sale_id) FILTER (WHERE sale_id IS NOT NULL) AS sale_id_count,
-  COUNT(*) FILTER (WHERE am_id IS NULL) AS am_id_null_count,
-  COUNT(*) FILTER (WHERE am_id IS NOT NULL) AS am_id_not_null_count,
-  COUNT(DISTINCT am_id) FILTER (WHERE am_id IS NOT NULL) AS am_id_count,
-  SUM(COALESCE(real_income_value, income_value, 0))::numeric(20,4) AS income_amount
-FROM revenue_rows
-GROUP BY settlement_month, product
-ORDER BY settlement_month DESC, product;
-
--- 第 3 段结果怎么看：
--- 1. sale_id_not_null_count > 0：
---    源收入有销售 ID，但没有部门 ID。可以通过销售维表 / 用户部门关系补 department_id。
--- 2. sale_id_not_null_count = 0 且 am_id_not_null_count > 0：
---    只有 AM ID，需要确认 AM 是否也走同一套部门规则。
--- 3. sale_id_not_null_count = 0 且 am_id_not_null_count = 0：
---    源收入连销售 / AM 都没有，必须先修 dws_sales_revenue_monthly 的销售归因。
-
-
--- =========================
--- 第 4 段：列出需要补部门的销售 ID
--- =========================
--- 第 3 段显示 sale_id 大部分有值，但 sale_department 全为空。
--- 第 4 段只列出这些 sale_id 的金额和行数，方便确认销售 ID 对应哪个部门。
-WITH params AS (
-  SELECT
-    date_trunc('month', CURRENT_DATE - interval '3 months')::date AS min_settlement_month,
-    NULL::date AS settlement_month_filter
-),
-revenue_rows AS (
-  SELECT
-    r.*
-  FROM "dws"."dws_sales_revenue_monthly" r
-  CROSS JOIN params p
-  WHERE r.delete_time IS NULL
-    AND r.settlement_month >= p.min_settlement_month
-    AND (p.settlement_month_filter IS NULL OR r.settlement_month = p.settlement_month_filter)
-    AND r.metric_code NOT IN (
-      'assets_acceptance_fee_gt_zero',
-      'assets_acceptance_fee_eq_zero',
-      'physical_card_cost'
-    )
-)
-SELECT
-  'sale_id_need_department' AS check_step,
-  sale_id,
-  COUNT(*) AS row_count,
-  COUNT(DISTINCT settlement_month) AS month_count,
-  COUNT(DISTINCT root_account_id) AS root_account_count,
-  COUNT(DISTINCT product) AS product_count,
-  STRING_AGG(DISTINCT product, ',' ORDER BY product) AS products,
-  SUM(COALESCE(real_income_value, income_value, 0))::numeric(20,4) AS income_amount
-FROM revenue_rows
-WHERE sale_id IS NOT NULL
-GROUP BY sale_id
-ORDER BY income_amount DESC NULLS LAST, row_count DESC;
-
--- 第 4 段结果怎么看：
--- 1. sale_id 数量很少：
---    可以先人工确认这些 sale_id 对应部门，然后决定补数方案。
--- 2. sale_id 数量很多：
---    需要找系统销售/用户维表，不能靠手工维护。
--- 3. 下一步建议：
---    先拿这个结果里的前几个 sale_id，查系统用户/员工/部门表，确认 sale_id -> department_id 来源。
-
-
--- =========================
--- 第 5 段：通过 system_user_department 补部门是否可行
--- =========================
--- 依赖表：
---   public.system_user_department.user_id = dws_sales_revenue_monthly.sale_id::uuid
---   public.system_user_department.department_id = system_department.id
---
--- 这一段验证两个问题：
---   1. sale_id 能不能补出 department_id。
---   2. 补出的 department_id 是否存在于 dim.dim_sales_commission_rule。
-WITH params AS (
-  SELECT
-    date_trunc('month', CURRENT_DATE - interval '3 months')::date AS min_settlement_month,
-    NULL::date AS settlement_month_filter
-),
-revenue_rows AS (
-  SELECT
-    r.*
-  FROM "dws"."dws_sales_revenue_monthly" r
-  CROSS JOIN params p
-  WHERE r.delete_time IS NULL
-    AND r.settlement_month >= p.min_settlement_month
-    AND (p.settlement_month_filter IS NULL OR r.settlement_month = p.settlement_month_filter)
+    AND r.settlement_month = p.settlement_month_filter
+    AND r.sale_id = p.sale_id_filter
     AND r.metric_code NOT IN (
       'assets_acceptance_fee_gt_zero',
       'assets_acceptance_fee_eq_zero',
       'physical_card_cost'
     )
 ),
-sale_department AS (
+source_summary AS (
   SELECT
-    user_id::text AS sale_id,
-    department_id::text AS department_id,
-    COUNT(*) AS department_relation_count
-  FROM "public"."system_user_department"
-  WHERE delete_time IS NULL
-  GROUP BY user_id::text, department_id::text
-),
-rule_departments AS (
-  SELECT DISTINCT department_id
-  FROM "dim"."dim_sales_commission_rule"
-  WHERE enabled = true
-    AND delete_time IS NULL
-)
-SELECT
-  'sale_department_join_probe' AS check_step,
-  r.settlement_month,
-  r.product,
-  COUNT(*) AS row_count,
-  COUNT(*) FILTER (WHERE r.sale_id IS NULL) AS sale_id_null_count,
-  COUNT(*) FILTER (WHERE r.sale_id IS NOT NULL) AS sale_id_not_null_count,
-  COUNT(*) FILTER (WHERE sd.department_id IS NULL) AS department_join_null_count,
-  COUNT(*) FILTER (WHERE sd.department_id IS NOT NULL) AS department_join_not_null_count,
-  COUNT(DISTINCT sd.department_id) FILTER (WHERE sd.department_id IS NOT NULL) AS joined_department_count,
-  COUNT(*) FILTER (WHERE rd.department_id IS NOT NULL) AS rule_department_match_count,
-  COUNT(*) FILTER (WHERE sd.department_id IS NOT NULL AND rd.department_id IS NULL) AS department_not_in_rule_count,
-  SUM(COALESCE(r.real_income_value, r.income_value, 0))::numeric(20,4) AS income_amount
-FROM revenue_rows r
-LEFT JOIN sale_department sd
-  ON sd.sale_id = r.sale_id
-LEFT JOIN rule_departments rd
-  ON rd.department_id = sd.department_id
-GROUP BY r.settlement_month, r.product
-ORDER BY r.settlement_month DESC, r.product;
-
--- 第 5 段结果怎么看：
--- 1. department_join_not_null_count 很高：
---    可以在物化视图里用 system_user_department 补 department_id。
--- 2. rule_department_match_count = department_join_not_null_count：
---    补出的部门都能命中规则表部门，下一段就验证完整规则匹配。
--- 3. department_not_in_rule_count > 0：
---    有销售部门不在规则表里，需要补 dim_sales_commission_rule 的部门规则。
-
-
--- =========================
--- 第 6 段：system_user_department 是否一人多部门
--- =========================
--- 第 5 段 row_count 比第 3 段变大，说明直接 join system_user_department 会放大收入。
--- 第 6 段专门看：
---   1. 哪些 sale_id 绑定了多个 department_id。
---   2. 补出来的 department_id 哪些不在返佣规则表。
---   3. 后续物化视图不能直接 join 多部门表，必须先选定一个部门口径。
-WITH params AS (
-  SELECT
-    date_trunc('month', CURRENT_DATE - interval '3 months')::date AS min_settlement_month,
-    NULL::date AS settlement_month_filter
-),
-revenue_rows AS (
-  SELECT
-    r.*
-  FROM "dws"."dws_sales_revenue_monthly" r
-  CROSS JOIN params p
-  WHERE r.delete_time IS NULL
-    AND r.settlement_month >= p.min_settlement_month
-    AND (p.settlement_month_filter IS NULL OR r.settlement_month = p.settlement_month_filter)
-    AND r.metric_code NOT IN (
-      'assets_acceptance_fee_gt_zero',
-      'assets_acceptance_fee_eq_zero',
-      'physical_card_cost'
-    )
-),
-sale_department AS (
-  SELECT
-    user_id::text AS sale_id,
-    department_id::text AS department_id
-  FROM "public"."system_user_department"
-  WHERE delete_time IS NULL
-),
-sale_department_count AS (
-  SELECT
+    settlement_month,
     sale_id,
-    COUNT(*) AS department_relation_count,
-    COUNT(DISTINCT department_id) AS department_count,
-    STRING_AGG(DISTINCT department_id, ',' ORDER BY department_id) AS department_ids
-  FROM sale_department
-  GROUP BY sale_id
+    operation_manager_id,
+    am_id,
+    source_type,
+    SUM(effective_revenue)::numeric(20,4) AS source_effective_revenue
+  FROM source_rows
+  GROUP BY settlement_month, sale_id, operation_manager_id, am_id, source_type
 ),
-rule_departments AS (
-  SELECT DISTINCT department_id
-  FROM "dim"."dim_sales_commission_rule"
-  WHERE enabled = true
-    AND delete_time IS NULL
+mv_summary AS (
+  SELECT
+    m.settlement_month,
+    m.sale_id,
+    m.operation_manager_id,
+    m.am_id,
+    m.source_type,
+    SUM(m.effective_revenue)::numeric(20,4) AS mv_effective_revenue,
+    SUM(m.cogs)::numeric(20,4) AS mv_cogs,
+    SUM(m.gp)::numeric(20,4) AS mv_gp,
+    SUM(m.estimated_commission)::numeric(20,4) AS mv_commission
+  FROM dws.mv_sales_commission_recent_estimate m
+  CROSS JOIN params p
+  WHERE m.settlement_month = p.settlement_month_filter
+    AND m.sale_id = p.sale_id_filter
+  GROUP BY m.settlement_month, m.sale_id, m.operation_manager_id, m.am_id, m.source_type
 )
 SELECT
-  'multi_department_summary' AS check_step,
-  COUNT(DISTINCT r.sale_id) FILTER (WHERE r.sale_id IS NOT NULL) AS sale_id_count,
-  COUNT(DISTINCT r.sale_id) FILTER (WHERE r.sale_id IS NOT NULL AND sdc.department_count IS NULL) AS no_department_sale_count,
-  COUNT(DISTINCT r.sale_id) FILTER (WHERE sdc.department_count = 1) AS one_department_sale_count,
-  COUNT(DISTINCT r.sale_id) FILTER (WHERE sdc.department_count > 1) AS multi_department_sale_count,
-  COUNT(*) AS revenue_row_count,
-  SUM(COALESCE(r.real_income_value, r.income_value, 0))::numeric(20,4) AS income_amount
-FROM revenue_rows r
-LEFT JOIN sale_department_count sdc
-  ON sdc.sale_id = r.sale_id;
+  'source_vs_mv_summary' AS check_step,
+  COALESCE(s.settlement_month, m.settlement_month) AS settlement_month,
+  COALESCE(s.sale_id, m.sale_id) AS sale_id,
+  COALESCE(s.operation_manager_id, m.operation_manager_id) AS operation_manager_id,
+  COALESCE(s.am_id, m.am_id) AS am_id,
+  COALESCE(s.source_type, m.source_type) AS source_type,
+  COALESCE(s.source_effective_revenue, 0)::numeric(20,4) AS source_effective_revenue,
+  COALESCE(m.mv_effective_revenue, 0)::numeric(20,4) AS mv_effective_revenue,
+  (COALESCE(m.mv_effective_revenue, 0) - COALESCE(s.source_effective_revenue, 0))::numeric(20,4) AS effective_revenue_diff,
+  COALESCE(m.mv_cogs, 0)::numeric(20,4) AS mv_cogs,
+  COALESCE(m.mv_gp, 0)::numeric(20,4) AS mv_gp,
+  COALESCE(m.mv_commission, 0)::numeric(20,4) AS mv_commission
+FROM source_summary s
+FULL JOIN mv_summary m
+  ON m.settlement_month = s.settlement_month
+ AND m.sale_id = s.sale_id
+ AND COALESCE(m.operation_manager_id, '') = COALESCE(s.operation_manager_id, '')
+ AND COALESCE(m.am_id, '') = COALESCE(s.am_id, '')
+ AND m.source_type = s.source_type
+ORDER BY am_id, source_type;
 
--- 第 6.1 段：部门维度汇总，确认哪些部门不在规则表。
+
+-- =========================
+-- 第 2 段：physical_card_cost 加法/减法口径汇总
+-- =========================
+-- 用途：
+--   验证如果把 dws_sales_revenue_monthly.physical_card_cost 当分摊项时，
+--   “加法口径”和“减法口径”的结果差异。
 WITH params AS (
   SELECT
-    date_trunc('month', CURRENT_DATE - interval '3 months')::date AS min_settlement_month,
-    NULL::date AS settlement_month_filter
+    DATE '2026-05-01' AS settlement_month_filter,
+    'edfc4d0a-2131-440f-87a3-f3781767fa7f'::varchar AS sale_id_filter
 ),
-revenue_rows AS (
+revenue_base AS (
   SELECT
-    r.*
-  FROM "dws"."dws_sales_revenue_monthly" r
+    r.settlement_month,
+    r.root_account_id,
+    r.product,
+    r.provider,
+    CASE
+      WHEN r.product = 'open_api' AND r.metric_code = 'api_monthly_fee' THEN 'api_monthly_billing'
+      WHEN r.product = 'open_api' AND r.metric_code = 'month_receivable' THEN 'billing_decline_fee'
+      WHEN r.product = 'open_api' AND r.metric_code = 'month_revenue' THEN 'past_due_invoice'
+      WHEN r.metric_code = 'past_due_invoice' THEN 'past_due_invoice'
+      WHEN r.metric_code = 'billing_decline_fee' THEN 'billing_decline_fee'
+      ELSE 'real_time_processing_fee'
+    END AS source_type,
+    r.sale_id,
+    r.operation_manager_id,
+    r.am_id,
+    SUM(COALESCE(r.real_income_value, r.income_value, 0))::numeric(20,4) AS effective_revenue
+  FROM dws.dws_sales_revenue_monthly r
   CROSS JOIN params p
   WHERE r.delete_time IS NULL
-    AND r.settlement_month >= p.min_settlement_month
-    AND (p.settlement_month_filter IS NULL OR r.settlement_month = p.settlement_month_filter)
+    AND r.settlement_month = p.settlement_month_filter
+    AND r.sale_id = p.sale_id_filter
+    AND r.metric_code NOT IN (
+      'assets_acceptance_fee_gt_zero',
+      'assets_acceptance_fee_eq_zero',
+      'physical_card_cost'
+    )
+  GROUP BY
+    r.settlement_month, r.root_account_id, r.product, r.provider,
+    r.metric_code, r.sale_id, r.operation_manager_id, r.am_id
+),
+physical_card_cost AS (
+  SELECT
+    r.settlement_month,
+    r.root_account_id,
+    r.product,
+    r.provider,
+    SUM(COALESCE(r.real_income_value, r.income_value, 0))::numeric(20,4) AS physical_card_cost
+  FROM dws.dws_sales_revenue_monthly r
+  CROSS JOIN params p
+  WHERE r.delete_time IS NULL
+    AND r.settlement_month = p.settlement_month_filter
+    AND r.sale_id = p.sale_id_filter
+    AND r.metric_code = 'physical_card_cost'
+  GROUP BY r.settlement_month, r.root_account_id, r.product, r.provider
+),
+allocated AS (
+  SELECT
+    b.*,
+    COALESCE(c.physical_card_cost, 0)::numeric(20,4) AS allocated_source_amount,
+    SUM(b.effective_revenue) OVER (
+      PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, '')
+    )::numeric(20,4) AS product_effective_revenue
+  FROM revenue_base b
+  LEFT JOIN physical_card_cost c
+    ON c.settlement_month = b.settlement_month
+   AND c.root_account_id = b.root_account_id
+   AND c.product = b.product
+   AND COALESCE(c.provider, '') = COALESCE(b.provider, '')
+),
+calculated AS (
+  SELECT
+    settlement_month,
+    sale_id,
+    operation_manager_id,
+    am_id,
+    source_type,
+    effective_revenue,
+    CASE
+      WHEN product_effective_revenue <> 0 THEN allocated_source_amount * effective_revenue / product_effective_revenue
+      ELSE 0
+    END AS allocated_amount,
+    GREATEST((
+      effective_revenue
+      + CASE
+          WHEN product_effective_revenue <> 0 THEN allocated_source_amount * effective_revenue / product_effective_revenue
+          ELSE 0
+        END
+    ), 0)::numeric(20,4) AS effective_revenue_add,
+    GREATEST((
+      effective_revenue
+      - CASE
+          WHEN product_effective_revenue <> 0 THEN allocated_source_amount * effective_revenue / product_effective_revenue
+          ELSE 0
+        END
+    ), 0)::numeric(20,4) AS effective_revenue_subtract
+  FROM allocated
+)
+SELECT
+  'physical_card_cost_add_vs_subtract_summary' AS check_step,
+  settlement_month,
+  sale_id,
+  operation_manager_id,
+  am_id,
+  source_type,
+  COUNT(*) AS row_count,
+  SUM(effective_revenue)::numeric(20,4) AS source_effective_revenue,
+  SUM(allocated_amount)::numeric(20,4) AS allocated_physical_card_cost,
+  SUM(effective_revenue_add)::numeric(20,4) AS effective_revenue_add,
+  SUM(effective_revenue_subtract)::numeric(20,4) AS effective_revenue_subtract
+FROM calculated
+GROUP BY settlement_month, sale_id, operation_manager_id, am_id, source_type
+ORDER BY am_id, source_type;
+
+
+-- =========================
+-- 第 3 段：按 MV 真实 channel_rebate 来源复算
+-- =========================
+-- 用途：
+--   mv_sales_commission_recent_estimate 真实 channel_rebate 来源不是 physical_card_cost，
+--   而是 BB/QI 日表的渠道返现字段。本段按真实来源复算。
+WITH params AS (
+  SELECT
+    DATE '2026-05-01' AS settlement_month_filter,
+    'edfc4d0a-2131-440f-87a3-f3781767fa7f'::varchar AS sale_id_filter
+),
+account_root_relation AS (
+  SELECT
+    aar.root_id::text AS root_id,
+    aar.account_id::text AS account_id
+  FROM public.api_account_relation aar
+  WHERE aar.root_id IS NOT NULL
+    AND aar.account_id IS NOT NULL
+),
+revenue_base AS (
+  SELECT
+    r.settlement_month,
+    r.root_account_id,
+    r.product,
+    r.provider,
+    CASE
+      WHEN r.product = 'open_api' AND r.metric_code = 'api_monthly_fee' THEN 'api_monthly_billing'
+      WHEN r.product = 'open_api' AND r.metric_code = 'month_receivable' THEN 'billing_decline_fee'
+      WHEN r.product = 'open_api' AND r.metric_code = 'month_revenue' THEN 'past_due_invoice'
+      WHEN r.metric_code = 'past_due_invoice' THEN 'past_due_invoice'
+      WHEN r.metric_code = 'billing_decline_fee' THEN 'billing_decline_fee'
+      ELSE 'real_time_processing_fee'
+    END AS source_type,
+    r.sale_id,
+    r.operation_manager_id,
+    r.am_id,
+    SUM(COALESCE(r.real_income_value, r.income_value, 0))::numeric(20,4) AS effective_revenue
+  FROM dws.dws_sales_revenue_monthly r
+  CROSS JOIN params p
+  WHERE r.delete_time IS NULL
+    AND r.settlement_month = p.settlement_month_filter
+    AND r.sale_id = p.sale_id_filter
+    AND r.metric_code NOT IN (
+      'assets_acceptance_fee_gt_zero',
+      'assets_acceptance_fee_eq_zero',
+      'physical_card_cost'
+    )
+  GROUP BY
+    r.settlement_month, r.root_account_id, r.product, r.provider,
+    r.metric_code, r.sale_id, r.operation_manager_id, r.am_id
+),
+qbit_card_channel_rebate AS (
+  SELECT
+    settlement_month,
+    root_account_id,
+    product,
+    provider,
+    SUM(channel_rebate)::numeric(20,4) AS channel_rebate
+  FROM (
+    SELECT
+      date_trunc('month', b.report_date)::date AS settlement_month,
+      COALESCE(aar.root_id, b.account_id) AS root_account_id,
+      'qbit_card' AS product,
+      'BB' AS provider,
+      ABS(SUM(COALESCE(b.bb_channel_cashback_comm, 0)))::numeric(20,4) AS channel_rebate
+    FROM dws.dws_bb_card_finance_daily_p b
+    LEFT JOIN account_root_relation aar
+      ON aar.account_id = b.account_id::text
+    CROSS JOIN params p
+    WHERE b.delete_time IS NULL
+      AND date_trunc('month', b.report_date)::date = p.settlement_month_filter
+    GROUP BY date_trunc('month', b.report_date)::date, COALESCE(aar.root_id, b.account_id)
+    UNION ALL
+    SELECT
+      date_trunc('month', q.report_date)::date AS settlement_month,
+      COALESCE(aar.root_id, q.account_id) AS root_account_id,
+      'qbit_card' AS product,
+      'QI' AS provider,
+      ABS(SUM(
+          COALESCE(q.rebate_interchange_base_amt, 0) * COALESCE(q.rebate_interchange_rate, 0)
+        + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 0)
+      ))::numeric(20,4) AS channel_rebate
+    FROM dws.dws_qi_card_finance_daily_v2_p q
+    LEFT JOIN account_root_relation aar
+      ON aar.account_id = q.account_id::text
+    CROSS JOIN params p
+    WHERE q.delete_time IS NULL
+      AND date_trunc('month', q.report_date)::date = p.settlement_month_filter
+    GROUP BY date_trunc('month', q.report_date)::date, COALESCE(aar.root_id, q.account_id)
+  ) rebate_union
+  GROUP BY settlement_month, root_account_id, product, provider
+),
+allocated AS (
+  SELECT
+    b.*,
+    COALESCE(r.channel_rebate, 0)::numeric(20,4) AS channel_rebate,
+    SUM(b.effective_revenue) OVER (
+      PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, '')
+    )::numeric(20,4) AS product_effective_revenue
+  FROM revenue_base b
+  LEFT JOIN qbit_card_channel_rebate r
+    ON r.settlement_month = b.settlement_month
+   AND r.root_account_id = b.root_account_id
+   AND r.product = b.product
+   AND COALESCE(r.provider, '') = COALESCE(b.provider, '')
+),
+calculated AS (
+  SELECT
+    settlement_month,
+    sale_id,
+    operation_manager_id,
+    am_id,
+    source_type,
+    effective_revenue,
+    channel_rebate,
+    CASE
+      WHEN product_effective_revenue <> 0 THEN channel_rebate * effective_revenue / product_effective_revenue
+      ELSE 0
+    END AS allocated_channel_rebate,
+    GREATEST((
+      effective_revenue
+      + CASE
+          WHEN product_effective_revenue <> 0 THEN channel_rebate * effective_revenue / product_effective_revenue
+          ELSE 0
+        END
+    ), 0)::numeric(20,4) AS effective_revenue_add,
+    GREATEST((
+      effective_revenue
+      - CASE
+          WHEN product_effective_revenue <> 0 THEN channel_rebate * effective_revenue / product_effective_revenue
+          ELSE 0
+        END
+    ), 0)::numeric(20,4) AS effective_revenue_subtract
+  FROM allocated
+)
+SELECT
+  'mv_real_rebate_add_vs_subtract_summary' AS check_step,
+  settlement_month,
+  sale_id,
+  operation_manager_id,
+  am_id,
+  source_type,
+  COUNT(*) AS row_count,
+  SUM(effective_revenue)::numeric(20,4) AS source_effective_revenue,
+  SUM(channel_rebate)::numeric(20,4) AS joined_channel_rebate,
+  SUM(allocated_channel_rebate)::numeric(20,4) AS allocated_channel_rebate,
+  SUM(effective_revenue_add)::numeric(20,4) AS effective_revenue_add,
+  SUM(effective_revenue_subtract)::numeric(20,4) AS effective_revenue_subtract
+FROM calculated
+GROUP BY settlement_month, sale_id, operation_manager_id, am_id, source_type
+ORDER BY am_id, source_type;
+
+
+-- =========================
+-- 第 4 段：定位真实 channel_rebate 负数来自哪张表/哪个账户
+-- =========================
+-- 用途：
+--   第 3 段已经确认负数来自 MV 真实 channel_rebate。
+--   本段拆开 BB/QI 两部分，定位负数来自：
+--     1. dws_bb_card_finance_daily_p.bb_channel_cashback_comm
+--     2. dws_qi_card_finance_daily_v2_p.rebate_interchange_base_amt * rebate_interchange_rate
+--     3. dws_qi_card_finance_daily_v2_p.rebate_incentive_base_amt * rebate_incentive_rate
+WITH params AS (
+  SELECT
+    DATE '2026-05-01' AS settlement_month_filter,
+    'edfc4d0a-2131-440f-87a3-f3781767fa7f'::varchar AS sale_id_filter
+),
+account_root_relation AS (
+  SELECT
+    aar.root_id::text AS root_id,
+    aar.account_id::text AS account_id
+  FROM public.api_account_relation aar
+  WHERE aar.root_id IS NOT NULL
+    AND aar.account_id IS NOT NULL
+),
+sale_revenue_account AS (
+  SELECT DISTINCT
+    r.settlement_month,
+    r.root_account_id,
+    r.product,
+    r.provider
+  FROM dws.dws_sales_revenue_monthly r
+  CROSS JOIN params p
+  WHERE r.delete_time IS NULL
+    AND r.settlement_month = p.settlement_month_filter
+    AND r.sale_id = p.sale_id_filter
     AND r.metric_code NOT IN (
       'assets_acceptance_fee_gt_zero',
       'assets_acceptance_fee_eq_zero',
       'physical_card_cost'
     )
 ),
-sale_department AS (
+rebate_detail AS (
   SELECT
-    user_id::text AS sale_id,
-    department_id::text AS department_id
-  FROM "public"."system_user_department"
-  WHERE delete_time IS NULL
-),
-rule_departments AS (
-  SELECT DISTINCT department_id
-  FROM "dim"."dim_sales_commission_rule"
-  WHERE enabled = true
-    AND delete_time IS NULL
+    date_trunc('month', b.report_date)::date AS settlement_month,
+    COALESCE(aar.root_id, b.account_id) AS root_account_id,
+    b.account_id,
+    'qbit_card' AS product,
+    'BB' AS provider,
+    'bb_channel_cashback_comm' AS rebate_part,
+    SUM(COALESCE(b.bb_channel_cashback_comm, 0))::numeric(20,4) AS rebate_amount
+  FROM dws.dws_bb_card_finance_daily_p b
+  LEFT JOIN account_root_relation aar
+    ON aar.account_id = b.account_id::text
+  CROSS JOIN params p
+  WHERE b.delete_time IS NULL
+    AND date_trunc('month', b.report_date)::date = p.settlement_month_filter
+  GROUP BY date_trunc('month', b.report_date)::date, COALESCE(aar.root_id, b.account_id), b.account_id
+  UNION ALL
+  SELECT
+    date_trunc('month', q.report_date)::date AS settlement_month,
+    COALESCE(aar.root_id, q.account_id) AS root_account_id,
+    q.account_id,
+    'qbit_card' AS product,
+    'QI' AS provider,
+    'qi_rebate_interchange' AS rebate_part,
+    SUM(COALESCE(q.rebate_interchange_base_amt, 0) * COALESCE(q.rebate_interchange_rate, 0))::numeric(20,4) AS rebate_amount
+  FROM dws.dws_qi_card_finance_daily_v2_p q
+  LEFT JOIN account_root_relation aar
+    ON aar.account_id = q.account_id::text
+  CROSS JOIN params p
+  WHERE q.delete_time IS NULL
+    AND date_trunc('month', q.report_date)::date = p.settlement_month_filter
+  GROUP BY date_trunc('month', q.report_date)::date, COALESCE(aar.root_id, q.account_id), q.account_id
+  UNION ALL
+  SELECT
+    date_trunc('month', q.report_date)::date AS settlement_month,
+    COALESCE(aar.root_id, q.account_id) AS root_account_id,
+    q.account_id,
+    'qbit_card' AS product,
+    'QI' AS provider,
+    'qi_rebate_incentive' AS rebate_part,
+    SUM(COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 0))::numeric(20,4) AS rebate_amount
+  FROM dws.dws_qi_card_finance_daily_v2_p q
+  LEFT JOIN account_root_relation aar
+    ON aar.account_id = q.account_id::text
+  CROSS JOIN params p
+  WHERE q.delete_time IS NULL
+    AND date_trunc('month', q.report_date)::date = p.settlement_month_filter
+  GROUP BY date_trunc('month', q.report_date)::date, COALESCE(aar.root_id, q.account_id), q.account_id
 )
 SELECT
-  'department_rule_status' AS check_step,
-  sd.department_id,
-  CASE WHEN rd.department_id IS NULL THEN 'not_in_rule_table' ELSE 'in_rule_table' END AS rule_status,
-  COUNT(DISTINCT r.sale_id) AS sale_id_count,
-  COUNT(*) AS joined_row_count,
-  SUM(COALESCE(r.real_income_value, r.income_value, 0))::numeric(20,4) AS income_amount
-FROM revenue_rows r
-JOIN sale_department sd
-  ON sd.sale_id = r.sale_id
-LEFT JOIN rule_departments rd
-  ON rd.department_id = sd.department_id
-GROUP BY sd.department_id, rd.department_id
-ORDER BY rule_status DESC, income_amount DESC NULLS LAST;
+  'negative_rebate_source_detail' AS check_step,
+  d.settlement_month,
+  d.root_account_id,
+  d.account_id,
+  d.product,
+  d.provider,
+  d.rebate_part,
+  d.rebate_amount
+FROM rebate_detail d
+JOIN sale_revenue_account a
+  ON a.settlement_month = d.settlement_month
+ AND a.root_account_id = d.root_account_id
+ AND a.product = d.product
+ AND COALESCE(a.provider, '') = COALESCE(d.provider, '')
+WHERE d.rebate_amount < 0
+ORDER BY d.rebate_amount ASC, d.root_account_id, d.account_id, d.rebate_part;
 
--- 第 6.2 段：列出多部门销售。这个结果决定后面部门口径怎么取。
+
+-- 第 4.1 段：负数来源汇总版
+-- 用途：
+--   如果第 4 段明细太多，先跑这个汇总版。
 WITH params AS (
   SELECT
-    date_trunc('month', CURRENT_DATE - interval '3 months')::date AS min_settlement_month,
-    NULL::date AS settlement_month_filter
+    DATE '2026-05-01' AS settlement_month_filter,
+    'edfc4d0a-2131-440f-87a3-f3781767fa7f'::varchar AS sale_id_filter
 ),
-revenue_rows AS (
+account_root_relation AS (
   SELECT
-    r.*
-  FROM "dws"."dws_sales_revenue_monthly" r
+    aar.root_id::text AS root_id,
+    aar.account_id::text AS account_id
+  FROM public.api_account_relation aar
+  WHERE aar.root_id IS NOT NULL
+    AND aar.account_id IS NOT NULL
+),
+sale_revenue_account AS (
+  SELECT DISTINCT
+    r.settlement_month,
+    r.root_account_id,
+    r.product,
+    r.provider
+  FROM dws.dws_sales_revenue_monthly r
   CROSS JOIN params p
   WHERE r.delete_time IS NULL
-    AND r.settlement_month >= p.min_settlement_month
-    AND (p.settlement_month_filter IS NULL OR r.settlement_month = p.settlement_month_filter)
+    AND r.settlement_month = p.settlement_month_filter
+    AND r.sale_id = p.sale_id_filter
     AND r.metric_code NOT IN (
       'assets_acceptance_fee_gt_zero',
       'assets_acceptance_fee_eq_zero',
       'physical_card_cost'
     )
 ),
-sale_department_count AS (
+rebate_detail AS (
   SELECT
-    user_id::text AS sale_id,
-    COUNT(DISTINCT department_id::text) AS department_count,
-    STRING_AGG(DISTINCT department_id::text, ',' ORDER BY department_id::text) AS department_ids
-  FROM "public"."system_user_department"
-  WHERE delete_time IS NULL
-  GROUP BY user_id::text
+    date_trunc('month', b.report_date)::date AS settlement_month,
+    COALESCE(aar.root_id, b.account_id) AS root_account_id,
+    b.account_id,
+    'qbit_card' AS product,
+    'BB' AS provider,
+    'bb_channel_cashback_comm' AS rebate_part,
+    SUM(COALESCE(b.bb_channel_cashback_comm, 0))::numeric(20,4) AS rebate_amount
+  FROM dws.dws_bb_card_finance_daily_p b
+  LEFT JOIN account_root_relation aar
+    ON aar.account_id = b.account_id::text
+  CROSS JOIN params p
+  WHERE b.delete_time IS NULL
+    AND date_trunc('month', b.report_date)::date = p.settlement_month_filter
+  GROUP BY date_trunc('month', b.report_date)::date, COALESCE(aar.root_id, b.account_id), b.account_id
+  UNION ALL
+  SELECT
+    date_trunc('month', q.report_date)::date AS settlement_month,
+    COALESCE(aar.root_id, q.account_id) AS root_account_id,
+    q.account_id,
+    'qbit_card' AS product,
+    'QI' AS provider,
+    'qi_rebate_interchange' AS rebate_part,
+    SUM(COALESCE(q.rebate_interchange_base_amt, 0) * COALESCE(q.rebate_interchange_rate, 0))::numeric(20,4) AS rebate_amount
+  FROM dws.dws_qi_card_finance_daily_v2_p q
+  LEFT JOIN account_root_relation aar
+    ON aar.account_id = q.account_id::text
+  CROSS JOIN params p
+  WHERE q.delete_time IS NULL
+    AND date_trunc('month', q.report_date)::date = p.settlement_month_filter
+  GROUP BY date_trunc('month', q.report_date)::date, COALESCE(aar.root_id, q.account_id), q.account_id
+  UNION ALL
+  SELECT
+    date_trunc('month', q.report_date)::date AS settlement_month,
+    COALESCE(aar.root_id, q.account_id) AS root_account_id,
+    q.account_id,
+    'qbit_card' AS product,
+    'QI' AS provider,
+    'qi_rebate_incentive' AS rebate_part,
+    SUM(COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 0))::numeric(20,4) AS rebate_amount
+  FROM dws.dws_qi_card_finance_daily_v2_p q
+  LEFT JOIN account_root_relation aar
+    ON aar.account_id = q.account_id::text
+  CROSS JOIN params p
+  WHERE q.delete_time IS NULL
+    AND date_trunc('month', q.report_date)::date = p.settlement_month_filter
+  GROUP BY date_trunc('month', q.report_date)::date, COALESCE(aar.root_id, q.account_id), q.account_id
 )
 SELECT
-  'multi_department_sale_detail' AS check_step,
-  r.sale_id,
-  sdc.department_count,
-  sdc.department_ids,
-  COUNT(*) AS revenue_row_count,
-  COUNT(DISTINCT r.product) AS product_count,
-  STRING_AGG(DISTINCT r.product, ',' ORDER BY r.product) AS products,
-  SUM(COALESCE(r.real_income_value, r.income_value, 0))::numeric(20,4) AS income_amount
-FROM revenue_rows r
-JOIN sale_department_count sdc
-  ON sdc.sale_id = r.sale_id
-WHERE sdc.department_count > 1
-GROUP BY r.sale_id, sdc.department_count, sdc.department_ids
-ORDER BY income_amount DESC NULLS LAST, revenue_row_count DESC;
-
--- 第 6 段结果怎么看：
--- 1. multi_department_sale_count = 0：
---    可以安全用 system_user_department 补 department_id。
--- 2. multi_department_sale_count > 0：
---    不能直接 join，否则收入会重复。需要确定“用户多部门时取哪个部门”的业务规则。
--- 3. department_rule_status 里 not_in_rule_table：
---    这些部门没有返佣规则，补了部门也不会出佣金。
+  'negative_rebate_source_summary' AS check_step,
+  d.settlement_month,
+  d.product,
+  d.provider,
+  d.rebate_part,
+  COUNT(*) AS account_row_count,
+  COUNT(DISTINCT d.root_account_id) AS root_account_count,
+  SUM(d.rebate_amount)::numeric(20,4) AS rebate_amount
+FROM rebate_detail d
+JOIN sale_revenue_account a
+  ON a.settlement_month = d.settlement_month
+ AND a.root_account_id = d.root_account_id
+ AND a.product = d.product
+ AND COALESCE(a.provider, '') = COALESCE(d.provider, '')
+WHERE d.rebate_amount < 0
+GROUP BY d.settlement_month, d.product, d.provider, d.rebate_part
+ORDER BY rebate_amount ASC;
