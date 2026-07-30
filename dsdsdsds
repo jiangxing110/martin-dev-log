@@ -1,5 +1,20 @@
-查看
-bi-cost/flink/quantum-v2
-的
-/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/quantum-v2/bb/batch/dws_online_bb_channel_fixed_fee_v2-batch-sql.sql
-固定成本逻辑 我想知道为什么每个客户在自己的月份里每一天都一样
+SELECT
+	*
+FROM dws.dws_sales_commission_snapshot_p
+WHERE delete_time IS NULL
+  AND settlement_month = (
+        TO_DATE(CONCAT('2026-06', '-01'), 'YYYY-MM-DD')
+        - INTERVAL '1 month'
+      )::date
+  AND (
+        sale_id = 'edfc4d0a-2131-440f-87a3-f3781767fa7f'
+        OR am_id = 'edfc4d0a-2131-440f-87a3-f3781767fa7f'
+      )
+
+1027672116	2026-06-09	2026-05-01	edfc4d0a-2131-440f-87a3-f3781767fa7f			-64708.8732	47521.8812	220223.5302	9785.7926	1	snapshot batch	2026-07-29 18:08:41.536	2026-07-29 18:08:41.536	
+1002323537	2026-06-09	2026-05-01	edfc4d0a-2131-440f-87a3-f3781767fa7f		f3086b59-5078-4c00-b2f7-c38ab62a6f44	-846595.6135	140824.8781	28720.1387	1074.3471	1	snapshot batch	2026-07-29 18:08:41.536	2026-07-29 18:08:41.536	
+1086655760	2026-06-09	2026-05-01	edfc4d0a-2131-440f-87a3-f3781767fa7f		3c2f4044-4762-44b6-a274-e0cd5286d428	-4089134.8395	115344.4125	11752.5565	775.2410	1	snapshot batch	2026-07-29 18:08:41.536	2026-07-29 18:08:41.536	
+我需要你确定一下      
+/Users/martinjiang/VsCodeProjects/martin-dev-log/sale-repoet/sales-commission/batch/dws_online_sales_commission_recent_estimate-batch-sql.sql
+/Users/martinjiang/VsCodeProjects/martin-dev-log/sale-repoet/sales-commission/batch/dws_online_sales_commission_snapshot-batch-sql.sql
+的快照为什么会有复数我的收入都是>0
