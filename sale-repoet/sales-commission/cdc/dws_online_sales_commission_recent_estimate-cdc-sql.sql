@@ -1,20 +1,18 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-29
--- Description:    销售佣金8号前预估物化视图半天刷新任务说明
+-- Description:    销售佣金8号前预估物化视图刷新说明
 -- 作业元信息：
---   作业类型：ADBPG SQL 调度说明
---   运行方式：半天调度一次，必须通过 ADBPG / PostgreSQL 客户端执行
+--   作业类型：说明脚本
+--   运行方式：通过 ADBPG / PostgreSQL 客户端调度执行
 --   运行参数：无
 -- Notes:
---   1. 物化视图为 dws.mv_sales_commission_recent_estimate。
---   2. 本任务不覆盖8号后快照。
---   3. 每月8号快照固化前必须先刷新成功。
---   4. 不要提交到 Flink SQL Gateway；Flink SQL 不支持 REFRESH MATERIALIZED VIEW。
---   5. 真正需要执行的数据库 SQL：
---      REFRESH MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate";
+--   1. dws.mv_sales_commission_recent_estimate 包含复杂 CTE / JOIN / 窗口函数。
+--   2. ADBPG 增量物化视图不支持该类查询，当前使用普通物化视图。
+--   3. 本任务不提交 Flink SQL Gateway。
+--   4. 调度时执行 batch/dws_online_sales_commission_recent_estimate-batch-sql.sql。
 --********************************************************************--
 
 CREATE TEMPORARY VIEW sales_commission_recent_estimate_refresh_notice AS
 SELECT
-    CAST('REFRESH MATERIALIZED VIEW is ADBPG/PostgreSQL SQL, not Flink SQL. Run batch/dws_online_sales_commission_recent_estimate-batch-sql.sql through an ADBPG client.' AS STRING) AS message;
+    CAST('dws.mv_sales_commission_recent_estimate is a normal materialized view because the query is not incrementally maintainable. Refresh it through an ADBPG client, not Flink SQL Gateway.' AS STRING) AS message;

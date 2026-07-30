@@ -3,7 +3,7 @@
 -- Created Time:   2026-07-29
 -- Description:    销售佣金8号前预估物化视图
 -- Notes:
---   1. 本物化视图承载8号前页面查询和半天刷新结果。
+--   1. 本物化视图承载8号前页面查询结果。
 --   2. 每次刷新保留近三个月 settlement_month 数据。
 --   3. 每月8号快照任务从本物化视图读取目标 settlement_month 并固化到快照表。
 --   4. 成本按 settlement_month + root_account_id + product + provider 汇总后，再按收入占比分摊到明细行。
@@ -62,6 +62,8 @@ revenue_base AS (
     END AS item,
     CASE
       WHEN r.product = 'open_api' AND r.metric_code = 'api_monthly_fee' THEN 'api_monthly_billing'
+      WHEN r.product = 'open_api' AND r.metric_code = 'month_receivable' THEN 'billing_decline_fee'
+      WHEN r.product = 'open_api' AND r.metric_code = 'month_revenue' THEN 'past_due_invoice'
       WHEN r.metric_code = 'past_due_invoice' THEN 'past_due_invoice'
       WHEN r.metric_code = 'billing_decline_fee' THEN 'billing_decline_fee'
       ELSE 'real_time_processing_fee'
@@ -462,12 +464,13 @@ SELECT
   now() AS refreshed_at
 FROM rule_candidates
 WHERE rn = 1
-WITH DATA;
+WITH DATA
+DISTRIBUTED BY (id);
 
 ALTER MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate"
   OWNER TO "flink_cdc_user";
 
-COMMENT ON MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate" IS '销售佣金8号前预估物化视图，半天刷新近三个月数据';
+COMMENT ON MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate" IS '销售佣金8号前预估物化视图，复杂CTE计算不适用于ADBPG增量物化视图';
 
 CREATE INDEX "idx_mv_sales_commission_recent_estimate_query" ON "dws"."mv_sales_commission_recent_estimate" (
   "settlement_month",

@@ -489,3 +489,140 @@ SaleCommissionMapper.xml
         BeanUtil.copyProperties(body, searchDTO);
         return searchDTO;
     }
+
+SELECT source_type FROM mv_sales_commission_recent_estimate
+GROUP BY source_type
+现在只有一个
+real_time_processing_fee
+但是我看了的
+我mock 收入数据的时候
+  ('open_api',      '',           'month_receivable',              1000.000::numeric,   3000
+      ('open_api',      '',           'month_revenue', 
+      这两个其实是应收和实收收入
+
+real_time_processing_fee  实时处理费回款
+billing_decline_fee  账单应收（month_receivable）
+past_due_invoice （month_revenue）
+ 需要更新视图
+CREATE INCREMENTAL MATERIALIZED VIEW mv AS SELECT * FROM TEST WHERE b > 40 DISTRIBUTED BY (a);
+这种的才是会实时更新数据的物化视图
+所以我们
+/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost
+/Users/martinjiang/VsCodeProjects/martin-dev-log/sale-repoet
+这两个文件夹下的物化视图都要这样
+
+
+
+127.0.0.1:8080/api/admin/sale/commission/wallet
+127.0.0.1:8080/api/admin/sale/commission/performance
+这两个有一个问题是
+{"saleId":"f1ce7ec5-18cd-4a96-933f-ca6b4c59bb74","settlementMonth":"2026-04"}
+同样传"settlementMonth":"2026-04"
+左边是上个月 右边是当前月份
+然后对于payoutPipeline这个来讲
+real_time_processing_fee 这个数据
+是        {
+                "sourceType": "past_due_invoice",
+                "effectiveRevenue": 8989.3500,
+                "gp": 8989.3500,
+                "commissionAmount": 898.9350
+            },
+            {
+                "sourceType": "real_time_processing_fee",
+                "effectiveRevenue": 15030.2024,
+                "gp": 176430.1728,
+                "commissionAmount": 17643.0174
+            } 这两个值的汇总
+api_monthly_billing 
+是
+    {
+                "sourceType": "billing_decline_fee",
+                "effectiveRevenue": 9677.1300,
+                "gp": 9677.1300,
+                "commissionAmount": 967.7130
+            }
+这个值但是这个不见得生成会在api 月账单生成的时候insert 一条进去
+
+        "payoutPipeline": [
+            {
+                "pipelineType": "next_payout",
+                "sourceType": "billing_decline_fee",
+                "settlementMonth": "2026-04",
+                "payoutDate": "2026-05-12",
+                "effectiveRevenue": 10539.4600,
+                "gp": 10539.4600,
+                "estimatedCommission": 1053.9460,
+                "status": "paid"
+            },
+            {
+                "pipelineType": "next_payout",
+                "sourceType": "past_due_invoice",
+                "settlementMonth": "2026-04",
+                "payoutDate": "2026-05-12",
+                "effectiveRevenue": 10962.1700,
+                "gp": 10962.1700,
+                "estimatedCommission": 1096.2170,
+                "status": "paid"
+            },
+            {
+                "pipelineType": "next_payout",
+                "sourceType": "real_time_processing_fee",
+                "settlementMonth": "2026-04",
+                "payoutDate": "2026-05-12",
+                "effectiveRevenue": 160734.9761,
+                "gp": 175533.0782,
+                "estimatedCommission": 17553.3078,
+                "status": "paid"
+            }
+        ]
+我看现在返回后这些那就不对了
+
+有一个问题是
+wallet.collectedItems
+"collectedItems": [
+            {
+                "sourceType": "billing_decline_fee",
+                "effectiveRevenue": 10539.4600,
+                "gp": 10539.4600,
+                "commissionAmount": 1053.9460
+            },
+            {
+                "sourceType": "past_due_invoice",
+                "effectiveRevenue": 10962.1700,
+                "gp": 10962.1700,
+                "commissionAmount": 1096.2170
+            },
+            {
+                "sourceType": "real_time_processing_fee",
+                "effectiveRevenue": 160734.9761,
+                "gp": 175533.0782,
+                "commissionAmount": 17553.3078
+            }
+        ]
+/api/admin/sale/commission/performance
+   {
+                "pipelineType": "next_payout",
+                "sourceType": "real_time_processing_fee",
+                "settlementMonth": "2026-07",
+                "payoutDate": "2026-08-12",
+                "effectiveRevenue": 56606.3908,
+                "gp": 180204.4464,
+                "estimatedCommission": 18020.4446,
+                "status": "estimated"
+            },
+            {
+                "pipelineType": "future_payout",
+                "sourceType": "api_monthly_billing",
+                "settlementMonth": "2026-08",
+                "payoutDate": "2026-09-12",
+                "effectiveRevenue": 8996.7900,
+                "gp": 8996.7900,
+                "estimatedCommission": 899.6790,
+                "status": "estimated"
+            }
+
+这些都是api 客户相关的东西 不是每一个销售都有 
+但是我想如果没有的话这个sourceType 这些得存在只不过值都是0
+这种的枚举都要 没有都按0处理
+
+包括其他的金额相关也是一样

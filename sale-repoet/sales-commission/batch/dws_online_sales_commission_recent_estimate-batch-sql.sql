@@ -8,10 +8,19 @@
 --   运行参数：无
 -- Notes:
 --   1. 物化视图为 dws.mv_sales_commission_recent_estimate。
---   2. 本脚本不写 DWS 物理结果表。
---   3. 刷新范围由物化视图定义控制：近三个月 settlement_month。
---   4. 不要提交到 Flink SQL Gateway；Flink SQL 不支持 REFRESH MATERIALIZED VIEW。
---   5. 如果需要调度，使用数据库 SQL 调度/ADBPG 客户端任务执行本脚本。
+--   2. 该视图包含复杂 CTE / JOIN / 窗口函数，不适用于 ADBPG 增量物化视图。
+--   3. 本脚本用于手动刷新物化视图，并返回各月份、各来源类型汇总，方便检查。
 --********************************************************************--
 
 REFRESH MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate";
+
+SELECT
+  settlement_month,
+  source_type,
+  COUNT(1) AS row_count,
+  SUM(effective_revenue) AS effective_revenue,
+  SUM(gp) AS gp,
+  SUM(estimated_commission) AS estimated_commission
+FROM "dws"."mv_sales_commission_recent_estimate"
+GROUP BY settlement_month, source_type
+ORDER BY settlement_month, source_type;

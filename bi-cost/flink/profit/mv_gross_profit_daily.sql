@@ -2,12 +2,12 @@
 --   作业类型：DDL物化视图脚本
 --   运行方式：非运行作业
 --   运行参数：无
---   源库变更响应：上游收入/成本视图或表变更后，通过 pg_cron 每 5 分钟刷新物化结果。
+--   源库变更响应：ADBPG 增量物化视图随上游收入/成本视图或表变更自动维护。
 
 -- ==============================================
--- 1. 创建物化视图
+-- 1. 创建增量物化视图
 -- ==============================================
-CREATE MATERIALIZED VIEW "dws"."mv_gross_profit_daily" AS
+CREATE INCREMENTAL MATERIALIZED VIEW "dws"."mv_gross_profit_daily" AS
 WITH revenue_daily AS (
     SELECT
         stat_date AS report_date,
@@ -149,12 +149,11 @@ SELECT
     CAST(NULL AS timestamp) AS delete_time,
     CAST(NULL AS timestamp) AS create_date
 FROM gross_profit_daily
-WITH DATA
 DISTRIBUTED BY (id);
 
 ALTER MATERIALIZED VIEW "dws"."mv_gross_profit_daily" OWNER TO "qbit_admin";
 
--- 唯一索引：用于 CONCURRENTLY 刷新
+-- 唯一索引：用于按 id 查询和幂等校验
 CREATE UNIQUE INDEX IF NOT EXISTS "idx_mv_gross_profit_daily_id"
     ON "dws"."mv_gross_profit_daily" ("id");
 
@@ -165,23 +164,9 @@ CREATE INDEX IF NOT EXISTS "idx_mv_gross_profit_daily_account_dim"
     ON "dws"."mv_gross_profit_daily" ("account_id", "report_date");
 
 COMMENT ON MATERIALIZED VIEW "dws"."mv_gross_profit_daily" IS
-    'DWS物化视图：客户产品线毛利日汇总，每 5 分钟刷新一次';
+    'DWS增量物化视图：客户产品线毛利日汇总';
 
 -- ==============================================
--- 2. 定时刷新（每 5 分钟）
+-- 2. 维护说明
 -- ==============================================
--- 手动刷新：
--- REFRESH MATERIALIZED VIEW CONCURRENTLY dws.mv_gross_profit_daily;
-
--- pg_cron 定时任务（每 5 分钟刷新一次）：
-SELECT cron.schedule(
-    'refresh_mv_gross_profit_daily',
-    '*/5 * * * *',
-    $$REFRESH MATERIALIZED VIEW CONCURRENTLY dws.mv_gross_profit_daily$$
-);
-
--- 查看已创建的定时任务：
--- SELECT * FROM cron.job;
-
--- 删除定时任务：
--- SELECT cron.unschedule('refresh_mv_gross_profit_daily');
+-- 本视图为 ADBPG 增量物化视图，不再通过 REFRESH MATERIALIZED VIEW 或 pg_cron 定时刷新。
