@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-12
+-- Updated Time:   2026-07-30 22:00:21
 -- Description:    BB v2 交易 + 结算明细 DWM 表
 -- Notes:
 --   1. v2 以 quantum_card_transaction_extend 为交易主源。
@@ -102,6 +103,11 @@ CREATE INDEX "idx_dwm_bb_tx_v2_original_completion" ON "dwm"."dwm_bb_card_transa
   "account_id" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
 );
 
+CREATE TABLE "dwm"."dwm_bb_card_tx_v2_2025_08" PARTITION OF "dwm"."dwm_bb_card_transaction_detail_v2_p" FOR VALUES FROM ('2025-08-01 00:00:00') TO ('2025-09-01 00:00:00');
+CREATE TABLE "dwm"."dwm_bb_card_tx_v2_2025_09" PARTITION OF "dwm"."dwm_bb_card_transaction_detail_v2_p" FOR VALUES FROM ('2025-09-01 00:00:00') TO ('2025-10-01 00:00:00');
+CREATE TABLE "dwm"."dwm_bb_card_tx_v2_2025_10" PARTITION OF "dwm"."dwm_bb_card_transaction_detail_v2_p" FOR VALUES FROM ('2025-10-01 00:00:00') TO ('2025-11-01 00:00:00');
+CREATE TABLE "dwm"."dwm_bb_card_tx_v2_2025_11" PARTITION OF "dwm"."dwm_bb_card_transaction_detail_v2_p" FOR VALUES FROM ('2025-11-01 00:00:00') TO ('2025-12-01 00:00:00');
+CREATE TABLE "dwm"."dwm_bb_card_tx_v2_2025_12" PARTITION OF "dwm"."dwm_bb_card_transaction_detail_v2_p" FOR VALUES FROM ('2025-12-01 00:00:00') TO ('2026-01-01 00:00:00');
 CREATE TABLE "dwm"."dwm_bb_card_tx_v2_2026_01" PARTITION OF "dwm"."dwm_bb_card_transaction_detail_v2_p" FOR VALUES FROM ('2026-01-01 00:00:00') TO ('2026-02-01 00:00:00');
 CREATE TABLE "dwm"."dwm_bb_card_tx_v2_2026_02" PARTITION OF "dwm"."dwm_bb_card_transaction_detail_v2_p" FOR VALUES FROM ('2026-02-01 00:00:00') TO ('2026-03-01 00:00:00');
 CREATE TABLE "dwm"."dwm_bb_card_tx_v2_2026_03" PARTITION OF "dwm"."dwm_bb_card_transaction_detail_v2_p" FOR VALUES FROM ('2026-03-01 00:00:00') TO ('2026-04-01 00:00:00');

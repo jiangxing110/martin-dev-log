@@ -1,10 +1,12 @@
--- BB Auth monthly table reader.
--- The monthly raw tables are named public."bb_card_auth_detail_yyyy-mm".
--- This function gives Flink a stable entry point:
---   1. derive the monthly table name from p_start_time
---   2. return no rows when the monthly table does not exist
---   3. scan only the derived monthly table when it exists
---   4. return NULL for optional fields that are absent in 2026-02
+--********************************************************************--
+-- Author:         martinJiang
+-- Created Time:   2026-07-31 10:21:56
+-- Description:    BB Auth 月表读取函数兼容 2026-02 缺失扩展字段
+-- Notes:
+--   1. 2026-02 月表只有成本计算必需字段。
+--   2. 函数返回结构保持不变，Merchant Name/MCC 等扩展字段统一返回 NULL。
+--   3. 避免 CDC Auth DWM 通过函数读取 2026-02 时访问不存在列。
+--********************************************************************--
 
 CREATE OR REPLACE FUNCTION "public"."fn_bb_card_auth_detail_by_window"(
     p_start_time timestamp,
@@ -83,4 +85,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION "public"."fn_bb_card_auth_detail_by_window"(timestamp, timestamp)
-IS 'BB Auth monthly table stable reader for Flink. Returns empty result when the derived monthly table does not exist.';
+IS 'BB Auth monthly table stable reader for Flink. Returns empty result when the derived monthly table does not exist; optional extended fields may be NULL.';

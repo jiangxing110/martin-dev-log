@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-12
+-- Updated Time:   2026-07-30 20:27:55
 -- Description:    BB v2 Auth DWM 月表导入
 -- 作业元信息：
 --   作业类型：批处理
@@ -12,6 +13,7 @@
 --   3. JDBC source 直接读取指定 Auth 月表，避免函数入口在 Flink JDBC 中解析不稳定。
 --   4. Auth 月表名代表账单月份；实际回刷按 start_time/end_time 分片执行，避免单次扫描整月。
 --   5. DWM 通过 upsert 覆盖，不做删除。
+--   6. 2026-02 Auth 月表只有成本计算必需字段，缺失 Merchant Name/MCC 时写 NULL。
 --********************************************************************--
 
 SET 'parallelism.default' = '4';
@@ -52,14 +54,12 @@ CREATE TEMPORARY TABLE source_bb_card_auth_detail (
     merchant_country        STRING,
     transmission_date       STRING,
     merchant_name           STRING,
-    pos_service_code        STRING,
     mcc                     STRING,
-    authorization_id_code   STRING,
     source_table            STRING
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT CAST(TO_TIMESTAMP("Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') AS timestamp) AS auth_time, "Trans Date / Time" AS trans_date_time, "Program GUID" AS program_guid, "Program Name" AS program_name, "Card Proxy" AS card_proxy, "Person Name" AS person_name, "Request Code" AS request_code, "Request Description" AS request_description, "Local Trans Date / Time" AS local_trans_date_time, "Auth Txn GUID" AS auth_txn_guid, "Response Code" AS response_code, "Reason Code" AS reason_code, "Txn Amount" AS txn_amount, "Settle Amount" AS settle_amount, "Txn Currency" AS txn_currency, "Merchant Country" AS merchant_country, "Transmission Date" AS transmission_date, "Merchant Name" AS merchant_name, pos_service_code, "MCC" AS mcc, authorization_id_code, ''public."${auth_table_name}"'' AS source_table FROM public."${auth_table_name}" WHERE TO_TIMESTAMP("Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND TO_TIMESTAMP("Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') < CAST(''${end_time}'' AS TIMESTAMP(6))) AS bb_auth_detail_f',
+    'table-name' = '(SELECT CAST(TO_TIMESTAMP("Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') AS timestamp) AS auth_time, "Trans Date / Time" AS trans_date_time, "Program GUID" AS program_guid, "Program Name" AS program_name, "Card Proxy" AS card_proxy, "Person Name" AS person_name, "Request Code" AS request_code, "Request Description" AS request_description, "Local Trans Date / Time" AS local_trans_date_time, "Auth Txn GUID" AS auth_txn_guid, "Response Code" AS response_code, "Reason Code" AS reason_code, "Txn Amount" AS txn_amount, "Settle Amount" AS settle_amount, "Txn Currency" AS txn_currency, "Merchant Country" AS merchant_country, "Transmission Date" AS transmission_date, CAST(NULL AS varchar) AS merchant_name, CAST(NULL AS varchar) AS mcc, ''public."${auth_table_name}"'' AS source_table FROM public."${auth_table_name}" WHERE TO_TIMESTAMP("Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND TO_TIMESTAMP("Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') < CAST(''${end_time}'' AS TIMESTAMP(6))) AS bb_auth_detail_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

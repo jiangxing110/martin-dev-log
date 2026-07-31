@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-15
+-- Updated Time:   2026-07-31 10:21:56
 -- Description:    BB v2 Auth DWM CDC 窗口导入
 -- 作业元信息：
 --   作业类型：批式 CDC 修复任务
@@ -10,6 +11,7 @@
 --   1. Auth 原始表是月表，单月通常 200w+。
 --   2. 通过 public.fn_bb_card_auth_detail_by_window 固定入口按 start_time 选择月表。
 --   3. 月表不存在时函数返回空结果；DWM 通过 upsert 覆盖，不做删除。
+--   4. 2026-02 Auth 月表只有成本计算必需字段，缺失 Merchant Name/MCC 时写 NULL。
 --********************************************************************--
 
 SET 'parallelism.default' = '4';
@@ -142,8 +144,8 @@ SELECT
     a.`Txn Amount` AS txn_amount,
     a.`Settle Amount` AS settle_amount,
     a.`Txn Currency` AS txn_currency,
-    a.`Merchant Name` AS merchant_name,
-    a.MCC AS mcc,
+    CAST(NULL AS STRING) AS merchant_name,
+    CAST(NULL AS STRING) AS mcc,
     c.`type` AS card_org,
     a.`Merchant Country` = 'USA' AS is_dom,
     a.`Response Code` = 'DECLINE' AS is_decline,
