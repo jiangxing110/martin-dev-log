@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-23
+-- Updated Time:   2026-08-03 15:48:16
 -- 历史名称：sp_init_quantum_card_hz_bank_cost.sql
 -- Description:    金融渠道成本 DWM CDC 初始化 - QUANTUM_CARD / HZ_BANK
 -- 作业元信息：
@@ -300,11 +301,10 @@ WHERE mt.source_amount <> CAST(0 AS DECIMAL(20, 4));
 
 CREATE TEMPORARY VIEW v_sale_relation_candidates AS
 SELECT
-    b.report_date,
-    b.account_id,
-    b.product_line,
-    b.provider,
-    b.cost_type,
+    CONCAT(
+        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
+        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
+    ) AS cost_key,
     sr.sale_id,
     sr.am_id,
     sr.relation_start_time,
@@ -320,11 +320,10 @@ INNER JOIN source_dim_sale_account_relation_p sr
    )
 UNION ALL
 SELECT
-    b.report_date,
-    b.account_id,
-    b.product_line,
-    b.provider,
-    b.cost_type,
+    CONCAT(
+        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
+        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
+    ) AS cost_key,
     sr.sale_id,
     sr.am_id,
     sr.relation_start_time,
@@ -343,18 +342,14 @@ INNER JOIN source_dim_sale_account_relation_p sr
    );
 
 CREATE TEMPORARY VIEW v_sale_relation AS
-SELECT report_date, account_id, product_line, provider, cost_type, sale_id, am_id
+SELECT cost_key, sale_id, am_id
 FROM (
     SELECT
-        report_date,
-        account_id,
-        product_line,
-        provider,
-        cost_type,
+        cost_key,
         sale_id,
         am_id,
         ROW_NUMBER() OVER (
-            PARTITION BY report_date, account_id, product_line, provider, cost_type
+            PARTITION BY cost_key
             ORDER BY sale_priority ASC, relation_start_time DESC
         ) AS rn
     FROM v_sale_relation_candidates
@@ -363,7 +358,7 @@ WHERE rn = 1;
 
 
 CREATE TEMPORARY VIEW v_dwm_finance_channel_cost AS
-SELECT /*+ BROADCAST(sr) */
+SELECT
     CAST(ABS(HASH_CODE(CONCAT(
         DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
         b.account_id, ':',
@@ -403,11 +398,10 @@ SELECT /*+ BROADCAST(sr) */
 FROM v_allocated_cost_base b
 LEFT JOIN source_dim_account da ON da.id = b.account_id
 LEFT JOIN v_sale_relation sr
-    ON sr.report_date = b.report_date
-   AND sr.account_id = b.account_id
-   AND sr.product_line = b.product_line
-   AND sr.provider = b.provider
-   AND sr.cost_type = b.cost_type
+    ON sr.cost_key = CONCAT(
+        DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
+        b.account_id, ':', b.product_line, ':', b.provider, ':', b.cost_type
+    )
 WHERE b.cost_amount <> CAST(0 AS DECIMAL(20, 4));
 
 -- ====================================================================

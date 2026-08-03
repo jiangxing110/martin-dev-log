@@ -1,7 +1,45 @@
-/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/online
-帮我看看 检查一下
-finance 
-cdc 和batch的逻辑
-batch 根据startTime endTime 查询 statistics_time 数据在进行具体的逻辑处理
-batch 根据startTime endTime（前一天的开始时间结束时间） 查询 update_time 数据在进行具体的逻辑处理
-cdc 的具体分摊逻辑要和batch 保持一致
+/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/profit/mv_gross_profit_daily_v2.sql 这个地方收入视图dws_revenue_summary_daily_mv业务上游改成了 
+
+CREATE MATERIALIZED VIEW "dws"."dws_effective_revenue_daily_mv"
+AS
+SELECT COALESCE(r.stat_date, c.stat_date) AS stat_date,
+    COALESCE(r.category, c.category) AS category,
+    COALESCE(r.account_id, c.account_id) AS account_id,
+    COALESCE(r.account_type, c.account_type) AS account_type,
+    COALESCE(r.system_type, c.system_type) AS system_type,
+    COALESCE(r.total_revenue, (0)::numeric) AS total_revenue,
+    COALESCE(c.total_cashback, (0)::numeric) AS total_cashback,
+    (COALESCE(r.total_revenue, (0)::numeric) - COALESCE(c.total_cashback, (0)::numeric)) AS effective_revenue
+   FROM (dws.dws_effective_revenue_daily_mv_nest_r r
+     FULL JOIN dws.dws_effective_revenue_daily_mv_nest_c c ON (((r.stat_date = c.stat_date) AND ((r.category)::text = (c.category)::text) AND (r.account_id = c.account_id) AND (r.account_type = c.account_type) AND (r.system_type = c.system_type))));
+
+ALTER MATERIALIZED VIEW "dws"."dws_effective_revenue_daily_mv" OWNER TO "flink_cdc_user";
+
+CREATE INDEX "imv222451271_index" ON "dws"."dws_effective_revenue_daily_mv" USING btree (
+  "effective_revenue" "pg_catalog"."numeric_ops" ASC NULLS LAST
+);
+
+CREATE INDEX "imv_outerjoin222451271_index0" ON "dws"."dws_effective_revenue_daily_mv" USING btree (
+  "__imv_outerjoin222451239_1_9__" "pg_catalog"."date_ops" ASC NULLS LAST,
+  "__imv_outerjoin222451239_2_11__" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "__imv_outerjoin222451239_3_13__" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "__imv_outerjoin222451239_4_15__" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "__imv_outerjoin222451239_5_17__" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+CREATE INDEX "imv_outerjoin222451271_index1" ON "dws"."dws_effective_revenue_daily_mv" USING btree (
+  "__imv_outerjoin222451260_1_10__" "pg_catalog"."date_ops" ASC NULLS LAST,
+  "__imv_outerjoin222451260_2_12__" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "__imv_outerjoin222451260_3_14__" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "__imv_outerjoin222451260_4_16__" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "__imv_outerjoin222451260_5_18__" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+COMMENT ON MATERIALIZED VIEW "dws"."dws_effective_revenue_daily_mv" IS '有效收入日维度汇总（收入-返现）';
+
+
+原来的收入我们现在应该取effective_revenue
+给我生成一份mv_gross_profit_daily_v3
+
+1.sales dashboard:因为收入部分表结构调整明天才能更新我的销售返佣视图
+2.CDC任务编排:50%

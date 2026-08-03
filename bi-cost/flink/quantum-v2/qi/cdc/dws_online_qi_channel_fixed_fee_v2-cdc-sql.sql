@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-16
--- Updated Time:   2026-07-30 16:12:12
+-- Updated Time:   2026-08-03 17:09:43
 -- Description:    QI v2 渠道固定成本 CDC 每日维护
 --********************************************************************--
 
@@ -48,19 +48,18 @@ CREATE TEMPORARY TABLE source_dws_qi_card_finance_daily_v2_p (
     delete_time TIMESTAMP(6),
     PRIMARY KEY (id, report_date) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dws_qi_card_finance_daily_v2_p',
-    'targetSchema' = 'dws',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT t.id, t.report_date, t.account_id, t.account_type, t.account_category, t.system_type, t.sale_id, t.am_id, t.rebate_incentive_base_amt, t.special_fee_type, t.delete_time FROM dws.dws_qi_card_finance_daily_v2_p t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS report_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND tag = ''CHANNEL_COST'' AND provider = ''IQ'' AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) m WHERE t.report_date >= m.report_month AND t.report_date < m.next_month)) AS dws_qi_card_finance_daily_v2_p_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY VIEW v_month_scope AS
 SELECT DISTINCT report_month, CAST(DATE_FORMAT(CAST(DATE_ADD(report_month, 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS next_month
 FROM (
-    SELECT CAST(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
-    UNION
     SELECT CAST(DATE_FORMAT(CAST(statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
     FROM source_bi_month_tag
     WHERE tag = 'CHANNEL_COST'
@@ -123,6 +122,25 @@ WHERE c.month_fixed_fee IS NOT NULL
   AND c.month_fixed_fee <> CAST(0 AS DECIMAL(20, 4))
   AND na.month_total_net_amount <> CAST(0 AS DECIMAL(20, 4));
 
+CREATE TEMPORARY VIEW v_obsolete_fixed_fee_rows AS
+SELECT
+    existing_row.id,
+    existing_row.report_date,
+    existing_row.account_id,
+    existing_row.account_type,
+    existing_row.account_category,
+    existing_row.system_type,
+    existing_row.sale_id,
+    existing_row.am_id
+FROM source_dws_qi_card_finance_daily_v2_p existing_row
+LEFT JOIN v_fixed_fee_rows fresh
+    ON fresh.id = existing_row.id
+   AND fresh.report_date = existing_row.report_date
+WHERE existing_row.special_fee_type = 'CHANNEL_FIXED_FEE'
+  AND existing_row.delete_time IS NULL
+  AND EXISTS (SELECT 1 FROM v_month_scope m WHERE existing_row.report_date >= m.report_month AND existing_row.report_date < m.next_month)
+  AND fresh.id IS NULL;
+
 CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_v2_p (
     id BIGINT,
     report_date DATE,
@@ -151,12 +169,13 @@ CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_v2_p (
     'batchSize' = '2000'
 );
 
-DELETE FROM sink_dws_qi_card_finance_daily_v2_p
-WHERE special_fee_type = 'CHANNEL_FIXED_FEE'
-  AND EXISTS (SELECT 1 FROM v_month_scope m WHERE report_date >= m.report_month AND report_date < m.next_month);
-
 INSERT INTO sink_dws_qi_card_finance_daily_v2_p
 SELECT id, report_date, account_id, account_type, account_category, system_type,
        1, 'qi_channel_fixed_fee_v2', CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)), CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)), CAST(NULL AS TIMESTAMP(6)),
        sale_id, am_id, cost_fixed_fee, 'CHANNEL_FIXED_FEE'
-FROM v_fixed_fee_rows;
+FROM v_fixed_fee_rows
+UNION ALL
+SELECT id, report_date, account_id, account_type, account_category, system_type,
+       1, 'qi_channel_fixed_fee_v2_soft_delete', CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)), CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)), CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)),
+       sale_id, am_id, CAST(0 AS DECIMAL(20, 4)), 'CHANNEL_FIXED_FEE'
+FROM v_obsolete_fixed_fee_rows;
