@@ -1,21 +1,7 @@
-6
-BB 414168.8149
-   414,022
-   413,801
-
-QI 771390
-1186802.6316
-
-
-1186802.6316+9023.6532+120000.3918+41081.0003=1,356,907.6769
-
-2491382.1270	1356907.6769	1134474.4501
-
-我和饶老师对了一下6月差了一个qi的固定成本 等下补一下
-
-37680
-
-177499
-1364588.1636
-
-我和饶谦核对了量子卡的成本BB QI基本保持一致(QI缺了一个固定成本，魏老师录入进去后已经重新洗了) 
+/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/online
+帮我看看 检查一下
+finance 
+cdc 和batch的逻辑
+batch 根据startTime endTime 查询 statistics_time 数据在进行具体的逻辑处理
+batch 根据startTime endTime（前一天的开始时间结束时间） 查询 update_time 数据在进行具体的逻辑处理
+cdc 的具体分摊逻辑要和batch 保持一致
