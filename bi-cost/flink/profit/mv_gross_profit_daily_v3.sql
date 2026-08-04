@@ -3,7 +3,7 @@
 --   运行方式：非运行作业
 --   运行参数：无
 --   源库变更响应：普通物化视图不会自动维护，需按需 REFRESH MATERIALIZED VIEW。
---   v3 说明：收入读取 dws.dws_effective_revenue_daily_mv.effective_revenue；渠道成本只读取 dws.dws_total_channel_cost_daily_v2_p。
+--   v3 说明：收入读取 dws.dws_effective_revenue_daily_mv.effective_revenue，并将收入 category=card 映射到 qbit_card。
 
 -- ==============================================
 -- 1. 创建普通物化视图
@@ -42,7 +42,10 @@ FROM (
         SELECT
             stat_date AS report_date,
             account_id,
-            category,
+            CASE
+                WHEN category = 'card' THEN 'qbit_card'
+                ELSE category
+            END AS category,
             SUM(
                 CASE
                     WHEN effective_revenue IS NULL OR effective_revenue::text = 'NaN' THEN 0
@@ -50,7 +53,14 @@ FROM (
                 END
             ) AS revenue_amount
         FROM "dws"."dws_effective_revenue_daily_mv"
-        GROUP BY stat_date, account_id, category
+        WHERE category IN ('global_account', 'acquiring', 'card', 'crypto_assets')
+        GROUP BY
+            stat_date,
+            account_id,
+            CASE
+                WHEN category = 'card' THEN 'qbit_card'
+                ELSE category
+            END
     ) r
     FULL OUTER JOIN (
         SELECT
@@ -166,7 +176,7 @@ CREATE INDEX IF NOT EXISTS "idx_mv_gross_profit_daily_account_dim"
     ON "dws"."mv_gross_profit_daily" ("account_id", "report_date");
 
 COMMENT ON MATERIALIZED VIEW "dws"."mv_gross_profit_daily" IS
-    'DWS普通物化视图：客户产品线毛利日汇总 v3，收入来源 dws_effective_revenue_daily_mv.effective_revenue，渠道成本来源 dws_total_channel_cost_daily_v2_p';
+    'DWS普通物化视图：客户产品线毛利日汇总 v3，收入来源 dws_effective_revenue_daily_mv.effective_revenue，card 映射 qbit_card';
 
 -- ==============================================
 -- 2. 维护说明

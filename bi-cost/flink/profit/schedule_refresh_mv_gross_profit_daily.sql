@@ -1,12 +1,13 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-31 16:30:00
+-- Updated Time:   2026-08-04 11:44:59
 -- Description:    注册毛利日汇总普通物化视图数据库定时刷新任务
 -- Notes:
 --   1. 本脚本依赖 pg_cron 或兼容 cron 扩展。
---   2. 先执行 mv_gross_profit_daily_v2.sql 创建普通物化视图。
+--   2. 先执行 mv_gross_profit_daily_v3.sql 创建普通物化视图。
 --   3. 再执行本脚本注册定时刷新任务。
---   4. 当前调度为每 1 小时刷新一次。
+--   4. 当前调度为每 30 分钟刷新一次。
 --********************************************************************--
 
 -- 1. 检查 pg_cron 是否已安装。
@@ -37,10 +38,10 @@ WHERE jobname IN (
   'refresh_gross_profit_daily_1h'
 );
 
--- 5. 注册每 1 小时刷新一次。
+-- 5. 注册每 30 分钟刷新一次。
 SELECT cron.schedule(
-  'refresh_gross_profit_daily_1h',
-  '0 * * * *',
+  'refresh_gross_profit_daily_30min',
+  '*/30 * * * *',
   $$REFRESH MATERIALIZED VIEW "dws"."mv_gross_profit_daily"$$
 );
 
@@ -52,4 +53,4 @@ SELECT
   command,
   active
 FROM cron.job
-WHERE jobname = 'refresh_gross_profit_daily_1h';
+WHERE jobname = 'refresh_gross_profit_daily_30min';
