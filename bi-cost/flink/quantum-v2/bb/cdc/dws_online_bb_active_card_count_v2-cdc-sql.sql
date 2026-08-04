@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-16
--- Updated Time:   2026-08-04 10:01:05
+-- Updated Time:   2026-08-04 15:02:00
 -- Description:    BB v2 Active Card Count CDC 每日重算写入
 -- 作业元信息：
 --   作业类型：批式 CDC 修复任务
@@ -39,12 +39,13 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
     delete_time      TIMESTAMP(6),
     PRIMARY KEY (id, auth_time) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dwm_bb_card_auth_detail_v2_p',
-    'targetSchema' = 'dwm',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT id, card_proxy, account_id, account_type, account_category, system_type, auth_time, update_time, delete_time FROM dwm.dwm_bb_card_auth_detail_v2_p) AS dwm_bb_card_auth_detail_v2_p_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (

@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-12
+-- Updated Time:   2026-08-04 14:55:00
 -- Description:    BB v2 DWM CDC 增量同步
 -- 作业元信息：
 --   作业类型：流处理 CDC
@@ -106,12 +107,13 @@ CREATE TEMPORARY TABLE source_dim_account (
     system_type       STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dim_account',
-    'targetSchema' = 'dim',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = 'dim.dim_account',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 -- API 子账户到 root account 的关系，用于直连销售关系找不到时兜底到 root。
@@ -142,12 +144,13 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     delete_time           TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dim_sale_account_relation_p',
-    'targetSchema' = 'dim',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = 'dim.dim_sale_account_relation_p',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 -- BB 交易口径入口：

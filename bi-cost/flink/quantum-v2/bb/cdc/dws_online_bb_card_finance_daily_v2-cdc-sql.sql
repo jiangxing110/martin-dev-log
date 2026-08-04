@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-12
--- Updated Time:   2026-08-04 10:01:05
+-- Updated Time:   2026-08-04 15:16:00
 -- Description:    Quantum BB v2 DWS CDC 按月重算写入
 -- 作业元信息：
 --   作业类型：流处理 CDC
@@ -72,12 +72,13 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_transaction_detail_v2_p (
     delete_time              TIMESTAMP(6),
     PRIMARY KEY (id, transaction_time) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dwm_bb_card_transaction_detail_v2_p',
-    'targetSchema' = 'dwm',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT id, txn_id, settlement_id, source_id, card_transaction_id, account_id, account_type, account_category, system_type, card_id, transaction_time, original_completion_time, business_type, business_code_list, remarks, detail, card_org, tx_country, settle_country, is_dom, resp_code, reason_code, transaction_type, is_valid_settle, is_clearing, is_reversal, is_refund, billing_amount, settlement_post_date, settlement_txn_date, sale_id, am_id, version, create_time, update_time, delete_time FROM dwm.dwm_bb_card_transaction_detail_v2_p) AS dwm_bb_card_transaction_detail_v2_p_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
@@ -115,12 +116,13 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
     delete_time             TIMESTAMP(6),
     PRIMARY KEY (id, auth_time) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dwm_bb_card_auth_detail_v2_p',
-    'targetSchema' = 'dwm',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT id, auth_txn_guid, card_proxy, account_id, account_type, account_category, system_type, card_id, auth_time, program_name, merchant_country, request_code, request_description, response_code, reason_code, txn_amount, settle_amount, txn_currency, merchant_name, mcc, card_org, is_dom, is_decline, is_account_verification, is_excluded_request, sale_id, am_id, source_table, version, create_time, update_time, delete_time FROM dwm.dwm_bb_card_auth_detail_v2_p) AS dwm_bb_card_auth_detail_v2_p_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY VIEW v_bb_changed_months AS
@@ -175,19 +177,28 @@ FROM (
 WHERE report_month IS NOT NULL;
 
 CREATE TEMPORARY VIEW v_bb_metric_rows AS
-SELECT s.*, 'txn_time' AS metric_basis
+SELECT
+    CAST(DATE_FORMAT(CAST(s.transaction_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
+    s.*,
+    'txn_time' AS metric_basis
 FROM source_dwm_bb_card_transaction_detail_v2_p s
 INNER JOIN v_bb_changed_months m
     ON CAST(DATE_FORMAT(CAST(s.transaction_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = m.report_month
 WHERE s.delete_time IS NULL
 UNION ALL
-SELECT s.*, 'completion_time' AS metric_basis
+SELECT
+    CAST(DATE_FORMAT(CAST(s.original_completion_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
+    s.*,
+    'completion_time' AS metric_basis
 FROM source_dwm_bb_card_transaction_detail_v2_p s
 INNER JOIN v_bb_changed_months m
     ON CAST(DATE_FORMAT(CAST(s.original_completion_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = m.report_month
 WHERE s.delete_time IS NULL
 UNION ALL
-SELECT s.*, 'post_date' AS metric_basis
+SELECT
+    CAST(DATE_FORMAT(CAST(s.settlement_post_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
+    s.*,
+    'post_date' AS metric_basis
 FROM source_dwm_bb_card_transaction_detail_v2_p s
 INNER JOIN v_bb_changed_months m
     ON CAST(DATE_FORMAT(CAST(s.settlement_post_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = m.report_month
@@ -218,9 +229,9 @@ SELECT
     CAST(0 AS INT) AS ac_m_int_decline_count,
     CAST(0 AS INT) AS ac_v_int_decline_count,
     CAST(0 AS INT) AS ac_dom_decline_count,
-    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND card_org = 'Master' AND is_valid_settle = TRUE AND is_dom = FALSE AND is_reversal = TRUE AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND request_code IN ('ST-AUTH_REV', 'ST-PARTIAL_REV') THEN 1 ELSE 0 END) AS INT) AS m_int_reversal_count,
-    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND card_org = 'VISA' AND is_valid_settle = TRUE AND tx_country NOT IN ('US', 'USA') AND is_reversal = TRUE AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND request_code IN ('ST-AUTH_REV', 'ST-PARTIAL_REV') THEN 1 ELSE 0 END) AS INT) AS v_int_reversal_count,
-    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND is_dom = TRUE AND is_valid_settle = TRUE AND is_reversal = TRUE AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND request_code IN ('ST-AUTH_REV', 'ST-PARTIAL_REV') THEN 1 ELSE 0 END) AS INT) AS dom_reversal_count,
+    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' THEN 1 ELSE 0 END) AS INT) AS m_int_reversal_count,
+    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' THEN 1 ELSE 0 END) AS INT) AS v_int_reversal_count,
+    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' THEN 1 ELSE 0 END) AS INT) AS dom_reversal_count,
     CAST(SUM(CASE WHEN metric_basis = 'post_date' AND business_type = 'Credit' AND card_org = 'Master' AND is_valid_settle = TRUE AND settle_country NOT IN ('US', 'USA') AND is_refund = TRUE AND resp_code = 'APPROVE' THEN 1 ELSE 0 END) AS INT) AS m_int_refund_count,
     CAST(SUM(CASE WHEN metric_basis = 'post_date' AND business_type = 'Credit' AND card_org = 'VISA' AND is_valid_settle = TRUE AND settle_country NOT IN ('US', 'USA') AND is_refund = TRUE AND resp_code = 'APPROVE' THEN 1 ELSE 0 END) AS INT) AS v_int_refund_count,
     CAST(SUM(CASE WHEN metric_basis = 'post_date' AND business_type = 'Credit' AND settle_country NOT IN ('US', 'USA') AND is_refund = TRUE AND resp_code = 'APPROVE' THEN 1 ELSE 0 END) AS INT) AS dom_refund_count,
