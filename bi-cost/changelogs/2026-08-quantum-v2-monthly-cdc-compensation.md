@@ -6,3 +6,4 @@
 - DWM 明细 monthly-cdc 保留 batch 逻辑和 upsert 写入。
 - DWS monthly-cdc 拆分为 delete 和 insert，insert 使用 `writeMode = 'insert'`，规避 ADBPG beam 分区表 `ON CONFLICT DO UPDATE` 限制。
 - monthly delete 固定清理上月完整窗口，并按 `special_fee_type` 限定普通汇总、渠道固定成本和 BB 活跃卡费用。
+- BB transaction DWM monthly-cdc 的 settlement `createTime` 上界调整为本月 9 号 00:00 前，对齐 BB 原始成本对账口径。

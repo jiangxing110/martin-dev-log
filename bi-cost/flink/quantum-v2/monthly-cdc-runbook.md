@@ -54,3 +54,4 @@ DWS 的 delete 和 insert 不要合并到同一个 Flink SQL 作业里执行。
 
 `bb/monthly-cdc/dwm_online_bb_card_auth_detail_v2-monthly-cdc-sql.sql` 仍需要配置 `auth_table_name`，例如 `bb_card_auth_detail_2026-07`。
 所有 monthly-cdc 脚本的时间窗口均自动取上月，不需要再传 `start_time/end_time` 或 `start_date/end_date`。
+BB transaction DWM 的 settlement `createTime` 扩窗为上月前 1 个月到本月 9 号 00:00 前，用于对齐 BB 原始成本对账口径。

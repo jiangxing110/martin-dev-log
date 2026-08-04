@@ -35,6 +35,7 @@ Flink SQL 本体中使用 `DATE_FORMAT(CURRENT_DATE, 'yyyy-MM-01')` 组合表达
 
 DWM 明细脚本从 batch 派生，保留 `writeMode = 'upsert'`。
 这些表是明细粒度，主键可覆盖同一条明细，不需要先删整月。
+BB transaction DWM 的 settlement `createTime` 读取窗口按 BB 原始成本对账口径处理：从费用月前 1 个月开始，到费用月后下月 9 号 00:00 前结束，避免把 9 号之后的下月 settlement 计入当月成本。
 
 ### 3. DWS 汇总
 
