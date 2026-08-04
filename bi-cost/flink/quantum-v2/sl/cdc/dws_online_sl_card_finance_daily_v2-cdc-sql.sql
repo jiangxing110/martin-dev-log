@@ -1,7 +1,8 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-12
--- Description:    Quantum SL v2 DWS CDC 按月回刷
+-- Updated Time:   2026-08-04 10:01:05
+-- Description:    Quantum SL v2 DWS CDC 按月重算写入
 -- 作业元信息：
 --   作业类型：流处理 CDC
 --   运行方式：默认按昨天变更扫描，按受影响月份整月删除后重算
@@ -155,17 +156,8 @@ CREATE TEMPORARY TABLE sink_dws_sl_card_finance_daily_p (
     'targetSchema' = 'dws',
     'userName' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'writeMode' = 'upsert',
+    'writeMode' = 'insert',
     'batchSize' = '2000'
-);
-
-DELETE FROM sink_dws_sl_card_finance_daily_p
-WHERE (special_fee_type IS NULL OR special_fee_type <> 'CHANNEL_FIXED_FEE')
-  AND EXISTS (
-    SELECT 1
-    FROM v_sl_changed_months m
-    WHERE sink_dws_sl_card_finance_daily_p.report_date >= m.report_month
-      AND sink_dws_sl_card_finance_daily_p.report_date < m.next_month
 );
 
 INSERT INTO sink_dws_sl_card_finance_daily_p

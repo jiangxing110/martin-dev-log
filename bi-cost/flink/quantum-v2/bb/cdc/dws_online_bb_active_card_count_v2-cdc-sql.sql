@@ -1,7 +1,8 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-16
--- Description:    BB v2 Active Card Count CDC 每日维护
+-- Updated Time:   2026-08-04 10:01:05
+-- Description:    BB v2 Active Card Count CDC 每日重算写入
 -- 作业元信息：
 --   作业类型：批式 CDC 修复任务
 --   运行方式：默认重算当前月；如昨天 Auth DWM 变更，也重算对应月份
@@ -206,18 +207,9 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     'targetSchema' = 'dws',
     'userName' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'writeMode' = 'upsert',
+    'writeMode' = 'insert',
     'batchSize' = '2000'
 );
-
-DELETE FROM sink_dws_bb_card_finance_daily_v2_p
-WHERE special_fee_type = 'ACTIVE_CARD_ACCOUNT_FEE'
-  AND EXISTS (
-      SELECT 1
-      FROM v_month_scope m
-      WHERE report_date >= m.report_month
-        AND report_date < m.next_month
-  );
 
 INSERT INTO sink_dws_bb_card_finance_daily_v2_p
 SELECT
