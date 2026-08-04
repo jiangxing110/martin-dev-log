@@ -12,7 +12,7 @@ SELECT
     '2026-06-01 08:00:00'::timestamp AS txn_start,   -- transaction_time 开始（带时区偏移）
     '2026-07-01 08:00:00'::timestamp AS txn_end,     -- transaction_time 结束（带时区偏移）
     '2026-05-01 00:00:00'::timestamp AS settle_start, -- settle表开始时间前延一个月
-    '2026-08-01 00:00:00'::timestamp AS settle_end,   -- settle表结束时间后延一个月
+    '2026-07-09 00:00:00'::timestamp AS settle_end,   -- settle表结束时间到下月9号00:00前
     '2026-06-01'::date AS post_start,                 -- post_date-计算退款 开始时间
     '2026-07-01'::date AS post_end,                   -- post_date-计算退款 结束时间
     '2026-06'::text AS month_label,                   -- 输出月份标签
