@@ -1,15 +1,15 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-15
--- Updated Time:   2026-07-31 10:21:56
+-- Updated Time:   2026-08-04 14:48:00
 -- Description:    BB v2 Auth DWM CDC 窗口导入
 -- 作业元信息：
 --   作业类型：批式 CDC 修复任务
---   运行方式：按 start_time 所在月份导入存在的 bb_card_auth_detail_yyyy-mm
---   运行参数：start_time, end_time
+--   运行方式：默认导入昨天窗口 [CURRENT_DATE - 1 day, CURRENT_DATE)
+--   运行参数：无
 -- Notes:
 --   1. Auth 原始表是月表，单月通常 200w+。
---   2. 通过 public.fn_bb_card_auth_detail_by_window 固定入口按 start_time 选择月表。
+--   2. 通过 public.fn_bb_card_auth_detail_by_window 固定入口按昨天窗口选择月表。
 --   3. 月表不存在时函数返回空结果；DWM 通过 upsert 覆盖，不做删除。
 --   4. 2026-02 Auth 月表只有成本计算必需字段，缺失 Merchant Name/MCC 时写 NULL。
 --********************************************************************--
@@ -53,7 +53,7 @@ CREATE TEMPORARY TABLE source_bb_card_auth_detail (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT * FROM public.fn_bb_card_auth_detail_by_window(CAST(''${start_time}'' AS timestamp), CAST(''${end_time}'' AS timestamp))) AS bb_auth_detail_f',
+    'table-name' = '(SELECT * FROM public.fn_bb_card_auth_detail_by_window((CURRENT_DATE - INTERVAL ''1 day'')::timestamp, CURRENT_DATE::timestamp)) AS bb_auth_detail_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -83,12 +83,13 @@ CREATE TEMPORARY TABLE source_dim_account (
     system_type       STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dim_account',
-    'targetSchema' = 'dim',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = 'dim.dim_account',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_api_account_relation (
@@ -117,12 +118,13 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     delete_time           TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dim_sale_account_relation_p',
-    'targetSchema' = 'dim',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = 'dim.dim_sale_account_relation_p',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY VIEW v_auth_base AS
@@ -165,8 +167,8 @@ LEFT JOIN source_qbit_card c
     ON a.`Card Proxy` = c.token
 LEFT JOIN source_dim_account da
     ON da.id = c.account_id
-WHERE TO_TIMESTAMP(a.`Trans Date / Time`, 'MM/dd/yyyy hh:mm:ss a') >= CAST('${start_time}' AS TIMESTAMP(6))
-  AND TO_TIMESTAMP(a.`Trans Date / Time`, 'MM/dd/yyyy hh:mm:ss a') < CAST('${end_time}' AS TIMESTAMP(6));
+WHERE TO_TIMESTAMP(a.`Trans Date / Time`, 'MM/dd/yyyy hh:mm:ss a') >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6))
+  AND TO_TIMESTAMP(a.`Trans Date / Time`, 'MM/dd/yyyy hh:mm:ss a') < CAST(CURRENT_DATE AS TIMESTAMP(6));
 
 CREATE TEMPORARY VIEW v_auth_direct_sale_relation AS
 SELECT auth_txn_guid, sale_id, am_id
