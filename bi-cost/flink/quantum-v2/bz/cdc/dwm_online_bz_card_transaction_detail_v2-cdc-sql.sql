@@ -1,12 +1,13 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-28
+-- Updated Time:   2026-08-04 15:36:00
 -- Description:    BZ v2 CDC 增量同步: qbit_card_transaction -> DWM 交易明细
 -- 作业元信息：
---   作业类型：流处理 CDC
---   运行方式：全量初始化 + 增量实时同步
+--   作业类型：批式 CDC 修复任务
+--   运行方式：默认按昨天变更扫描
 --   运行参数：无
---   源库变更响应：源表变更通过 postgres-cdc 驱动下游写入。
+--   源库变更响应：按 qbit_card_transaction updateTime/createTime/deleteTime 昨日窗口重刷。
 -- Notes:
 --   1. CDC 源: qbit_card_transaction (provider LIKE 'I2c%')
 --   2. accountId 直接可用，关联 dim_account 获取账户维度
@@ -29,7 +30,6 @@ SET 'execution.checkpointing.interval' = '10s';
 SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
 SET 'execution.checkpointing.timeout' = '30min';
 
--- CDC 源：qbit_card_transaction (postgres-cdc)
 CREATE TEMPORARY TABLE source_qbit_card_transaction (
     id                  STRING,
     `accountId`         STRING,
@@ -45,21 +45,14 @@ CREATE TEMPORARY TABLE source_qbit_card_transaction (
     `updateTime`        TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'postgres-cdc',
-    'hostname' = '${secret_values.PG_TEST_HOST}',
-    'port' = '${secret_values.PG_TEST_PORT1}',
-    'username' = '${secret_values.PG_TEST_USERNAME}',
-    'password' = '${secret_values.PG_TEST_PASSWORD}',
-    'database-name' = '${secret_values.PG_TEST_DATABASE}',
-    'schema-name' = 'public',
-    'table-name' = 'qbit_card_transaction',
-    'slot.name' = 'flink_slot_qbit_card_txn_bz_dwm',
-    'decoding.plugin.name' = 'pgoutput',
-    'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.slot.drop.on.stop' = 'true',
-    'debezium.decimal.handling.mode' = 'string',
-    'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'false'
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT id::text AS id, "accountId"::text AS "accountId", "cardId"::text AS "cardId", "transactionTime", "businessType", status, "settleAmount", CAST("specialSourceData" AS text) AS "specialSourceData", provider, "deleteTime", "createTime", "updateTime" FROM public.qbit_card_transaction WHERE provider LIKE ''I2c%'' AND ((COALESCE("updateTime", "createTime") >= CAST(CURRENT_DATE - INTERVAL ''1'' DAY AS TIMESTAMP(6)) AND COALESCE("updateTime", "createTime") < CAST(CURRENT_DATE AS TIMESTAMP(6))) OR ("deleteTime" >= CAST(CURRENT_DATE - INTERVAL ''1'' DAY AS TIMESTAMP(6)) AND "deleteTime" < CAST(CURRENT_DATE AS TIMESTAMP(6))))) AS qbit_card_transaction_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000',
+    'scan.auto-commit' = 'false'
 );
 
 CREATE TEMPORARY TABLE source_dim_account (
@@ -70,12 +63,13 @@ CREATE TEMPORARY TABLE source_dim_account (
     delete_time  TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dim_account',
-    'targetSchema' = 'dim',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT id::text AS id, account_type, "type", system_type, delete_time FROM dim.dim_account) AS dim_account_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
@@ -88,12 +82,13 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
     delete_time          TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dim_sale_account_relation_p',
-    'targetSchema' = 'dim',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT id::text AS id, relation_account_id::text AS relation_account_id, sale_id, am_id, relation_start_time, relation_end_time, delete_time FROM dim.dim_sale_account_relation_p WHERE delete_time IS NULL) AS dim_sale_account_relation_p_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY TABLE source_api_account_relation (
@@ -102,12 +97,13 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     delete_time TIMESTAMP(6),
     PRIMARY KEY (account_id) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'api_account_relation',
-    'targetSchema' = 'public',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT account_id::text AS account_id, root_id::text AS root_id, delete_time FROM public.api_account_relation WHERE delete_time IS NULL) AS api_account_relation_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 -- 交易基础视图：CDC 源 + dim_account

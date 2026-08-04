@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-12
--- Updated Time:   2026-08-04 10:01:05
+-- Updated Time:   2026-08-04 15:48:00
 -- Description:    Quantum QI v2 DWS CDC 按月重算写入
 -- 作业元信息：
 --   作业类型：批式 CDC 修复任务
@@ -77,12 +77,13 @@ CREATE TEMPORARY TABLE source_dwm_qi_card_transaction_detail_v2_p (
     am_id                 STRING,
     PRIMARY KEY (id, transaction_time) NOT ENFORCED
 ) WITH (
-    'connector' = 'adbpg',
+    'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dwm_qi_card_transaction_detail_v2_p',
-    'targetSchema' = 'dwm',
-    'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}'
+    'table-name' = '(SELECT id, transaction_id, account_id, account_type, account_category, system_type, status, transaction_time, version, remarks, create_time, update_time, delete_time, source_update_time, source_delete_time, is_current_valid, billing_amount, is_qbit_provision, is_hk_region, is_consumption, is_reversal_or_credit, has_special_code, is_vip_account, business_type, card_id, sale_id, am_id FROM dwm.dwm_qi_card_transaction_detail_v2_p) AS dwm_qi_card_transaction_detail_v2_p_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY VIEW v_qi_fact_changed_months AS
@@ -114,10 +115,29 @@ FROM (
     SELECT report_month FROM v_qi_config_changed_months
 ) changed;
 
+CREATE TEMPORARY VIEW v_qi_dwm_month_rows AS
+SELECT
+    CAST(s.transaction_time AS DATE) AS report_date,
+    s.account_id,
+    s.account_type,
+    s.account_category,
+    s.system_type,
+    s.status,
+    s.billing_amount,
+    s.is_hk_region,
+    s.business_type,
+    s.has_special_code,
+    s.sale_id,
+    s.am_id
+FROM source_dwm_qi_card_transaction_detail_v2_p s
+INNER JOIN v_qi_changed_months m
+    ON CAST(DATE_FORMAT(CAST(s.transaction_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = m.report_month
+WHERE s.delete_time IS NULL;
+
 CREATE TEMPORARY VIEW v_dws_qi_month_base AS
 SELECT
-    CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(s.transaction_time, 'yyyyMMdd'), ':', s.account_id, ':', COALESCE(s.sale_id, ''), ':', COALESCE(s.am_id, '')))) AS BIGINT) AS id,
-    CAST(s.transaction_time AS DATE) AS report_date,
+    CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', COALESCE(sale_id, ''), ':', COALESCE(am_id, '')))) AS BIGINT) AS id,
+    report_date,
     s.account_id,
     s.account_type,
     s.account_category,
@@ -177,11 +197,8 @@ SELECT
         END ELSE 0 END) AS DECIMAL(20, 4)) AS cost_dcsf_base_amt,
     CAST(SUM(CASE WHEN s.status IN ('Closed', 'Pending') AND s.is_hk_region = FALSE AND s.business_type = 'Consumption' THEN s.billing_amount * CAST(0.02 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS rebate_interchange_base_amt,
     CAST(SUM(CASE WHEN s.status IN ('Closed', 'Pending') AND s.business_type = 'Consumption' THEN s.billing_amount * CAST(0.0118 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS rebate_incentive_base_amt
-FROM source_dwm_qi_card_transaction_detail_v2_p s
-INNER JOIN v_qi_changed_months m
-    ON CAST(DATE_FORMAT(CAST(s.transaction_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = m.report_month
-WHERE s.delete_time IS NULL
-GROUP BY CAST(s.transaction_time AS DATE), s.account_id, s.account_type, s.account_category, s.system_type, s.sale_id, s.am_id;
+FROM v_qi_dwm_month_rows s
+GROUP BY report_date, s.account_id, s.account_type, s.account_category, s.system_type, s.sale_id, s.am_id;
 
 CREATE TEMPORARY VIEW v_qi_month_row_count AS
 SELECT
