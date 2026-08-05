@@ -1,12 +1,14 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-04
--- Updated Time:   2026-08-04 10:01:05
+-- Updated Time:   2026-08-05 22:30:25
 -- Description:    Quantum BB v2 DWS CDC 按月清理普通汇总行
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
 SET 'table.dml-sync' = 'true';
+SET 'execution.application-management.enabled' = 'true';
+SET 'execution.multi-jobs-in-application.enable' = 'true';
 
 CREATE TEMPORARY TABLE source_dwm_bb_card_transaction_detail_v2_p (
     id                       STRING,

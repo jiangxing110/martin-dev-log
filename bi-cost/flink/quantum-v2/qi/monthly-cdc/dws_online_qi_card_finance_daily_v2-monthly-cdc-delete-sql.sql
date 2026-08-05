@@ -1,12 +1,14 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-04
--- Updated Time:   2026-08-04 12:24:00
+-- Updated Time:   2026-08-05 22:30:25
 -- Description:    Quantum QI v2 DWS 月度补偿清理普通汇总行
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
 SET 'table.dml-sync' = 'true';
+SET 'execution.application-management.enabled' = 'true';
+SET 'execution.multi-jobs-in-application.enable' = 'true';
 
 CREATE TEMPORARY VIEW v_month_scope AS
 SELECT
