@@ -50,9 +50,11 @@ CREATE TEMPORARY TABLE source_account (
     'slot.name' = 'flink_slot_account_analysis_account',
     'decoding.plugin.name' = 'pgoutput',
     'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.slot.drop.on.stop' = 'true',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'debezium.slot.drop.on.stop' = 'false',
     'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'false'
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096'
 );
 
 CREATE TEMPORARY TABLE source_account_extend (
@@ -72,9 +74,11 @@ CREATE TEMPORARY TABLE source_account_extend (
     'slot.name' = 'flink_slot_account_analysis_account_extend',
     'decoding.plugin.name' = 'pgoutput',
     'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.slot.drop.on.stop' = 'true',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'debezium.slot.drop.on.stop' = 'false',
     'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'false'
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096'
 );
 
 CREATE TEMPORARY TABLE source_referral_code (
@@ -94,9 +98,11 @@ CREATE TEMPORARY TABLE source_referral_code (
     'slot.name' = 'flink_slot_account_analysis_referral_code',
     'decoding.plugin.name' = 'pgoutput',
     'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.slot.drop.on.stop' = 'true',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'debezium.slot.drop.on.stop' = 'false',
     'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'false'
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096'
 );
 
 CREATE TEMPORARY TABLE source_caas_open_api_extend (
@@ -119,9 +125,11 @@ CREATE TEMPORARY TABLE source_caas_open_api_extend (
     'slot.name' = 'flink_slot_account_analysis_caas_extend',
     'decoding.plugin.name' = 'pgoutput',
     'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.slot.drop.on.stop' = 'true',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'debezium.slot.drop.on.stop' = 'false',
     'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'false'
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096'
 );
 
 CREATE TEMPORARY TABLE source_cdd_risk_rating (
@@ -142,9 +150,11 @@ CREATE TEMPORARY TABLE source_cdd_risk_rating (
     'slot.name' = 'flink_slot_account_analysis_cdd_risk',
     'decoding.plugin.name' = 'pgoutput',
     'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.slot.drop.on.stop' = 'true',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'debezium.slot.drop.on.stop' = 'false',
     'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'false'
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096'
 );
 
 CREATE TEMPORARY TABLE source_api_account_relation (
@@ -164,9 +174,11 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     'slot.name' = 'flink_slot_account_analysis_api_account_relation',
     'decoding.plugin.name' = 'pgoutput',
     'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.slot.drop.on.stop' = 'true',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'debezium.slot.drop.on.stop' = 'false',
     'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'false'
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096'
 );
 
 CREATE TEMPORARY TABLE source_qbit_card_wallet_transaction (
@@ -190,9 +202,11 @@ CREATE TEMPORARY TABLE source_qbit_card_wallet_transaction (
     'slot.name' = 'flink_slot_account_analysis_card_wallet',
     'decoding.plugin.name' = 'pgoutput',
     'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.slot.drop.on.stop' = 'true',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'debezium.slot.drop.on.stop' = 'false',
     'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'false'
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096'
 );
 
 CREATE TEMPORARY TABLE source_transfer (
@@ -213,9 +227,11 @@ CREATE TEMPORARY TABLE source_transfer (
     'slot.name' = 'flink_slot_account_analysis_transfer',
     'decoding.plugin.name' = 'pgoutput',
     'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.slot.drop.on.stop' = 'true',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'debezium.slot.drop.on.stop' = 'false',
     'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'false'
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096'
 );
 
 CREATE TEMPORARY TABLE source_crypto_assets_transfers (
@@ -241,9 +257,11 @@ CREATE TEMPORARY TABLE source_crypto_assets_transfers (
     'slot.name' = 'flink_slot_account_analysis_crypto_transfer',
     'decoding.plugin.name' = 'pgoutput',
     'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.slot.drop.on.stop' = 'true',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'debezium.slot.drop.on.stop' = 'false',
     'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'false'
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096'
 );
 
 CREATE TEMPORARY TABLE source_open_api_client_config (
@@ -264,9 +282,11 @@ CREATE TEMPORARY TABLE source_open_api_client_config (
     'slot.name' = 'flink_slot_account_analysis_open_api_config',
     'decoding.plugin.name' = 'pgoutput',
     'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.slot.drop.on.stop' = 'true',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'debezium.slot.drop.on.stop' = 'false',
     'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'false'
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096'
 );
 
 CREATE TEMPORARY TABLE source_fund_orders (
@@ -289,9 +309,11 @@ CREATE TEMPORARY TABLE source_fund_orders (
     'slot.name' = 'flink_slot_account_analysis_fund_orders',
     'decoding.plugin.name' = 'pgoutput',
     'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.slot.drop.on.stop' = 'true',
+    'debezium.connector.pgout.publication.autocreate' = 'false',
+    'debezium.slot.drop.on.stop' = 'false',
     'scan.startup.mode' = 'initial',
-    'scan.incremental.snapshot.enabled' = 'false'
+    'scan.incremental.snapshot.enabled' = 'true',
+    'scan.snapshot.fetch.size' = '4096'
 );
 
 CREATE TEMPORARY VIEW v_card_active AS
