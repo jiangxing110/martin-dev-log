@@ -1,12 +1,15 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-05 14:47:12
+-- Updated Time:   2026-08-05 23:57:15
 -- Description:    注册 BB 量子卡 CDC 每日 PostgreSQL 删除任务
 -- Schedule:       每天北京时间 02:00
 -- Notes:
 --   1. 在目标 ADBPG 数据库执行一次本脚本完成注册。
 --   2. 删除逻辑对应 quantum-v2/bb/cdc 下的三个 delete-sql 作业。
 --   3. 删除成功后再运行对应 BB CDC INSERT 作业。
+--   4. 如果需要在 VVR 保留 Flink 作业执行记录，使用 flink/jobs/delete-table-data JAR，
+--      并为渠道固定成本清理传入 --delete-type bb-channel-fixed-fee-cdc。
 --********************************************************************--
 
 CREATE OR REPLACE FUNCTION dws.fn_quantum_bb_cdc_delete()

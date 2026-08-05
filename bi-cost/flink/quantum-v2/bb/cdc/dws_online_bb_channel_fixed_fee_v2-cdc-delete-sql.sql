@@ -1,8 +1,11 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-04
--- Updated Time:   2026-08-05 22:30:25
+-- Updated Time:   2026-08-05 23:57:15
 -- Description:    BB v2 渠道固定成本 CDC 每日清理
+-- Notes:
+--   1. 推荐使用 flink/jobs/delete-table-data JAR 作业执行，delete-type=bb-channel-fixed-fee-cdc。
+--   2. 本 SQL 仅作为 VVR SQL 方案备选；不要在 SQL 编辑器中直接 Execute Draft。
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
