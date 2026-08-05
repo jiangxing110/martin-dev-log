@@ -5,3 +5,6 @@
 3.代收修复
 4.销售收入报表
 4.数据重洗
+
+
+com.qbit.flink.deletetable.DeleteTableDataJob

@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-05
--- Updated Time:   2026-08-05 00:00:00
+-- Updated Time:   2026-08-05 12:35:00
 -- Description:    view_crypto_assets_blockchain_transfers -> ods.ods_crypto_blockchain_transfers 数据核对
 -- Notes:
 --   1. PG 源库执行第 1 段，核对 public.view_crypto_assets_blockchain_transfers 水位。
@@ -28,6 +28,23 @@ SELECT
     ) AS source_out_of_partition_count
 FROM public.view_crypto_assets_blockchain_transfers;
 
+-- PG 源库执行：定位是否存在超过 ADBPG 原 varchar(255) 限制的字段
+SELECT
+    MAX(LENGTH(transaction_display_id::text)) AS max_transaction_display_id_len,
+    MAX(LENGTH(action::text)) AS max_action_len,
+    MAX(LENGTH(source_address::text)) AS max_source_address_len,
+    MAX(LENGTH(destination_address::text)) AS max_destination_address_len,
+    MAX(LENGTH(amount::text)) AS max_amount_len,
+    MAX(LENGTH(gas_fee::text)) AS max_gas_fee_len,
+    MAX(LENGTH(cross_chain_fee::text)) AS max_cross_chain_fee_len,
+    MAX(LENGTH(status::text)) AS max_status_len,
+    MAX(LENGTH(transaction_hash::text)) AS max_transaction_hash_len,
+    MAX(LENGTH(risk_level::text)) AS max_risk_level_len,
+    MAX(LENGTH(third_party_id::text)) AS max_third_party_id_len
+FROM public.view_crypto_assets_blockchain_transfers
+WHERE create_time IS NOT NULL
+  AND create_time <> '';
+
 -- ============================================================
 -- 2. 目标水位: ods.ods_crypto_blockchain_transfers
 -- ============================================================
@@ -41,7 +58,36 @@ SELECT
 FROM ods.ods_crypto_blockchain_transfers;
 
 -- ============================================================
--- 3. ADBPG 内部 MV 对目标表：判断是否有漏数/残留
+-- 3. 源库主键粒度检查：判断 source_count > target_count 是否来自 upsert 覆盖
+-- ============================================================
+
+-- PG 源库执行：如果 source_distinct_sink_key_count 接近 target_count，
+-- 说明差异主要来自源视图在目标主键 (id, dt) 粒度上有重复行。
+SELECT
+    COUNT(*) AS source_count,
+    COUNT(DISTINCT (id::text, create_time::timestamp::date)) AS source_distinct_sink_key_count,
+    COUNT(*) - COUNT(DISTINCT (id::text, create_time::timestamp::date)) AS source_duplicate_sink_key_count
+FROM public.view_crypto_assets_blockchain_transfers
+WHERE create_time IS NOT NULL
+  AND create_time <> '';
+
+-- PG 源库执行：重复主键样例
+SELECT
+    id::text AS id,
+    create_time::timestamp::date AS dt,
+    COUNT(*) AS duplicate_count,
+    MIN(transaction_hash::text) AS min_transaction_hash,
+    MAX(transaction_hash::text) AS max_transaction_hash
+FROM public.view_crypto_assets_blockchain_transfers
+WHERE create_time IS NOT NULL
+  AND create_time <> ''
+GROUP BY id::text, create_time::timestamp::date
+HAVING COUNT(*) > 1
+ORDER BY duplicate_count DESC, dt DESC
+LIMIT 20;
+
+-- ============================================================
+-- 4. ADBPG 内部 MV 对目标表：判断是否有漏数/残留
 -- ============================================================
 
 SELECT
@@ -75,7 +121,7 @@ LEFT JOIN ods.view_crypto_assets_blockchain_transfers s
 WHERE s.id IS NULL;
 
 -- ============================================================
--- 4. 分布检查：水位不一致时再跑
+-- 5. 分布检查：水位不一致时再跑
 -- ============================================================
 
 -- 源库执行: 按年
@@ -104,3 +150,22 @@ FROM ods.view_crypto_assets_blockchain_transfers
 WHERE create_time IS NOT NULL
 GROUP BY TO_CHAR(create_time::timestamp, 'YYYY')
 ORDER BY yy;
+
+-- ADBPG 目标库执行：按月看目标分布
+SELECT
+    TO_CHAR(create_time, 'YYYY-MM') AS ym,
+    COUNT(*) AS target_count
+FROM ods.ods_crypto_blockchain_transfers
+GROUP BY TO_CHAR(create_time, 'YYYY-MM')
+ORDER BY ym;
+
+-- ADBPG 目标库执行：按月看 ADBPG 内部 MV 分布
+SELECT
+    TO_CHAR(create_time::timestamp, 'YYYY-MM') AS ym,
+    COUNT(*) AS adbpg_mv_count,
+    COUNT(DISTINCT (id::text, create_time::timestamp::date)) AS adbpg_mv_distinct_sink_key_count,
+    COUNT(*) - COUNT(DISTINCT (id::text, create_time::timestamp::date)) AS adbpg_mv_duplicate_sink_key_count
+FROM ods.view_crypto_assets_blockchain_transfers
+WHERE create_time IS NOT NULL
+GROUP BY TO_CHAR(create_time::timestamp, 'YYYY-MM')
+ORDER BY ym;

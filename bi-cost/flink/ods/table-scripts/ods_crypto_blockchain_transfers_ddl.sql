@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-22
+-- Updated Time:   2026-08-05 12:35:00
 -- 功能：ADBPG ODS目标表 ods_crypto_blockchain_transfers DDL | 按dt日期分区
 -- 作业元信息：
 --   作业类型：DDL建表/视图脚本
@@ -15,25 +16,25 @@
 CREATE TABLE "ods"."ods_crypto_blockchain_transfers" (
     "id" VARCHAR(64) NOT NULL,
     "dt" DATE NOT NULL,
-    "transaction_display_id" VARCHAR(255),
+    "transaction_display_id" TEXT,
     "account_id" VARCHAR(64),
     "wallet_id" VARCHAR(64),
     "balance_id" VARCHAR(64),
-    "action" VARCHAR(255),
+    "action" TEXT,
     "currency" VARCHAR(30),
     "chain" VARCHAR(20),
-    "source_address" VARCHAR(255),
-    "destination_address" VARCHAR(255),
-    "amount" VARCHAR(255),
-    "gas_fee" VARCHAR(255),
-    "cross_chain_fee" VARCHAR(255),
-    "status" VARCHAR(255),
-    "transaction_hash" VARCHAR(255),
-    "risk_level" VARCHAR(255),
+    "source_address" TEXT,
+    "destination_address" TEXT,
+    "amount" TEXT,
+    "gas_fee" TEXT,
+    "cross_chain_fee" TEXT,
+    "status" TEXT,
+    "transaction_hash" TEXT,
+    "risk_level" TEXT,
     "create_time" TIMESTAMP,
     "third_party_create_time" TIMESTAMP,
     "completion_time" TIMESTAMP,
-    "third_party_id" VARCHAR(255),
+    "third_party_id" TEXT,
     "platform" VARCHAR(64),
     "usd_rate" NUMERIC(20, 8),
     "fees" TEXT,

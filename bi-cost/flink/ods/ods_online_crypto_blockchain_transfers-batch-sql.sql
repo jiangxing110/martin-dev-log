@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-22
--- Updated Time:   2026-08-05 11:45:00
+-- Updated Time:   2026-08-05 14:54:40
 -- 历史名称：sp_init_crypto_blockchain_transfers_ods.sql
 -- 功能：PG视图 view_crypto_assets_blockchain_transfers 同步到 ODS层 ods_crypto_blockchain_transfers
 -- 作业元信息：
@@ -11,8 +11,11 @@
 --   源库变更响应：源为派生视图 view_crypto_assets_blockchain_transfers，不能直接 CDC；源数据变化需依赖上游 ODS/MV 刷新后重跑。
 --   ODS说明：本脚本同步派生视图结果；原始表变更需先进入上游 ODS/MV，再调度重跑本脚本。
 -- 模式：JDBC 批读（视图不支持 CDC），全量刷新
--- 说明：每天调度执行；先运行 delete 脚本清空目标表已建分区范围，再运行本脚本全量拉取视图数据写入。
--- 注意：本脚本必须作为独立 VVR Draft/作业运行，不要与 delete 脚本合并到同一个 Draft。
+-- 说明：每天调度执行；先运行 delete-table-data JAR 作业清理目标表，
+--       JAR 作业成功后再运行本脚本全量拉取视图数据写入。
+-- JAR 业务参数：--schema ods --table-name ods_crypto_blockchain_transfers
+--               --start-date 2021-01-01 --end-date 2027-01-01
+-- 注意：本脚本必须作为独立 VVR Draft/Deployment 运行，并通过工作流依赖 JAR 删除作业。
 ----------------------------------------------------------------------
 
 SET 'parallelism.default' = '1';
@@ -57,7 +60,7 @@ CREATE TEMPORARY TABLE source_view_crypto_blockchain_transfers (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.PG_TEST_HOST}:${secret_values.PG_TEST_PORT1}/${secret_values.PG_TEST_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id, transaction_display_id, account_id, wallet_id, balance_id, action, currency, chain, source_address, destination_address, amount, gas_fee, cross_chain_fee, status, transaction_hash, risk_level, NULLIF(create_time::text, '''')::timestamp AS create_time, NULLIF(third_party_create_time::text, '''')::timestamp AS third_party_create_time, NULLIF(completion_time::text, '''')::timestamp AS completion_time, third_party_id, platform, usd_rate, fees FROM public.view_crypto_assets_blockchain_transfers WHERE NULLIF(create_time::text, '''') IS NOT NULL) AS view_crypto_assets_blockchain_transfers_f',
+    'table-name' = '(SELECT id::text AS id, transaction_display_id::text AS transaction_display_id, account_id::text AS account_id, wallet_id::text AS wallet_id, balance_id::text AS balance_id, action::text AS action, currency::text AS currency, chain::text AS chain, source_address::text AS source_address, destination_address::text AS destination_address, amount::text AS amount, gas_fee::text AS gas_fee, cross_chain_fee::text AS cross_chain_fee, status::text AS status, transaction_hash::text AS transaction_hash, risk_level::text AS risk_level, NULLIF(create_time::text, '''')::timestamp AS create_time, NULLIF(third_party_create_time::text, '''')::timestamp AS third_party_create_time, NULLIF(completion_time::text, '''')::timestamp AS completion_time, third_party_id::text AS third_party_id, platform::text AS platform, usd_rate, fees::text AS fees FROM public.view_crypto_assets_blockchain_transfers WHERE NULLIF(create_time::text, '''') IS NOT NULL) AS view_crypto_assets_blockchain_transfers_f',
     'username' = '${secret_values.PG_TEST_USERNAME}',
     'password' = '${secret_values.PG_TEST_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
