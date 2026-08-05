@@ -3,7 +3,7 @@
 --   运行方式：非运行作业
 --   运行参数：无
 --   源库变更响应：普通物化视图不会自动维护，需按需 REFRESH MATERIALIZED VIEW。
---   v2 说明：沿用有效收入口径，渠道成本改为读取 dws.mv_channel_cost_daily。
+--   v3 说明：收入读取 dws.dws_effective_revenue_daily_mv.effective_revenue，并将收入 category=card 映射到 qbit_card。
 
 -- ==============================================
 -- 1. 创建普通物化视图
@@ -79,7 +79,7 @@ FROM (
                         ELSE quantum_cost
                     END
                 ) AS channel_cost_amount
-            FROM "dws"."mv_channel_cost_daily"
+            FROM "dws"."dws_total_channel_cost_daily_v2_p"
             WHERE delete_time IS NULL
             GROUP BY report_date, account_id
             HAVING SUM(
@@ -101,7 +101,7 @@ FROM (
                         ELSE business_cost
                     END
                 ) AS channel_cost_amount
-            FROM "dws"."mv_channel_cost_daily"
+            FROM "dws"."dws_total_channel_cost_daily_v2_p"
             WHERE delete_time IS NULL
             GROUP BY report_date, account_id
             HAVING SUM(
@@ -123,7 +123,7 @@ FROM (
                         ELSE crypto_cost
                     END
                 ) AS channel_cost_amount
-            FROM "dws"."mv_channel_cost_daily"
+            FROM "dws"."dws_total_channel_cost_daily_v2_p"
             WHERE delete_time IS NULL
             GROUP BY report_date, account_id
             HAVING SUM(
@@ -145,7 +145,7 @@ FROM (
                         ELSE acquiring_cost
                     END
                 ) AS channel_cost_amount
-            FROM "dws"."mv_channel_cost_daily"
+            FROM "dws"."dws_total_channel_cost_daily_v2_p"
             WHERE delete_time IS NULL
             GROUP BY report_date, account_id
             HAVING SUM(
@@ -176,7 +176,7 @@ CREATE INDEX IF NOT EXISTS "idx_mv_gross_profit_daily_account_dim"
     ON "dws"."mv_gross_profit_daily" ("account_id", "report_date");
 
 COMMENT ON MATERIALIZED VIEW "dws"."mv_gross_profit_daily" IS
-    'DWS普通物化视图：客户产品线毛利日汇总 v2，收入来源有效收入 MV，成本来源 mv_channel_cost_daily';
+    'DWS普通物化视图：客户产品线毛利日汇总 v3，收入来源 dws_effective_revenue_daily_mv.effective_revenue，card 映射 qbit_card';
 
 -- ==============================================
 -- 2. 维护说明
