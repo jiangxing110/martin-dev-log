@@ -19,7 +19,7 @@
 ### Task 1: 创建总渠道成本物化视图
 
 **Files:**
-- Create: `flink/total_cost/mv_total_channel_cost_daily.sql`
+- Create: `flink/total_cost/mv_channel_cost_daily.sql`
 
 - [x] 迁移 BB、BZ、QI、SL 和金融渠道成本计算逻辑。
 - [x] 按日期、账户、销售和 AM 汇总四个成本桶。
@@ -28,7 +28,7 @@
 ### Task 2: 创建小时刷新任务
 
 **Files:**
-- Create: `flink/total_cost/schedule_refresh_mv_total_channel_cost_daily.sql`
+- Create: `flink/total_cost/schedule_refresh_mv_channel_cost_daily.sql`
 
 - [x] 检查 pg_cron 扩展。
 - [x] 幂等清理同名旧任务。

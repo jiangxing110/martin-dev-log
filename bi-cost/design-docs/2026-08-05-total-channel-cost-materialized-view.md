@@ -9,9 +9,9 @@
 
 ## 对象
 
-- 新物化视图：`dws.dws_total_channel_cost_daily_mv`
-- 创建脚本：`flink/total_cost/mv_total_channel_cost_daily.sql`
-- 刷新脚本：`flink/total_cost/schedule_refresh_mv_total_channel_cost_daily.sql`
+- 新物化视图：`dws.mv_channel_cost_daily`
+- 创建脚本：`flink/total_cost/mv_channel_cost_daily.sql`
+- 刷新脚本：`flink/total_cost/schedule_refresh_mv_channel_cost_daily.sql`
 - 旧结果表：`dws.dws_total_channel_cost_daily_v2_p`
 - 下游毛利视图：`dws.mv_gross_profit_daily`
 
@@ -69,7 +69,7 @@
 
 ```sql
 REFRESH MATERIALIZED VIEW CONCURRENTLY
-    dws.dws_total_channel_cost_daily_mv;
+    dws.mv_channel_cost_daily;
 ```
 
 选择第 5 分钟是为了避开现有毛利视图在整点和半点的刷新。毛利视图在

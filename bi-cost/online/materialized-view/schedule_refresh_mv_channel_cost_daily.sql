@@ -4,7 +4,7 @@
 -- Description:    注册总渠道成本普通物化视图每小时刷新任务
 -- Notes:
 --   1. 依赖 pg_cron 或兼容 cron 扩展。
---   2. 先执行 mv_total_channel_cost_daily.sql。
+--   2. 先执行 mv_channel_cost_daily.sql。
 --   3. 每小时第 5 分钟并发刷新一次。
 --********************************************************************--
 
@@ -32,6 +32,7 @@ END $$;
 SELECT cron.unschedule(jobid)
 FROM cron.job
 WHERE jobname IN (
+    'refresh_mv_channel_cost_daily_60min',
     'refresh_total_channel_cost_daily_60min',
     'refresh_total_channel_cost_daily_v3_60min',
     'refresh_total_channel_cost_daily_v3_1h'
@@ -39,9 +40,9 @@ WHERE jobname IN (
 
 -- 4. 每小时第 5 分钟并发刷新。
 SELECT cron.schedule(
-    'refresh_total_channel_cost_daily_60min',
+    'refresh_mv_channel_cost_daily_60min',
     '5 * * * *',
-    $$REFRESH MATERIALIZED VIEW CONCURRENTLY "dws"."dws_total_channel_cost_daily_mv"$$
+    $$REFRESH MATERIALIZED VIEW CONCURRENTLY "dws"."mv_channel_cost_daily"$$
 );
 
 -- 5. 检查任务是否注册成功。
@@ -52,4 +53,4 @@ SELECT
     command,
     active
 FROM cron.job
-WHERE jobname = 'refresh_total_channel_cost_daily_60min';
+WHERE jobname = 'refresh_mv_channel_cost_daily_60min';

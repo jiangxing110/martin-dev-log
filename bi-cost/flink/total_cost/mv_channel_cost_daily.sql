@@ -8,9 +8,9 @@
 --   3. BB/QI/BZ/SL 作为量子卡成本来源，金融渠道成本按 product_line 分桶。
 --********************************************************************--
 
-DROP MATERIALIZED VIEW IF EXISTS "dws"."dws_total_channel_cost_daily_mv";
+DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_channel_cost_daily";
 
-CREATE MATERIALIZED VIEW "dws"."dws_total_channel_cost_daily_mv" AS
+CREATE MATERIALIZED VIEW "dws"."mv_channel_cost_daily" AS
 WITH bb_month_net_amount AS (
     SELECT
         DATE_TRUNC('month', report_date)::date AS report_month,
@@ -226,22 +226,22 @@ FROM channel_cost_source
 GROUP BY report_date, account_id, sale_id, am_id
 DISTRIBUTED BY (id);
 
-ALTER MATERIALIZED VIEW "dws"."dws_total_channel_cost_daily_mv"
+ALTER MATERIALIZED VIEW "dws"."mv_channel_cost_daily"
     OWNER TO "qbit_admin";
 
-CREATE UNIQUE INDEX IF NOT EXISTS "idx_total_channel_cost_daily_mv_id"
-    ON "dws"."dws_total_channel_cost_daily_mv" ("id");
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_mv_channel_cost_daily_id"
+    ON "dws"."mv_channel_cost_daily" ("id");
 
-CREATE INDEX IF NOT EXISTS "idx_total_channel_cost_daily_mv_date_account"
-    ON "dws"."dws_total_channel_cost_daily_mv"
+CREATE INDEX IF NOT EXISTS "idx_mv_channel_cost_daily_date_account"
+    ON "dws"."mv_channel_cost_daily"
     ("report_date", "account_id");
 
-COMMENT ON MATERIALIZED VIEW "dws"."dws_total_channel_cost_daily_mv" IS
+COMMENT ON MATERIALIZED VIEW "dws"."mv_channel_cost_daily" IS
     '总渠道成本日汇总普通物化视图，每 60 分钟全量刷新';
 
 -- 手动全量刷新：
--- REFRESH MATERIALIZED VIEW "dws"."dws_total_channel_cost_daily_mv";
+-- REFRESH MATERIALIZED VIEW "dws"."mv_channel_cost_daily";
 --
 -- 手动并发刷新：
 -- REFRESH MATERIALIZED VIEW CONCURRENTLY
---     "dws"."dws_total_channel_cost_daily_mv";
+--     "dws"."mv_channel_cost_daily";
