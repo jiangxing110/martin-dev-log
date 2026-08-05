@@ -4,7 +4,7 @@
 -- Description:    总渠道成本日汇总普通物化视图
 -- Notes:
 --   1. 计算口径对齐 dws_online_total_channel_cost_daily-batch-sql.sql。
---   2. 普通物化视图不会自动维护，由 pg_cron 每 60 分钟刷新。
+--   2. 普通物化视图不会自动维护，由 pg_cron 每 5 小时刷新。
 --   3. BB/QI/BZ/SL 作为量子卡成本来源，金融渠道成本按 product_line 分桶。
 --********************************************************************--
 
@@ -237,7 +237,7 @@ CREATE INDEX IF NOT EXISTS "idx_mv_channel_cost_daily_date_account"
     ("report_date", "account_id");
 
 COMMENT ON MATERIALIZED VIEW "dws"."mv_channel_cost_daily" IS
-    '总渠道成本日汇总普通物化视图，每 60 分钟全量刷新';
+    '总渠道成本日汇总普通物化视图，每 5 小时全量刷新';
 
 -- 手动全量刷新：
 -- REFRESH MATERIALIZED VIEW "dws"."mv_channel_cost_daily";

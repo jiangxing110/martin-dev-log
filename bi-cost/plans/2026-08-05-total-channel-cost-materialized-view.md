@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 使用每小时刷新的 ADBPG 普通物化视图替代总渠道成本 Flink batch/CDC。
+**Goal:** 使用每 5 小时刷新的 ADBPG 普通物化视图替代总渠道成本 Flink batch/CDC。
 
-**Architecture:** 将现有 batch 的五路成本来源和计算公式迁移到一个普通物化视图。使用唯一索引支持并发刷新，通过 pg_cron 每小时第 5 分钟刷新。
+**Architecture:** 将现有 batch 的五路成本来源和计算公式迁移到一个普通物化视图。使用唯一索引支持并发刷新，通过 pg_cron 每 5 小时整点刷新。
 
 **Tech Stack:** AnalyticDB for PostgreSQL、PostgreSQL SQL、pg_cron
 
@@ -32,8 +32,9 @@
 
 - [x] 检查 pg_cron 扩展。
 - [x] 幂等清理同名旧任务。
-- [x] 注册每小时第 5 分钟并发刷新。
+- [x] 注册每 5 小时整点并发刷新。
 - [x] 输出任务注册结果。
+- [x] 将毛利刷新调整为每 30 分钟一次。
 
 ### Task 3: 静态校验
 
