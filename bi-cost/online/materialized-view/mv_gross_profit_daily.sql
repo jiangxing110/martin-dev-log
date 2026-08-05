@@ -3,7 +3,7 @@
 --   运行方式：非运行作业
 --   运行参数：无
 --   源库变更响应：普通物化视图不会自动维护，需按需 REFRESH MATERIALIZED VIEW。
---   v2 说明：沿用有效收入口径，渠道成本改为读取 dws.mv_channel_cost_daily。
+--   v2 说明：渠道成本读取 dws.mv_channel_cost_daily；treasury 无渠道成本时按 0 计算。
 
 -- ==============================================
 -- 1. 创建普通物化视图
@@ -53,7 +53,7 @@ FROM (
                 END
             ) AS revenue_amount
         FROM "dws"."dws_effective_revenue_daily_mv"
-        WHERE category IN ('global_account', 'acquiring', 'card', 'crypto_assets')
+        WHERE category IN ('global_account', 'acquiring', 'card', 'crypto_assets', 'treasury')
         GROUP BY
             stat_date,
             account_id,
@@ -176,7 +176,7 @@ CREATE INDEX IF NOT EXISTS "idx_mv_gross_profit_daily_account_dim"
     ON "dws"."mv_gross_profit_daily" ("account_id", "report_date");
 
 COMMENT ON MATERIALIZED VIEW "dws"."mv_gross_profit_daily" IS
-    'DWS普通物化视图：客户产品线毛利日汇总 v2，收入来源有效收入 MV，成本来源 mv_channel_cost_daily';
+    'DWS普通物化视图：客户产品线毛利日汇总 v2，收入来源有效收入 MV，成本来源 mv_channel_cost_daily，treasury 无成本时按 0 计算';
 
 -- ==============================================
 -- 2. 维护说明
