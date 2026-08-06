@@ -1,64 +1,67 @@
-/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/ods/ods_online_crypto_assets_transactions-cdc-sql.sql
+sale-repoet/sales-commission/table-scripts/mv_sales_commission_recent_estimate.sql
+这个"dws"."dws_sales_revenue_monthly" 这个表要改成dws.dws_metrics_sales_revenue_monthly 
+还有就是之前写了
+      WHEN r.product = 'open_api' AND r.metric_code = 'api_monthly_fee' THEN 'api_monthly_billing'
+      WHEN r.product = 'open_api' AND r.metric_code = 'month_receivable' THEN 'billing_decline_fee'
+本质上api_monthly_fee=month_receivable 都是要20 号以后才会生成上个月的 但是他们对应的settlement_month都是对的
+settlement_month=2026-05-01 那这个就是月的账单
 
-1.cdc已经基本完结
-2.bz成本数据融合到总渠道成本
-3.销售收入报表还在改因为有之前定的枚举逻辑变更
-3.代收修复
-4.销售收入报表
-
-
-global_account:
-global_account_income
+SELECT product,	metric_code	
+FROM dws.dws_metrics_sales_revenue_monthly 
+GROUP BY product,	metric_code	
 
 open_api:
 month_revenue
 month_receivable
 
-qbit_card:
-main
-qbit_account_recharge_fee
-card_creation_fee_amount
-virtual_card_create_fee_amount
-qbit_card_main_fee
-physical_card_cost
-client_rebates
-
 crypto_connect:
-crypto_connect_income
+main
 assets_acceptance_fee_eq_zero
 assets_acceptance_fee_gt_zero
 
+global_account:
+main
+(global_account_income)
+这部分不要
+
+qbit_card:
+main
+physical_card_cost
+(qbit_card_client_rebates
+qbit_account_recharge_fee
+virtual_card_create_fee_amount
+qbit_card_main_fee
+card_creation_fee_amount)
+这部分不要
+
+我想要重新生成一下这个视图的v2版本
+CREATE TABLE "dws"."dws_metrics_sales_revenue_monthly" (
+  "dws_row_id" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
+  "root_account_id" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
+  "report_date" date NOT NULL,
+  "settlement_month" date NOT NULL,
+  "product" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
+  "metric_code" varchar(100) COLLATE "pg_catalog"."default" NOT NULL,
+  "provider" varchar(255) COLLATE "pg_catalog"."default",
+  "sale_id" varchar(64) COLLATE "pg_catalog"."default",
+  "am_id" varchar(64) COLLATE "pg_catalog"."default",
+  "income_value" numeric(20,3) NOT NULL,
+  "loaded_at" timestamp(6) NOT NULL,
+  "version" int4 NOT NULL DEFAULT 1,
+  "remarks" varchar(2000) COLLATE "pg_catalog"."default",
+  "create_time" timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "update_time" timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "delete_time" timestamp(6),
+  "type_desc" varchar(20) COLLATE "pg_catalog"."default",
+  CONSTRAINT "dws_metrics_sales_revenue_monthly_pkey" PRIMARY KEY ("dws_row_id")
+)
+;
+
+ALTER TABLE "dws"."dws_metrics_sales_revenue_monthly" 
+  OWNER TO "flink_cdc_user";
+
+CREATE INDEX "dws_metrics_sales_revenue_monthly_report_date_idx" ON "dws"."dws_metrics_sales_revenue_monthly" USING btree (
+  "report_date" "pg_catalog"."date_ops" ASC NULLS LAST
+);
 
 
-A:
-SELECT category,sum(revenue_amount) FROM mv_gross_profit_daily GROUP BY 
-category现在这个里面有
-qbit_card
-crypto_assets
-global_account
-acquiring
-B:
-SELECT
-    category
-FROM dws.dws_effective_revenue_daily_mv
-WHERE stat_date >= DATE '2026-05-01'
-  AND stat_date <  DATE '2026-06-01'
-GROUP BY category;
-treasury
-crypto_assets
-card
-acquiring
-global_account
-
-B多了treasury 我觉得 如果mv_gross_profit_daily没有成本那直接就说category 收入是收入成本归0 
-
-
-/Users/martinjiang/VsCodeProjects/martin-dev-log/sale-repoet/sales-commission/cdc/
-dws_online_sales_commission_snapshot-month-cdc-sql.sql 
-我只是不想手动去掉用 想直接在这个上个月的时间写上个月的时间 
-然后我们还有一直是拿
-open_api:
-month_receivable 这个是要20号才能账单出了才能有
-
-所以得有两组脚本 
-或者这个脚本是cdc 每天运行 然后根据 运行时间判断是执行那个
