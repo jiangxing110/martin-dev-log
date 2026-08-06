@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-29
--- Updated Time:   2026-08-06 17:45:00
+-- Updated Time:   2026-08-06 18:05:00
 -- Description:    销售佣金8号前预估物化视图
 -- Notes:
 --   1. 本物化视图承载8号前页面查询结果。
@@ -371,8 +371,6 @@ v_cost_by_account_product AS (
     UNION ALL
     SELECT settlement_month, root_account_id, product, provider, cogs FROM qbit_card_bz_cost
     UNION ALL
-    SELECT settlement_month, root_account_id, product, provider, cogs FROM qbit_card_physical_cost
-    UNION ALL
     SELECT
       settlement_month,
       root_account_id,
@@ -438,7 +436,11 @@ estimate_base AS (
     b.payable_settlement_month,
     b.allocated_effective_revenue AS effective_revenue,
     b.allocated_cogs AS cogs,
-    GREATEST(b.allocated_effective_revenue - b.allocated_cogs, 0)::numeric(20,4) AS gp,
+    CASE
+      WHEN b.department_id = '1851130772357509121'
+        THEN (b.allocated_effective_revenue - b.allocated_cogs)::numeric(20,4)
+      ELSE GREATEST(b.allocated_effective_revenue - b.allocated_cogs, 0)::numeric(20,4)
+    END AS gp,
     CASE
       WHEN b.product = 'qbit_card' AND a.card_active_time IS NOT NULL THEN (b.settlement_month - a.card_active_time::date)
       WHEN b.product = 'group_account' AND a.global_active_time IS NOT NULL THEN (b.settlement_month - a.global_active_time::date)
