@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-04
--- Updated Time:   2026-08-04 12:24:00
+-- Updated Time:   2026-08-06 01:20:00
 -- Description:    BB v2 DWS 批量初始化/回刷
 -- 作业元信息：
 --   作业类型：批处理
@@ -12,6 +12,10 @@
 --   1. 主链路: dwm_bb_card_transaction_detail_v2_p + dwm_bb_card_auth_detail_v2_p -> dws_bb_card_finance_daily_p。
 --   2. DWS 粒度: account_id + report_date(月初) + sale_id + am_id。
 --   3. 固定成本和 Active Card fee 由独立特殊行脚本处理，主链路保持 0。
+-- Notes:
+--   1. v2 在同一个 Flink SQL 作业中通过 JDBC source 调用 dws.fn_delete_bb_card_finance_daily_v2_monthly_cdc(false) 先清理目标数据。
+--   2. 部署时需要在“附加依赖文件”添加 PostgreSQL JDBC driver，例如 postgresql-42.7.4.jar。
+--   3. 首次执行可将函数参数 false 改为 true 做 dry-run。
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
@@ -34,6 +38,18 @@ SET 'heartbeat.interval' = '30 s';
 SET 'heartbeat.timeout' = '600 s';
 -- 禁止将同源 JDBC 表扫描合并为 Expand，因 JDBC connector 不支持该物理算子
 SET 'table.optimizer.union-any-expand' = 'false';
+
+CREATE TEMPORARY TABLE source_delete_bb_card_finance_daily_v2_monthly_cdc_result (
+    affected_rows BIGINT
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT dws.fn_delete_bb_card_finance_daily_v2_monthly_cdc(false) AS affected_rows) AS delete_result',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1'
+);
 
 CREATE TEMPORARY TABLE source_bi_month_tag (
     id              BIGINT,
@@ -965,4 +981,6 @@ SELECT
     b.create_time,
     b.update_time,
     b.delete_time
-FROM v_dws_bb_daily_base b;
+FROM v_dws_bb_daily_base b
+CROSS JOIN source_delete_bb_card_finance_daily_v2_monthly_cdc_result AS delete_result
+WHERE delete_result.affected_rows >= 0;

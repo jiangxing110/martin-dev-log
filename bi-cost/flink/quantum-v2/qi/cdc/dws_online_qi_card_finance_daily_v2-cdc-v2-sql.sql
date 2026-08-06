@@ -1,27 +1,24 @@
+-- Notes:
+--   1. v2 在同一个 Flink SQL 作业中通过 JDBC source 调用 dws.fn_delete_qi_card_finance_daily_v2_cdc(false) 先清理目标数据。
+--   2. 部署时需要在“附加依赖文件”添加 PostgreSQL JDBC driver，例如 postgresql-42.7.4.jar。
+--   3. 首次执行可将函数参数 false 改为 true 做 dry-run。
 --********************************************************************--
 -- Author:         martinJiang
--- Created Time:   2026-08-04
--- Updated Time:   2026-08-04 12:24:00
--- Description:    Quantum QI v2 DWS 批量初始化/回刷
+-- Created Time:   2026-07-12
+-- Updated Time:   2026-08-06 01:03:20
+-- Description:    Quantum QI v2 DWS CDC 按月重算写入 v2
 -- 作业元信息：
---   作业类型：批处理
---   运行方式：一次性初始化/回刷或调度执行
---   运行参数：无，自动取上月完整窗口
+--   作业类型：批式 CDC 修复任务
+--   运行方式：默认扫描昨天 DWM/source tag 变更，按受影响月份整月删除后重算
+--   运行参数：无
 -- Notes:
 --   1. 主链路: DWM v2 -> DWS v2
---   2. 粒度: account_id + report_date + sale_id + am_id
+--   2. 主干事实变化和 ods_bi_month_tag 配置变化都会进入 affected months
 --   3. 只记录成本/返现计费基数和对应 rate，结果金额由下游按 base * rate 计算
 --********************************************************************--
 
-SET 'parallelism.default' = '4';
-SET 'pipeline.default-parallelism' = '4';
-SET 'table.exec.resource.default-parallelism' = '4';
-SET 'pipeline.operator-chaining' = 'true';
-SET 'taskmanager.memory.network.min' = '1gb';
-SET 'taskmanager.memory.network.max' = '3gb';
-SET 'taskmanager.memory.network.fraction' = '0.2';
-SET 'taskmanager.network.sort-shuffle.min-buffers' = '512';
-SET 'heartbeat.timeout' = '600000';
+SET 'parallelism.default' = '1';
+SET 'pipeline.operator-chaining' = 'false';
 SET 'table.exec.mini-batch.enabled' = 'true';
 SET 'table.exec.mini-batch.allow-latency' = '5s';
 SET 'table.exec.mini-batch.size' = '5000';
@@ -29,6 +26,21 @@ SET 'table.dml-sync' = 'true';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
+
+-- ==============================================
+-- 0. 【临时表】ADBPG 删除函数调用结果
+-- ==============================================
+CREATE TEMPORARY TABLE source_delete_qi_card_finance_daily_v2_cdc_result (
+    affected_rows BIGINT
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT dws.fn_delete_qi_card_finance_daily_v2_cdc(false) AS affected_rows) AS delete_result',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1'
+);
 SET 'execution.checkpointing.interval' = '10s';
 SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
 SET 'execution.checkpointing.timeout' = '30min';
@@ -86,131 +98,155 @@ CREATE TEMPORARY TABLE source_dwm_qi_card_transaction_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    -- DWM 明细可能长期累计到千万级，这里必须在 JDBC 子查询内下推时间窗口，避免 Flink 先全表拉取后再过滤。
-    'table-name' = '(SELECT id, transaction_id, account_id, account_type, account_category, system_type, status, transaction_time, version, remarks, create_time, update_time, delete_time, source_update_time, source_delete_time, is_current_valid, billing_amount, is_qbit_provision, is_hk_region, is_consumption, is_reversal_or_credit, has_special_code, is_vip_account, business_type, card_id, sale_id, am_id FROM dwm.dwm_qi_card_transaction_detail_v2_p WHERE delete_time IS NULL AND transaction_time >= date_trunc(''month'', CURRENT_DATE - INTERVAL ''1 month'') AND transaction_time < date_trunc(''month'', CURRENT_DATE)) AS dwm_qi_card_transaction_detail_v2_f',
+    'table-name' = '(SELECT id, transaction_id, account_id, account_type, account_category, system_type, status, transaction_time, version, remarks, create_time, update_time, delete_time, source_update_time, source_delete_time, is_current_valid, billing_amount, is_qbit_provision, is_hk_region, is_consumption, is_reversal_or_credit, has_special_code, is_vip_account, business_type, card_id, sale_id, am_id FROM dwm.dwm_qi_card_transaction_detail_v2_p) AS dwm_qi_card_transaction_detail_v2_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '2000',
-    'scan.auto-commit' = 'false'
+    'scan.fetch-size' = '5000'
 );
 
-CREATE TEMPORARY VIEW v_qi_dwm_daily_rows AS
-SELECT
-    CAST(transaction_time AS DATE) AS report_date,
-    account_id,
-    account_type,
-    account_category,
-    system_type,
-    sale_id,
-    am_id,
-    status,
-    billing_amount,
-    is_hk_region,
-    business_type,
-    has_special_code
+CREATE TEMPORARY VIEW v_qi_fact_changed_months AS
+SELECT DISTINCT
+    CAST(DATE_FORMAT(CAST(transaction_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
 FROM source_dwm_qi_card_transaction_detail_v2_p
-WHERE transaction_time >= CAST(DATE_FORMAT(CAST(CURRENT_DATE - INTERVAL '1' MONTH AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6))
-  AND transaction_time < CAST(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6));
+WHERE (
+        (source_update_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6)) AND source_update_time < CAST(CURRENT_DATE AS TIMESTAMP(6)))
+     OR (source_delete_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6)) AND source_delete_time < CAST(CURRENT_DATE AS TIMESTAMP(6)))
+     OR (update_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6)) AND update_time < CAST(CURRENT_DATE AS TIMESTAMP(6)))
+     OR (delete_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6)) AND delete_time < CAST(CURRENT_DATE AS TIMESTAMP(6)))
+  );
 
-CREATE TEMPORARY VIEW v_dws_qi_daily_base AS
+CREATE TEMPORARY VIEW v_qi_config_changed_months AS
+SELECT DISTINCT
+    CAST(DATE_FORMAT(CAST(statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
+FROM source_bi_month_tag
+WHERE provider = 'IQ'
+  AND update_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6))
+  AND update_time < CAST(CURRENT_DATE AS TIMESTAMP(6));
+
+CREATE TEMPORARY VIEW v_qi_changed_months AS
+SELECT
+    report_month,
+    CAST(DATE_FORMAT(CAST(DATE_ADD(report_month, 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS next_month
+FROM (
+    SELECT report_month FROM v_qi_fact_changed_months
+    UNION
+    SELECT report_month FROM v_qi_config_changed_months
+) changed;
+
+CREATE TEMPORARY VIEW v_qi_dwm_month_rows AS
+SELECT
+    CAST(s.transaction_time AS DATE) AS report_date,
+    s.account_id,
+    s.account_type,
+    s.account_category,
+    s.system_type,
+    s.status,
+    s.billing_amount,
+    s.is_hk_region,
+    s.business_type,
+    s.has_special_code,
+    s.sale_id,
+    s.am_id
+FROM source_dwm_qi_card_transaction_detail_v2_p s
+INNER JOIN v_qi_changed_months m
+    ON CAST(DATE_FORMAT(CAST(s.transaction_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = m.report_month
+WHERE s.delete_time IS NULL;
+
+CREATE TEMPORARY VIEW v_dws_qi_month_base AS
 SELECT
     CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', COALESCE(sale_id, ''), ':', COALESCE(am_id, '')))) AS BIGINT) AS id,
     report_date,
-    account_id,
-    account_type,
-    account_category,
-    system_type,
+    s.account_id,
+    s.account_type,
+    s.account_category,
+    s.system_type,
     1 AS version,
     CAST(NULL AS STRING) AS remarks,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time,
-    sale_id,
-    am_id,
-    CAST(SUM(CASE WHEN is_hk_region = FALSE AND business_type = 'Consumption' AND status IN ('Closed', 'Pending') THEN billing_amount * CAST(0.0135 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS cost_reimbursement_base_amt,
-    CAST(SUM(CASE WHEN is_hk_region = FALSE AND status IN ('Closed', 'Pending') AND business_type IN ('Consumption', 'Reversal', 'Credit') THEN
+    s.sale_id,
+    s.am_id,
+    CAST(SUM(CASE WHEN s.is_hk_region = FALSE AND s.business_type = 'Consumption' AND s.status IN ('Closed', 'Pending') THEN s.billing_amount * CAST(0.0135 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS cost_reimbursement_base_amt,
+    CAST(SUM(CASE WHEN s.is_hk_region = FALSE AND s.status IN ('Closed', 'Pending') AND s.business_type IN ('Consumption', 'Reversal', 'Credit') THEN
         CASE
-            WHEN ABS(billing_amount) < 5 THEN billing_amount * CAST(0.00095 AS DECIMAL(20, 4))
-            WHEN ABS(billing_amount) < 10 THEN billing_amount * CAST(0.00145 AS DECIMAL(20, 4))
-            WHEN ABS(billing_amount) < 50 THEN billing_amount * CAST(0.0022 AS DECIMAL(20, 4))
-            WHEN ABS(billing_amount) < 250 THEN billing_amount * CAST(0.0037 AS DECIMAL(20, 4))
-            ELSE billing_amount * CAST(0.00445 AS DECIMAL(20, 4))
-        END * CASE WHEN business_type = 'Consumption' THEN 1 ELSE -1 END
+            WHEN ABS(s.billing_amount) < 5 THEN s.billing_amount * CAST(0.00095 AS DECIMAL(20, 4))
+            WHEN ABS(s.billing_amount) < 10 THEN s.billing_amount * CAST(0.00145 AS DECIMAL(20, 4))
+            WHEN ABS(s.billing_amount) < 50 THEN s.billing_amount * CAST(0.0022 AS DECIMAL(20, 4))
+            WHEN ABS(s.billing_amount) < 250 THEN s.billing_amount * CAST(0.0037 AS DECIMAL(20, 4))
+            ELSE s.billing_amount * CAST(0.00445 AS DECIMAL(20, 4))
+        END * CASE WHEN s.business_type = 'Consumption' THEN 1 ELSE -1 END
         ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS cost_service_base_amt,
-    CAST(SUM(CASE WHEN is_hk_region = FALSE AND business_type = 'Consumption' AND status IN ('Closed', 'Pending') THEN
+    CAST(SUM(CASE WHEN s.is_hk_region = FALSE AND s.business_type = 'Consumption' AND s.status IN ('Closed', 'Pending') THEN
         CASE
-            WHEN billing_amount < 5 THEN 0.01
-            WHEN billing_amount < 10 THEN 0.055
-            WHEN billing_amount < 50 THEN 0.08
-            WHEN billing_amount < 250 THEN 0.12
+            WHEN s.billing_amount < 5 THEN 0.01
+            WHEN s.billing_amount < 10 THEN 0.055
+            WHEN s.billing_amount < 50 THEN 0.08
+            WHEN s.billing_amount < 250 THEN 0.12
             ELSE 0.14
         END ELSE 0 END) AS DECIMAL(20, 4)) AS cost_acs_regular_base_amt,
-    CAST(SUM(CASE WHEN is_hk_region = FALSE AND business_type = 'Consumption' AND has_special_code = FALSE THEN
+    CAST(SUM(CASE WHEN s.is_hk_region = FALSE AND s.business_type = 'Consumption' AND s.has_special_code = FALSE THEN
         CASE
-            WHEN billing_amount < 5 THEN 0.04
-            WHEN billing_amount < 10 THEN 0.22
-            WHEN billing_amount < 50 THEN 0.255
-            WHEN billing_amount < 250 THEN 0.48
+            WHEN s.billing_amount < 5 THEN 0.04
+            WHEN s.billing_amount < 10 THEN 0.22
+            WHEN s.billing_amount < 50 THEN 0.255
+            WHEN s.billing_amount < 250 THEN 0.48
             ELSE 0.56
         END ELSE 0 END) AS DECIMAL(20, 4)) AS cost_acs_vip_base_amt,
-    CAST(SUM(CASE WHEN is_hk_region = FALSE AND business_type = 'Consumption' AND has_special_code = FALSE THEN 0.09 ELSE 0 END) AS DECIMAL(20, 4)) AS cost_vrm_base_amt,
-    CAST(SUM(CASE WHEN is_hk_region = TRUE AND business_type = 'Consumption' AND status IN ('Closed', 'Pending') THEN
+    CAST(SUM(CASE WHEN s.is_hk_region = FALSE AND s.business_type = 'Consumption' AND s.has_special_code = FALSE THEN 0.09 ELSE 0 END) AS DECIMAL(20, 4)) AS cost_vrm_base_amt,
+    CAST(SUM(CASE WHEN s.is_hk_region = TRUE AND s.business_type = 'Consumption' AND s.status IN ('Closed', 'Pending') THEN
         CASE
-            WHEN billing_amount < 5 THEN 0.004
-            WHEN billing_amount < 50 THEN 0.018
+            WHEN s.billing_amount < 5 THEN 0.004
+            WHEN s.billing_amount < 50 THEN 0.018
             ELSE 0.032
         END ELSE 0 END) AS DECIMAL(20, 4)) AS cost_hk_regular_base_amt,
-    CAST(SUM(CASE WHEN is_hk_region = TRUE AND business_type = 'Consumption' AND status IN ('Closed', 'Pending') AND has_special_code = FALSE THEN
+    CAST(SUM(CASE WHEN s.is_hk_region = TRUE AND s.business_type = 'Consumption' AND s.status IN ('Closed', 'Pending') AND s.has_special_code = FALSE THEN
         CASE
-            WHEN billing_amount < 5 THEN 0.006
-            WHEN billing_amount < 50 THEN 0.027
+            WHEN s.billing_amount < 5 THEN 0.006
+            WHEN s.billing_amount < 50 THEN 0.027
             ELSE 0.048
         END ELSE 0 END) AS DECIMAL(20, 4)) AS cost_hk_vip_base_amt,
-    CAST(SUM(CASE WHEN is_hk_region = FALSE AND business_type = 'Consumption' AND has_special_code = FALSE THEN
+    CAST(SUM(CASE WHEN s.is_hk_region = FALSE AND s.business_type = 'Consumption' AND s.has_special_code = FALSE THEN
         CASE
-            WHEN billing_amount <= 50 THEN 0.025
-            WHEN billing_amount <= 1000 THEN billing_amount * CAST(0.0005 AS DECIMAL(20, 4))
-            WHEN billing_amount > 1000 THEN 0.5
+            WHEN s.billing_amount <= 50 THEN 0.025
+            WHEN s.billing_amount <= 1000 THEN s.billing_amount * CAST(0.0005 AS DECIMAL(20, 4))
+            WHEN s.billing_amount > 1000 THEN 0.5
             ELSE 0
         END ELSE 0 END) AS DECIMAL(20, 4)) AS cost_dcsf_base_amt,
-    CAST(SUM(CASE WHEN status IN ('Closed', 'Pending') AND is_hk_region = FALSE AND business_type = 'Consumption' THEN billing_amount * CAST(0.02 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS rebate_interchange_base_amt,
-    CAST(SUM(CASE WHEN status IN ('Closed', 'Pending') AND business_type = 'Consumption' THEN billing_amount * CAST(0.0118 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS rebate_incentive_base_amt
-FROM v_qi_dwm_daily_rows
-GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id;
-
-CREATE TEMPORARY VIEW v_qi_month_scope AS
-SELECT DISTINCT CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
-FROM v_dws_qi_daily_base;
+    CAST(SUM(CASE WHEN s.status IN ('Closed', 'Pending') AND s.is_hk_region = FALSE AND s.business_type = 'Consumption' THEN s.billing_amount * CAST(0.02 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS rebate_interchange_base_amt,
+    CAST(SUM(CASE WHEN s.status IN ('Closed', 'Pending') AND s.business_type = 'Consumption' THEN s.billing_amount * CAST(0.0118 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS rebate_incentive_base_amt
+FROM v_qi_dwm_month_rows s
+GROUP BY report_date, s.account_id, s.account_type, s.account_category, s.system_type, s.sale_id, s.am_id;
 
 CREATE TEMPORARY VIEW v_qi_month_row_count AS
 SELECT
     CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month,
     COUNT(*) AS row_count
-FROM v_dws_qi_daily_base
+FROM v_dws_qi_month_base
 GROUP BY CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE);
 
 CREATE TEMPORARY VIEW v_qi_month_tag_ranked AS
 SELECT report_month, tag, amount
 FROM (
     SELECT
-        s.report_month,
+        m.report_month,
         t.tag,
         t.amount,
         ROW_NUMBER() OVER (
-            PARTITION BY s.report_month, t.tag
+            PARTITION BY m.report_month, t.tag
             ORDER BY
                 CASE WHEN t.detail = 'DEFAULT_FALLBACK' THEN 1 ELSE 0 END,
                 t.statistics_time DESC,
                 t.update_time DESC,
                 t.id DESC
         ) AS rn
-    FROM v_qi_month_scope s
+    FROM v_qi_changed_months m
     LEFT JOIN source_bi_month_tag t
         ON t.provider = 'IQ'
        AND t.delete_time IS NULL
        AND (
-              CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = s.report_month
+              CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = m.report_month
            OR CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = DATE '2099-01-01'
            OR t.detail = 'DEFAULT_FALLBACK'
        )
@@ -318,6 +354,8 @@ SELECT
     CAST(COALESCE(r.rebate_incentive_rate, 1) AS DECIMAL(20, 8)) AS rebate_incentive_rate,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
     CAST(NULL AS STRING) AS special_fee_type
-FROM v_dws_qi_daily_base b
+FROM v_dws_qi_month_base b
 LEFT JOIN v_qi_month_rates r
-    ON CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = r.report_month;
+    ON CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = r.report_month
+CROSS JOIN source_delete_qi_card_finance_daily_v2_cdc_result AS delete_result
+WHERE delete_result.affected_rows >= 0;

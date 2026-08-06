@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-04
--- Updated Time:   2026-08-04 12:24:00
+-- Updated Time:   2026-08-06 01:20:00
 -- Description:    BB v2 Active Card Count 批量回刷
 -- 作业元信息：
 --   作业类型：批处理
@@ -11,6 +11,10 @@
 --   1. 只维护 active_card_count。
 --   2. 只落每月 1 号特殊行，special_fee_type = ACTIVE_CARD_ACCOUNT_FEE，费用金额由 cost_fixed_fee 承载。
 --   3. 销售归属取执行时客户最新有效关系，不按 auth_time 历史关系拆分。
+-- Notes:
+--   1. v2 在同一个 Flink SQL 作业中通过 JDBC source 调用 dws.fn_delete_bb_active_card_count_v2_monthly_cdc(false) 先清理目标数据。
+--   2. 部署时需要在“附加依赖文件”添加 PostgreSQL JDBC driver，例如 postgresql-42.7.4.jar。
+--   3. 首次执行可将函数参数 false 改为 true 做 dry-run。
 --********************************************************************--
 
 SET 'parallelism.default' = '4';
@@ -23,6 +27,19 @@ SET 'pipeline.operator-chaining' = 'true';
 SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'execution.application-management.enabled' = 'true';
 SET 'execution.multi-jobs-in-application.enable' = 'true';
+
+CREATE TEMPORARY TABLE source_delete_bb_active_card_count_v2_monthly_cdc_result (
+    affected_rows BIGINT
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT dws.fn_delete_bb_active_card_count_v2_monthly_cdc(false) AS affected_rows) AS delete_result',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1'
+);
+
 SET 'table.dml-sync' = 'true';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '3';
@@ -280,6 +297,8 @@ SELECT
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM v_bb_active_card_count_rows
+CROSS JOIN source_delete_bb_active_card_count_v2_monthly_cdc_result AS delete_result
+WHERE delete_result.affected_rows >= 0
 UNION ALL
 SELECT
     id,
@@ -298,4 +317,6 @@ SELECT
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS delete_time
-FROM v_obsolete_active_card_rows;
+FROM v_obsolete_active_card_rows
+CROSS JOIN source_delete_bb_active_card_count_v2_monthly_cdc_result AS delete_result
+WHERE delete_result.affected_rows >= 0;

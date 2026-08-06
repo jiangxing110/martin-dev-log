@@ -1,8 +1,12 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-04
--- Updated Time:   2026-08-04 12:24:00
--- Description:    QI v2 渠道固定成本批量回刷
+-- Updated Time:   2026-08-06 01:20:00
+-- Description:    SL 渠道固定成本批量回刷 v2
+-- Notes:
+--   1. v2 在同一个 Flink SQL 作业中通过 JDBC source 调用 dws.fn_delete_sl_channel_fixed_fee_v2_monthly_cdc(false) 先清理目标数据。
+--   2. 部署时需要在“附加依赖文件”添加 PostgreSQL JDBC driver，例如 postgresql-42.7.4.jar。
+--   3. 首次执行可将函数参数 false 改为 true 做 dry-run。
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
@@ -15,6 +19,19 @@ SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'execution.application-management.enabled' = 'true';
 SET 'execution.multi-jobs-in-application.enable' = 'true';
+
+CREATE TEMPORARY TABLE source_delete_sl_channel_fixed_fee_v2_monthly_cdc_result (
+    affected_rows BIGINT
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT dws.fn_delete_sl_channel_fixed_fee_v2_monthly_cdc(false) AS affected_rows) AS delete_result',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1'
+);
+
 
 CREATE TEMPORARY TABLE source_bi_month_tag (
     id BIGINT,
@@ -36,7 +53,7 @@ CREATE TEMPORARY TABLE source_bi_month_tag (
     'scan.fetch-size' = '1000'
 );
 
-CREATE TEMPORARY TABLE source_dws_qi_card_finance_daily_v2_p (
+CREATE TEMPORARY TABLE source_dws_sl_card_finance_daily_p (
     id BIGINT,
     report_date DATE,
     account_id STRING,
@@ -45,14 +62,14 @@ CREATE TEMPORARY TABLE source_dws_qi_card_finance_daily_v2_p (
     system_type STRING,
     sale_id STRING,
     am_id STRING,
-    rebate_incentive_base_amt DECIMAL(20, 4),
+    rebate_amt DECIMAL(20, 4),
     special_fee_type STRING,
     delete_time TIMESTAMP(6),
     PRIMARY KEY (id, report_date) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, report_date, account_id, account_type, account_category, system_type, sale_id, am_id, rebate_incentive_base_amt, special_fee_type, delete_time FROM dws.dws_qi_card_finance_daily_v2_p WHERE report_date >= date_trunc(''month'', CURRENT_DATE - INTERVAL ''1 month'')::date AND report_date < date_trunc(''month'', CURRENT_DATE)::date) AS dws_qi_card_finance_daily_v2_p_f',
+    'table-name' = '(SELECT id, report_date, account_id, account_type, account_category, system_type, sale_id, am_id, rebate_amt, special_fee_type, delete_time FROM dws.dws_sl_card_finance_daily_p WHERE report_date >= date_trunc(''month'', CURRENT_DATE - INTERVAL ''1 month'')::date AND report_date < date_trunc(''month'', CURRENT_DATE)::date) AS dws_sl_card_finance_daily_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -63,12 +80,12 @@ CREATE TEMPORARY VIEW v_month_scope AS
 SELECT DISTINCT report_month, CAST(DATE_FORMAT(CAST(DATE_ADD(report_month, 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS next_month
 FROM (
     SELECT CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
-    FROM source_dws_qi_card_finance_daily_v2_p
+    FROM source_dws_sl_card_finance_daily_p
     WHERE report_date >= CAST(DATE_FORMAT(CAST(CURRENT_DATE - INTERVAL '1' MONTH AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AND report_date < CAST(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE)
     UNION
     SELECT CAST(DATE_FORMAT(CAST(statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
     FROM source_bi_month_tag
-    WHERE tag = 'CHANNEL_COST' AND provider = 'IQ'
+    WHERE tag = 'CHANNEL_COST' AND provider = 'LS'
       AND statistics_time >= CAST(DATE_FORMAT(CAST(CURRENT_DATE - INTERVAL '1' MONTH AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6)) AND statistics_time < CAST(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6))
 ) m
 WHERE report_month IS NOT NULL;
@@ -85,7 +102,7 @@ FROM (
     LEFT JOIN source_bi_month_tag t
         ON t.tag = 'CHANNEL_COST'
        AND t.delete_time IS NULL
-       AND t.provider = 'IQ'
+       AND t.provider = 'LS'
        AND (
               CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = m.report_month
            OR CAST(DATE_FORMAT(CAST(t.statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = DATE '2099-01-01'
@@ -96,7 +113,7 @@ WHERE rn = 1;
 
 CREATE TEMPORARY VIEW v_allocation_base AS
 SELECT *
-FROM source_dws_qi_card_finance_daily_v2_p
+FROM source_dws_sl_card_finance_daily_p
 WHERE delete_time IS NULL
   AND (special_fee_type IS NULL OR special_fee_type <> 'CHANNEL_FIXED_FEE')
   AND EXISTS (SELECT 1 FROM v_month_scope m WHERE report_date >= m.report_month AND report_date < m.next_month);
@@ -104,13 +121,13 @@ WHERE delete_time IS NULL
 CREATE TEMPORARY VIEW v_month_net_amount AS
 SELECT
     CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month,
-    CAST(SUM(COALESCE(rebate_incentive_base_amt, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS month_total_net_amount
+    CAST(SUM(COALESCE(rebate_amt, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS month_total_net_amount
 FROM v_allocation_base
 GROUP BY CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE);
 
 CREATE TEMPORARY VIEW v_fixed_fee_rows AS
 SELECT
-    CAST(ABS(HASH_CODE(CONCAT('CHANNEL_FIXED_FEE:IQ:', DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', b.account_id, ':', COALESCE(b.sale_id, ''), ':', COALESCE(b.am_id, '')))) AS BIGINT) AS id,
+    CAST(ABS(HASH_CODE(CONCAT('CHANNEL_FIXED_FEE:LS:', DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', b.account_id, ':', COALESCE(b.sale_id, ''), ':', COALESCE(b.am_id, '')))) AS BIGINT) AS id,
     b.report_date,
     b.account_id,
     b.account_type,
@@ -118,7 +135,7 @@ SELECT
     b.system_type,
     b.sale_id,
     b.am_id,
-    CAST(c.month_fixed_fee * COALESCE(b.rebate_incentive_base_amt, CAST(0 AS DECIMAL(20, 4))) / NULLIF(na.month_total_net_amount, 0) AS DECIMAL(20, 4)) AS cost_fixed_fee
+    CAST(c.month_fixed_fee * COALESCE(b.rebate_amt, CAST(0 AS DECIMAL(20, 4))) / NULLIF(na.month_total_net_amount, 0) AS DECIMAL(20, 4)) AS cost_fixed_fee
 FROM v_allocation_base b
 INNER JOIN v_month_net_amount na ON CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = na.report_month
 INNER JOIN v_month_channel_cost c ON c.report_month = na.report_month
@@ -136,7 +153,7 @@ SELECT
     existing_row.system_type,
     existing_row.sale_id,
     existing_row.am_id
-FROM source_dws_qi_card_finance_daily_v2_p existing_row
+FROM source_dws_sl_card_finance_daily_p existing_row
 LEFT JOIN v_fixed_fee_rows fresh
     ON fresh.id = existing_row.id
    AND fresh.report_date = existing_row.report_date
@@ -145,7 +162,7 @@ WHERE existing_row.special_fee_type = 'CHANNEL_FIXED_FEE'
   AND EXISTS (SELECT 1 FROM v_month_scope m WHERE existing_row.report_date >= m.report_month AND existing_row.report_date < m.next_month)
   AND fresh.id IS NULL;
 
-CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_v2_p (
+CREATE TEMPORARY TABLE sink_dws_sl_card_finance_daily_p (
     id BIGINT,
     report_date DATE,
     account_id STRING,
@@ -165,7 +182,7 @@ CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_v2_p (
 ) WITH (
     'connector' = 'adbpg',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'tableName' = 'dws_qi_card_finance_daily_v2_p',
+    'tableName' = 'dws_sl_card_finance_daily_p',
     'targetSchema' = 'dws',
     'userName' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
@@ -173,13 +190,17 @@ CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_v2_p (
     'batchSize' = '2000'
 );
 
-INSERT INTO sink_dws_qi_card_finance_daily_v2_p
+INSERT INTO sink_dws_sl_card_finance_daily_p
 SELECT id, report_date, account_id, account_type, account_category, system_type,
-       1, 'qi_channel_fixed_fee_v2', CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)), CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)), CAST(NULL AS TIMESTAMP(6)),
+       1, 'sl_channel_fixed_fee_v2', CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)), CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)), CAST(NULL AS TIMESTAMP(6)),
        sale_id, am_id, cost_fixed_fee, 'CHANNEL_FIXED_FEE'
 FROM v_fixed_fee_rows
+CROSS JOIN source_delete_sl_channel_fixed_fee_v2_monthly_cdc_result AS delete_result
+WHERE delete_result.affected_rows >= 0
 UNION ALL
 SELECT id, report_date, account_id, account_type, account_category, system_type,
-       1, 'qi_channel_fixed_fee_v2_soft_delete', CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)), CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)), CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)),
+       1, 'sl_channel_fixed_fee_v2_soft_delete', CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)), CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)), CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)),
        sale_id, am_id, CAST(0 AS DECIMAL(20, 4)), 'CHANNEL_FIXED_FEE'
-FROM v_obsolete_fixed_fee_rows;
+FROM v_obsolete_fixed_fee_rows
+CROSS JOIN source_delete_sl_channel_fixed_fee_v2_monthly_cdc_result AS delete_result
+WHERE delete_result.affected_rows >= 0;
