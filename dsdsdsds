@@ -51,3 +51,14 @@ acquiring
 global_account
 
 B多了treasury 我觉得 如果mv_gross_profit_daily没有成本那直接就说category 收入是收入成本归0 
+
+
+/Users/martinjiang/VsCodeProjects/martin-dev-log/sale-repoet/sales-commission/cdc/
+dws_online_sales_commission_snapshot-month-cdc-sql.sql 
+我只是不想手动去掉用 想直接在这个上个月的时间写上个月的时间 
+然后我们还有一直是拿
+open_api:
+month_receivable 这个是要20号才能账单出了才能有
+
+所以得有两组脚本 
+或者这个脚本是cdc 每天运行 然后根据 运行时间判断是执行那个
