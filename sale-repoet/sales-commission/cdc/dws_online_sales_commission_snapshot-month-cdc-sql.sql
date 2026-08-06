@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-29
--- Updated Time:   2026-08-06 00:00:00
+-- Updated Time:   2026-08-06 17:20:00
 -- Description:    销售佣金每月8号快照固化任务
 -- 作业元信息：
 --   作业类型：月度批式CDC固化任务
@@ -32,7 +32,6 @@ CREATE TEMPORARY TABLE source_recent_estimate (
     source_type STRING,
     commission_stage STRING,
     sale_id STRING,
-    operation_manager_id STRING,
     am_id STRING,
     department_id STRING,
     invite_type STRING,
@@ -56,7 +55,7 @@ CREATE TEMPORARY TABLE source_recent_estimate (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, report_date, settlement_month, root_account_id, product, provider, item, source_type, commission_stage, sale_id, operation_manager_id, am_id, department_id, invite_type, activity_month, collection_month, payable_settlement_month, effective_revenue, cogs, gp, commission_base, commission_rate, estimated_commission, active_days, rule_code, 1 AS version, ''snapshot source from materialized view'' AS remarks, refreshed_at AS create_time, refreshed_at AS update_time, NULL::timestamp AS delete_time FROM dws.mv_sales_commission_recent_estimate WHERE settlement_month = date_trunc(''month'', CURRENT_DATE - interval ''1 month'')::date) AS recent_estimate_f',
+    'table-name' = '(SELECT id, report_date, settlement_month, root_account_id, product, provider, item, source_type, commission_stage, sale_id, am_id, department_id, invite_type, activity_month, collection_month, payable_settlement_month, effective_revenue, cogs, gp, commission_base, commission_rate, estimated_commission, active_days, rule_code, 1 AS version, ''snapshot source from materialized view'' AS remarks, refreshed_at AS create_time, refreshed_at AS update_time, NULL::timestamp AS delete_time FROM dws.mv_sales_commission_recent_estimate WHERE settlement_month = date_trunc(''month'', CURRENT_DATE - interval ''1 month'')::date) AS recent_estimate_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -81,7 +80,6 @@ SELECT
     source_type,
     commission_stage,
     sale_id,
-    operation_manager_id,
     am_id,
     department_id,
     invite_type,
@@ -104,18 +102,42 @@ SELECT
 FROM source_recent_estimate
 WHERE delete_time IS NULL;
 
+CREATE TEMPORARY VIEW v_snapshot_user AS
+SELECT
+    settlement_month,
+    sale_id AS display_sale_id,
+    commission_stage,
+    effective_revenue,
+    cogs,
+    gp,
+    estimated_commission
+FROM source_recent_estimate
+WHERE delete_time IS NULL
+  AND sale_id IS NOT NULL
+UNION ALL
+SELECT
+    settlement_month,
+    am_id AS display_sale_id,
+    commission_stage,
+    effective_revenue,
+    cogs,
+    gp,
+    estimated_commission
+FROM source_recent_estimate
+WHERE delete_time IS NULL
+  AND am_id IS NOT NULL
+  AND (sale_id IS NULL OR sale_id <> am_id);
+
 CREATE TEMPORARY VIEW v_snapshot AS
 SELECT
     CAST(ABS(HASH_CODE(CONCAT(
         DATE_FORMAT(CAST(CAST(CONCAT(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM'), '-08') AS DATE) AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
         DATE_FORMAT(CAST(settlement_month AS TIMESTAMP(6)), 'yyyyMM'), ':',
-        COALESCE(sale_id, ''), ':', COALESCE(am_id, '')
+        COALESCE(display_sale_id, '')
     ))) AS BIGINT) AS id,
     CAST(CONCAT(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM'), '-08') AS DATE) AS snapshot_date,
     settlement_month,
-    sale_id,
-    operation_manager_id,
-    am_id,
+    display_sale_id AS sale_id,
     CAST(SUM(CASE WHEN commission_stage = 'current_payout' THEN effective_revenue ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS total_effective_revenue,
     CAST(SUM(CASE WHEN commission_stage = 'current_payout' THEN cogs ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS total_cogs,
     CAST(SUM(CASE WHEN commission_stage = 'current_payout' THEN gp ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS total_gp,
@@ -125,9 +147,8 @@ SELECT
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
-FROM source_recent_estimate
-WHERE delete_time IS NULL
-GROUP BY settlement_month, sale_id, operation_manager_id, am_id;
+FROM v_snapshot_user
+GROUP BY settlement_month, display_sale_id;
 
 CREATE TEMPORARY TABLE sink_snapshot_detail (
     id BIGINT,
@@ -140,7 +161,6 @@ CREATE TEMPORARY TABLE sink_snapshot_detail (
     source_type STRING,
     commission_stage STRING,
     sale_id STRING,
-    operation_manager_id STRING,
     am_id STRING,
     department_id STRING,
     invite_type STRING,
@@ -177,8 +197,6 @@ CREATE TEMPORARY TABLE sink_snapshot (
     snapshot_date DATE,
     settlement_month DATE,
     sale_id STRING,
-    operation_manager_id STRING,
-    am_id STRING,
     total_effective_revenue DECIMAL(20, 4),
     total_cogs DECIMAL(20, 4),
     total_gp DECIMAL(20, 4),

@@ -1,20 +1,20 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-29
--- Updated Time:   2026-08-06 00:00:00
--- Description:    销售佣金8号前预估物化视图V2
+-- Updated Time:   2026-08-06 17:45:00
+-- Description:    销售佣金8号前预估物化视图
 -- Notes:
 --   1. 本物化视图承载8号前页面查询结果。
 --   2. 每次刷新保留近三个月 settlement_month 数据。
 --   3. 每月8号快照任务从本物化视图读取目标 settlement_month 并固化到快照表。
 --   4. 成本按 settlement_month + root_account_id + product + provider 汇总后，再按收入占比分摊到明细行。
 --   5. 量子卡渠道返现金作为收入加回；最终 GP 小于 0 时按 0 计佣。
---   6. V2读取 dws.dws_metrics_sales_revenue_monthly，收入仅使用 income_value。
+--   6. 读取 dws.dws_metrics_sales_revenue_monthly，收入仅使用 income_value。
 --********************************************************************--
 
-DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_sales_commission_recent_estimate_v2";
+DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_sales_commission_recent_estimate";
 
-CREATE MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate_v2" AS
+CREATE MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate" AS
 WITH account_root_relation AS (
   SELECT
     account_id,
@@ -115,6 +115,15 @@ global_account_channel_cost AS (
     AND c.provider IN ('BZ', 'CL')
   GROUP BY c.source_month, COALESCE(aar.root_id, c.account_id), c.provider
 ),
+qbit_card_bb_month_net_amount AS (
+  SELECT
+    date_trunc('month', report_date)::date AS settlement_month,
+    SUM(COALESCE(total_net_amount, 0))::numeric(20,4) AS month_total_net_amount
+  FROM "dws"."dws_bb_card_finance_daily_v2_p"
+  WHERE delete_time IS NULL
+    AND report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+  GROUP BY date_trunc('month', report_date)::date
+),
 qbit_card_bb_cost AS (
   SELECT
     date_trunc('month', b.report_date)::date AS settlement_month,
@@ -125,33 +134,45 @@ qbit_card_bb_cost AS (
         COALESCE(b.m_dom_auth_count, 0) * 0.1090
       + COALESCE(b.m_int_auth_count, 0) * 0.4845
       + COALESCE(b.v_dom_auth_count, 0) * 0.0725
-      + COALESCE(b.v_int_auth_count, 0) * 0.4700
-      + COALESCE(b.m_int_decline_count, 0) * 0.3595
-      + COALESCE(b.v_int_decline_count, 0) * 0.3570
-      + COALESCE(b.dom_decline_count, 0) * 0.0890
+      + COALESCE(b.v_int_auth_count, 0) * 0.4770
+      + COALESCE(b.av_m_dom_count, 0) * 0.1090
+      + COALESCE(b.av_m_int_count, 0) * 0.4845
+      + COALESCE(b.av_v_dom_count, 0) * 0.0725
+      + COALESCE(b.av_v_int_count, 0) * 0.4770
+      + COALESCE(b.m_dom_clearing_vol, 0) * 0.0021
+      + COALESCE(b.m_int_clearing_vol, 0) * 0.0111
+      + COALESCE(b.v_dom_clearing_vol, 0) * 0.0016
+      + COALESCE(b.v_int_clearing_vol, 0) * 0.0116
       + COALESCE(b.m_int_reversal_count, 0) * 0.7190
       + COALESCE(b.v_int_reversal_count, 0) * 0.7140
       + COALESCE(b.dom_reversal_count, 0) * 0.1780
       + COALESCE(b.m_int_refund_count, 0) * 0.4845
       + COALESCE(b.v_int_refund_count, 0) * 0.4770
       + COALESCE(b.dom_refund_count, 0) * 0.1090
-      + COALESCE(b.av_m_dom_count, 0) * 0.1090
-      + COALESCE(b.av_m_int_count, 0) * 0.4845
-      + COALESCE(b.av_v_dom_count, 0) * 0.0725
-      + COALESCE(b.av_v_int_count, 0) * 0.4770
       + COALESCE(b.m_int_decline_count, 0) * 0.3595
       + COALESCE(b.v_int_decline_count, 0) * 0.3570
       + COALESCE(b.dom_decline_count, 0) * 0.0890
-      + COALESCE(b.m_dom_clearing_vol, 0) * -0.0021
-      + COALESCE(b.m_int_clearing_vol, 0) * -0.0111
-      + COALESCE(b.v_dom_clearing_vol, 0) * -0.0016
-      + COALESCE(b.v_int_clearing_vol, 0) * -0.0116
+      + COALESCE(b.ac_m_int_decline_count, 0) * 0.3595
+      + COALESCE(b.ac_v_int_decline_count, 0) * 0.3570
+      + COALESCE(b.ac_dom_decline_count, 0) * 0.0890
       + COALESCE(b.active_card_count, 0) * 0.1000
+      + CASE
+          WHEN COALESCE(mn.month_total_net_amount, 0) = 0 THEN 0
+          WHEN mn.month_total_net_amount <= 5000000
+            THEN COALESCE(b.total_net_amount, 0) * 0.0055
+          WHEN mn.month_total_net_amount <= 10000000
+            THEN COALESCE(b.total_net_amount, 0) / mn.month_total_net_amount
+               * (5000000 * 0.0055 + (mn.month_total_net_amount - 5000000) * 0.0045)
+          ELSE COALESCE(b.total_net_amount, 0) / mn.month_total_net_amount
+               * (5000000 * 0.0055 + 5000000 * 0.0045 + (mn.month_total_net_amount - 10000000) * 0.0040)
+        END
       + COALESCE(b.cost_fixed_fee, 0)
     )::numeric(20,4) AS cogs
-  FROM "dws"."dws_bb_card_finance_daily_p" b
+  FROM "dws"."dws_bb_card_finance_daily_v2_p" b
   LEFT JOIN account_root_relation aar
     ON aar.account_id = b.account_id
+  LEFT JOIN qbit_card_bb_month_net_amount mn
+    ON mn.settlement_month = date_trunc('month', b.report_date)::date
   WHERE b.delete_time IS NULL
     AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
   GROUP BY date_trunc('month', b.report_date)::date, COALESCE(aar.root_id, b.account_id)
@@ -210,6 +231,34 @@ qbit_card_bpc_cost AS (
     AND c.provider = 'BPC'
   GROUP BY c.source_month, COALESCE(aar.root_id, c.account_id)
 ),
+qbit_card_bz_cost AS (
+  SELECT
+    date_trunc('month', z.report_date)::date AS settlement_month,
+    COALESCE(aar.root_id, z.account_id) AS root_account_id,
+    'qbit_card' AS product,
+    'BZ' AS provider,
+    SUM(
+        COALESCE(z.clearing_base_amt, 0) * COALESCE(z.reimbursement_rate, 0)
+      + COALESCE(z.refund_base_amt, 0) * COALESCE(z.reimbursement_rate, 0)
+      + COALESCE(z.visa_charges_base_amt, 0) * COALESCE(z.visa_charges_rate, 0)
+      + COALESCE(z.card_create_count, 0) * COALESCE(z.card_setup_rate, 0)
+      + COALESCE(z.card_create_count, 0) * COALESCE(z.account_activation_rate, 0)
+      + COALESCE(z.card_active_count, 0) * COALESCE(z.account_on_file_rate, 0)
+      + COALESCE(z.settlement_volume, 0) * COALESCE(z.service_fee_rate, 0)
+      + COALESCE(z.verify_count, 0) * COALESCE(z.verify_fee_rate, 0)
+      + COALESCE(z.auth_count, 0) * COALESCE(z.auth_fee_rate, 0)
+      + COALESCE(z.clearing_count, 0) * COALESCE(z.clearing_fee_rate, 0)
+      + COALESCE(z.refund_count, 0) * COALESCE(z.refund_fee_rate, 0)
+      + COALESCE(z.reversal_count, 0) * COALESCE(z.reversal_fee_rate, 0)
+      + COALESCE(z.cost_fixed_fee, 0)
+    )::numeric(20,4) AS cogs
+  FROM "dws"."dws_bz_card_finance_daily_v2_p" z
+  LEFT JOIN account_root_relation aar
+    ON aar.account_id = z.account_id
+  WHERE z.delete_time IS NULL
+    AND z.report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+  GROUP BY date_trunc('month', z.report_date)::date, COALESCE(aar.root_id, z.account_id)
+),
 qbit_card_physical_cost AS (
   SELECT
     r.settlement_month,
@@ -267,8 +316,8 @@ qbit_card_channel_rebate AS (
       COALESCE(aar.root_id, b.account_id) AS root_account_id,
       'qbit_card' AS product,
       'BB' AS provider,
-      ABS(SUM(COALESCE(b.bb_channel_cashback_comm, 0)))::numeric(20,4) AS channel_rebate
-    FROM "dws"."dws_bb_card_finance_daily_p" b
+      ABS(SUM(COALESCE(b.bb_rebate_base_amt, 0) * 0.021195))::numeric(20,4) AS channel_rebate
+    FROM "dws"."dws_bb_card_finance_daily_v2_p" b
     LEFT JOIN account_root_relation aar
       ON aar.account_id = b.account_id
     WHERE b.delete_time IS NULL
@@ -319,6 +368,8 @@ v_cost_by_account_product AS (
     SELECT settlement_month, root_account_id, product, provider, cogs FROM qbit_card_sl_cost
     UNION ALL
     SELECT settlement_month, root_account_id, product, provider, cogs FROM qbit_card_bpc_cost
+    UNION ALL
+    SELECT settlement_month, root_account_id, product, provider, cogs FROM qbit_card_bz_cost
     UNION ALL
     SELECT settlement_month, root_account_id, product, provider, cogs FROM qbit_card_physical_cost
     UNION ALL
@@ -470,25 +521,25 @@ WHERE rn = 1
 WITH DATA
 DISTRIBUTED BY (id);
 
-ALTER MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate_v2"
+ALTER MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate"
   OWNER TO "flink_cdc_user";
 
-COMMENT ON MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate_v2" IS '销售佣金8号前预估物化视图V2，读取dws_metrics_sales_revenue_monthly，普通物化视图，通过pg_cron定时REFRESH刷新';
+COMMENT ON MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate" IS '销售佣金8号前预估物化视图，读取dws_metrics_sales_revenue_monthly，普通物化视图，通过pg_cron定时REFRESH刷新';
 
-CREATE INDEX IF NOT EXISTS "idx_mv_sales_commission_recent_estimate_v2_query" ON "dws"."mv_sales_commission_recent_estimate_v2" (
+CREATE INDEX IF NOT EXISTS "idx_mv_sales_commission_recent_estimate_query" ON "dws"."mv_sales_commission_recent_estimate" (
   "settlement_month",
   "sale_id",
   "am_id",
   "commission_stage"
 );
 
-CREATE INDEX IF NOT EXISTS "idx_mv_sales_commission_recent_estimate_v2_payable" ON "dws"."mv_sales_commission_recent_estimate_v2" (
+CREATE INDEX IF NOT EXISTS "idx_mv_sales_commission_recent_estimate_payable" ON "dws"."mv_sales_commission_recent_estimate" (
   "payable_settlement_month",
   "sale_id",
   "am_id"
 );
 
-CREATE INDEX IF NOT EXISTS "idx_mv_sales_commission_recent_estimate_v2_account" ON "dws"."mv_sales_commission_recent_estimate_v2" (
+CREATE INDEX IF NOT EXISTS "idx_mv_sales_commission_recent_estimate_account" ON "dws"."mv_sales_commission_recent_estimate" (
   "root_account_id",
   "settlement_month"
 );

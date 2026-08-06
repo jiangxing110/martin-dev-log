@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-06
--- Updated Time:   2026-08-06 00:00:00
+-- Updated Time:   2026-08-06 16:48:08
 -- Description:    销售佣金API月账单20号后补入任务
 -- 作业元信息：
 --   作业类型：月度批式CDC补入任务
@@ -10,7 +10,7 @@
 -- Notes:
 --   1. settlement_month 自动取当前日期上个月月初，例如2026-06-20处理2026-05。
 --   2. 只补 open_api 月账单 future_payout 明细，不更新 dws_sales_commission_snapshot_p 汇总。
---   3. 当前物化视图中 open_api/month_receivable 映射为 billing_decline_fee，本任务补入时改写为 api_monthly_billing/future_payout。
+--   3. 当前物化视图中 open_api/month_receivable 映射为 api_monthly_billing，本任务补入时改写为 api_monthly_billing/future_payout。
 --   4. payable_settlement_month = settlement_month + 1个月，对应下下月12号发薪展示。
 --********************************************************************--
 
@@ -32,7 +32,6 @@ CREATE TEMPORARY TABLE source_recent_estimate (
     source_type STRING,
     commission_stage STRING,
     sale_id STRING,
-    operation_manager_id STRING,
     am_id STRING,
     department_id STRING,
     invite_type STRING,
@@ -56,7 +55,7 @@ CREATE TEMPORARY TABLE source_recent_estimate (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, report_date, settlement_month, root_account_id, product, provider, item, source_type, commission_stage, sale_id, operation_manager_id, am_id, department_id, invite_type, activity_month, collection_month, payable_settlement_month, effective_revenue, cogs, gp, commission_base, commission_rate, estimated_commission, active_days, rule_code, 1 AS version, ''snapshot source from materialized view'' AS remarks, refreshed_at AS create_time, refreshed_at AS update_time, NULL::timestamp AS delete_time FROM dws.mv_sales_commission_recent_estimate WHERE settlement_month = date_trunc(''month'', CURRENT_DATE - interval ''1 month'')::date AND product = ''open_api'' AND source_type = ''billing_decline_fee'') AS recent_estimate_f',
+    'table-name' = '(SELECT id, report_date, settlement_month, root_account_id, product, provider, item, source_type, commission_stage, sale_id, am_id, department_id, invite_type, activity_month, collection_month, payable_settlement_month, effective_revenue, cogs, gp, commission_base, commission_rate, estimated_commission, active_days, rule_code, 1 AS version, ''snapshot source from materialized view'' AS remarks, refreshed_at AS create_time, refreshed_at AS update_time, NULL::timestamp AS delete_time FROM dws.mv_sales_commission_recent_estimate WHERE settlement_month = date_trunc(''month'', CURRENT_DATE - interval ''1 month'')::date AND product = ''open_api'' AND source_type = ''api_monthly_billing'') AS recent_estimate_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -81,7 +80,6 @@ SELECT
     CAST('api_monthly_billing' AS STRING) AS source_type,
     CAST('future_payout' AS STRING) AS commission_stage,
     sale_id,
-    operation_manager_id,
     am_id,
     department_id,
     invite_type,
@@ -115,7 +113,6 @@ CREATE TEMPORARY TABLE sink_snapshot_detail (
     source_type STRING,
     commission_stage STRING,
     sale_id STRING,
-    operation_manager_id STRING,
     am_id STRING,
     department_id STRING,
     invite_type STRING,

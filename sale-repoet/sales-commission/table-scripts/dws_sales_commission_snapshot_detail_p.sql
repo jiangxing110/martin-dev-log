@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-29
+-- Updated Time:   2026-08-06 16:48:08
 -- Description:    销售佣金发薪快照明细表
 -- Notes:
 --   1. 每月8号从预估结果表固化生成。
@@ -18,7 +19,6 @@ CREATE TABLE "dws"."dws_sales_commission_snapshot_detail_p" (
   "source_type" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
   "commission_stage" varchar(32) COLLATE "pg_catalog"."default" NOT NULL,
   "sale_id" varchar(64) COLLATE "pg_catalog"."default",
-  "operation_manager_id" varchar(64) COLLATE "pg_catalog"."default",
   "am_id" varchar(64) COLLATE "pg_catalog"."default",
   "department_id" varchar(64) COLLATE "pg_catalog"."default",
   "invite_type" varchar(32) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'all',
@@ -58,7 +58,6 @@ COMMENT ON COLUMN "dws"."dws_sales_commission_snapshot_detail_p"."item" IS '收�
 COMMENT ON COLUMN "dws"."dws_sales_commission_snapshot_detail_p"."source_type" IS '页面回款来源类型';
 COMMENT ON COLUMN "dws"."dws_sales_commission_snapshot_detail_p"."commission_stage" IS '佣金阶段：current_payout/future_payout';
 COMMENT ON COLUMN "dws"."dws_sales_commission_snapshot_detail_p"."sale_id" IS '销售ID';
-COMMENT ON COLUMN "dws"."dws_sales_commission_snapshot_detail_p"."operation_manager_id" IS '运营经理ID';
 COMMENT ON COLUMN "dws"."dws_sales_commission_snapshot_detail_p"."am_id" IS 'AM ID';
 COMMENT ON COLUMN "dws"."dws_sales_commission_snapshot_detail_p"."department_id" IS '销售所属部门ID';
 COMMENT ON COLUMN "dws"."dws_sales_commission_snapshot_detail_p"."invite_type" IS '直邀类型：all/direct/non_direct，快照生成时计算后固化';
