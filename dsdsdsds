@@ -106,4 +106,144 @@ Effective Revenue - COGS（排除实体卡部分)
 海外销售二部
 Effective Revenue - COGS（排除实体卡部分)
 （单客户算出来是多少就是多少，客户之间能互相影响）
+WITH finance_profit AS (
+  SELECT *
+  FROM (VALUES
+    ('0f00a197-38bf-4949-b854-39d6f583b444', 'Dragon Innovate Limited', 56822.62701::numeric),
+    ('2ab5f209-9c47-4e51-badb-c0af5407f742', 'BZ PAYMENT SOLUTION INC.', 110.46888::numeric),
+    ('2e48629c-9216-4841-8d38-6594e3975251', 'ENCOIN SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ', -13.07::numeric),
+    ('33e97a9d-4b66-437b-b349-3ab05d9efb6d', 'SYNDICATE X PTY LTD', 24.529937::numeric),
+    ('4c980d5d-74b7-49f4-83b1-683844b6ccec', 'Blockformer LLC', 70.99304::numeric),
+    ('5c807f96-7a57-49b5-a5a9-8774aee0a687', 'Zestful Zone LLC', 99.22215646::numeric),
+    ('64079345-d179-4b7e-b9e9-61903a78acaa', 'HOPPACARD, družba za razvoj in tehnologijo d.o.o.', 4440.06::numeric),
+    ('64687837-6092-4696-91c0-816ded02b783', 'The Block Limited', 0::numeric),
+    ('78ad30f2-5794-47c7-b413-62cc599ab203', 'DigitWallet s.r.o.', 32300.69733::numeric),
+    ('7e6945aa-d990-4472-8f47-1738419c99f6', '司軻翎資訊技術諮詢有限公司', 34.5::numeric),
+    ('8198d18d-59c7-4514-982f-5c16b6d63505', 'BTSE Holdings Limited', 8.83::numeric),
+    ('870284ad-6135-4044-8674-333dd522c174', 'Resourcing Limited', 0.41::numeric),
+    ('954a87a0-e537-4b6f-b4a9-5e25d9da5906', 'Kemfinity s.r.o.', -249.94::numeric),
+    ('95d362d7-56fe-4f50-82cb-f97a51afc263', 'LGENERATION LTD', 84199.18389::numeric),
+    ('9d5e5b26-6672-4102-aa7a-f38a2badc199', 'CTG Ltd', 4513.730399::numeric),
+    ('b391d672-4ccb-4f5b-8ab5-2c676f4fbf01', 'LogicTech s.r.o.', 224.407607::numeric),
+    ('b3995cca-7ed8-4e5a-b7d2-d27650c53403', 'C Labs Holdings Limited', 31.29::numeric),
+    ('bfa34005-8eda-4ada-9e7c-3f4cc3180f52', 'Ventorys Solutions Limited', 288.6482387::numeric),
+    ('c23e5ba5-1968-4dc5-a714-8da076a3f457', 'Nano Advanced Services Limited', 9772.712918::numeric),
+    ('ca84de65-eeb8-48d5-a7ff-46a4dc871ab3', 'Pay3 Limited', 333.149118::numeric),
+    ('e7107263-a635-4e3b-b9be-bb26d3d33e22', 'NOVA SOLUTIONS HK LIMITED', 5456.922158::numeric),
+    ('e83b6e59-cd6b-4f77-9c0e-388ec2486bc4', 'Luminary Asia Limited', 1756.166274::numeric),
+    ('ea96c478-15ad-47e1-852e-3bf48bff338c', 'BETTER-PRO ENTERPRISES LIMITED', 6.75::numeric),
+    ('ec30f31d-d306-4c00-9925-7b7e8fba61e4', 'Toonpay Technologies Limited', 12142.79::numeric),
+    ('ee631dc7-47a1-41fc-93b7-908f6fc0fa2f', 'PEXX TECHNOLOGY PTY LTD', 15444.18::numeric),
+    ('f2c81895-27ec-4262-b6b4-d7412b2e88eb', 'RELOPAY PTE. LTD.', 25.9::numeric),
+    ('f4c932de-cb74-4ea1-bce7-c4544ba812af', 'AVA ELA', 973.990267::numeric),
+    ('f5cbed5d-ffde-4598-bbbd-8dd57ac336d9', 'IZI PAY LTD', 8037.792457::numeric),
+    ('fc8bb295-edc1-4a35-bb0f-3fab367c96fd', 'ILUMAPAY LIMITED', -0.27::numeric),
+    ('1be35603-f5c9-480d-bada-0019dd265632', 'Paimon Fund LP', 0::numeric),
+    ('4b15d06f-c0a4-433d-8875-92f7351a1f21', '睿思創新投資管理有限公司', 0::numeric),
+    ('504da6d3-dfe0-4254-986a-80b3e15c4f4b', 'CIBC AG LIMITED', 0::numeric),
+    ('5f4e0b87-2e12-44d3-ae3c-28877093a813', 'Pando Payment Limited', 0::numeric),
+    ('d5eb83b4-dfb3-4bbf-9d8c-c94b962106fc', 'Lalley Capital LLC', -15.15::numeric),
+    ('f9671989-ed49-4675-bd35-2fc4f73e8158', 'Miracle Moment Ltd', 0::numeric)
+  ) AS t(root_account_id, verified_name, finance_profit)
+),
+snapshot_profit AS (
+  SELECT
+    root_account_id,
+    commission_rate,
+    SUM(gp)   AS snapshot_commission
+  FROM dws.dws_sales_commission_snapshot_detail_p
+  WHERE delete_time IS NULL
+    AND settlement_month = DATE '2026-05-01'
+    AND commission_stage <> 'future_payout'
+    AND (
+      sale_id = 'cfd8b2a8-af2d-474a-9923-3a5ef0335f52'
+      OR am_id = 'cfd8b2a8-af2d-474a-9923-3a5ef0335f52'
+    )
+  GROUP BY root_account_id, commission_rate
+),
+diff_result AS (
+  SELECT
+    COALESCE(f.root_account_id, s.root_account_id) AS root_account_id,
+    f.verified_name,
+    s.commission_rate,
+    COALESCE(f.finance_profit, 0) AS finance_profit,
+    COALESCE(s.snapshot_commission, 0) AS snapshot_commission,
+    COALESCE(s.snapshot_commission, 0) - COALESCE(f.finance_profit, 0) AS diff_amount
+  FROM finance_profit f
+  FULL JOIN snapshot_profit s
+    ON s.root_account_id = f.root_account_id
+)
+SELECT *,diff_amount*commission_rate
+FROM diff_result
+WHERE ABS(diff_amount*commission_rate) > 10
+ORDER BY ABS(diff_amount) DESC;
 
+
+
+有，两边确实不一样。
+
+第一组有 36 个，下面带 verifiedName/profit 的表里有 35 个。共同的有 30 个。
+
+第一组有、下面表里没有的 6 个：
+
+004dcf0c-0db5-461e-b0d0-3c3ce7d8b622
+380bb314-5423-41a8-84ac-bcf2ff9dba0f
+69794135-965c-4670-b712-64e43c69195d
+9439a1cb-ba0b-442a-8669-bc4acaa4089a
+a6ec8b38-9e0f-407a-9c4a-4820075407a7
+c06c5690-0935-4f81-8131-96b8ca00156c
+
+下面表里有、第一组没有的 5 个：
+
+1be35603-f5c9-480d-bada-0019dd265632
+4b15d06f-c0a4-433d-8875-92f7351a1f21
+504da6d3-dfe0-4254-986a-80b3e15c4f4b
+5f4e0b87-2e12-44d3-ae3c-28877093a813
+f9671989-ed49-4675-bd35-2fc4f73e8158
+
+而且这 5 个在你下面的数据里 profit 都是 0。所以很像是：第一组把部分 0-profit 客户过滤掉了，但同时又多出了 6 个其他客户。
+
+
+
+现在有问题
+1.month_receivable 这个不应该算入实际返佣计算
+2.关于
+以4月为例
+February Regular Billing Conditional Decline Fees(Collected March 20) ：因为2月账单是在3月20出的，所以4月统计的是2月账单
+Collected Effective Revenue ， CollectedGross Profit (GP) 这2项统计的就是当月账单，算出来多少就是多少（以图中为例18,000.00 ， 4900）
+Commission：  是根据在3月实际收到客户的付款金额（以图中为例 490 ， 如果4900只收到2000 ， 那么则算出来是200，到了下个月如果还清了，那其余290就会在下个月计入Past-Due）
+
+Past-Due January Invoices(Paid in March)：统计1月及之前历史所有账单，在3月的API账单实收金额
+Collected Effective Revenue ， CollectedGross Profit (GP) ，Commission根据历史已经收到的客户金额计算
+
+CREATE TABLE "dws"."dws_metrics_sales_revenue_monthly" (
+  "dws_row_id" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
+  "root_account_id" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
+  "report_date" date NOT NULL,
+  "settlement_month" date NOT NULL,
+  "product" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
+  "metric_code" varchar(100) COLLATE "pg_catalog"."default" NOT NULL,
+  "provider" varchar(255) COLLATE "pg_catalog"."default",
+  "sale_id" varchar(64) COLLATE "pg_catalog"."default",
+  "am_id" varchar(64) COLLATE "pg_catalog"."default",
+  "income_value" numeric(20,3) NOT NULL,
+  "loaded_at" timestamp(6) NOT NULL,
+  "version" int4 NOT NULL DEFAULT 1,
+  "remarks" varchar(2000) COLLATE "pg_catalog"."default",
+  "create_time" timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "update_time" timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "delete_time" timestamp(6),
+  "type_desc" varchar(20) COLLATE "pg_catalog"."default",
+  CONSTRAINT "dws_metrics_sales_revenue_monthly_pkey" PRIMARY KEY ("dws_row_id")
+)
+里month_revenue 特殊处理
+"report_date" 实际还款月份
+  "settlement_month" 还款的是那个月的账单
+
+
+我和魏老师饶谦抽了56个销售对比毛利和返佣金额都差不多
+1.不过他们之前的模型里有些返佣策略(rate 和现在比有调整)
+2.还有一个代收的客户返现 这个是现在均摊策略和饶谦之前计算的也不一样
+浩然那边今天才拿到这部分的均摊逻辑，我和饶谦沟通了一下现在按量子卡渠道收入占比均摊
+这个浩然更新我也要改
+3.饶谦说等他7月份算出来在对比一下

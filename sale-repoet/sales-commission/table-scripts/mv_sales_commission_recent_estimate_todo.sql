@@ -2,7 +2,7 @@
 -- Author:         martinJiang
 -- Created Time:   2026-07-29
 -- Updated Time:   2026-08-07 15:20:00
--- Description:    销售佣金8号前预估物化视图
+-- Description:    销售佣金8号前预估物化视图todo
 -- Notes:
 --   1. 本物化视图承载8号前页面查询结果。
 --   2. 每次刷新保留近三个月展示结算月数据；API实收按report_date归属展示结算月。
@@ -10,12 +10,11 @@
 --   4. 成本按 settlement_month + root_account_id + product + provider 汇总后，再按收入占比分摊到明细行。
 --   5. 量子卡渠道返现金作为收入加回；海外销售二部允许客户间毛利抵扣，其余部门单客户/渠道负毛利按 0 计佣。
 --   6. 读取 dws.dws_metrics_sales_revenue_monthly，收入仅使用 income_value。
---   7. v2额外扣减 public.cash_back_bonuses 中 QuantumAccountHandlingFeeOnBehalf 且 Closed 的量子卡客户返现成本。
 --********************************************************************--
 
-DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_sales_commission_recent_estimate";
+DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_sales_commission_recent_estimate_todo";
 
-CREATE MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate" AS
+CREATE MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate_todo" AS
 WITH account_root_relation AS (
   SELECT
     account_id,
@@ -371,19 +370,6 @@ qbit_card_channel_rebate AS (
   ) rebate_union
   GROUP BY settlement_month, root_account_id, product, provider
 ),
-qbit_card_customer_rebate_cost AS (
-  SELECT
-    to_date(cbb."month" || '-01', 'YYYY-MM-DD') AS settlement_month,
-    cbb.account_id::text AS root_account_id,
-    'qbit_card' AS product,
-    SUM(COALESCE(cbb.cash_back_amount, 0))::numeric(20,4) AS customer_rebate_cost
-  FROM "public"."cash_back_bonuses" cbb
-  WHERE cbb.delete_time IS NULL
-    AND cbb.project = 'QuantumAccountHandlingFeeOnBehalf'
-    AND cbb.status = 'Closed'
-    AND to_date(cbb."month" || '-01', 'YYYY-MM-DD') >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
-  GROUP BY to_date(cbb."month" || '-01', 'YYYY-MM-DD'), cbb.account_id::text
-),
 v_cost_by_account_product AS (
   SELECT
     settlement_month,
@@ -438,24 +424,15 @@ revenue_cost_allocated AS (
         WHEN x.product_effective_revenue <> 0 THEN x.total_cogs * x.effective_revenue / x.product_effective_revenue
         ELSE 0
       END
-      + CASE
-          WHEN x.product = 'qbit_card' AND x.qbit_card_effective_revenue <> 0
-            THEN x.total_customer_rebate_cost * x.effective_revenue / x.qbit_card_effective_revenue
-          ELSE 0
-        END
     )::numeric(20,4) AS allocated_cogs
   FROM (
     SELECT
       b.*,
       COALESCE(c.cogs, 0)::numeric(20,4) AS total_cogs,
       COALESCE(r.channel_rebate, 0)::numeric(20,4) AS total_channel_rebate,
-      COALESCE(cr.customer_rebate_cost, 0)::numeric(20,4) AS total_customer_rebate_cost,
       SUM(b.effective_revenue) OVER (
         PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, '')
-      )::numeric(20,4) AS product_effective_revenue,
-      SUM(CASE WHEN b.product = 'qbit_card' THEN b.effective_revenue ELSE 0 END) OVER (
-        PARTITION BY b.settlement_month, b.root_account_id, b.product
-      )::numeric(20,4) AS qbit_card_effective_revenue
+      )::numeric(20,4) AS product_effective_revenue
     FROM revenue_base b
     LEFT JOIN v_cost_by_account_product c
       ON c.settlement_month = b.settlement_month
@@ -467,10 +444,6 @@ revenue_cost_allocated AS (
      AND r.root_account_id = b.root_account_id
      AND r.product = b.product
      AND COALESCE(r.provider, '') = COALESCE(b.provider, '')
-    LEFT JOIN qbit_card_customer_rebate_cost cr
-      ON cr.settlement_month = b.settlement_month
-     AND cr.root_account_id = b.root_account_id
-     AND cr.product = b.product
   ) x
 ),
 estimate_base AS (
@@ -578,25 +551,25 @@ WHERE rn = 1
 WITH DATA
 DISTRIBUTED BY (id);
 
-ALTER MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate"
+ALTER MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate_todo"
   OWNER TO "flink_cdc_user";
 
-COMMENT ON MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate" IS '销售佣金8号前预估物化视图，读取dws_metrics_sales_revenue_monthly，普通物化视图，通过pg_cron定时REFRESH刷新';
+COMMENT ON MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate_todo" IS '销售佣金8号前预估物化视图todo，读取dws_metrics_sales_revenue_monthly，普通物化视图，通过pg_cron定时REFRESH刷新';
 
-CREATE INDEX IF NOT EXISTS "idx_mv_sales_commission_recent_estimate_query" ON "dws"."mv_sales_commission_recent_estimate" (
+CREATE INDEX IF NOT EXISTS "idx_mv_sales_commission_recent_estimate_todo_query" ON "dws"."mv_sales_commission_recent_estimate_todo" (
   "settlement_month",
   "sale_id",
   "am_id",
   "commission_stage"
 );
 
-CREATE INDEX IF NOT EXISTS "idx_mv_sales_commission_recent_estimate_payable" ON "dws"."mv_sales_commission_recent_estimate" (
+CREATE INDEX IF NOT EXISTS "idx_mv_sales_commission_recent_estimate_todo_payable" ON "dws"."mv_sales_commission_recent_estimate_todo" (
   "payable_settlement_month",
   "sale_id",
   "am_id"
 );
 
-CREATE INDEX IF NOT EXISTS "idx_mv_sales_commission_recent_estimate_account" ON "dws"."mv_sales_commission_recent_estimate" (
+CREATE INDEX IF NOT EXISTS "idx_mv_sales_commission_recent_estimate_todo_account" ON "dws"."mv_sales_commission_recent_estimate_todo" (
   "root_account_id",
   "settlement_month"
 );
