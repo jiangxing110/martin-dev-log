@@ -117,52 +117,24 @@ LANGUAGE plpgsql
 AS $function$
 DECLARE
     affected_rows BIGINT;
+    month_start DATE := DATE_TRUNC('month', CURRENT_DATE)::date;
+    month_end DATE := (DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month')::date;
 BEGIN
     IF p_dry_run THEN
-        WITH changed_months AS (
-            SELECT DATE_TRUNC('month', CURRENT_DATE)::date AS report_month
-
-            UNION
-
-            SELECT DISTINCT DATE_TRUNC('month', COALESCE(auth_time, update_time))::date
-            FROM dwm.dwm_bb_card_auth_detail_v2_p
-            WHERE ((update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
-                OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE))
-              AND COALESCE(auth_time, update_time) IS NOT NULL
-        )
         SELECT COUNT(*)
         INTO affected_rows
         FROM dws.dws_bb_card_finance_daily_v2_p AS target
         WHERE target.special_fee_type = 'ACTIVE_CARD_ACCOUNT_FEE'
-          AND EXISTS (
-              SELECT 1
-              FROM changed_months month_scope
-              WHERE target.report_date >= month_scope.report_month
-                AND target.report_date < month_scope.report_month + INTERVAL '1 month'
-          );
+          AND target.report_date >= month_start
+          AND target.report_date < month_end;
 
         RETURN affected_rows;
     END IF;
 
-    WITH changed_months AS (
-        SELECT DATE_TRUNC('month', CURRENT_DATE)::date AS report_month
-
-        UNION
-
-        SELECT DISTINCT DATE_TRUNC('month', COALESCE(auth_time, update_time))::date
-        FROM dwm.dwm_bb_card_auth_detail_v2_p
-        WHERE ((update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
-            OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE))
-          AND COALESCE(auth_time, update_time) IS NOT NULL
-    )
     DELETE FROM dws.dws_bb_card_finance_daily_v2_p AS target
     WHERE target.special_fee_type = 'ACTIVE_CARD_ACCOUNT_FEE'
-      AND EXISTS (
-          SELECT 1
-          FROM changed_months month_scope
-          WHERE target.report_date >= month_scope.report_month
-            AND target.report_date < month_scope.report_month + INTERVAL '1 month'
-      );
+      AND target.report_date >= month_start
+      AND target.report_date < month_end;
 
     GET DIAGNOSTICS affected_rows = ROW_COUNT;
     RETURN affected_rows;

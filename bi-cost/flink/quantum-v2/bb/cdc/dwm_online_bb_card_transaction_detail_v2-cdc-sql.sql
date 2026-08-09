@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-12
--- Updated Time:   2026-08-04 14:55:00
+-- Updated Time:   2026-08-09 12:33:31
 -- Description:    BB v2 DWM CDC 增量同步
 -- 作业元信息：
 --   作业类型：流处理 CDC
@@ -13,14 +13,16 @@
 --   2. cost_fixed_fee 由固定成本独立脚本回刷。
 --********************************************************************--
 
-SET 'parallelism.default' = '4';
-SET 'taskmanager.memory.network.min' = '1gb';
-SET 'taskmanager.memory.network.max' = '3gb';
-SET 'taskmanager.memory.network.fraction' = '0.2';
-SET 'pipeline.default-parallelism' = '4';
-SET 'table.exec.resource.default-parallelism' = '4';
+SET 'parallelism.default' = '1';
+SET 'taskmanager.memory.network.min' = '1536mb';
+SET 'taskmanager.memory.network.max' = '1536mb';
+SET 'taskmanager.memory.network.fraction' = '0.45';
+SET 'taskmanager.network.sort-shuffle.min-buffers' = '64';
+SET 'pipeline.default-parallelism' = '1';
+SET 'table.exec.resource.default-parallelism' = '1';
 SET 'pipeline.operator-chaining' = 'true';
 SET 'table.exec.mini-batch.enabled' = 'false';
+SET 'execution.batch-shuffle-mode' = 'ALL_EXCHANGES_BLOCKING';
 SET 'execution.multi-jobs-in-application.enable' = 'false';
 SET 'table.optimizer.reuse-source-enabled' = 'false';
 SET 'table.optimizer.reuse-sub-plan-enabled' = 'false';
@@ -31,6 +33,8 @@ SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'execution.checkpointing.interval' = '10s';
 SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
 SET 'execution.checkpointing.timeout' = '30min';
+SET 'heartbeat.timeout' = '600000';
+SET 'execution.application-management.enabled' = 'true';
 
 -- 交易主源只读取 ODS 明细本身。
 -- CDC 主链路由交易/结算数据变化驱动，业务过滤放到 v_bb_tx 中统一维护。
@@ -55,11 +59,12 @@ CREATE TEMPORARY TABLE source_quantum_card_transaction_extend (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, source_id, card_transaction_id, account_id, country, type AS "type", transaction_time, original_completion_time, business_code_list, remarks, card_id, detail, channel_provision, create_time, update_time, delete_time FROM ods.ods_quantum_card_transaction_extend) AS ods_quantum_card_transaction_extend_f',
+    'table-name' = '(WITH changed_tx AS (SELECT t.id, t.source_id, t.card_transaction_id, t.account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, t.business_code_list, t.remarks, t.card_id, t.detail, t.channel_provision, t.create_time, t.update_time, t.delete_time FROM ods.ods_quantum_card_transaction_extend t WHERE t.channel_provision = ''BLUEBANC'' AND t.type IN (''Consumption'', ''Credit'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND ((COALESCE(t.update_time, t.create_time) >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND COALESCE(t.update_time, t.create_time) < CURRENT_DATE::timestamp) OR (t.delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND t.delete_time < CURRENT_DATE::timestamp)) UNION SELECT t.id, t.source_id, t.card_transaction_id, t.account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, t.business_code_list, t.remarks, t.card_id, t.detail, t.channel_provision, t.create_time, t.update_time, t.delete_time FROM public."qbitCardSettlement" s INNER JOIN ods.ods_quantum_card_transaction_extend t ON s."transactionId"::text = t.source_id WHERE s."deleteTime" IS NULL AND s."provider" = ''BlueBancCard'' AND s."createTime" >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND s."createTime" < CURRENT_DATE::timestamp AND CAST(s."rawData" AS text) NOT LIKE ''%\\u0000%'' AND t.channel_provision = ''BLUEBANC'' AND t.type IN (''Consumption'', ''Credit'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') UNION SELECT t.id, t.source_id, t.card_transaction_id, t.account_id, t.country, t.type AS "type", t.transaction_time, t.original_completion_time, t.business_code_list, t.remarks, t.card_id, t.detail, t.channel_provision, t.create_time, t.update_time, t.delete_time FROM public."qbitCardSettlement" s INNER JOIN ods.ods_quantum_card_transaction_extend t ON s."qbitCardTransactionId"::text = t.card_transaction_id WHERE s."deleteTime" IS NULL AND s."provider" = ''BlueBancCard'' AND s."createTime" >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND s."createTime" < CURRENT_DATE::timestamp AND CAST(s."rawData" AS text) NOT LIKE ''%\\u0000%'' AND t.channel_provision = ''BLUEBANC'' AND t.type IN (''Consumption'', ''Credit'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'')) SELECT * FROM changed_tx) AS ods_quantum_card_transaction_extend_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'scan.fetch-size' = '1000',
+    'scan.auto-commit' = 'false'
 );
 
 -- 卡表只负责补充卡组织，并限制 BB 当前口径需要的 Master/VISA。
@@ -70,11 +75,12 @@ CREATE TEMPORARY TABLE source_qbit_card (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, type AS "type" FROM ods.ods_qbit_card WHERE delete_time IS NULL AND type IN (''Master'', ''VISA'')) AS ods_qbit_card_f',
+    'table-name' = '(WITH changed_card AS (SELECT DISTINCT t.card_id FROM ods.ods_quantum_card_transaction_extend t WHERE t.channel_provision = ''BLUEBANC'' AND t.type IN (''Consumption'', ''Credit'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND ((COALESCE(t.update_time, t.create_time) >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND COALESCE(t.update_time, t.create_time) < CURRENT_DATE::timestamp) OR (t.delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND t.delete_time < CURRENT_DATE::timestamp)) UNION SELECT DISTINCT t.card_id FROM public."qbitCardSettlement" s INNER JOIN ods.ods_quantum_card_transaction_extend t ON s."transactionId"::text = t.source_id WHERE s."deleteTime" IS NULL AND s."provider" = ''BlueBancCard'' AND s."createTime" >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND s."createTime" < CURRENT_DATE::timestamp AND CAST(s."rawData" AS text) NOT LIKE ''%\\u0000%'' AND t.channel_provision = ''BLUEBANC'' AND t.type IN (''Consumption'', ''Credit'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') UNION SELECT DISTINCT t.card_id FROM public."qbitCardSettlement" s INNER JOIN ods.ods_quantum_card_transaction_extend t ON s."qbitCardTransactionId"::text = t.card_transaction_id WHERE s."deleteTime" IS NULL AND s."provider" = ''BlueBancCard'' AND s."createTime" >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND s."createTime" < CURRENT_DATE::timestamp AND CAST(s."rawData" AS text) NOT LIKE ''%\\u0000%'' AND t.channel_provision = ''BLUEBANC'' AND t.type IN (''Consumption'', ''Credit'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'')) SELECT c.id, c.type AS "type" FROM ods.ods_qbit_card c INNER JOIN changed_card tx ON tx.card_id = c.id WHERE c.delete_time IS NULL AND c.type IN (''Master'', ''VISA'')) AS ods_qbit_card_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'scan.fetch-size' = '1000',
+    'scan.auto-commit' = 'false'
 );
 
 -- 结算源保持简单过滤，具体按 source_id / card_transaction_id 匹配交易在 v_matched_settle 中完成。
@@ -92,11 +98,12 @@ CREATE TEMPORARY TABLE source_qbit_card_settlement (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, transaction_id, qbit_card_transaction_id, provider, transaction_type, billing_amount, raw_data, create_time, delete_time FROM ods.ods_qbit_card_settlement WHERE delete_time IS NULL AND provider = ''BlueBancCard'') AS ods_qbit_card_settlement_f',
+    'table-name' = '(WITH changed_tx AS (SELECT t.source_id, t.card_transaction_id FROM ods.ods_quantum_card_transaction_extend t WHERE t.channel_provision = ''BLUEBANC'' AND t.type IN (''Consumption'', ''Credit'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') AND ((COALESCE(t.update_time, t.create_time) >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND COALESCE(t.update_time, t.create_time) < CURRENT_DATE::timestamp) OR (t.delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND t.delete_time < CURRENT_DATE::timestamp)) UNION SELECT t.source_id, t.card_transaction_id FROM public."qbitCardSettlement" s INNER JOIN ods.ods_quantum_card_transaction_extend t ON s."transactionId"::text = t.source_id WHERE s."deleteTime" IS NULL AND s."provider" = ''BlueBancCard'' AND s."createTime" >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND s."createTime" < CURRENT_DATE::timestamp AND CAST(s."rawData" AS text) NOT LIKE ''%\\u0000%'' AND t.channel_provision = ''BLUEBANC'' AND t.type IN (''Consumption'', ''Credit'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'') UNION SELECT t.source_id, t.card_transaction_id FROM public."qbitCardSettlement" s INNER JOIN ods.ods_quantum_card_transaction_extend t ON s."qbitCardTransactionId"::text = t.card_transaction_id WHERE s."deleteTime" IS NULL AND s."provider" = ''BlueBancCard'' AND s."createTime" >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND s."createTime" < CURRENT_DATE::timestamp AND CAST(s."rawData" AS text) NOT LIKE ''%\\u0000%'' AND t.channel_provision = ''BLUEBANC'' AND t.type IN (''Consumption'', ''Credit'') AND (t.detail IS NULL OR t.detail NOT LIKE ''AUTO CLASS CAR RENTAL%'')) SELECT s."id"::text AS id, s."transactionId"::text AS transaction_id, s."qbitCardTransactionId"::text AS qbit_card_transaction_id, s."provider" AS provider, s."transactionType" AS transaction_type, s."billingAmount" AS billing_amount, CAST(s."rawData" AS text) AS raw_data, s."createTime" AS create_time, s."deleteTime" AS delete_time FROM public."qbitCardSettlement" s INNER JOIN changed_tx tx ON s."transactionId"::text = tx.source_id WHERE s."deleteTime" IS NULL AND s."provider" = ''BlueBancCard'' AND CAST(s."rawData" AS text) NOT LIKE ''%\\u0000%'' UNION SELECT s."id"::text AS id, s."transactionId"::text AS transaction_id, s."qbitCardTransactionId"::text AS qbit_card_transaction_id, s."provider" AS provider, s."transactionType" AS transaction_type, s."billingAmount" AS billing_amount, CAST(s."rawData" AS text) AS raw_data, s."createTime" AS create_time, s."deleteTime" AS delete_time FROM public."qbitCardSettlement" s INNER JOIN changed_tx tx ON s."qbitCardTransactionId"::text = tx.card_transaction_id WHERE s."deleteTime" IS NULL AND s."provider" = ''BlueBancCard'' AND CAST(s."rawData" AS text) NOT LIKE ''%\\u0000%'') AS qbit_card_settlement_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'scan.fetch-size' = '1000',
+    'scan.auto-commit' = 'false'
 );
 
 -- 账户维度：只取 DWM 需要落表的账户分类字段。

@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-15
--- Updated Time:   2026-08-04 14:48:00
+-- Updated Time:   2026-08-09 12:05:17
 -- Description:    BB v2 Auth DWM CDC 窗口导入
 -- 作业元信息：
 --   作业类型：批式 CDC 修复任务
@@ -27,37 +27,40 @@ SET 'table.dml-sync' = 'true';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
+SET 'heartbeat.timeout' = '600000';
 
 CREATE TEMPORARY TABLE source_bb_card_auth_detail (
-    `Trans Date / Time`       STRING,
-    `Program GUID`            STRING,
-    `Program Name`            STRING,
-    `Card Proxy`              STRING,
-    `Person Name`             STRING,
-    `Request Code`            STRING,
-    `Request Description`     STRING,
-    `Local Trans Date / Time` STRING,
-    `Auth Txn GUID`           STRING,
-    `Response Code`           STRING,
-    `Reason Code`             STRING,
-    `Txn Amount`              STRING,
-    `Settle Amount`           STRING,
-    `Txn Currency`            STRING,
-    `Merchant Country`        STRING,
-    `Transmission Date`       STRING,
-    `Merchant Name`           STRING,
+    auth_time                 TIMESTAMP(6),
+    trans_date_time           STRING,
+    program_guid              STRING,
+    program_name              STRING,
+    card_proxy                STRING,
+    person_name               STRING,
+    request_code              STRING,
+    request_description       STRING,
+    local_trans_date_time     STRING,
+    auth_txn_guid             STRING,
+    response_code             STRING,
+    reason_code               STRING,
+    txn_amount                STRING,
+    settle_amount             STRING,
+    txn_currency              STRING,
+    merchant_country          STRING,
+    transmission_date         STRING,
+    merchant_name             STRING,
     pos_service_code          STRING,
-    MCC                       STRING,
+    mcc                       STRING,
     authorization_id_code     STRING,
     source_table              STRING
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT * FROM public.fn_bb_card_auth_detail_by_window((CURRENT_DATE - INTERVAL ''1 day'')::timestamp, CURRENT_DATE::timestamp)) AS bb_auth_detail_f',
+    'table-name' = '(SELECT CAST(TO_TIMESTAMP("Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') AS timestamp) AS auth_time, "Trans Date / Time" AS trans_date_time, "Program GUID" AS program_guid, "Program Name" AS program_name, "Card Proxy" AS card_proxy, "Person Name" AS person_name, "Request Code" AS request_code, "Request Description" AS request_description, "Local Trans Date / Time" AS local_trans_date_time, "Auth Txn GUID" AS auth_txn_guid, "Response Code" AS response_code, "Reason Code" AS reason_code, "Txn Amount" AS txn_amount, "Settle Amount" AS settle_amount, "Txn Currency" AS txn_currency, "Merchant Country" AS merchant_country, "Transmission Date" AS transmission_date, CAST(NULL AS varchar) AS merchant_name, pos_service_code, CAST(NULL AS varchar) AS mcc, authorization_id_code, source_table FROM public.fn_bb_card_auth_detail_by_window((CURRENT_DATE - INTERVAL ''1 day'')::timestamp, CURRENT_DATE::timestamp)) AS bb_auth_detail_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'scan.fetch-size' = '1000',
+    'scan.auto-commit' = 'false'
 );
 
 CREATE TEMPORARY TABLE source_qbit_card (
@@ -69,11 +72,12 @@ CREATE TEMPORARY TABLE source_qbit_card (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, token, account_id, type AS "type" FROM ods.ods_qbit_card WHERE delete_time IS NULL) AS ods_qbit_card_f',
+    'table-name' = '(WITH auth_cards AS (SELECT DISTINCT "Card Proxy" AS card_proxy FROM public.fn_bb_card_auth_detail_by_window((CURRENT_DATE - INTERVAL ''1 day'')::timestamp, CURRENT_DATE::timestamp) WHERE "Card Proxy" IS NOT NULL) SELECT c.id, c.token, c.account_id, c.type AS "type" FROM ods.ods_qbit_card c INNER JOIN auth_cards a ON a.card_proxy = c.token WHERE c.delete_time IS NULL) AS ods_qbit_card_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'scan.fetch-size' = '1000',
+    'scan.auto-commit' = 'false'
 );
 
 CREATE TEMPORARY TABLE source_dim_account (
@@ -129,30 +133,30 @@ CREATE TEMPORARY TABLE source_dim_sale_account_relation_p (
 
 CREATE TEMPORARY VIEW v_auth_base AS
 SELECT
-    TO_TIMESTAMP(a.`Trans Date / Time`, 'MM/dd/yyyy hh:mm:ss a') AS auth_time,
-    a.`Auth Txn GUID` AS auth_txn_guid,
-    a.`Card Proxy` AS card_proxy,
+    a.auth_time,
+    a.auth_txn_guid,
+    a.card_proxy,
     c.id AS card_id,
     c.account_id AS account_id,
     da.account_type,
     da.`type` AS account_category,
     da.system_type,
-    a.`Program Name` AS program_name,
-    a.`Merchant Country` AS merchant_country,
-    a.`Request Code` AS request_code,
-    a.`Request Description` AS request_description,
-    a.`Response Code` AS response_code,
-    a.`Reason Code` AS reason_code,
-    a.`Txn Amount` AS txn_amount,
-    a.`Settle Amount` AS settle_amount,
-    a.`Txn Currency` AS txn_currency,
-    CAST(NULL AS STRING) AS merchant_name,
-    CAST(NULL AS STRING) AS mcc,
+    a.program_name,
+    a.merchant_country,
+    a.request_code,
+    a.request_description,
+    a.response_code,
+    a.reason_code,
+    a.txn_amount,
+    a.settle_amount,
+    a.txn_currency,
+    a.merchant_name,
+    a.mcc,
     c.`type` AS card_org,
-    a.`Merchant Country` = 'USA' AS is_dom,
-    a.`Response Code` = 'DECLINE' AS is_decline,
-    a.`Request Description` = 'Account Verification' AS is_account_verification,
-    a.`Request Description` IN (
+    a.merchant_country = 'USA' AS is_dom,
+    a.response_code = 'DECLINE' AS is_decline,
+    a.request_description = 'Account Verification' AS is_account_verification,
+    a.request_description IN (
         'Settlement Advice',
         'Card load via OCT Advice',
         'Refund Advice',
@@ -164,11 +168,11 @@ SELECT
     a.source_table
 FROM source_bb_card_auth_detail a
 LEFT JOIN source_qbit_card c
-    ON a.`Card Proxy` = c.token
+    ON a.card_proxy = c.token
 LEFT JOIN source_dim_account da
     ON da.id = c.account_id
-WHERE TO_TIMESTAMP(a.`Trans Date / Time`, 'MM/dd/yyyy hh:mm:ss a') >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6))
-  AND TO_TIMESTAMP(a.`Trans Date / Time`, 'MM/dd/yyyy hh:mm:ss a') < CAST(CURRENT_DATE AS TIMESTAMP(6));
+WHERE a.auth_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6))
+  AND a.auth_time < CAST(CURRENT_DATE AS TIMESTAMP(6));
 
 CREATE TEMPORARY VIEW v_auth_direct_sale_relation AS
 SELECT auth_txn_guid, sale_id, am_id

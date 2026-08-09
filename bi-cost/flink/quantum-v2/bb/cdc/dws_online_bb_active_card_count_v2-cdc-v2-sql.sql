@@ -9,7 +9,7 @@
 -- Description:    BB v2 Active Card Count CDC 每日重算写入 v2
 -- 作业元信息：
 --   作业类型：批式 CDC 修复任务
---   运行方式：默认重算当前月；如昨天 Auth DWM 变更，也重算对应月份
+--   运行方式：按 batch 口径重算当前月
 --   运行参数：无
 -- Notes:
 --   1. 只维护 active_card_count。
@@ -60,7 +60,7 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, card_proxy, account_id, account_type, account_category, system_type, auth_time, update_time, delete_time FROM dwm.dwm_bb_card_auth_detail_v2_p) AS dwm_bb_card_auth_detail_v2_p_f',
+    'table-name' = '(SELECT id, card_proxy, account_id, account_type, account_category, system_type, auth_time, update_time, delete_time FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE auth_time >= date_trunc(''month'', CURRENT_DATE)::timestamp AND auth_time < (date_trunc(''month'', CURRENT_DATE) + INTERVAL ''1 month'')::timestamp) AS dwm_bb_card_auth_detail_v2_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -102,22 +102,9 @@ CREATE TEMPORARY TABLE source_api_account_relation (
 );
 
 CREATE TEMPORARY VIEW v_month_scope AS
-SELECT DISTINCT report_month, CAST(DATE_FORMAT(CAST(DATE_ADD(report_month, 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS next_month
-FROM (
-    SELECT CAST(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
-    UNION
-    SELECT CAST(DATE_FORMAT(CAST(COALESCE(auth_time, update_time) AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
-    FROM source_dwm_bb_card_auth_detail_v2_p
-    WHERE (
-            update_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6))
-        AND update_time < CAST(CURRENT_DATE AS TIMESTAMP(6))
-    )
-       OR (
-            delete_time >= CAST(CURRENT_DATE - INTERVAL '1' DAY AS TIMESTAMP(6))
-        AND delete_time < CAST(CURRENT_DATE AS TIMESTAMP(6))
-    )
-) m
-WHERE report_month IS NOT NULL;
+SELECT
+    CAST(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month,
+    CAST(DATE_FORMAT(CAST(DATE_ADD(CAST(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE), 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS next_month;
 
 CREATE TEMPORARY VIEW v_active_account_month AS
 SELECT
