@@ -147,7 +147,8 @@ CREATE TEMPORARY VIEW v_bb_changed_keys AS
 SELECT DISTINCT
     report_date,
     account_id
-FROM source_bb_changed_keys;
+FROM source_bb_changed_keys
+WHERE report_date >= DATE '2021-01-01';
 
 CREATE TEMPORARY VIEW v_bb_metric_rows AS
 SELECT
@@ -160,6 +161,7 @@ INNER JOIN v_bb_changed_keys k
    AND s.account_id = k.account_id
 WHERE s.delete_time IS NULL
   AND s.transaction_time IS NOT NULL
+  AND CAST(s.transaction_time AS DATE) >= DATE '2021-01-01'
 UNION ALL
 SELECT
     CAST(DATE_FORMAT(CAST(s.original_completion_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
@@ -171,6 +173,7 @@ INNER JOIN v_bb_changed_keys k
    AND s.account_id = k.account_id
 WHERE s.delete_time IS NULL
   AND s.original_completion_time IS NOT NULL
+  AND CAST(s.original_completion_time AS DATE) >= DATE '2021-01-01'
 UNION ALL
 SELECT
     CAST(DATE_FORMAT(CAST(s.settlement_post_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
@@ -181,7 +184,8 @@ INNER JOIN v_bb_changed_keys k
     ON CAST(DATE_FORMAT(CAST(s.settlement_post_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = k.report_date
    AND s.account_id = k.account_id
 WHERE s.delete_time IS NULL
-  AND s.settlement_post_date IS NOT NULL;
+  AND s.settlement_post_date IS NOT NULL
+  AND CAST(s.settlement_post_date AS DATE) >= DATE '2021-01-01';
 
 CREATE TEMPORARY VIEW v_bb_auth_scope_rows AS
 SELECT s.*
@@ -190,7 +194,8 @@ INNER JOIN v_bb_changed_keys k
     ON CAST(DATE_FORMAT(CAST(s.auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = k.report_date
    AND s.account_id = k.account_id
 WHERE s.delete_time IS NULL
-  AND s.auth_time IS NOT NULL;
+  AND s.auth_time IS NOT NULL
+  AND CAST(s.auth_time AS DATE) >= DATE '2021-01-01';
 
 CREATE TEMPORARY VIEW v_dws_bb_txn_daily_base AS
 SELECT
@@ -463,4 +468,5 @@ SELECT
     create_time,
     update_time,
     delete_time
-FROM v_dws_bb_daily_base;
+FROM v_dws_bb_daily_base
+WHERE report_date >= DATE '2021-01-01';

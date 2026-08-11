@@ -1,6 +1,45 @@
-我觉得这种删除是不对的
-我不是应该判断 dwm昨天有哪些变更吗
-确定一下bb 两个dwm 的update Time
 
-1.dwm update_time这个时间更新了的数据最后数据解析出来的report_date可能会有很多个（应该删除需要变的dws 数据）
-2.
+1. BZ卡段绑卡逻辑
+
+绑卡交易查询如下：
+SELECT * from public.i2c_iso_message
+where pos_condition_code='62' and mti ='0100'
+
+判断参数：
+pos_condition_code: 62 - Account Verification w/o Auth; product eligibility inquiry without authorization
+mti：0100消息类型，授权交易
+
+绑卡交易状态有成功或失败，是可以由我方控制，目前系统处理方式，绑卡请求过来后，验证当前卡内余额是否为负，如果为负，则绑卡失败。如果≥0，正常会成功。
+
+
+2. QI卡段绑卡逻辑
+绑卡授权在BPC那边配置的STIP模式，即绑卡授权BPC代为我方审批，审批结果会通过0120消息发送至我方。
+
+绑卡交易查询如下：
+select response_code, * from vcc_authorization_advice_request
+where processing_code like '38%'
+
+判断参数：
+processing_code前两位来判断交易类型，38：AccountVerification
+respone_code来判断绑卡授权是否成功，000成功，其他失败
+
+
+3. 默认报价
+
+收费项
+
+QI
+BZ
+解释或描述
+Transaction
+
+Card verification fee ($/verification)
+US Domestic
+0
+0.1
+将银行卡绑定至平台 / 电子钱包时，用于身份与卡片验证所产生的费用。
+交易类型=绑卡验证，且状态=成功，按笔数收费。
+International
+0
+0.1
+
