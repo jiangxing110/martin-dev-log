@@ -19,26 +19,51 @@ DECLARE
     affected_rows BIGINT;
 BEGIN
     IF p_dry_run THEN
-        WITH fact_changed_months AS (
-            SELECT DISTINCT DATE_TRUNC('month', transaction_time)::date AS report_month
+        WITH fact_changed_keys AS (
+            SELECT DISTINCT transaction_time::date AS report_date, account_id
             FROM dwm.dwm_qi_card_transaction_detail_v2_p
-            WHERE (source_update_time >= CURRENT_DATE - INTERVAL '1 day' AND source_update_time < CURRENT_DATE)
-               OR (source_delete_time >= CURRENT_DATE - INTERVAL '1 day' AND source_delete_time < CURRENT_DATE)
-               OR (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
-               OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE)
+            WHERE transaction_time IS NOT NULL
+              AND account_id IS NOT NULL
+              AND ((source_update_time >= CURRENT_DATE - INTERVAL '1 day' AND source_update_time < CURRENT_DATE)
+                OR (source_delete_time >= CURRENT_DATE - INTERVAL '1 day' AND source_delete_time < CURRENT_DATE)
+                OR (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
+                OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE))
         ),
         config_changed_months AS (
             SELECT DISTINCT DATE_TRUNC('month', statistics_time)::date AS report_month
             FROM ods.ods_bi_month_tag
             WHERE delete_time IS NULL
               AND provider = 'IQ'
+              AND tag IN (
+                  'QI_COST_REIMBURSEMENT_RATE',
+                  'QI_COST_SERVICE_RATE',
+                  'QI_COST_ACS_REGULAR_RATE',
+                  'QI_COST_ACS_VIP_RATE',
+                  'QI_COST_VRM_RATE',
+                  'QI_COST_HK_REGULAR_RATE',
+                  'QI_COST_HK_VIP_RATE',
+                  'QI_COST_DCSF_RATE',
+                  'QI_REBATE_INTERCHANGE_RATE',
+                  'QI_REBATE_INCENTIVE_RATE'
+              )
               AND update_time >= CURRENT_DATE - INTERVAL '1 day'
               AND update_time < CURRENT_DATE
+              AND statistics_time IS NOT NULL
         ),
-        changed_months AS (
-            SELECT report_month FROM fact_changed_months
+        config_changed_keys AS (
+            SELECT DISTINCT s.transaction_time::date AS report_date, s.account_id
+            FROM dwm.dwm_qi_card_transaction_detail_v2_p s
+            JOIN config_changed_months m
+              ON s.transaction_time >= m.report_month
+             AND s.transaction_time < m.report_month + INTERVAL '1 month'
+            WHERE s.delete_time IS NULL
+              AND s.transaction_time IS NOT NULL
+              AND s.account_id IS NOT NULL
+        ),
+        changed_keys AS (
+            SELECT report_date, account_id FROM fact_changed_keys
             UNION
-            SELECT report_month FROM config_changed_months
+            SELECT report_date, account_id FROM config_changed_keys
         )
         SELECT COUNT(*)
         INTO affected_rows
@@ -46,44 +71,67 @@ BEGIN
         WHERE (target.special_fee_type IS NULL OR target.special_fee_type <> 'CHANNEL_FIXED_FEE')
           AND EXISTS (
               SELECT 1
-              FROM changed_months month_scope
-              WHERE month_scope.report_month IS NOT NULL
-                AND target.report_date >= month_scope.report_month
-                AND target.report_date < month_scope.report_month + INTERVAL '1 month'
+              FROM changed_keys scope
+              WHERE target.report_date = scope.report_date
+                AND target.account_id = scope.account_id
           );
 
         RETURN affected_rows;
     END IF;
 
-    WITH fact_changed_months AS (
-        SELECT DISTINCT DATE_TRUNC('month', transaction_time)::date AS report_month
+    WITH fact_changed_keys AS (
+        SELECT DISTINCT transaction_time::date AS report_date, account_id
         FROM dwm.dwm_qi_card_transaction_detail_v2_p
-        WHERE (source_update_time >= CURRENT_DATE - INTERVAL '1 day' AND source_update_time < CURRENT_DATE)
-           OR (source_delete_time >= CURRENT_DATE - INTERVAL '1 day' AND source_delete_time < CURRENT_DATE)
-           OR (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
-           OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE)
+        WHERE transaction_time IS NOT NULL
+          AND account_id IS NOT NULL
+          AND ((source_update_time >= CURRENT_DATE - INTERVAL '1 day' AND source_update_time < CURRENT_DATE)
+            OR (source_delete_time >= CURRENT_DATE - INTERVAL '1 day' AND source_delete_time < CURRENT_DATE)
+            OR (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
+            OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE))
     ),
     config_changed_months AS (
         SELECT DISTINCT DATE_TRUNC('month', statistics_time)::date AS report_month
         FROM ods.ods_bi_month_tag
         WHERE delete_time IS NULL
           AND provider = 'IQ'
+          AND tag IN (
+              'QI_COST_REIMBURSEMENT_RATE',
+              'QI_COST_SERVICE_RATE',
+              'QI_COST_ACS_REGULAR_RATE',
+              'QI_COST_ACS_VIP_RATE',
+              'QI_COST_VRM_RATE',
+              'QI_COST_HK_REGULAR_RATE',
+              'QI_COST_HK_VIP_RATE',
+              'QI_COST_DCSF_RATE',
+              'QI_REBATE_INTERCHANGE_RATE',
+              'QI_REBATE_INCENTIVE_RATE'
+          )
           AND update_time >= CURRENT_DATE - INTERVAL '1 day'
           AND update_time < CURRENT_DATE
+          AND statistics_time IS NOT NULL
     ),
-    changed_months AS (
-        SELECT report_month FROM fact_changed_months
+    config_changed_keys AS (
+        SELECT DISTINCT s.transaction_time::date AS report_date, s.account_id
+        FROM dwm.dwm_qi_card_transaction_detail_v2_p s
+        JOIN config_changed_months m
+          ON s.transaction_time >= m.report_month
+         AND s.transaction_time < m.report_month + INTERVAL '1 month'
+        WHERE s.delete_time IS NULL
+          AND s.transaction_time IS NOT NULL
+          AND s.account_id IS NOT NULL
+    ),
+    changed_keys AS (
+        SELECT report_date, account_id FROM fact_changed_keys
         UNION
-        SELECT report_month FROM config_changed_months
+        SELECT report_date, account_id FROM config_changed_keys
     )
     DELETE FROM dws.dws_qi_card_finance_daily_v2_p AS target
     WHERE (target.special_fee_type IS NULL OR target.special_fee_type <> 'CHANNEL_FIXED_FEE')
       AND EXISTS (
           SELECT 1
-          FROM changed_months month_scope
-          WHERE month_scope.report_month IS NOT NULL
-            AND target.report_date >= month_scope.report_month
-            AND target.report_date < month_scope.report_month + INTERVAL '1 month'
+          FROM changed_keys scope
+          WHERE target.report_date = scope.report_date
+            AND target.account_id = scope.account_id
       );
 
     GET DIAGNOSTICS affected_rows = ROW_COUNT;

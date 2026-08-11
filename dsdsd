@@ -1,35 +1,6 @@
-/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/quantum-v2/bb/cdc/dwm_online_bb_card_auth_detail_v2-cdc-sql.sql
+我觉得这种删除是不对的
+我不是应该判断 dwm昨天有哪些变更吗
+确定一下bb 两个dwm 的update Time
 
-2026-08-09 12:00:58
-java.util.concurrent.TimeoutException: The heartbeat of TaskManager with id job-609d824f-d89e-4acd-a554-44643b94575d-taskmanager-1-15 timed out.
-	at org.apache.flink.runtime.resourcemanager.ResourceManager$TaskManagerHeartbeatListener.notifyHeartbeatTimeout(ResourceManager.java:1877)
-	at org.apache.flink.runtime.heartbeat.DefaultHeartbeatMonitor.run(DefaultHeartbeatMonitor.java:158)
-	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:515)
-	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
-	at org.apache.flink.runtime.rpc.pekko.PekkoRpcActor.lambda$handleRunAsync$4(PekkoRpcActor.java:460)
-	at org.apache.flink.runtime.concurrent.ClassLoadingUtils.runWithContextClassLoader(ClassLoadingUtils.java:68)
-	at org.apache.flink.runtime.rpc.pekko.PekkoRpcActor.handleRunAsync(PekkoRpcActor.java:460)
-	at org.apache.flink.runtime.rpc.pekko.PekkoRpcActor.handleRpcMessage(PekkoRpcActor.java:225)
-	at org.apache.flink.runtime.rpc.pekko.FencedPekkoRpcActor.handleRpcMessage(FencedPekkoRpcActor.java:88)
-	at org.apache.flink.runtime.rpc.pekko.PekkoRpcActor.handleMessage(PekkoRpcActor.java:174)
-	at org.apache.pekko.japi.pf.UnitCaseStatement.apply(CaseStatements.scala:33)
-	at org.apache.pekko.japi.pf.UnitCaseStatement.apply(CaseStatements.scala:29)
-	at scala.PartialFunction.applyOrElse(PartialFunction.scala:127)
-	at scala.PartialFunction.applyOrElse$(PartialFunction.scala:126)
-	at org.apache.pekko.japi.pf.UnitCaseStatement.applyOrElse(CaseStatements.scala:29)
-	at scala.PartialFunction$OrElse.applyOrElse(PartialFunction.scala:175)
-	at scala.PartialFunction$OrElse.applyOrElse(PartialFunction.scala:176)
-	at scala.PartialFunction$OrElse.applyOrElse(PartialFunction.scala:176)
-	at org.apache.pekko.actor.Actor.aroundReceive(Actor.scala:547)
-	at org.apache.pekko.actor.Actor.aroundReceive$(Actor.scala:545)
-	at org.apache.pekko.actor.AbstractActor.aroundReceive(AbstractActor.scala:229)
-	at org.apache.pekko.actor.ActorCell.receiveMessage(ActorCell.scala:590)
-	at org.apache.pekko.actor.ActorCell.invoke(ActorCell.scala:557)
-	at org.apache.pekko.dispatch.Mailbox.processMailbox(Mailbox.scala:272)
-	at org.apache.pekko.dispatch.Mailbox.run(Mailbox.scala:233)
-	at org.apache.pekko.dispatch.Mailbox.exec(Mailbox.scala:245)
-	at java.base/java.util.concurrent.ForkJoinTask.doExec(ForkJoinTask.java:290)
-	at java.base/java.util.concurrent.ForkJoinPool$WorkQueue.topLevelExec(ForkJoinPool.java:1020)
-	at java.base/java.util.concurrent.ForkJoinPool.scan(ForkJoinPool.java:1656)
-	at java.base/java.util.concurrent.ForkJoinPool.runWorker(ForkJoinPool.java:1594)
-	at java.base/java.util.concurrent.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:183)
+1.dwm update_time这个时间更新了的数据最后数据解析出来的report_date可能会有很多个（应该删除需要变的dws 数据）
+2.
