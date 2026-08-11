@@ -159,6 +159,7 @@ INNER JOIN v_bb_changed_keys k
     ON CAST(DATE_FORMAT(CAST(s.transaction_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = k.report_date
    AND s.account_id = k.account_id
 WHERE s.delete_time IS NULL
+  AND s.transaction_time IS NOT NULL
 UNION ALL
 SELECT
     CAST(DATE_FORMAT(CAST(s.original_completion_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
@@ -169,6 +170,7 @@ INNER JOIN v_bb_changed_keys k
     ON CAST(DATE_FORMAT(CAST(s.original_completion_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = k.report_date
    AND s.account_id = k.account_id
 WHERE s.delete_time IS NULL
+  AND s.original_completion_time IS NOT NULL
 UNION ALL
 SELECT
     CAST(DATE_FORMAT(CAST(s.settlement_post_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
@@ -178,7 +180,8 @@ FROM source_dwm_bb_card_transaction_detail_v2_p s
 INNER JOIN v_bb_changed_keys k
     ON CAST(DATE_FORMAT(CAST(s.settlement_post_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = k.report_date
    AND s.account_id = k.account_id
-WHERE s.delete_time IS NULL;
+WHERE s.delete_time IS NULL
+  AND s.settlement_post_date IS NOT NULL;
 
 CREATE TEMPORARY VIEW v_bb_auth_scope_rows AS
 SELECT s.*
@@ -186,7 +189,8 @@ FROM source_dwm_bb_card_auth_detail_v2_p s
 INNER JOIN v_bb_changed_keys k
     ON CAST(DATE_FORMAT(CAST(s.auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = k.report_date
    AND s.account_id = k.account_id
-WHERE s.delete_time IS NULL;
+WHERE s.delete_time IS NULL
+  AND s.auth_time IS NOT NULL;
 
 CREATE TEMPORARY VIEW v_dws_bb_txn_daily_base AS
 SELECT
@@ -410,7 +414,7 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     'targetSchema' = 'dws',
     'userName' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'writeMode' = 'insert',
+    'writeMode' = 'upsert',
     'batchSize' = '2000'
 );
 

@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "mingai": {
-      "command": "npx",
-      "args": ["-y", "@mingai/mcp"]
-    }
-  }
-}
