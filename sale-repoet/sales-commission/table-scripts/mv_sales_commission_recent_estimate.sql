@@ -1,11 +1,11 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-29
--- Updated Time:   2026-08-07 15:20:00
+-- Updated Time:   2026-08-13 21:01:30
 -- Description:    销售佣金8号前预估物化视图
 -- Notes:
 --   1. 本物化视图承载8号前页面查询结果。
---   2. 每次刷新保留近三个月展示结算月数据；API实收按report_date归属展示结算月。
+--   2. 每次刷新保留近半年展示结算月数据；API实收按report_date归属展示结算月。
 --   3. 每月8号快照任务从本物化视图读取目标 settlement_month 并固化到快照表。
 --   4. 成本按 settlement_month + root_account_id + product + provider 汇总后，再按收入占比分摊到明细行。
 --   5. 量子卡渠道返现金作为收入加回；海外销售二部允许客户间毛利抵扣，其余部门单客户/渠道负毛利按 0 计佣。
@@ -103,15 +103,15 @@ revenue_base AS (
   WHERE r.delete_time IS NULL
     AND (
       (r.product = 'open_api' AND r.metric_code = 'month_revenue'
-       AND r.report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date)
+       AND r.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date)
       OR (r.product = 'open_api' AND r.metric_code = 'month_receivable'
-          AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date)
+          AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date)
       OR (r.product = 'crypto_connect' AND r.metric_code = 'main'
-          AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date)
+          AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date)
       OR (r.product = 'global_account' AND r.metric_code = 'main'
-          AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date)
+          AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date)
       OR (r.product = 'qbit_card' AND r.metric_code = 'main'
-          AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date)
+          AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date)
     )
   GROUP BY
     CASE WHEN r.product = 'open_api' AND r.metric_code = 'month_revenue' THEN date_trunc('month', r.report_date)::date ELSE r.settlement_month END,
@@ -139,7 +139,7 @@ global_account_channel_cost AS (
   LEFT JOIN account_root_relation aar
     ON aar.account_id = c.account_id
   WHERE c.delete_time IS NULL
-    AND c.source_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND c.source_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     AND c.product_line = 'GLOBAL_ACCOUNT'
     AND c.provider IN ('BZ', 'CL')
   GROUP BY c.source_month, COALESCE(aar.root_id, c.account_id), c.provider
@@ -150,7 +150,7 @@ qbit_card_bb_month_net_amount AS (
     SUM(COALESCE(total_net_amount, 0))::numeric(20,4) AS month_total_net_amount
   FROM "dws"."dws_bb_card_finance_daily_v2_p"
   WHERE delete_time IS NULL
-    AND report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY date_trunc('month', report_date)::date
 ),
 qbit_card_bb_cost AS (
@@ -203,7 +203,7 @@ qbit_card_bb_cost AS (
   LEFT JOIN qbit_card_bb_month_net_amount mn
     ON mn.settlement_month = date_trunc('month', b.report_date)::date
   WHERE b.delete_time IS NULL
-    AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY date_trunc('month', b.report_date)::date, COALESCE(aar.root_id, b.account_id)
 ),
 qbit_card_qi_cost AS (
@@ -227,7 +227,7 @@ qbit_card_qi_cost AS (
   LEFT JOIN account_root_relation aar
     ON aar.account_id = q.account_id
   WHERE q.delete_time IS NULL
-    AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY date_trunc('month', q.report_date)::date, COALESCE(aar.root_id, q.account_id)
 ),
 qbit_card_sl_cost AS (
@@ -241,7 +241,7 @@ qbit_card_sl_cost AS (
   LEFT JOIN account_root_relation aar
     ON aar.account_id = s.account_id
   WHERE s.delete_time IS NULL
-    AND s.report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND s.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY date_trunc('month', s.report_date)::date, COALESCE(aar.root_id, s.account_id)
 ),
 qbit_card_bpc_cost AS (
@@ -255,7 +255,7 @@ qbit_card_bpc_cost AS (
   LEFT JOIN account_root_relation aar
     ON aar.account_id = c.account_id
   WHERE c.delete_time IS NULL
-    AND c.source_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND c.source_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     AND c.product_line = 'QUANTUM_CARD'
     AND c.provider = 'BPC'
   GROUP BY c.source_month, COALESCE(aar.root_id, c.account_id)
@@ -285,7 +285,7 @@ qbit_card_bz_cost AS (
   LEFT JOIN account_root_relation aar
     ON aar.account_id = z.account_id
   WHERE z.delete_time IS NULL
-    AND z.report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND z.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY date_trunc('month', z.report_date)::date, COALESCE(aar.root_id, z.account_id)
 ),
 qbit_card_physical_cost AS (
@@ -299,7 +299,7 @@ qbit_card_physical_cost AS (
   LEFT JOIN sale_department_mapping sdm
     ON sdm.sale_id = COALESCE(r.sale_id, r.am_id)
   WHERE r.delete_time IS NULL
-    AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     AND r.product = 'qbit_card'
     AND r.provider = 'QI'
     AND r.metric_code = 'physical_card_cost'
@@ -327,7 +327,7 @@ crypto_acceptance_cost AS (
   LEFT JOIN sale_department_mapping sdm
     ON sdm.sale_id = COALESCE(r.sale_id, r.am_id)
   WHERE r.delete_time IS NULL
-    AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     AND r.product = 'crypto_connect'
     AND r.metric_code IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero')
   GROUP BY r.settlement_month, r.root_account_id, r.provider
@@ -350,7 +350,7 @@ qbit_card_channel_rebate AS (
     LEFT JOIN account_root_relation aar
       ON aar.account_id = b.account_id
     WHERE b.delete_time IS NULL
-      AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+      AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     GROUP BY date_trunc('month', b.report_date)::date, COALESCE(aar.root_id, b.account_id)
     UNION ALL
     SELECT
@@ -366,7 +366,7 @@ qbit_card_channel_rebate AS (
     LEFT JOIN account_root_relation aar
       ON aar.account_id = q.account_id
     WHERE q.delete_time IS NULL
-      AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+      AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     GROUP BY date_trunc('month', q.report_date)::date, COALESCE(aar.root_id, q.account_id)
   ) rebate_union
   GROUP BY settlement_month, root_account_id, product, provider
@@ -381,7 +381,7 @@ qbit_card_customer_rebate_cost AS (
   WHERE cbb.delete_time IS NULL
     AND cbb.project = 'QuantumAccountHandlingFeeOnBehalf'
     AND cbb.status = 'Closed'
-    AND to_date(cbb."month" || '-01', 'YYYY-MM-DD') >= date_trunc('month', CURRENT_DATE - interval '3 months')::date
+    AND to_date(cbb."month" || '-01', 'YYYY-MM-DD') >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY to_date(cbb."month" || '-01', 'YYYY-MM-DD'), cbb.account_id::text
 ),
 v_cost_by_account_product AS (
