@@ -1,24 +1,14 @@
-原始表
-SELECT COALESCE
-        ( SUM ( CASE WHEN "businessType" = 'Consumption' AND tr.status IN ( 'Closed', 'Pending' ) THEN "settleAmount" ELSE 0 END ), 0 ) AS "consumptionAmount",
-        COALESCE ( SUM ( CASE WHEN "businessType" = 'Consumption' AND tr.status IN ( 'Closed', 'Pending' ) THEN 1 ELSE 0 END ), 0 ) AS "consumptionCount",
-        COALESCE ( SUM ( CASE WHEN "businessType" = 'Credit' AND tr.status = 'Closed' THEN "settleAmount" ELSE 0 END ), 0 ) AS "refundAmount",
-        COALESCE ( SUM ( CASE WHEN "businessType" = 'Credit' AND tr.status = 'Closed' THEN 1 ELSE 0 END ), 0 ) AS "refundCount",
-        COALESCE ( SUM ( CASE WHEN "businessType" = 'Reversal' AND tr.status = 'Closed' THEN "settleAmount" ELSE 0 END ), 0 ) AS "reversalAmount",
-        COALESCE ( SUM ( CASE WHEN "businessType" = 'Reversal' AND tr.status = 'Closed' THEN 1 ELSE 0 END ), 0 ) AS "reversalCount",
-        TO_CHAR( "createTime", 'YYYY-MM-dd' ) AS "date" 
-FROM
-        public."qbit_card_transaction" AS tr 
-WHERE
-        "businessType" IN ( 'Credit', 'Consumption', 'Reversal' ) 
-        AND tr."deleteTime" IS NULL 
-        AND "createTime" >= '2026-01-01 00:00:00'
-        AND "createTime" < '2027-01-01 00:00:00' 
-        --AND tr."accountId" :: UUID IN ( SELECT account_id FROM api_account_relation WHERE root_id = 'f5cbed5d-ffde-4598-bbbd-8dd57ac336d9' AND delete_time IS NULL AND relation_type = 'api' ) 
-GROUP BY
-        "date"
-ORDER BY
-        "date";				
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+对比 原始表(qbit_card_transaction) 与 清洗表(dws_qbit_card_transaction_2026) 的每日汇总差异。
+列顺序: consumptionAmount, consumptionCount, refundAmount, refundCount, reversalAmount, reversalCount, date
+"""
+import re
+import json
+import html
+
+ORIGINAL = """
 2354739.629999916	48024	1159.68	47	41391.859999999986	2560	2026-01-01
 2708688.3299997183	54835	569.6999999999999	49	67076.10999999975	2733	2026-01-02
 2754685.9099997245	56381	4940.000000000002	69	55706.48999999976	2819	2026-01-03
@@ -248,27 +238,9 @@ ORDER BY
 1288385.0999999966	39334	21728.67000000003	503	41235.87999999984	3545	2026-08-15
 1330796.9699999685	36953	12174.579999999996	258	17320.030000000184	1696	2026-08-16
 1174379.6999999788	35496	181759.83	2110	45523.93999999968	4758	2026-08-17
-清洗表
-SELECT COALESCE
-        ( SUM ( CASE WHEN "business_type" = 'Consumption' AND tr.status IN ( 'Closed', 'Pending' ) THEN "settle_amount" ELSE 0 END ), 0 ) AS "consumptionAmount",
-        COALESCE ( SUM ( CASE WHEN "business_type" = 'Consumption' AND tr.status IN ( 'Closed', 'Pending' ) THEN "transaction_count" ELSE 0 END ), 0 ) AS "consumptionCount",
-        COALESCE ( SUM ( CASE WHEN "business_type" = 'Credit' AND tr.status = 'Closed' THEN "settle_amount" ELSE 0 END ), 0 ) AS "refundAmount",
-        COALESCE ( SUM ( CASE WHEN "business_type" = 'Credit' AND tr.status = 'Closed' THEN "transaction_count" ELSE 0 END ), 0 ) AS "refundCount",
-        COALESCE ( SUM ( CASE WHEN "business_type" = 'Reversal' AND tr.status = 'Closed' THEN "settle_amount" ELSE 0 END ), 0 ) AS "reversalAmount",
-        COALESCE ( SUM ( CASE WHEN "business_type" = 'Reversal' AND tr.status = 'Closed' THEN "transaction_count" ELSE 0 END ), 0 ) AS "reversalCount",
-        TO_CHAR( "create_date", 'YYYY-MM-dd' ) AS "date" 
-FROM
-        "dws_qbit_card_transaction_2026" AS tr 
-WHERE
-        "business_type" IN ( 'Credit', 'Consumption', 'Reversal' ) 
-        AND tr."delete_time" IS NULL 
-        AND "create_date" >= '2026-01-01 00:00:00'
-        AND "create_date" < '2027-01-01 00:00:00' 
-        --AND tr."account_id" :: UUID IN ( SELECT account_id FROM api_account_relation WHERE root_id = 'f5cbed5d-ffde-4598-bbbd-8dd57ac336d9' AND delete_time IS NULL AND relation_type = 'api' ) 
-GROUP BY
-        "date"
-ORDER BY 
-        "date"			
+"""
+
+CLEANING = """
 2354739.63	48024	1159.68	47	41391.86	2560	2026-01-01
 2708688.33	54835	569.70	49	67076.11	2733	2026-01-02
 2754685.91	56381	4940.00	69	55706.49	2819	2026-01-03
@@ -447,7 +419,6 @@ ORDER BY
 6537678.36	219756	49463.94	676	44029.30	4155	2026-06-25
 10152621.31	295638	52837.32	609	43487.17	4312	2026-06-26
 7442776.29	223572	38499.46	699	54906.24	15544	2026-06-27
-8540094.83	250433	177159.42	4465	30703.90	6935	2026-06-28
 11163211.10	346107	77388.39	1435	42487.33	3884	2026-06-29
 12257838.88	401545	65969.68	835	32065.34	4916	2026-06-30
 15684823.08	419305	41702.25	777	38132.05	3756	2026-07-01
@@ -497,31 +468,146 @@ ORDER BY
 2771378.52	105067	29236.78	372	14042.16	2944	2026-08-14
 1800971.60	62713	21728.67	503	41235.88	3545	2026-08-15
 1331299.48	36973	12174.58	258	17320.03	1696	2026-08-16
+"""
 
-上面的数据都是
-/Users/martinjiang/VsCodeProjects/martin-dev-log/qbit-card-cost-cleaning/task_2026
-里 dws_qbit_card_transaction_2026的结果
-大致流程时每天先insert 再 delete create_time 和update_time 不一样的数据，
-最坏重新执行update 脚本
-这中间可能有几天中断了
-1.给我分析不一致的可能原因
-2.给我看看我们能不能基于现在flink的来写
+def parse(block):
+    rows = []
+    pat = re.compile(r'([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+(\d{4}-\d{2}-\d{2})')
+    for line in block.strip().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        m = pat.search(line)
+        if not m:
+            continue
+        rows.append({
+            'consumptionAmount': float(m.group(1)),
+            'consumptionCount': int(m.group(2)),
+            'refundAmount': float(m.group(3)),
+            'refundCount': int(m.group(4)),
+            'reversalAmount': float(m.group(5)),
+            'reversalCount': int(m.group(6)),
+            'date': m.group(7),
+        })
+    return rows
 
-2
+orig = parse(ORIGINAL)
+clea = parse(CLEANING)
 
-0.我知道消费存在的问题是status pending时间比较长可能删除重写的时候出了问题
-1.我要文件夹结构参考
-/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/online
-table cdc batch 我希望每一个insert的表都有自己对应的脚本
-2.原来的表结构我已经迁移到
-/Users/martinjiang/VsCodeProjects/martin-dev-log/qbit-card-cost-cleaning/task_2026/old
-3.因为表数据已经存在了看看不能把不重新建表的情况下操作
-4.因为还有一个问题是当时的是基于分表的方法来的所以我们的第一版脚本要考虑到分表的情况，
-确保每个分表的数据都能正确地被处理和更新_2024 _2025 _2026 后面可能还有2027 
-但是我第二个版本会吧 这部分改成按年分区的写法来 我们第一版主要考虑跨年的问题
+# 按日期对齐（清洗表导出可能缺失某些天，例如 06-28 / 08-17）
+def index_by_date(rows):
+    by, dup = {}, []
+    for r in rows:
+        if r['date'] in by:
+            dup.append(r['date'])
+        by[r['date']] = r
+    return by, dup
 
+orig_by, orig_dup = index_by_date(orig)
+clea_by, clea_dup = index_by_date(clea)
+if orig_dup:
+    print("WARNING 原始表重复日期:", sorted(set(orig_dup)))
+if clea_dup:
+    print("WARNING 清洗表重复日期:", sorted(set(clea_dup)))
 
-1.都一样我想把原来的insert所有的表都搞一遍
-2.然后带sale 维度都表我现在想改成基于/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/quantum-v2/qi这里处理sale_id的
-不过这里sale_id和am_id不一样的是两条
+all_dates = sorted(set(orig_by) | set(clea_by))
+missing_in_clean = [d for d in all_dates if d not in clea_by]
+missing_in_orig  = [d for d in all_dates if d not in orig_by]
+if missing_in_clean:
+    print("INFO 清洗表缺失日期(仅原始表有):", missing_in_clean)
+if missing_in_orig:
+    print("INFO 原始表缺失日期(仅清洗表有):", missing_in_orig)
+print(f"INFO 匹配天数={len(all_dates)-len(missing_in_clean)-len(missing_in_orig)} 原始行={len(orig)} 清洗行={len(clea)}")
 
+def ratio(a, b):
+    if b == 0:
+        return None
+    return a / b
+
+daily = []
+for d in all_dates:
+    o = orig_by.get(d)
+    c = clea_by.get(d)
+    if not o or not c:
+        continue
+    r_cons = ratio(c['consumptionAmount'], o['consumptionAmount'])
+    r_refund = ratio(c['refundAmount'], o['refundAmount'])
+    r_reversal = ratio(c['reversalAmount'], o['reversalAmount'])
+    daily.append({
+        'date': d,
+        'orig_cons': o['consumptionAmount'], 'clean_cons': c['consumptionAmount'],
+        'orig_refund': o['refundAmount'], 'clean_refund': c['refundAmount'],
+        'orig_reversal': o['reversalAmount'], 'clean_reversal': c['reversalAmount'],
+        'r_cons': round(r_cons, 4) if r_cons is not None else None,
+        'r_refund': round(r_refund, 4) if r_refund is not None else None,
+        'r_reversal': round(r_reversal, 4) if r_reversal is not None else None,
+        'refund_missing': (o['refundAmount'] > 0 and c['refundAmount'] == 0),
+        'reversal_missing': (o['reversalAmount'] > 0 and c['reversalAmount'] == 0),
+    })
+
+# 关键指标
+explosion_start = None
+for d in daily:
+    if d['r_cons'] is not None and d['r_cons'] > 1.05:
+        explosion_start = d['date']
+        break
+
+first_anomaly = [d for d in daily if d['refund_missing'] or d['reversal_missing']]
+
+# 月度汇总
+from collections import defaultdict
+monthly = defaultdict(lambda: {'orig_cons':0.0,'clean_cons':0.0,'orig_refund':0.0,'clean_refund':0.0,
+                              'orig_reversal':0.0,'clean_reversal':0.0,'n':0})
+for d in daily:
+    m = d['date'][:7]
+    mo = monthly[m]
+    mo['orig_cons'] += d['orig_cons']; mo['clean_cons'] += d['clean_cons']
+    mo['orig_refund'] += d['orig_refund']; mo['clean_refund'] += d['clean_refund']
+    mo['orig_reversal'] += d['orig_reversal']; mo['clean_reversal'] += d['clean_reversal']
+    mo['n'] += 1
+
+# 总计
+tot = {
+    'orig_cons': sum(d['orig_cons'] for d in daily),
+    'clean_cons': sum(d['clean_cons'] for d in daily),
+    'orig_refund': sum(d['orig_refund'] for d in daily),
+    'clean_refund': sum(d['clean_refund'] for d in daily),
+    'orig_reversal': sum(d['orig_reversal'] for d in daily),
+    'clean_reversal': sum(d['clean_reversal'] for d in daily),
+}
+tot['r_cons'] = round(tot['clean_cons']/tot['orig_cons'], 3)
+tot['r_refund'] = round(tot['clean_refund']/tot['orig_refund'], 3)
+tot['r_reversal'] = round(tot['clean_reversal']/tot['orig_reversal'], 3)
+
+# 输出
+print("=== 总行数:", len(daily))
+print("=== 总量对比 (原始 vs 清洗) ===")
+print(f"  consumption: orig={tot['orig_cons']:,.2f}  clean={tot['clean_cons']:,.2f}  倍数={tot['r_cons']}")
+print(f"  refund:      orig={tot['orig_refund']:,.2f}  clean={tot['clean_refund']:,.2f}  倍数={tot['r_refund']}")
+print(f"  reversal:    orig={tot['orig_reversal']:,.2f}  clean={tot['clean_reversal']:,.2f}  倍数={tot['r_reversal']}")
+print()
+print("=== 爆炸起点 (cleaning 消费 > 原始 5% 的首日):", explosion_start)
+print("=== 退款/冲正完全缺失的天数:", [d['date'] for d in first_anomaly])
+print()
+print("=== 月度汇总 ===")
+print(f"{'月份':<9}{'orig_cons':>18}{'clean_cons':>18}{'倍数':>8}{'orig_refund':>15}{'clean_refund':>15}{'倍数':>8}")
+for m in sorted(monthly):
+    mo = monthly[m]
+    rc = round(mo['clean_cons']/mo['orig_cons'], 3) if mo['orig_cons'] else None
+    rr = round(mo['clean_refund']/mo['orig_refund'], 3) if mo['orig_refund'] else None
+    print(f"{m:<9}{mo['orig_cons']:>18,.2f}{mo['clean_cons']:>18,.2f}{str(rc):>8}{mo['orig_refund']:>15,.2f}{mo['clean_refund']:>15,.2f}{str(rr):>8}")
+print()
+print("=== 消费倍数 > 1.05 的天数明细 (前若干) ===")
+cnt = 0
+for d in daily:
+    if d['r_cons'] is not None and d['r_cons'] > 1.05:
+        print(f"  {d['date']}  r_cons={d['r_cons']}  r_refund={d['r_refund']}  r_reversal={d['r_reversal']}  refund_missing={d['refund_missing']} reversal_missing={d['reversal_missing']}")
+        cnt += 1
+print("  合计异常天数:", cnt)
+
+# 写出 JSON 供 HTML 图表使用
+with open('divergence_data.json', 'w') as f:
+    json.dump({'daily': daily, 'totals': tot,
+               'explosion_start': explosion_start,
+               'first_anomaly': [d['date'] for d in first_anomaly]}, f, indent=2)
+print("\n已写出 divergence_data.json")
