@@ -48,9 +48,9 @@ CREATE TEMPORARY TABLE source_dws_qbit_card_transaction (
         SELECT DISTINCT tr."accountId" AS k0, tr."provider" AS k1, qc."firstSix" AS k2, tr."businessType" AS k3, DATE(tr."createTime") AS k4, tr."status" AS k5
         FROM "qbit_card_transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)
+        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
     )
-    SELECT tr."accountId", tr."businessType", tr."status", tr."provider", qc."firstSix" AS "bin", COALESCE(SUM(tr."originalAmount"), 0) AS origin_amount, COALESCE(SUM(tr."settleAmount"), 0) AS settle_amount, COUNT(*) AS transaction_count, COALESCE(SUM(tr."fee"), 0) AS fee, TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date, 1 AS version, NOW() AS create_time, NOW() AS update_time
+    SELECT tr."accountId" AS "account_id", tr."businessType" AS "business_type", tr."status" AS "status", tr."provider" AS "provider", qc."firstSix" AS "bin", COALESCE(SUM(tr."originalAmount"), 0) AS origin_amount, COALESCE(SUM(tr."settleAmount"), 0) AS settle_amount, COUNT(*) AS transaction_count, COALESCE(SUM(tr."fee"), 0) AS fee, TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS create_date, 1 AS version, NOW() AS create_time, NOW() AS update_time
     FROM "qbit_card_transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
     JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."provider") IS NOT DISTINCT FROM a.k1 AND (qc."firstSix") IS NOT DISTINCT FROM a.k2 AND (tr."businessType") IS NOT DISTINCT FROM a.k3 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k4 AND (tr."status") IS NOT DISTINCT FROM a.k5

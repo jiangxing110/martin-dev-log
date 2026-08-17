@@ -54,9 +54,9 @@ CREATE TEMPORARY TABLE source_dws_crypto_assets_transfers (
     'table-name' = '(WITH affected AS (
         SELECT DISTINCT "account_id" AS k0, "status" AS k1, "sender_type" AS k2, "recipient_type" AS k3, "hidden" AS k4, DATE(tr."create_time") AS k5, "currency" AS k6, "action" AS k7
         FROM "crypto_assets_transfers" AS tr
-        WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE)
+        WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."create_time" < CURRENT_DATE)
     )
-    SELECT "account_id", "status", "sender_type", "recipient_type", COUNT(*) AS transaction_count, SUM("origin_amount" * "usd_rate") AS origin_amount, SUM("settlement_amount" * "usd_rate") AS settlement_amount, SUM("fee" * "usd_rate") AS fee, SUM("fee2" * "usd_rate") AS fee2, SUM("cross_chain_fee" * "usd_rate") AS cross_chain_fee, "hidden", TO_CHAR("create_time", 'YYYY-MM-DD')::DATE AS create_date, "currency", "action", 1 AS version, NOW() AS create_time, NOW() AS update_time
+    SELECT "account_id" AS "account_id", "status" AS "status", "sender_type" AS "sender_type", "recipient_type" AS "recipient_type", COUNT(*) AS transaction_count, SUM("origin_amount" * "usd_rate") AS origin_amount, SUM("settlement_amount" * "usd_rate") AS settlement_amount, SUM("fee" * "usd_rate") AS fee, SUM("fee2" * "usd_rate") AS fee2, SUM("cross_chain_fee" * "usd_rate") AS cross_chain_fee, "hidden" AS "hidden", TO_CHAR("create_time", ''YYYY-MM-DD'')::DATE AS create_date, "currency" AS "currency", "action" AS "action", 1 AS version, NOW() AS create_time, NOW() AS update_time
     FROM "crypto_assets_transfers" AS tr
     JOIN affected a ON ("account_id") IS NOT DISTINCT FROM a.k0 AND ("status") IS NOT DISTINCT FROM a.k1 AND ("sender_type") IS NOT DISTINCT FROM a.k2 AND ("recipient_type") IS NOT DISTINCT FROM a.k3 AND ("hidden") IS NOT DISTINCT FROM a.k4 AND (DATE(tr."create_time")) IS NOT DISTINCT FROM a.k5 AND ("currency") IS NOT DISTINCT FROM a.k6 AND ("action") IS NOT DISTINCT FROM a.k7
     WHERE tr."delete_time" IS NULL

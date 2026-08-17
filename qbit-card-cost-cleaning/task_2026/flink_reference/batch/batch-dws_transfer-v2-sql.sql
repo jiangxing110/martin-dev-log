@@ -47,9 +47,9 @@ CREATE TEMPORARY TABLE source_dws_transfer (
     'table-name' = '(WITH affected AS (
         SELECT DISTINCT tr."accountId" AS k0, tr."businessTypeDetail" AS k1, tr."businessCode" AS k2, tr."settlementCurrency" AS k3, DATE(tr."createTime") AS k4, tr."status" AS k5, "currency" AS k6
         FROM "transfer" AS tr
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)
+        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
     )
-    SELECT tr."accountId", tr."businessTypeDetail", tr."businessCode", tr."settlementCurrency", tr."status", COALESCE(SUM(tr."usdAmount"), 0) AS usd_amount, COUNT(*) AS transaction_count, COALESCE(SUM("fee" * "usdRate"), 0) AS fee, "currency", TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date, 1 AS version, NOW() AS create_time, NOW() AS update_time
+    SELECT tr."accountId" AS "account_id", tr."businessTypeDetail" AS "business_type_detail", tr."businessCode" AS "business_type_code", tr."settlementCurrency" AS "settlement_currency", tr."status" AS "status", COALESCE(SUM(tr."usdAmount"), 0) AS usd_amount, COUNT(*) AS transaction_count, COALESCE(SUM("fee" * "usdRate"), 0) AS fee, "currency" AS "currency", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS create_date, 1 AS version, NOW() AS create_time, NOW() AS update_time
     FROM "transfer" AS tr
     JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessTypeDetail") IS NOT DISTINCT FROM a.k1 AND (tr."businessCode") IS NOT DISTINCT FROM a.k2 AND (tr."settlementCurrency") IS NOT DISTINCT FROM a.k3 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k4 AND (tr."status") IS NOT DISTINCT FROM a.k5 AND ("currency") IS NOT DISTINCT FROM a.k6
     WHERE tr."deleteTime" IS NULL

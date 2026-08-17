@@ -53,10 +53,15 @@ CREATE TEMPORARY TABLE source_dws_sale_transfer_extend (
 LEFT JOIN "globalConversion" as ta on ta."recordId"::UUID = tr.id
 LEFT JOIN "ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::UUID = osat.transaction_id::UUID
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)
+WHERE
+tr."deleteTime" IS NULL and ta."deleteTime" IS NULL
+AND tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' 
+AND tr."createTime" < CURRENT_DATE
+) as tt
+        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
     )
-    SELECT "accountId", "sale_or_am_id", "status", COALESCE(SUM("dbsReceive"),0) AS "dbsReceive", COALESCE(SUM("clReceive"),0) AS "clReceive", COALESCE(SUM("epReceive"),0) AS "epReceive", COALESCE(SUM("rdReceive"),0) AS "rdReceive", COALESCE(SUM("settleFxFee"),0) AS "settleFxFee", COALESCE(SUM("conversionFxAmount"),0) AS "conversionFxAmount", COALESCE(SUM("conversionFxFee"),0) AS "conversionFxFee", COALESCE(SUM(CASE WHEN "businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and (fee - "clReceive"*0.0005 - "epReceive"*0.0005 - "rdReceive"*0.0005) > 0 THEN 
-               (fee - "clReceive"*0.0005 - "epReceive"*0.0005 - "rdReceive"*0.0005)  ELSE 0 END),0) AS "inboundProfit", COALESCE(SUM (CASE WHEN ("conversionFxFee"-"conversionFxAmount"*0.001)>0 THEN ("conversionFxFee"-"conversionFxAmount"*0.001) ELSE 0 END ),0) AS "conversionFxProfit", create_date, 1 AS version, -- 初始版本号
+    SELECT "accountId" AS "account_id", "sale_or_am_id" AS "sale_or_am_id", "status" AS "status", COALESCE(SUM("dbsReceive"),0) AS "dbsReceive" AS "dbs_receive", COALESCE(SUM("clReceive"),0) AS "clReceive" AS "cl_receive", COALESCE(SUM("epReceive"),0) AS "epReceive" AS "ep_receive", COALESCE(SUM("rdReceive"),0) AS "rdReceive" AS "rd_receive", COALESCE(SUM("settleFxFee"),0) AS "settleFxFee" AS "settle_fx_fee", COALESCE(SUM("conversionFxAmount"),0) AS "conversionFxAmount" AS "conversion_fx_amount", COALESCE(SUM("conversionFxFee"),0) AS "conversionFxFee" AS "conversion_fx_fee", COALESCE(SUM(CASE WHEN "businessTypeDetail" in (''OtherChannelInbound'', ''CCInbound'') and (fee - "clReceive"*0.0005 - "epReceive"*0.0005 - "rdReceive"*0.0005) > 0 THEN 
+               (fee - "clReceive"*0.0005 - "epReceive"*0.0005 - "rdReceive"*0.0005)  ELSE 0 END),0) AS "inboundProfit" AS "inbound_profit", COALESCE(SUM (CASE WHEN ("conversionFxFee"-"conversionFxAmount"*0.001)>0 THEN ("conversionFxFee"-"conversionFxAmount"*0.001) ELSE 0 END ),0) AS "conversionFxProfit" AS "conversion_fx_profit", create_date AS "create_date", 1 AS version, -- 初始版本号
 NOW() AS create_time, NOW() AS update_time
 from (  
 SELECT 
@@ -69,21 +74,25 @@ tr."fee"*"usdRate" AS "fee",
 ta."fromAmount",
 "usdAmount",
 ta."rateDiffIncomeFromUsdAmount",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound') and UPPER((tr."rawData"::jsonb->> 0)::jsonb->>'source') IN ('OTT','寻汇','BEEPAY') THEN "usdAmount" ELSE 0 END ) AS "dbsReceive",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider" = 'Column' THEN "usdAmount" ELSE 0 END) AS "clReceive",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider"  = 'EP' THEN "usdAmount" ELSE 0 END) AS "epReceive",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider"  = 'RD' THEN "usdAmount" ELSE 0 END) AS "rdReceive",
-(CASE WHEN ta."toCurrency" = 'CNY' and tr."status" = 'Closed' and ta.status='Closed' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "settleFxFee" ,
-(CASE WHEN tr."settlementCurrency" != 'CNY' and tr."status" = 'Closed' and ta.status='Closed'and tr."businessTypeDetail" in ('Payment','ConversionOut','InnerTransferOut') THEN tr."usdAmount" ELSE 0 END ) AS "conversionFxAmount" ,
-(CASE WHEN ta."toCurrency" != 'CNY' and tr."status" = 'Closed' and ta.status='Closed' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "conversionFxFee",
-TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date
+(CASE WHEN tr."businessTypeDetail" in (''OtherChannelInbound'') and UPPER((tr."rawData"::jsonb->> 0)::jsonb->>''source'') IN (''OTT'',''寻汇'',''BEEPAY'') THEN "usdAmount" ELSE 0 END ) AS "dbsReceive",
+(CASE WHEN tr."businessTypeDetail" in (''OtherChannelInbound'', ''CCInbound'') and tr."provider" = ''Column'' THEN "usdAmount" ELSE 0 END) AS "clReceive",
+(CASE WHEN tr."businessTypeDetail" in (''OtherChannelInbound'', ''CCInbound'') and tr."provider"  = ''EP'' THEN "usdAmount" ELSE 0 END) AS "epReceive",
+(CASE WHEN tr."businessTypeDetail" in (''OtherChannelInbound'', ''CCInbound'') and tr."provider"  = ''RD'' THEN "usdAmount" ELSE 0 END) AS "rdReceive",
+(CASE WHEN ta."toCurrency" = ''CNY'' and tr."status" = ''Closed'' and ta.status=''Closed'' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "settleFxFee" ,
+(CASE WHEN tr."settlementCurrency" != ''CNY'' and tr."status" = ''Closed'' and ta.status=''Closed''and tr."businessTypeDetail" in (''Payment'',''ConversionOut'',''InnerTransferOut'') THEN tr."usdAmount" ELSE 0 END ) AS "conversionFxAmount" ,
+(CASE WHEN ta."toCurrency" != ''CNY'' and tr."status" = ''Closed'' and ta.status=''Closed'' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "conversionFxFee",
+TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS create_date AS "update_time"
     FROM "transfer" as tr 
 LEFT JOIN "globalConversion" as ta on ta."recordId"::UUID = tr.id
 LEFT JOIN "ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::UUID = osat.transaction_id::UUID
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE
-    JOIN affected a ON ("accountId") IS NOT DISTINCT FROM a.k0 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k1 AND ("status") IS NOT DISTINCT FROM a.k2 AND ("sale_or_am_id") IS NOT DISTINCT FROM a.k3
-    WHERE tr."deleteTime" IS NULL and ta."deleteTime" IS NULL
+WHERE
+tr."deleteTime" IS NULL and ta."deleteTime" IS NULL
+AND tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' 
+AND tr."createTime" < CURRENT_DATE
 ) as tt
+    JOIN affected a ON ("accountId") IS NOT DISTINCT FROM a.k0 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k1 AND ("status") IS NOT DISTINCT FROM a.k2 AND ("sale_or_am_id") IS NOT DISTINCT FROM a.k3
+    WHERE TRUE
     GROUP BY "accountId",create_date, status,"sale_or_am_id") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',

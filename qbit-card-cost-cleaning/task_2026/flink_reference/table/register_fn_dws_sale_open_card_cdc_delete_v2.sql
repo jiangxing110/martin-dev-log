@@ -19,27 +19,18 @@ BEGIN
 LEFT JOIN "qbitCard" qc ON qc."id" :: VARCHAR = "tr"."sourceId"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."id"::VARCHAR = osat.transaction_id::VARCHAR
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE
-where
-tr."deleteTime" is NULL and tr."type" IN ('CreateCard', 'QbitCardFee') 
-AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
-            WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)
+            WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format('SELECT COUNT(*) FROM public.dws_sale_open_card_%s WHERE (status, account_id, provider, bin, sale_or_am_id, create_date) IN (SELECT DISTINCT tr."status", tr."accountId", qc.provider, qc."firstSix", ids."sale_or_am_id", DATE(tr."createTime") FROM "Transaction" as "tr"
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_open_card_%s WHERE (status, account_id, provider, bin, sale_or_am_id, create_date) IN (SELECT DISTINCT tr."status", tr."accountId", qc.provider, qc."firstSix", ids."sale_or_am_id", DATE(tr."createTime") FROM "Transaction" as "tr"
 LEFT JOIN "qbitCard" qc ON qc."id" :: VARCHAR = "tr"."sourceId"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."id"::VARCHAR = osat.transaction_id::VARCHAR
-LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE
-where
-tr."deleteTime" is NULL and tr."type" IN ('CreateCard', 'QbitCardFee') 
-AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))', v_year) INTO v_n;
+LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format('DELETE FROM public.dws_sale_open_card_%s WHERE (status, account_id, provider, bin, sale_or_am_id, create_date) IN (SELECT DISTINCT tr."status", tr."accountId", qc.provider, qc."firstSix", ids."sale_or_am_id", DATE(tr."createTime") FROM "Transaction" as "tr"
+                EXECUTE format($fmt$DELETE FROM public.dws_sale_open_card_%s WHERE (status, account_id, provider, bin, sale_or_am_id, create_date) IN (SELECT DISTINCT tr."status", tr."accountId", qc.provider, qc."firstSix", ids."sale_or_am_id", DATE(tr."createTime") FROM "Transaction" as "tr"
 LEFT JOIN "qbitCard" qc ON qc."id" :: VARCHAR = "tr"."sourceId"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."id"::VARCHAR = osat.transaction_id::VARCHAR
-LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE
-where
-tr."deleteTime" is NULL and tr."type" IN ('CreateCard', 'QbitCardFee') 
-AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))', v_year);
+LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -51,9 +42,9 @@ AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CUR
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format('SELECT COUNT(*) FROM public.dws_sale_open_card_%s WHERE create_date >= $1 AND create_date <= $2', v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_open_card_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format('DELETE FROM public.dws_sale_open_card_%s WHERE create_date >= $1 AND create_date <= $2', v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.dws_sale_open_card_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;

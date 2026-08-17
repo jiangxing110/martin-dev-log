@@ -18,16 +18,16 @@ BEGIN
             FROM "crypto_assets_transfers" AS tr
 LEFT JOIN "ods_sale_am_transaction_2026" AS osat ON tr."transaction_id"::UUID = osat.transaction_id::UUID
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE
-            WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE)
+            WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format('SELECT COUNT(*) FROM public.dws_sale_crypto_assets_transfers_%s WHERE (account_id, status, sender_type, recipient_type, hidden, create_date, currency, action, sale_or_am_id) IN (SELECT DISTINCT "account_id", "status", "sender_type", "recipient_type", "hidden", DATE(tr."create_time"), "currency", "action", ids."sale_or_am_id" FROM "crypto_assets_transfers" AS tr
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_crypto_assets_transfers_%s WHERE (account_id, status, sender_type, recipient_type, hidden, create_date, currency, action, sale_or_am_id) IN (SELECT DISTINCT "account_id", "status", "sender_type", "recipient_type", "hidden", DATE(tr."create_time"), "currency", "action", ids."sale_or_am_id" FROM "crypto_assets_transfers" AS tr
 LEFT JOIN "ods_sale_am_transaction_2026" AS osat ON tr."transaction_id"::UUID = osat.transaction_id::UUID
-LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE))', v_year) INTO v_n;
+LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format('DELETE FROM public.dws_sale_crypto_assets_transfers_%s WHERE (account_id, status, sender_type, recipient_type, hidden, create_date, currency, action, sale_or_am_id) IN (SELECT DISTINCT "account_id", "status", "sender_type", "recipient_type", "hidden", DATE(tr."create_time"), "currency", "action", ids."sale_or_am_id" FROM "crypto_assets_transfers" AS tr
+                EXECUTE format($fmt$DELETE FROM public.dws_sale_crypto_assets_transfers_%s WHERE (account_id, status, sender_type, recipient_type, hidden, create_date, currency, action, sale_or_am_id) IN (SELECT DISTINCT "account_id", "status", "sender_type", "recipient_type", "hidden", DATE(tr."create_time"), "currency", "action", ids."sale_or_am_id" FROM "crypto_assets_transfers" AS tr
 LEFT JOIN "ods_sale_am_transaction_2026" AS osat ON tr."transaction_id"::UUID = osat.transaction_id::UUID
-LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE))', v_year);
+LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -39,9 +39,9 @@ LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format('SELECT COUNT(*) FROM public.dws_sale_crypto_assets_transfers_%s WHERE create_date >= $1 AND create_date <= $2', v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_crypto_assets_transfers_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format('DELETE FROM public.dws_sale_crypto_assets_transfers_%s WHERE create_date >= $1 AND create_date <= $2', v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.dws_sale_crypto_assets_transfers_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;

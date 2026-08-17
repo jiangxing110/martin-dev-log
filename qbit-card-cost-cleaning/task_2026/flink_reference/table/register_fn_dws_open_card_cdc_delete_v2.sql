@@ -17,14 +17,14 @@ BEGIN
             SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."createTime"))::INT
             FROM "Transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON qc."id"::VARCHAR = tr."sourceId"
-            WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)
+            WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format('SELECT COUNT(*) FROM public.dws_open_card_%s WHERE (status, account_id, provider, bin, create_date) IN (SELECT DISTINCT tr."status", tr."accountId", qc."provider", qc."firstSix", DATE(tr."createTime") FROM "Transaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON qc."id"::VARCHAR = tr."sourceId" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))', v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_open_card_%s WHERE (status, account_id, provider, bin, create_date) IN (SELECT DISTINCT tr."status", tr."accountId", qc."provider", qc."firstSix", DATE(tr."createTime") FROM "Transaction" AS tr
+LEFT JOIN "qbitCard" AS qc ON qc."id"::VARCHAR = tr."sourceId" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format('DELETE FROM public.dws_open_card_%s WHERE (status, account_id, provider, bin, create_date) IN (SELECT DISTINCT tr."status", tr."accountId", qc."provider", qc."firstSix", DATE(tr."createTime") FROM "Transaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON qc."id"::VARCHAR = tr."sourceId" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))', v_year);
+                EXECUTE format($fmt$DELETE FROM public.dws_open_card_%s WHERE (status, account_id, provider, bin, create_date) IN (SELECT DISTINCT tr."status", tr."accountId", qc."provider", qc."firstSix", DATE(tr."createTime") FROM "Transaction" AS tr
+LEFT JOIN "qbitCard" AS qc ON qc."id"::VARCHAR = tr."sourceId" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -36,9 +36,9 @@ LEFT JOIN "qbitCard" AS qc ON qc."id"::VARCHAR = tr."sourceId" WHERE (tr."create
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format('SELECT COUNT(*) FROM public.dws_open_card_%s WHERE create_date >= $1 AND create_date <= $2', v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_open_card_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format('DELETE FROM public.dws_open_card_%s WHERE create_date >= $1 AND create_date <= $2', v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.dws_open_card_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;

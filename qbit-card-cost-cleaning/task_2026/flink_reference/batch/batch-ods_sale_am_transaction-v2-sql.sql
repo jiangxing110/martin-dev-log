@@ -48,14 +48,14 @@ UNION ALL
 SELECT sar."createTime",sar."deleteTime",sar."salesId",sar."amId",account.id as "accountId"   
 FROM account
 INNER JOIN "salesAccountRelation" as sar ON sar."accountId"::UUID=account."parentAccountId"::UUID
-where account."parentAccountId" !='00000000-0000-0000-0000-000000000000'   
+where account."parentAccountId" !=''00000000-0000-0000-0000-000000000000''   
 ) AS sar ON tr."accountId" :: UUID = sar."accountId" :: UUID AND tr."createTime" >= sar."createTime" AND ( tr."createTime" <= sar."deleteTime" OR sar."deleteTime" IS NULL )
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (sar."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."deleteTime" < CURRENT_DATE)
+        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
     )
     SELECT sar."salesId" AS sale_id, sar."amId" AS am_id, tr."createTime" as "create_time", NOW( ) AS update_time, -- 默认当前时间
         NULL AS delete_time, -- 逻辑删除字段，默认 NULL
         NULL AS remarks, -- 备注字段，默认 NULL
-        1 AS VERSION -- 版本号，默认 1
+        1 AS VERSION -- 版本号，默认 1 AS "version"
     FROM "Transaction" tr
 LEFT JOIN (
 select sar."createTime",sar."deleteTime",sar."salesId",sar."amId",sar."accountId" as "accountId"   
@@ -64,7 +64,7 @@ UNION ALL
 SELECT sar."createTime",sar."deleteTime",sar."salesId",sar."amId",account.id as "accountId"   
 FROM account
 INNER JOIN "salesAccountRelation" as sar ON sar."accountId"::UUID=account."parentAccountId"::UUID
-where account."parentAccountId" !='00000000-0000-0000-0000-000000000000'   
+where account."parentAccountId" !=''00000000-0000-0000-0000-000000000000''   
 ) AS sar ON tr."accountId" :: UUID = sar."accountId" :: UUID AND tr."createTime" >= sar."createTime" AND ( tr."createTime" <= sar."deleteTime" OR sar."deleteTime" IS NULL )
     JOIN affected a ON (tr.ID) IS NOT DISTINCT FROM a.k0
     WHERE tr."deleteTime" IS NULL) AS src',
@@ -102,22 +102,22 @@ SELECT id, sale_id, am_id, create_time, update_time, delete_time, remarks, versi
 FROM v_ods_sale_am_transaction_base
 CROSS JOIN source_delete_ods_sale_am_transaction_result AS del
 WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2024-01-01' AND create_date < DATE '2025-01-01';
+  AND create_time >= TIMESTAMP '2024-01-01 00:00:00' AND create_time < TIMESTAMP '2025-01-01 00:00:00';
 INSERT INTO sink_ods_sale_am_transaction_2025
 SELECT id, sale_id, am_id, create_time, update_time, delete_time, remarks, version
 FROM v_ods_sale_am_transaction_base
 CROSS JOIN source_delete_ods_sale_am_transaction_result AS del
 WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2025-01-01' AND create_date < DATE '2026-01-01';
+  AND create_time >= TIMESTAMP '2025-01-01 00:00:00' AND create_time < TIMESTAMP '2026-01-01 00:00:00';
 INSERT INTO sink_ods_sale_am_transaction_2026
 SELECT id, sale_id, am_id, create_time, update_time, delete_time, remarks, version
 FROM v_ods_sale_am_transaction_base
 CROSS JOIN source_delete_ods_sale_am_transaction_result AS del
 WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2026-01-01' AND create_date < DATE '2027-01-01';
+  AND create_time >= TIMESTAMP '2026-01-01 00:00:00' AND create_time < TIMESTAMP '2027-01-01 00:00:00';
 INSERT INTO sink_ods_sale_am_transaction_2027
 SELECT id, sale_id, am_id, create_time, update_time, delete_time, remarks, version
 FROM v_ods_sale_am_transaction_base
 CROSS JOIN source_delete_ods_sale_am_transaction_result AS del
 WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2027-01-01' AND create_date < DATE '2028-01-01';
+  AND create_time >= TIMESTAMP '2027-01-01 00:00:00' AND create_time < TIMESTAMP '2028-01-01 00:00:00';

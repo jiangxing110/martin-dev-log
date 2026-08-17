@@ -17,14 +17,14 @@ BEGIN
             SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."create_time"))::INT
             FROM "fund_profits" AS tr
 CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee
-            WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE)
+            WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format('SELECT COUNT(*) FROM public.ods_fund_profits_%s WHERE (fund_id) IN (SELECT DISTINCT tr."id" FROM "fund_profits" AS tr
-CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE))', v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.ods_fund_profits_%s WHERE (fund_id) IN (SELECT DISTINCT tr."id" FROM "fund_profits" AS tr
+CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format('DELETE FROM public.ods_fund_profits_%s WHERE (fund_id) IN (SELECT DISTINCT tr."id" FROM "fund_profits" AS tr
-CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE))', v_year);
+                EXECUTE format($fmt$DELETE FROM public.ods_fund_profits_%s WHERE (fund_id) IN (SELECT DISTINCT tr."id" FROM "fund_profits" AS tr
+CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -36,9 +36,9 @@ CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee WHERE (tr."create_time" >= 
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format('SELECT COUNT(*) FROM public.ods_fund_profits_%s WHERE create_date >= $1 AND create_date <= $2', v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.ods_fund_profits_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format('DELETE FROM public.ods_fund_profits_%s WHERE create_date >= $1 AND create_date <= $2', v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.ods_fund_profits_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;

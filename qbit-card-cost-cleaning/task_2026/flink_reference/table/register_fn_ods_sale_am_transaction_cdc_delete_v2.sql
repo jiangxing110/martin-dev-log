@@ -25,10 +25,10 @@ FROM account
 INNER JOIN "salesAccountRelation" as sar ON sar."accountId"::UUID=account."parentAccountId"::UUID
 where account."parentAccountId" !='00000000-0000-0000-0000-000000000000'   
 ) AS sar ON tr."accountId" :: UUID = sar."accountId" :: UUID AND tr."createTime" >= sar."createTime" AND ( tr."createTime" <= sar."deleteTime" OR sar."deleteTime" IS NULL )
-            WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (sar."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."deleteTime" < CURRENT_DATE)
+            WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format('SELECT COUNT(*) FROM public.ods_sale_am_transaction_%s WHERE (transaction_id) IN (SELECT DISTINCT tr.ID FROM "Transaction" tr
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.ods_sale_am_transaction_%s WHERE (transaction_id) IN (SELECT DISTINCT tr.ID FROM "Transaction" tr
 LEFT JOIN (
 select sar."createTime",sar."deleteTime",sar."salesId",sar."amId",sar."accountId" as "accountId"   
 FROM "salesAccountRelation" as sar
@@ -37,9 +37,9 @@ SELECT sar."createTime",sar."deleteTime",sar."salesId",sar."amId",account.id as 
 FROM account
 INNER JOIN "salesAccountRelation" as sar ON sar."accountId"::UUID=account."parentAccountId"::UUID
 where account."parentAccountId" !='00000000-0000-0000-0000-000000000000'   
-) AS sar ON tr."accountId" :: UUID = sar."accountId" :: UUID AND tr."createTime" >= sar."createTime" AND ( tr."createTime" <= sar."deleteTime" OR sar."deleteTime" IS NULL ) WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (sar."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."deleteTime" < CURRENT_DATE))', v_year) INTO v_n;
+) AS sar ON tr."accountId" :: UUID = sar."accountId" :: UUID AND tr."createTime" >= sar."createTime" AND ( tr."createTime" <= sar."deleteTime" OR sar."deleteTime" IS NULL ) WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format('DELETE FROM public.ods_sale_am_transaction_%s WHERE (transaction_id) IN (SELECT DISTINCT tr.ID FROM "Transaction" tr
+                EXECUTE format($fmt$DELETE FROM public.ods_sale_am_transaction_%s WHERE (transaction_id) IN (SELECT DISTINCT tr.ID FROM "Transaction" tr
 LEFT JOIN (
 select sar."createTime",sar."deleteTime",sar."salesId",sar."amId",sar."accountId" as "accountId"   
 FROM "salesAccountRelation" as sar
@@ -48,7 +48,7 @@ SELECT sar."createTime",sar."deleteTime",sar."salesId",sar."amId",account.id as 
 FROM account
 INNER JOIN "salesAccountRelation" as sar ON sar."accountId"::UUID=account."parentAccountId"::UUID
 where account."parentAccountId" !='00000000-0000-0000-0000-000000000000'   
-) AS sar ON tr."accountId" :: UUID = sar."accountId" :: UUID AND tr."createTime" >= sar."createTime" AND ( tr."createTime" <= sar."deleteTime" OR sar."deleteTime" IS NULL ) WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (sar."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."deleteTime" < CURRENT_DATE))', v_year);
+) AS sar ON tr."accountId" :: UUID = sar."accountId" :: UUID AND tr."createTime" >= sar."createTime" AND ( tr."createTime" <= sar."deleteTime" OR sar."deleteTime" IS NULL ) WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -60,9 +60,9 @@ where account."parentAccountId" !='00000000-0000-0000-0000-000000000000'
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format('SELECT COUNT(*) FROM public.ods_sale_am_transaction_%s WHERE create_date >= $1 AND create_date <= $2', v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.ods_sale_am_transaction_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format('DELETE FROM public.ods_sale_am_transaction_%s WHERE create_date >= $1 AND create_date <= $2', v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.ods_sale_am_transaction_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;

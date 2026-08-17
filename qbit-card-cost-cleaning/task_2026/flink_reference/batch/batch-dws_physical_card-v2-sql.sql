@@ -45,14 +45,14 @@ CREATE TEMPORARY TABLE source_dws_physical_card (
         SELECT DISTINCT tr."accountId" AS k0, qc."provider" AS k1, qc."firstSix" AS k2, tr."status" AS k3, DATE(tr."createTime") AS k4
         FROM "qbitCardWalletTransaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)
+        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
     )
-    SELECT tr."accountId" AS "account_id", qc."provider" AS "provider", qc."firstSix" AS "bin", tr."status" AS "status", COUNT(*) AS "transaction_count", SUM(tr."originAmount"::numeric) AS "physical_card_fee", TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
+    SELECT tr."accountId" AS "account_id", qc."provider" AS "provider", qc."firstSix" AS "bin", tr."status" AS "status", COUNT(*) AS "transaction_count", SUM(tr."originAmount"::numeric) AS "physical_card_fee", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
     FROM "qbitCardWalletTransaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
     JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (qc."provider") IS NOT DISTINCT FROM a.k1 AND (qc."firstSix") IS NOT DISTINCT FROM a.k2 AND (tr."status") IS NOT DISTINCT FROM a.k3 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k4
-    WHERE tr."deleteTime" IS NULL AND tr."businessType" = 'TransferOut' AND tr."remarks" IN ('邮寄费', '制卡费', '批量邮寄运费')
-    GROUP BY tr."accountId", qc."provider", qc."firstSix", tr."status", TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE) AS src',
+    WHERE tr."deleteTime" IS NULL AND tr."businessType" = ''TransferOut'' AND tr."remarks" IN (''邮寄费'', ''制卡费'', ''批量邮寄运费'')
+    GROUP BY tr."accountId", qc."provider", qc."firstSix", tr."status", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE) AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

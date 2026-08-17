@@ -51,23 +51,17 @@ CREATE TEMPORARY TABLE source_dws_sale_open_card (
 LEFT JOIN "qbitCard" qc ON qc."id" :: VARCHAR = "tr"."sourceId"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."id"::VARCHAR = osat.transaction_id::VARCHAR
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE
-where
-tr."deleteTime" is NULL and tr."type" IN ('CreateCard', 'QbitCardFee') 
-AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)
+        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
     )
-    SELECT tr."accountId", qc.provider, qc."firstSix", tr."status", ids."sale_or_am_id", COALESCE(sum("senderFee"),0) fee, count(*) count, TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS "create_date", 1 AS "version", -- 初始版本号
+    SELECT tr."accountId" AS "account_id", qc.provider AS "provider", qc."firstSix" AS "bin", tr."status" AS "status", ids."sale_or_am_id" AS "sale_or_am_id", COALESCE(sum("senderFee"),0) fee AS "fee", count(*) count AS "count", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS "create_date", 1 AS "version", -- 初始版本号
        NOW() AS "create_time", NOW() AS "update_time"
     FROM "Transaction" as "tr"
 LEFT JOIN "qbitCard" qc ON qc."id" :: VARCHAR = "tr"."sourceId"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."id"::VARCHAR = osat.transaction_id::VARCHAR
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE
-where
-tr."deleteTime" is NULL and tr."type" IN ('CreateCard', 'QbitCardFee') 
-AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
     JOIN affected a ON (tr."status") IS NOT DISTINCT FROM a.k0 AND (tr."accountId") IS NOT DISTINCT FROM a.k1 AND (qc.provider) IS NOT DISTINCT FROM a.k2 AND (qc."firstSix") IS NOT DISTINCT FROM a.k3 AND (ids."sale_or_am_id") IS NOT DISTINCT FROM a.k4 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k5
-    WHERE TRUE
-    GROUP BY tr."status",tr."accountId",qc.provider,qc."firstSix",ids."sale_or_am_id", TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE) AS src',
+    WHERE tr."deleteTime" is NULL and tr."type" IN (''CreateCard'', ''QbitCardFee'')
+    GROUP BY tr."status",tr."accountId",qc.provider,qc."firstSix",ids."sale_or_am_id", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE) AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

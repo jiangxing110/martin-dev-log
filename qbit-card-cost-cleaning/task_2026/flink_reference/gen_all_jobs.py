@@ -94,15 +94,31 @@ def parse_block(block):
     # SELECT 体（到 ON CONFLICT 之前）
     after = block[sel_idx:]
     sel_body = after.split("ON CONFLICT")[0].strip()
-    # FROM..JOIN（关键字大小写敏感，避免误匹配标识符中的 FROM/WHERE 等）
-    from_m = re.search(r'\bFROM\b\s+(.*?)(?:\bWHERE\b|\bGROUP BY\b|$)', sel_body, re.DOTALL)
-    from_join = from_m.group(1).strip() if from_m else ""
-    # WHERE
-    where_m = re.search(r'\bWHERE\b\s+(.*?)(?:\bGROUP BY\b|$)', sel_body, re.DOTALL)
-    where = where_m.group(1).strip() if where_m else ""
-    # GROUP BY
-    gb_m = re.search(r'\bGROUP BY\b\s+(.*?)(?:\bON CONFLICT\b|;|$)', sel_body, re.DOTALL)
-    group_by = gb_m.group(1).strip() if gb_m else None
+    # FROM..JOIN：定位主查询 FROM（首个 FROM），截至主层级(括号深度0)的 WHERE/GROUP BY。
+    # 非贪婪到“第一个 WHERE”会误停在嵌套子查询(如 UNION ALL 内)的 WHERE，导致 from_join 被截断。
+    from_kw = sel_body.find("FROM")
+    from_join = ""
+    if from_kw != -1:
+        wpos = _top_level_kw(sel_body, "WHERE")
+        gpos = _top_level_kw(sel_body, "GROUP BY")
+        cands = [p for p in (wpos, gpos) if p > from_kw]
+        from_end = min(cands) if cands else len(sel_body)
+        from_join = sel_body[from_kw+4:from_end].strip()
+    # WHERE（主层级），用于去掉变更窗口、保留其余过滤
+    where = ""
+    wpos = _top_level_kw(sel_body, "WHERE")
+    if wpos != -1:
+        gpos = _top_level_kw(sel_body, "GROUP BY")
+        wend = gpos if (gpos != -1 and gpos > wpos) else len(sel_body)
+        where = sel_body[wpos+5:wend].strip()
+    # GROUP BY（主层级），截至 ON CONFLICT / ; / 结尾
+    group_by = None
+    gpos = _top_level_kw(sel_body, "GROUP BY")
+    if gpos != -1:
+        tail = sel_body[gpos:]
+        gm = re.search(r'\bON CONFLICT\b|;', tail, re.IGNORECASE)
+        gend = gpos + gm.start() if gm else len(sel_body)
+        group_by = sel_body[gpos+8:gend].strip() or None
     # SELECT 列表（FROM 之前）；sel_body 保持原大小写，FROM 关键字全大写
     sel_list = sel_body[len("SELECT"):sel_body.index("FROM")].strip()
     exprs = split_args(sel_list)
@@ -124,6 +140,28 @@ def _norm(s):
 def _strip_alias(e):
     """去掉 SELECT 表达式尾部 AS 别名（兼容带引号：AS "bin" / AS bin）。"""
     return re.sub(r'\s+AS\s+"?[\w]+"?\s*$', '', e, flags=re.IGNORECASE).strip()
+
+def alias_to_cols(exprs, cols):
+    """让 PG 子查询 SELECT 输出的列名 == DWS 列名(cols)，保证 Flink source 声明与子查询对齐。
+    表达式已含 `AS "col"` 的沿用；否则补 `AS "col"`（ODS 原始表 SELECT 多不带别名，易错位）。"""
+    out = []
+    for i, c in enumerate(cols):
+        e = exprs[i] if i < len(exprs) else c
+        if re.search(r'\s+AS\s+"?' + re.escape(c) + r'"?\s*$', e, re.IGNORECASE):
+            out.append(e)
+        else:
+            out.append(f'{e} AS "{c}"')
+    return out
+
+def route_cond(cols, y):
+    """年分表路由条件：优先 create_date(DATE)，否则 create_time/createTime(TIMESTAMP)。
+    部分 ODS 原始表(如 ods_sale_fund_profits/ods_sale_qbit_card)无 create_date 列，需按时间列路由。"""
+    if "create_date" in cols:
+        return f"create_date >= DATE '{y}-01-01' AND create_date < DATE '{y+1}-01-01'"
+    for alt in ("create_time", "createTime"):
+        if alt in cols:
+            return f"{alt} >= TIMESTAMP '{y}-01-01 00:00:00' AND {alt} < TIMESTAMP '{y+1}-01-01 00:00:00'"
+    return f"create_date >= DATE '{y}-01-01' AND create_date < DATE '{y+1}-01-01'"
 
 def derive_business_keys(p):
     cols, exprs, group_by = p["cols"], p["exprs"], p["group_by"]
@@ -159,15 +197,40 @@ def derive_business_keys(p):
 # ---------------------------------------------------------------------------
 # PG 表达式构造
 # ---------------------------------------------------------------------------
-def find_time_cols(from_join):
-    """检测源表里出现的时间列，返回 dict: create/update/delete -> 列引用(含别名)。"""
+def _top_level_kw(s, kw):
+    """返回主层级(括号深度0)的 WHERE/GROUP BY 等关键字起始下标；找不到返回 -1。
+    用于避免误把嵌套子查询(如 UNION ALL 内的 WHERE)当作主查询子句。"""
+    depth = 0
+    n, k = len(s), len(kw)
+    i = 0
+    while i < n:
+        c = s[i]
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+        elif depth == 0 and s[i:i+k].upper() == kw:
+            before_ok = (i == 0) or (not s[i-1].isalnum() and s[i-1] != "_")
+            after_ok = (i+k >= n) or (not s[i+k].isalnum() and s[i+k] != "_")
+            if before_ok and after_ok:
+                return i
+        i += 1
+    return -1
+
+def find_time_cols(block):
+    """定位变更窗口(CURRENT_DATE - INTERVAL)所引用的时间列(含别名)。
+    锚定 '>= CURRENT_DATE - INTERVAL'，避免误取嵌套子查询(UNION ALL)内的同名别名。"""
     res = {"create": None, "update": None, "delete": None}
-    for kind, pat in [("create", r'(\w+\."(?:createTime|create_time)")'),
-                      ("update", r'(\w+\."(?:updateTime|update_time)")'),
-                      ("delete", r'(\w+\."(?:deleteTime|delete_time)")')]:
-        m = re.search(pat, from_join)
-        if m:
-            res[kind] = m.group(1)
+    pat = re.compile(r'(\w+\."(?:createTime|create_time|updateTime|update_time|deleteTime|delete_time)")\s*>=\s*CURRENT_DATE\s*-\s*INTERVAL', re.IGNORECASE)
+    for m in pat.finditer(block):
+        col = m.group(1)
+        low = col.lower().replace('"', '').replace('_', '')
+        if low.endswith("createtime"):
+            res["create"] = col
+        elif low.endswith("updatetime"):
+            res["update"] = col
+        elif low.endswith("deletetime"):
+            res["delete"] = col
     return res
 
 def change_window(time_cols):
@@ -259,12 +322,13 @@ def src_cols_decl(cols):
     return ",\n    ".join(f"{c} {flink_type(c)}" for c in cols[1:])
 
 def jdbc_src_block(base, cols, pg_subquery):
+    pgq = pg_subquery.replace("'", "''")  # Flink table-name 属性值内单引号需转义为 ''
     return f"""CREATE TEMPORARY TABLE source_{base} (
     {src_cols_decl(cols)}
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${{secret_values.ADB_PG_VPC_HOSTNAME}}:${{secret_values.ADB_PG_VPC_PORT}}/${{secret_values.ADB_PG_DATABASE}}?stringtype=unspecified',
-    'table-name' = '({pg_subquery}) AS src',
+    'table-name' = '({pgq}) AS src',
     'username' = '${{secret_values.ADB_PG_USERNAME}}',
     'password' = '${{secret_values.ADB_PG_PASSWORD}}',
     'driver' = 'org.postgresql.Driver',
@@ -298,9 +362,9 @@ BEGIN
             WHERE {change_win}
         LOOP
             IF p_dry_run THEN
-                EXECUTE format('SELECT COUNT(*) FROM public.{base}_%s WHERE ({left}) IN (SELECT DISTINCT {pg_key_exprs} FROM {from_join} WHERE {change_win})', v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.{base}_%s WHERE ({left}) IN (SELECT DISTINCT {pg_key_exprs} FROM {from_join} WHERE {change_win})$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format('DELETE FROM public.{base}_%s WHERE ({left}) IN (SELECT DISTINCT {pg_key_exprs} FROM {from_join} WHERE {change_win})', v_year);
+                EXECUTE format($fmt$DELETE FROM public.{base}_%s WHERE ({left}) IN (SELECT DISTINCT {pg_key_exprs} FROM {from_join} WHERE {change_win})$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -312,9 +376,9 @@ BEGIN
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format('SELECT COUNT(*) FROM public.{base}_%s WHERE create_date >= $1 AND create_date <= $2', v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.{base}_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format('DELETE FROM public.{base}_%s WHERE create_date >= $1 AND create_date <= $2', v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.{base}_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -331,6 +395,7 @@ $function$;
 
 def cdc_block(base, cols, keys, pg_subquery):
     # Flink key exprs（基于 source 输出列名）
+    pgq = pg_subquery.replace("'", "''")  # Flink table-name 属性值内单引号需转义为 ''
     flink_keys = []
     for k in keys:
         if k == "create_date":
@@ -349,13 +414,12 @@ def cdc_block(base, cols, keys, pg_subquery):
     {ycols},
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${{secret_values.ADB_PG_VPC_HOSTNAME}}:${{secret_values.ADB_PG_VPC_PORT}}/${{secret_values.ADB_PG_DATABASE}}','tableName'='public.{base}_{y}','userName'='${{secret_values.ADB_PG_USERNAME}}','password'='${{secret_values.ADB_PG_PASSWORD}}','writeMode'='upsert','batchSize'='2000');""")
-        y_start = f"{y}-01-01"; y_end = f"{y+1}-01-01"
         inserts.append(f"""INSERT INTO sink_{base}_{y}
 SELECT {sink_cols}
 FROM v_{base}_base
 CROSS JOIN source_delete_{base}_result AS del
 WHERE del.affected_rows >= 0
-  AND create_date >= DATE '{y_start}' AND create_date < DATE '{y_end}';""")
+  AND {route_cond(cols, y)};""")
     return f"""{SET_BLOCK}
 -- ==============================================
 -- 0. 先调用删除函数：按唯一业务键精准清空受影响分表行（先清后写，保证幂等）
@@ -380,7 +444,7 @@ CREATE TEMPORARY TABLE source_{base} (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${{secret_values.ADB_PG_VPC_HOSTNAME}}:${{secret_values.ADB_PG_VPC_PORT}}/${{secret_values.ADB_PG_DATABASE}}?stringtype=unspecified',
-    'table-name' = '({pg_subquery}) AS src',
+    'table-name' = '({pgq}) AS src',
     'username' = '${{secret_values.ADB_PG_USERNAME}}',
     'password' = '${{secret_values.ADB_PG_PASSWORD}}',
     'driver' = 'org.postgresql.Driver',
@@ -409,6 +473,7 @@ FROM source_{base};
 """
 
 def batch_block(base, cols, keys, from_join, where_no_window, pg_key_exprs, create_expr, pg_subquery):
+    pgq = pg_subquery.replace("'", "''")  # Flink table-name 属性值内单引号需转义为 ''
     out_cols = ["id"] + cols[1:]
     sink_cols = ", ".join(out_cols)
     flink_keys = []
@@ -426,13 +491,12 @@ def batch_block(base, cols, keys, from_join, where_no_window, pg_key_exprs, crea
     {ycols},
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${{secret_values.ADB_PG_VPC_HOSTNAME}}:${{secret_values.ADB_PG_VPC_PORT}}/${{secret_values.ADB_PG_DATABASE}}','tableName'='public.{base}_{y}','userName'='${{secret_values.ADB_PG_USERNAME}}','password'='${{secret_values.ADB_PG_PASSWORD}}','writeMode'='upsert','batchSize'='2000');""")
-        y_start = f"{y}-01-01"; y_end = f"{y+1}-01-01"
         inserts.append(f"""INSERT INTO sink_{base}_{y}
 SELECT {sink_cols}
 FROM v_{base}_base
 CROSS JOIN source_delete_{base}_result AS del
 WHERE del.affected_rows >= 0
-  AND create_date >= DATE '{y_start}' AND create_date < DATE '{y_end}';""")
+  AND {route_cond(cols, y)};""")
     # batch 用日期区间清理（修复模式），默认 2026 全量；可改
     return f"""{SET_BLOCK}
 -- 说明：batch 用于一次性修复/补数。删除函数走“修复模式”(传入 p_start/p_end)，按 create_date
@@ -455,7 +519,7 @@ CREATE TEMPORARY TABLE source_{base} (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${{secret_values.ADB_PG_VPC_HOSTNAME}}:${{secret_values.ADB_PG_VPC_PORT}}/${{secret_values.ADB_PG_DATABASE}}?stringtype=unspecified',
-    'table-name' = '({pg_subquery}) AS src',
+    'table-name' = '({pgq}) AS src',
     'username' = '${{secret_values.ADB_PG_USERNAME}}',
     'password' = '${{secret_values.ADB_PG_PASSWORD}}',
     'driver' = 'org.postgresql.Driver',
@@ -513,8 +577,8 @@ def main():
         create_expr = create_date_expr(time_cols)
         dws_keys, pg_key_exprs = dws_key_exprs(base, keys, p, time_cols)
 
-        # 聚合 SELECT（去掉 id 列）
-        agg_select = ", ".join(p["exprs"][1:])
+        # 聚合 SELECT（去掉 id 列），并让输出列名对齐 DWS 列名
+        agg_select = ", ".join(alias_to_cols(p["exprs"][1:], p["cols"][1:]))
         # PG 重算子查询：CTE 找受影响 key，再聚合这些 key 的当前有效源行
         key_exprs_aliased = ", ".join(f"{e} AS k{i}" for i, e in enumerate(pg_key_exprs.split(", ")))
         if is_ods:

@@ -76,9 +76,10 @@ python3 gen_all_jobs.py     # 解析 ../old/insert_task_job.sql，覆盖生成 9
 ## ⚠️ 上线前必读（参考脚手架性质）
 
 1. **列类型需对照 Flink catalog 校准**：生成器按命名启发式推断 Flink 类型（`amount→DECIMAL(20,4)`、`count→BIGINT`、`id→BIGINT` 等）。UUID / JSON / boolean 等真实类型请按线上 catalog 修正。
-2. **嵌套子查询表已打 `[TODO]`**：`ods_sale_fund_profits`、`ods_sale_qbit_card`（其 FROM 含 `UNION ALL` 子查询）等 8 个文件的删除函数“变更窗口引用源别名”可能需人工校准，上线前务必核对 affected-key 子查询是否能正确解析。
-3. **先 dry-run**：每个删除函数 `SELECT fn_delete_<base>_cdc(true);` 核对影响行数后再转正。
-4. **v1 不改表结构、不删表**，回滚只需停 cdc 作业、重启旧 PG 三步任务。
+2. **`[TODO]` 标记的 8 个文件（2 张表）**：`ods_sale_fund_profits`、`ods_sale_qbit_card` 的 FROM 含 `UNION ALL` + `jsonb_array_elements` 嵌套。它们的变更窗口、按年路由、引号转义**已由生成器正确产出**（已修复此前 `affected` 子查询别名越界、`WHERE FALSE`、引号未转义等问题），此处仅作“复杂聚合需人工复核”的提醒，上线前请核对 affected-key 子查询与 `create_time` 年份路由。
+3. **引号转义已处理**：删除函数用 `format($fmt$...$fmt$)` 美元引号包住含 `INTERVAL '1 day'` 的 SQL；Flink `table-name` 属性值内单引号已转义为 `''`（如 `INTERVAL ''1 day''`、`''0000...UUID''`）。**重改生成器后重跑前请勿手动去掉转义**。
+4. **先 dry-run**：每个删除函数 `SELECT fn_delete_<base>_cdc(true);` 核对影响行数后再转正。
+5. **v1 不改表结构、不删表**，回滚只需停 cdc 作业、重启旧 PG 三步任务。
 
 ## 路线图：v2（按年分区单表）
 

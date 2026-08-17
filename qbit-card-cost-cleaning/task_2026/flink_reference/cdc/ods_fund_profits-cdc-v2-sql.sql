@@ -54,9 +54,9 @@ CREATE TEMPORARY TABLE source_ods_fund_profits (
         SELECT DISTINCT tr."id" AS k0
         FROM "fund_profits" AS tr
 CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee
-        WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE)
+        WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."create_time" < CURRENT_DATE)
     )
-    SELECT tr."id", tr."create_time", tr."update_time", tr."delete_time", tr."version", tr."remarks", tr."account_id", tr."product_id", tr."date", tr."currency", tr."profit", (CASE WHEN fee->>'type' = 'SERVICE' THEN (fee->>'amount')::numeric ELSE 0 END) AS "service_fee", tr."status", tr."apr", tr."share", tr."net_value"
+    SELECT tr."id" AS "fund_id", tr."create_time" AS "create_time", tr."update_time" AS "update_time", tr."delete_time" AS "delete_time", tr."version" AS "version", tr."remarks" AS "remarks", tr."account_id" AS "account_id", tr."product_id" AS "product_id", tr."date" AS "date", tr."currency" AS "currency", tr."profit" AS "profit", (CASE WHEN fee->>''type'' = ''SERVICE'' THEN (fee->>''amount'')::numeric ELSE 0 END) AS "service_fee", tr."status" AS "status", tr."apr" AS "apr", tr."share" AS "share", tr."net_value" AS "net_value"
     FROM "fund_profits" AS tr
 CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee
     JOIN affected a ON (tr."id") IS NOT DISTINCT FROM a.k0
@@ -105,22 +105,22 @@ SELECT id, fund_id, create_time, update_time, delete_time, version, remarks, acc
 FROM v_ods_fund_profits_base
 CROSS JOIN source_delete_ods_fund_profits_result AS del
 WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2024-01-01' AND create_date < DATE '2025-01-01';
+  AND create_time >= TIMESTAMP '2024-01-01 00:00:00' AND create_time < TIMESTAMP '2025-01-01 00:00:00';
 INSERT INTO sink_ods_fund_profits_2025
 SELECT id, fund_id, create_time, update_time, delete_time, version, remarks, account_id, product_id, date, currency, profit, service_fee, status, apr, share, net_value
 FROM v_ods_fund_profits_base
 CROSS JOIN source_delete_ods_fund_profits_result AS del
 WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2025-01-01' AND create_date < DATE '2026-01-01';
+  AND create_time >= TIMESTAMP '2025-01-01 00:00:00' AND create_time < TIMESTAMP '2026-01-01 00:00:00';
 INSERT INTO sink_ods_fund_profits_2026
 SELECT id, fund_id, create_time, update_time, delete_time, version, remarks, account_id, product_id, date, currency, profit, service_fee, status, apr, share, net_value
 FROM v_ods_fund_profits_base
 CROSS JOIN source_delete_ods_fund_profits_result AS del
 WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2026-01-01' AND create_date < DATE '2027-01-01';
+  AND create_time >= TIMESTAMP '2026-01-01 00:00:00' AND create_time < TIMESTAMP '2027-01-01 00:00:00';
 INSERT INTO sink_ods_fund_profits_2027
 SELECT id, fund_id, create_time, update_time, delete_time, version, remarks, account_id, product_id, date, currency, profit, service_fee, status, apr, share, net_value
 FROM v_ods_fund_profits_base
 CROSS JOIN source_delete_ods_fund_profits_result AS del
 WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2027-01-01' AND create_date < DATE '2028-01-01';
+  AND create_time >= TIMESTAMP '2027-01-01 00:00:00' AND create_time < TIMESTAMP '2028-01-01 00:00:00';
