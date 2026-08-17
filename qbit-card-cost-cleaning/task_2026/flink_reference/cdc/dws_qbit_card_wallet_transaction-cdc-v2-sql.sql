@@ -31,18 +31,27 @@ CREATE TEMPORARY TABLE source_delete_dws_qbit_card_wallet_transaction_result (
 -- 1. 源聚合（留在 PostgreSQL 内执行，复用原版聚合逻辑；只回传受影响 key 的聚合结果）
 -- ==============================================
 CREATE TEMPORARY TABLE source_dws_qbit_card_wallet_transaction (
-    dws_qbit_card_wallet_transaction_row STRING
+    account_id STRING,
+    business_type STRING,
+    status STRING,
+    origin_amount DECIMAL(20,4),
+    transaction_count BIGINT,
+    fee DECIMAL(20,4),
+    create_date DATE,
+    version BIGINT,
+    create_time TIMESTAMP(6),
+    update_time TIMESTAMP(6)
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT tr."accountId" AS k0, tr."businessType" AS k1, CURRENT_DATE AS k2, tr."status" AS k3
+        SELECT DISTINCT tr."accountId" AS k0, tr."businessType" AS k1, DATE(tr."createTime") AS k2, tr."status" AS k3
         FROM "qbitCardWalletTransaction" AS tr
-        WHERE FALSE
+        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)
     )
     SELECT tr."accountId", tr."businessType", tr."status", COALESCE(SUM(tr."originAmount"), 0) AS origin_amount, COUNT(*) AS transaction_count, COALESCE(SUM(tr."fee"), 0) AS fee, TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date, 1 AS version, NOW() AS create_time, NOW() AS update_time
-    FROM "qbitCardWalletTransaction" AS tr s
-    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessType") IS NOT DISTINCT FROM a.k1 AND (CURRENT_DATE) IS NOT DISTINCT FROM a.k2 AND (tr."status") IS NOT DISTINCT FROM a.k3
+    FROM "qbitCardWalletTransaction" AS tr
+    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessType") IS NOT DISTINCT FROM a.k1 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k2 AND (tr."status") IS NOT DISTINCT FROM a.k3
     WHERE tr."deleteTime" IS NULL
     GROUP BY tr."accountId", tr."businessType", create_date, tr."status") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',

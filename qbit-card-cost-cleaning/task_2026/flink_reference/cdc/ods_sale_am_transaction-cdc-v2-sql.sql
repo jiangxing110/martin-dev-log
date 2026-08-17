@@ -31,7 +31,13 @@ CREATE TEMPORARY TABLE source_delete_ods_sale_am_transaction_result (
 -- 1. 源聚合（留在 PostgreSQL 内执行，复用原版聚合逻辑；只回传受影响 key 的聚合结果）
 -- ==============================================
 CREATE TEMPORARY TABLE source_ods_sale_am_transaction (
-    ods_sale_am_transaction_row STRING
+    sale_id STRING,
+    am_id STRING,
+    create_time TIMESTAMP(6),
+    update_time TIMESTAMP(6),
+    delete_time TIMESTAMP(6),
+    remarks STRING,
+    version BIGINT
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
@@ -45,7 +51,9 @@ UNION ALL
 SELECT sar."createTime",sar."deleteTime",sar."salesId",sar."amId",account.id as "accountId"   
 FROM account
 INNER JOIN "salesAccountRelation" as sar ON sar."accountId"::UUID=account."parentAccountId"::UUID
-        WHERE (sar."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."createTime" < CURRENT_DATE) OR (sar."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."deleteTime" < CURRENT_DATE)
+where account."parentAccountId" !='00000000-0000-0000-0000-000000000000'   
+) AS sar ON tr."accountId" :: UUID = sar."accountId" :: UUID AND tr."createTime" >= sar."createTime" AND ( tr."createTime" <= sar."deleteTime" OR sar."deleteTime" IS NULL )
+        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (sar."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."deleteTime" < CURRENT_DATE)
     )
     SELECT sar."salesId" AS sale_id, sar."amId" AS am_id, tr."createTime" as "create_time", NOW( ) AS update_time, -- 默认当前时间
         NULL AS delete_time, -- 逻辑删除字段，默认 NULL
@@ -58,11 +66,11 @@ FROM "salesAccountRelation" as sar
 UNION ALL
 SELECT sar."createTime",sar."deleteTime",sar."salesId",sar."amId",account.id as "accountId"   
 FROM account
-INNER JOIN "salesAccountRelation" as sar ON sar."accountId"::UUID=account."parentAccountId"::UUID s
+INNER JOIN "salesAccountRelation" as sar ON sar."accountId"::UUID=account."parentAccountId"::UUID
+where account."parentAccountId" !='00000000-0000-0000-0000-000000000000'   
+) AS sar ON tr."accountId" :: UUID = sar."accountId" :: UUID AND tr."createTime" >= sar."createTime" AND ( tr."createTime" <= sar."deleteTime" OR sar."deleteTime" IS NULL )
     JOIN affected a ON (tr.ID) IS NOT DISTINCT FROM a.k0
-    WHERE account."parentAccountId" !='00000000-0000-0000-0000-000000000000'   
-) AS sar ON tr."accountId" :: UUID = sar."accountId" :: UUID AND tr."createTime" >= sar."createTime" AND ( tr."createTime" <= sar."deleteTime" OR sar."deleteTime" IS NULL ) 
-WHERE tr."deleteTime" IS NULL) AS src',
+    WHERE tr."deleteTime" IS NULL) AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

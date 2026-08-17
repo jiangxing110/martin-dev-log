@@ -28,20 +28,36 @@ CREATE TEMPORARY TABLE source_delete_dws_qbit_card_transaction_extend_result (
 );
 
 CREATE TEMPORARY TABLE source_dws_qbit_card_transaction_extend (
-    dws_qbit_card_transaction_extend_row STRING
+    account_id STRING,
+    provider STRING,
+    bin STRING,
+    business_type STRING,
+    status STRING,
+    settle_amount DECIMAL(20,4),
+    transaction_currency STRING,
+    country STRING,
+    transaction_count BIGINT,
+    fx_fee DECIMAL(20,4),
+    atm_fee DECIMAL(20,4),
+    apple_pay_fee DECIMAL(20,4),
+    settle_fee DECIMAL(20,4),
+    create_date DATE,
+    version BIGINT,
+    create_time TIMESTAMP(6),
+    update_time TIMESTAMP(6)
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT tr."accountId" AS "account_id" AS k0, tr."provider" AS "provider" AS k1, qc."firstSix" AS "bin" AS k2, tr."businessType" AS k3, tr."status" AS "status" AS k4, tr."transactionCurrency" AS "transaction_currency" AS k5, tr."specialSourceData"->>'country' AS "country" AS k6, CURRENT_DATE AS k7
+        SELECT DISTINCT tr."accountId" AS k0, tr."provider" AS k1, qc."firstSix" AS k2, tr."businessType" AS k3, tr."status" AS k4, tr."transactionCurrency" AS k5, tr."specialSourceData"->>'country' AS k6, DATE(tr."createTime") AS k7
         FROM "qbit_card_transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
-        WHERE FALSE
+        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)
     )
     SELECT tr."accountId" AS "account_id", tr."provider" AS "provider", qc."firstSix" AS "bin", tr."businessType", tr."status" AS "status", COALESCE(SUM(tr."settleAmount"), 0) AS "settle_amount", tr."transactionCurrency" AS "transaction_currency", tr."specialSourceData"->>'country' AS "country", COUNT(*) AS "transaction_count", COALESCE(SUM((tr."specialSourceData"->>'markupFee')::numeric), 0) AS "fx_fee", COALESCE(SUM(CASE WHEN tr.remarks LIKE '%ATM取现费' THEN fee::numeric ELSE 0 END), 0) AS "atm_fee", COALESCE(SUM((tr."specialSourceData"->>'applePayFee')::numeric), 0) AS "apple_pay_fee", COALESCE(SUM((tr."specialSourceData"->>'settleFee')::numeric), 0) AS "settle_fee", TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
     FROM "qbit_card_transaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" s
-    JOIN affected a ON (tr."accountId" AS "account_id") IS NOT DISTINCT FROM a.k0 AND (tr."provider" AS "provider") IS NOT DISTINCT FROM a.k1 AND (qc."firstSix" AS "bin") IS NOT DISTINCT FROM a.k2 AND (tr."businessType") IS NOT DISTINCT FROM a.k3 AND (tr."status" AS "status") IS NOT DISTINCT FROM a.k4 AND (tr."transactionCurrency" AS "transaction_currency") IS NOT DISTINCT FROM a.k5 AND (tr."specialSourceData"->>'country' AS "country") IS NOT DISTINCT FROM a.k6 AND (CURRENT_DATE) IS NOT DISTINCT FROM a.k7
+LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
+    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."provider") IS NOT DISTINCT FROM a.k1 AND (qc."firstSix") IS NOT DISTINCT FROM a.k2 AND (tr."businessType") IS NOT DISTINCT FROM a.k3 AND (tr."status") IS NOT DISTINCT FROM a.k4 AND (tr."transactionCurrency") IS NOT DISTINCT FROM a.k5 AND (tr."specialSourceData"->>'country') IS NOT DISTINCT FROM a.k6 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k7
     WHERE tr."deleteTime" IS NULL
     GROUP BY tr."accountId", tr."provider", qc."firstSix", tr."businessType", tr."status",
   tr."transactionCurrency", tr."specialSourceData"->>'country',TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE) AS src',

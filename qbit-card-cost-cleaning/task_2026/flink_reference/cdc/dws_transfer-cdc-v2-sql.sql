@@ -31,18 +31,30 @@ CREATE TEMPORARY TABLE source_delete_dws_transfer_result (
 -- 1. 源聚合（留在 PostgreSQL 内执行，复用原版聚合逻辑；只回传受影响 key 的聚合结果）
 -- ==============================================
 CREATE TEMPORARY TABLE source_dws_transfer (
-    dws_transfer_row STRING
+    account_id STRING,
+    business_type_detail STRING,
+    business_type_code STRING,
+    settlement_currency STRING,
+    status STRING,
+    usd_amount DECIMAL(20,4),
+    transaction_count BIGINT,
+    fee DECIMAL(20,4),
+    currency STRING,
+    create_date DATE,
+    version BIGINT,
+    create_time TIMESTAMP(6),
+    update_time TIMESTAMP(6)
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT tr."accountId" AS k0, tr."businessTypeDetail" AS k1, tr."businessCode" AS k2, tr."settlementCurrency" AS k3, CURRENT_DATE AS k4, tr."status" AS k5, "currency" AS k6
+        SELECT DISTINCT tr."accountId" AS k0, tr."businessTypeDetail" AS k1, tr."businessCode" AS k2, tr."settlementCurrency" AS k3, DATE(tr."createTime") AS k4, tr."status" AS k5, "currency" AS k6
         FROM "transfer" AS tr
-        WHERE FALSE
+        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)
     )
     SELECT tr."accountId", tr."businessTypeDetail", tr."businessCode", tr."settlementCurrency", tr."status", COALESCE(SUM(tr."usdAmount"), 0) AS usd_amount, COUNT(*) AS transaction_count, COALESCE(SUM("fee" * "usdRate"), 0) AS fee, "currency", TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date, 1 AS version, NOW() AS create_time, NOW() AS update_time
-    FROM "transfer" AS tr s
-    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessTypeDetail") IS NOT DISTINCT FROM a.k1 AND (tr."businessCode") IS NOT DISTINCT FROM a.k2 AND (tr."settlementCurrency") IS NOT DISTINCT FROM a.k3 AND (CURRENT_DATE) IS NOT DISTINCT FROM a.k4 AND (tr."status") IS NOT DISTINCT FROM a.k5 AND ("currency") IS NOT DISTINCT FROM a.k6
+    FROM "transfer" AS tr
+    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessTypeDetail") IS NOT DISTINCT FROM a.k1 AND (tr."businessCode") IS NOT DISTINCT FROM a.k2 AND (tr."settlementCurrency") IS NOT DISTINCT FROM a.k3 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k4 AND (tr."status") IS NOT DISTINCT FROM a.k5 AND ("currency") IS NOT DISTINCT FROM a.k6
     WHERE tr."deleteTime" IS NULL
     GROUP BY tr."accountId", tr."businessTypeDetail",tr."businessCode", tr."settlementCurrency", create_date, status, "currency") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',

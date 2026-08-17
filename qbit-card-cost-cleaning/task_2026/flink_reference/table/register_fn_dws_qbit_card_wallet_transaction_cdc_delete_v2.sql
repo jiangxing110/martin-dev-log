@@ -14,14 +14,14 @@ BEGIN
     IF p_start IS NULL THEN
         -- ===== CDC 模式：按唯一业务键精准删（受影响 key 集合，不再按整天删）=====
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM CURRENT_DATE)::INT
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."createTime"))::INT
             FROM "qbitCardWalletTransaction" AS tr
-            WHERE FALSE
+            WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format('SELECT COUNT(*) FROM public.dws_qbit_card_wallet_transaction_%s WHERE (a, c, c, o, u, n, t, _, i, d, ,,  , b, u, s, i, n, e, s, s, _, t, y, p, e, ,,  , c, r, e, a, t, e, _, d, a, t, e, ,,  , s, t, a, t, u, s) IN (SELECT DISTINCT tr."accountId", tr."businessType", CURRENT_DATE, tr."status" FROM "qbitCardWalletTransaction" AS tr WHERE FALSE)', v_year) INTO v_n;
+                EXECUTE format('SELECT COUNT(*) FROM public.dws_qbit_card_wallet_transaction_%s WHERE (account_id, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId", tr."businessType", DATE(tr."createTime"), tr."status" FROM "qbitCardWalletTransaction" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))', v_year) INTO v_n;
             ELSE
-                EXECUTE format('DELETE FROM public.dws_qbit_card_wallet_transaction_%s WHERE (a, c, c, o, u, n, t, _, i, d, ,,  , b, u, s, i, n, e, s, s, _, t, y, p, e, ,,  , c, r, e, a, t, e, _, d, a, t, e, ,,  , s, t, a, t, u, s) IN (SELECT DISTINCT tr."accountId", tr."businessType", CURRENT_DATE, tr."status" FROM "qbitCardWalletTransaction" AS tr WHERE FALSE)', v_year);
+                EXECUTE format('DELETE FROM public.dws_qbit_card_wallet_transaction_%s WHERE (account_id, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId", tr."businessType", DATE(tr."createTime"), tr."status" FROM "qbitCardWalletTransaction" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))', v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;

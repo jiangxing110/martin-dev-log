@@ -14,7 +14,7 @@ BEGIN
     IF p_start IS NULL THEN
         -- ===== CDC 模式：按唯一业务键精准删（受影响 key 集合，不再按整天删）=====
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM DATE(sar."createTime"))::INT
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."createTime"))::INT
             FROM "Transaction" tr
 LEFT JOIN (
 select sar."createTime",sar."deleteTime",sar."salesId",sar."amId",sar."accountId" as "accountId"   
@@ -23,26 +23,32 @@ UNION ALL
 SELECT sar."createTime",sar."deleteTime",sar."salesId",sar."amId",account.id as "accountId"   
 FROM account
 INNER JOIN "salesAccountRelation" as sar ON sar."accountId"::UUID=account."parentAccountId"::UUID
-            WHERE (sar."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."createTime" < CURRENT_DATE) OR (sar."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."deleteTime" < CURRENT_DATE)
+where account."parentAccountId" !='00000000-0000-0000-0000-000000000000'   
+) AS sar ON tr."accountId" :: UUID = sar."accountId" :: UUID AND tr."createTime" >= sar."createTime" AND ( tr."createTime" <= sar."deleteTime" OR sar."deleteTime" IS NULL )
+            WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (sar."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."deleteTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format('SELECT COUNT(*) FROM public.ods_sale_am_transaction_%s WHERE (t, r, a, n, s, a, c, t, i, o, n, _, i, d) IN (SELECT DISTINCT tr.ID FROM "Transaction" tr
+                EXECUTE format('SELECT COUNT(*) FROM public.ods_sale_am_transaction_%s WHERE (transaction_id) IN (SELECT DISTINCT tr.ID FROM "Transaction" tr
 LEFT JOIN (
 select sar."createTime",sar."deleteTime",sar."salesId",sar."amId",sar."accountId" as "accountId"   
 FROM "salesAccountRelation" as sar
 UNION ALL
 SELECT sar."createTime",sar."deleteTime",sar."salesId",sar."amId",account.id as "accountId"   
 FROM account
-INNER JOIN "salesAccountRelation" as sar ON sar."accountId"::UUID=account."parentAccountId"::UUID WHERE (sar."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."createTime" < CURRENT_DATE) OR (sar."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."deleteTime" < CURRENT_DATE))', v_year) INTO v_n;
+INNER JOIN "salesAccountRelation" as sar ON sar."accountId"::UUID=account."parentAccountId"::UUID
+where account."parentAccountId" !='00000000-0000-0000-0000-000000000000'   
+) AS sar ON tr."accountId" :: UUID = sar."accountId" :: UUID AND tr."createTime" >= sar."createTime" AND ( tr."createTime" <= sar."deleteTime" OR sar."deleteTime" IS NULL ) WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (sar."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."deleteTime" < CURRENT_DATE))', v_year) INTO v_n;
             ELSE
-                EXECUTE format('DELETE FROM public.ods_sale_am_transaction_%s WHERE (t, r, a, n, s, a, c, t, i, o, n, _, i, d) IN (SELECT DISTINCT tr.ID FROM "Transaction" tr
+                EXECUTE format('DELETE FROM public.ods_sale_am_transaction_%s WHERE (transaction_id) IN (SELECT DISTINCT tr.ID FROM "Transaction" tr
 LEFT JOIN (
 select sar."createTime",sar."deleteTime",sar."salesId",sar."amId",sar."accountId" as "accountId"   
 FROM "salesAccountRelation" as sar
 UNION ALL
 SELECT sar."createTime",sar."deleteTime",sar."salesId",sar."amId",account.id as "accountId"   
 FROM account
-INNER JOIN "salesAccountRelation" as sar ON sar."accountId"::UUID=account."parentAccountId"::UUID WHERE (sar."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."createTime" < CURRENT_DATE) OR (sar."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."deleteTime" < CURRENT_DATE))', v_year);
+INNER JOIN "salesAccountRelation" as sar ON sar."accountId"::UUID=account."parentAccountId"::UUID
+where account."parentAccountId" !='00000000-0000-0000-0000-000000000000'   
+) AS sar ON tr."accountId" :: UUID = sar."accountId" :: UUID AND tr."createTime" >= sar."createTime" AND ( tr."createTime" <= sar."deleteTime" OR sar."deleteTime" IS NULL ) WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (sar."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND sar."deleteTime" < CURRENT_DATE))', v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;

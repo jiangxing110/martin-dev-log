@@ -28,20 +28,32 @@ CREATE TEMPORARY TABLE source_delete_dws_qbit_card_transaction_result (
 );
 
 CREATE TEMPORARY TABLE source_dws_qbit_card_transaction (
-    dws_qbit_card_transaction_row STRING
+    account_id STRING,
+    business_type STRING,
+    status STRING,
+    provider STRING,
+    bin STRING,
+    origin_amount DECIMAL(20,4),
+    settle_amount DECIMAL(20,4),
+    transaction_count BIGINT,
+    fee DECIMAL(20,4),
+    create_date DATE,
+    version BIGINT,
+    create_time TIMESTAMP(6),
+    update_time TIMESTAMP(6)
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT tr."accountId" AS k0, tr."provider" AS k1, qc."firstSix" AS "bin" AS k2, tr."businessType" AS k3, CURRENT_DATE AS k4, tr."status" AS k5
+        SELECT DISTINCT tr."accountId" AS k0, tr."provider" AS k1, qc."firstSix" AS k2, tr."businessType" AS k3, DATE(tr."createTime") AS k4, tr."status" AS k5
         FROM "qbit_card_transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
-        WHERE FALSE
+        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)
     )
     SELECT tr."accountId", tr."businessType", tr."status", tr."provider", qc."firstSix" AS "bin", COALESCE(SUM(tr."originalAmount"), 0) AS origin_amount, COALESCE(SUM(tr."settleAmount"), 0) AS settle_amount, COUNT(*) AS transaction_count, COALESCE(SUM(tr."fee"), 0) AS fee, TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date, 1 AS version, NOW() AS create_time, NOW() AS update_time
     FROM "qbit_card_transaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" s
-    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."provider") IS NOT DISTINCT FROM a.k1 AND (qc."firstSix" AS "bin") IS NOT DISTINCT FROM a.k2 AND (tr."businessType") IS NOT DISTINCT FROM a.k3 AND (CURRENT_DATE) IS NOT DISTINCT FROM a.k4 AND (tr."status") IS NOT DISTINCT FROM a.k5
+LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
+    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."provider") IS NOT DISTINCT FROM a.k1 AND (qc."firstSix") IS NOT DISTINCT FROM a.k2 AND (tr."businessType") IS NOT DISTINCT FROM a.k3 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k4 AND (tr."status") IS NOT DISTINCT FROM a.k5
     WHERE tr."deleteTime" IS NULL
     GROUP BY tr."accountId", tr."provider", qc."firstSix", tr."businessType", create_date, tr."status") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',

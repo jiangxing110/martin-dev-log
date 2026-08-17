@@ -14,17 +14,17 @@ BEGIN
     IF p_start IS NULL THEN
         -- ===== CDC 模式：按唯一业务键精准删（受影响 key 集合，不再按整天删）=====
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM CURRENT_DATE)::INT
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."createTime"))::INT
             FROM "qbit_card_transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
-            WHERE FALSE
+            WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format('SELECT COUNT(*) FROM public.dws_qbit_card_transaction_extend_%s WHERE (a, c, c, o, u, n, t, _, i, d, ,,  , p, r, o, v, i, d, e, r, ,,  , b, i, n, ,,  , b, u, s, i, n, e, s, s, _, t, y, p, e, ,,  , s, t, a, t, u, s, ,,  , t, r, a, n, s, a, c, t, i, o, n, _, c, u, r, r, e, n, c, y, ,,  , c, o, u, n, t, r, y, ,,  , c, r, e, a, t, e, _, d, a, t, e) IN (SELECT DISTINCT tr."accountId" AS "account_id", tr."provider" AS "provider", qc."firstSix" AS "bin", tr."businessType", tr."status" AS "status", tr."transactionCurrency" AS "transaction_currency", tr."specialSourceData"->>'country' AS "country", CURRENT_DATE FROM "qbit_card_transaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" WHERE FALSE)', v_year) INTO v_n;
+                EXECUTE format('SELECT COUNT(*) FROM public.dws_qbit_card_transaction_extend_%s WHERE (account_id, provider, bin, business_type, status, transaction_currency, country, create_date) IN (SELECT DISTINCT tr."accountId", tr."provider", qc."firstSix", tr."businessType", tr."status", tr."transactionCurrency", tr."specialSourceData"->>'country', DATE(tr."createTime") FROM "qbit_card_transaction" AS tr
+LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))', v_year) INTO v_n;
             ELSE
-                EXECUTE format('DELETE FROM public.dws_qbit_card_transaction_extend_%s WHERE (a, c, c, o, u, n, t, _, i, d, ,,  , p, r, o, v, i, d, e, r, ,,  , b, i, n, ,,  , b, u, s, i, n, e, s, s, _, t, y, p, e, ,,  , s, t, a, t, u, s, ,,  , t, r, a, n, s, a, c, t, i, o, n, _, c, u, r, r, e, n, c, y, ,,  , c, o, u, n, t, r, y, ,,  , c, r, e, a, t, e, _, d, a, t, e) IN (SELECT DISTINCT tr."accountId" AS "account_id", tr."provider" AS "provider", qc."firstSix" AS "bin", tr."businessType", tr."status" AS "status", tr."transactionCurrency" AS "transaction_currency", tr."specialSourceData"->>'country' AS "country", CURRENT_DATE FROM "qbit_card_transaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" WHERE FALSE)', v_year);
+                EXECUTE format('DELETE FROM public.dws_qbit_card_transaction_extend_%s WHERE (account_id, provider, bin, business_type, status, transaction_currency, country, create_date) IN (SELECT DISTINCT tr."accountId", tr."provider", qc."firstSix", tr."businessType", tr."status", tr."transactionCurrency", tr."specialSourceData"->>'country', DATE(tr."createTime") FROM "qbit_card_transaction" AS tr
+LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))', v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;

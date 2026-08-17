@@ -94,19 +94,17 @@ def parse_block(block):
     # SELECT 体（到 ON CONFLICT 之前）
     after = block[sel_idx:]
     sel_body = after.split("ON CONFLICT")[0].strip()
-    # FROM..JOIN
-    from_m = re.search(r'\bFROM\b\s+(.*?)(?:\bWHERE\b|\bGROUP BY\b|$)', sel_body, re.DOTALL | re.IGNORECASE)
+    # FROM..JOIN（关键字大小写敏感，避免误匹配标识符中的 FROM/WHERE 等）
+    from_m = re.search(r'\bFROM\b\s+(.*?)(?:\bWHERE\b|\bGROUP BY\b|$)', sel_body, re.DOTALL)
     from_join = from_m.group(1).strip() if from_m else ""
     # WHERE
-    where_m = re.search(r'\bWHERE\b\s+(.*?)(?:\bGROUP BY\b|$)', sel_body, re.DOTALL | re.IGNORECASE)
+    where_m = re.search(r'\bWHERE\b\s+(.*?)(?:\bGROUP BY\b|$)', sel_body, re.DOTALL)
     where = where_m.group(1).strip() if where_m else ""
     # GROUP BY
-    gb_m = re.search(r'\bGROUP BY\b\s+(.*)$', sel_body, re.DOTALL | re.IGNORECASE)
+    gb_m = re.search(r'\bGROUP BY\b\s+(.*?)(?:\bON CONFLICT\b|;|$)', sel_body, re.DOTALL)
     group_by = gb_m.group(1).strip() if gb_m else None
-    # SELECT 列表（FROM 之前）
-    sel_list = sel_body[len("SELECT"):sel_body.upper().index("FROM")].strip()
-    # 去掉开头可能的换行
-    sel_list = sel_list.strip()
+    # SELECT 列表（FROM 之前）；sel_body 保持原大小写，FROM 关键字全大写
+    sel_list = sel_body[len("SELECT"):sel_body.index("FROM")].strip()
     exprs = split_args(sel_list)
     return {
         "cols": cols,
@@ -119,31 +117,43 @@ def parse_block(block):
 # ---------------------------------------------------------------------------
 # 业务键推导
 # ---------------------------------------------------------------------------
+def _norm(s):
+    """归一化：去引号、去多余空格、小写，便于 GROUP BY 列引用与 SELECT 表达式对齐。"""
+    return s.replace('"', '').replace("'", "").strip().lower()
+
+def _strip_alias(e):
+    """去掉 SELECT 表达式尾部 AS 别名（兼容带引号：AS "bin" / AS bin）。"""
+    return re.sub(r'\s+AS\s+"?[\w]+"?\s*$', '', e, flags=re.IGNORECASE).strip()
+
 def derive_business_keys(p):
     cols, exprs, group_by = p["cols"], p["exprs"], p["group_by"]
     if group_by is None:
         return None  # ODS
-    gb_tokens = [t.strip() for t in split_args(group_by)]
+    group_by = group_by.rstrip(";").strip()
+    gb_tokens = [t.strip().rstrip(";") for t in split_args(group_by)]
     keys = []
     for tok in gb_tokens:
-        if tok in cols:
-            if tok not in keys:
-                keys.append(tok)
+        ntok = _norm(tok)
+        if ntok in [_norm(c) for c in cols]:
+            c = cols[[_norm(c) for c in cols].index(ntok)]
+            if c not in keys:
+                keys.append(c)
             continue
         # 匹配 SELECT 表达式（去掉尾部 AS 别名）
         matched = False
         for i, e in enumerate(exprs):
-            e0 = re.sub(r'\s+AS\s+\w+\s*$', '', e, flags=re.IGNORECASE).strip()
-            if e0 == tok or tok in e0:
+            e0 = _norm(_strip_alias(e))
+            if e0 == ntok or ntok in e0:
                 c = cols[i]
                 if c not in keys:
                     keys.append(c)
                 matched = True
                 break
         if not matched:
-            # 兜底：当作列名
-            if tok not in keys:
-                keys.append(tok)
+            # 兜底：当作列名（已是 DWS 列名则直接用，否则保留 token 去掉引号）
+            fb = tok.replace('"', '').strip()
+            if fb not in keys:
+                keys.append(fb)
     return keys
 
 # ---------------------------------------------------------------------------
@@ -191,7 +201,7 @@ def dws_key_exprs(base, keys, p, time_cols):
     cols, exprs = p["cols"], p["exprs"]
     expr_by_col = {}
     for i, c in enumerate(cols):
-        expr_by_col[c] = re.sub(r'\s+AS\s+\w+\s*$', '', exprs[i], flags=re.IGNORECASE).strip()
+        expr_by_col[c] = _strip_alias(exprs[i])
     pg_exprs = []
     for k in keys:
         if k == "create_date":
@@ -244,9 +254,13 @@ SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 """
 
-def jdbc_src_block(base, pg_subquery):
+def src_cols_decl(cols):
+    """JDBC source 输出列声明（聚合结果列，不含 id）。"""
+    return ",\n    ".join(f"{c} {flink_type(c)}" for c in cols[1:])
+
+def jdbc_src_block(base, cols, pg_subquery):
     return f"""CREATE TEMPORARY TABLE source_{base} (
-    {base}_row STRING
+    {src_cols_decl(cols)}
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${{secret_values.ADB_PG_VPC_HOSTNAME}}:${{secret_values.ADB_PG_VPC_PORT}}/${{secret_values.ADB_PG_DATABASE}}?stringtype=unspecified',
@@ -257,8 +271,8 @@ def jdbc_src_block(base, pg_subquery):
     'scan.fetch-size' = '2000'
 );"""
 
-def delete_fn_block(base, dws_keys, pg_key_exprs, from_join, change_win, create_expr):
-    keycols = dws_keys
+def delete_fn_block(base, keys, pg_key_exprs, from_join, change_win, create_expr):
+    keycols = keys
     n = len(keycols)
     # IN 子查询：左侧 DWS 列，右侧源表达式，顺序一致
     left = ", ".join(keycols)
@@ -362,7 +376,7 @@ CREATE TEMPORARY TABLE source_delete_{base}_result (
 -- 1. 源聚合（留在 PostgreSQL 内执行，复用原版聚合逻辑；只回传受影响 key 的聚合结果）
 -- ==============================================
 CREATE TEMPORARY TABLE source_{base} (
-    {base}_row STRING
+    {src_cols_decl(cols)}
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${{secret_values.ADB_PG_VPC_HOSTNAME}}:${{secret_values.ADB_PG_VPC_PORT}}/${{secret_values.ADB_PG_DATABASE}}?stringtype=unspecified',
@@ -437,7 +451,7 @@ CREATE TEMPORARY TABLE source_delete_{base}_result (
 );
 
 CREATE TEMPORARY TABLE source_{base} (
-    {base}_row STRING
+    {src_cols_decl(cols)}
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${{secret_values.ADB_PG_VPC_HOSTNAME}}:${{secret_values.ADB_PG_VPC_PORT}}/${{secret_values.ADB_PG_DATABASE}}?stringtype=unspecified',
@@ -493,7 +507,7 @@ def main():
             if not keys:
                 print(f"[WARN] {base}: 未推导到业务键，跳过", file=sys.stderr)
                 continue
-        time_cols = find_time_cols(p["from_join"])
+        time_cols = find_time_cols(block)
         change_win = change_window(time_cols)
         where_no_window = remove_create_window(p["where"])
         create_expr = create_date_expr(time_cols)
@@ -511,7 +525,7 @@ def main():
         WHERE {change_win}
     )
     SELECT {agg_select}
-    FROM {p['from_join']} s
+    FROM {p['from_join']}
     JOIN affected a ON {" AND ".join(f"({pg_key_exprs.split(', ')[i]}) IS NOT DISTINCT FROM a.k{i}" for i in range(len(keys)))}
     WHERE {'TRUE' if not where_no_window else where_no_window}"""
         else:
@@ -522,23 +536,31 @@ def main():
         WHERE {change_win}
     )
     SELECT {agg_select}
-    FROM {p['from_join']} s
+    FROM {p['from_join']}
     JOIN affected a ON {key_eq}
     WHERE {'TRUE' if not where_no_window else where_no_window}
     GROUP BY {p['group_by']}"""
+
+        # 嵌套子查询 / 非标准 FROM 的表：原 SELECT 的 FROM 含子查询，
+        # 通用解析对“变更窗口引用源别名”可能失效，打上 TODO 标记由人工复核。
+        fj_up = p["from_join"].upper()
+        nested = fj_up.strip().startswith("(") or fj_up.count(" FROM ") > 1 or " FROM (" in fj_up
+        todo = (f"-- [TODO] {base} 检测到嵌套/非标准 FROM（{p['from_join'].strip()[:40]}...），\n"
+                f"--        删除函数的变更窗口与聚合子查询的源别名引用可能需要人工校准，上线前务必核对。\n"
+                if nested else "")
 
         # 写文件
         tdir = os.path.join(OUT, "table"); cdir = os.path.join(OUT, "cdc"); bdir = os.path.join(OUT, "batch")
         for d in (tdir, cdir, bdir):
             os.makedirs(d, exist_ok=True)
         with open(os.path.join(tdir, f"{base}_ddl.sql"), "w", encoding="utf-8") as f:
-            f.write(f"-- {base} DDL（IF NOT EXISTS，不重建现有表）\n" + ddl_block(base, p["cols"]))
+            f.write(todo + f"-- {base} DDL（IF NOT EXISTS，不重建现有表）\n" + ddl_block(base, p["cols"]))
         with open(os.path.join(tdir, f"register_fn_{base}_cdc_delete_v2.sql"), "w", encoding="utf-8") as f:
-            f.write(delete_fn_block(base, dws_keys, pg_key_exprs, p["from_join"], change_win, create_expr))
+            f.write(todo + delete_fn_block(base, keys, pg_key_exprs, p["from_join"], change_win, create_expr))
         with open(os.path.join(cdir, f"{base}-cdc-v2-sql.sql"), "w", encoding="utf-8") as f:
-            f.write(cdc_block(base, p["cols"], keys, pg_subquery))
+            f.write(todo + cdc_block(base, p["cols"], keys, pg_subquery))
         with open(os.path.join(bdir, f"batch-{base}-v2-sql.sql"), "w", encoding="utf-8") as f:
-            f.write(batch_block(base, p["cols"], keys, p["from_join"], where_no_window, pg_key_exprs, create_expr, pg_subquery))
+            f.write(todo + batch_block(base, p["cols"], keys, p["from_join"], where_no_window, pg_key_exprs, create_expr, pg_subquery))
         print(f"[OK] {section:>2} {base:<45} keys={dws_keys}")
 
 if __name__ == "__main__":
