@@ -1,24 +1,37 @@
-1.页面不好看
-2.
-
-INSERT INTO "public"."accountFee" ( "remarks", "createTime", "updateTime", "deleteTime", "version", "accountId", "feeType", "rate", "mathType", "startTime", "endTime", "type", "low", "high", "threshold", "childFeeType", "raw", "provider", "providerField", "enable", "collectionRate") 
-VALUES ('', now(), now(), NULL, 1, '00000000-0000-0000-0000-000000000000', 'DeclineFeeAPIAccount_Caas', '0', 'Count', '2026-03-20 00:00:00+08', '2099-02-01 23:59:59+08', 'Tiered', '0', '20', NULL, 'MasterAccount', NULL, 'Corpay', NULL, 't', '0');
-INSERT INTO "public"."accountFee" ( "remarks", "createTime", "updateTime", "deleteTime", "version", "accountId", "feeType", "rate", "mathType", "startTime", "endTime", "type", "low", "high", "threshold", "childFeeType", "raw", "provider", "providerField", "enable", "collectionRate") 
-VALUES ('', now(), now(), NULL, 1, '00000000-0000-0000-0000-000000000000', 'DeclineFeeAPIAccount_Caas', '0.5', 'Count', '2026-03-20 00:00:00+08', '2099-02-01 23:59:59+08', 'Tiered', '20', '100', NULL, 'MasterAccount', NULL, 'Corpay', NULL, 't', '0');
-
-INSERT INTO "public"."accountFee" ( "remarks", "createTime", "updateTime", "deleteTime", "version", "accountId", "feeType", "rate", "mathType", "startTime", "endTime", "type", "low", "high", "threshold", "childFeeType", "raw", "provider", "providerField", "enable", "collectionRate") 
-VALUES ('', now(), now(), NULL, 1, '00000000-0000-0000-0000-000000000000', 'DeclineFeeAPIAccount_Caas', '0', 'Count', '2026-03-20 00:00:00+08', '2099-02-01 23:59:59+08', 'Tiered', '0', '20', NULL, 'MasterAccount', NULL, 'BlueBanc', NULL, 't', '0');
-INSERT INTO "public"."accountFee" ( "remarks", "createTime", "updateTime", "deleteTime", "version", "accountId", "feeType", "rate", "mathType", "startTime", "endTime", "type", "low", "high", "threshold", "childFeeType", "raw", "provider", "providerField", "enable", "collectionRate") 
-VALUES ('', now(), now(), NULL, 1, '00000000-0000-0000-0000-000000000000', 'DeclineFeeAPIAccount_Caas', '0.5', 'Count', '2026-03-20 00:00:00+08', '2099-02-01 23:59:59+08', 'Tiered', '20', '100', NULL, 'MasterAccount', NULL, 'BlueBanc', NULL, 't', '0');
-
-INSERT INTO "public"."accountFee" ( "remarks", "createTime", "updateTime", "deleteTime", "version", "accountId", "feeType", "rate", "mathType", "startTime", "endTime", "type", "low", "high", "threshold", "childFeeType", "raw", "provider", "providerField", "enable", "collectionRate") 
-VALUES ('', now(), now(), NULL, 1, '00000000-0000-0000-0000-000000000000', 'DeclineFeeAPIAccount_Caas', '0', 'Count', '2026-03-20 00:00:00+08', '2099-02-01 23:59:59+08', 'Tiered', '0', '20', NULL, 'MasterAccount', NULL, 'QbitIssuing', NULL, 't', '0');
-INSERT INTO "public"."accountFee" ( "remarks", "createTime", "updateTime", "deleteTime", "version", "accountId", "feeType", "rate", "mathType", "startTime", "endTime", "type", "low", "high", "threshold", "childFeeType", "raw", "provider", "providerField", "enable", "collectionRate") 
-VALUES ('', now(), now(), NULL, 1, '00000000-0000-0000-0000-000000000000', 'DeclineFeeAPIAccount_Caas', '0.5', 'Count', '2026-03-20 00:00:00+08', '2099-02-01 23:59:59+08', 'Tiered', '20', '100', NULL, 'MasterAccount', NULL, 'QbitIssuing', NULL, 't', '0');
-
-INSERT INTO "public"."accountFee" ( "remarks", "createTime", "updateTime", "deleteTime", "version", "accountId", "feeType", "rate", "mathType", "startTime", "endTime", "type", "low", "high", "threshold", "childFeeType", "raw", "provider", "providerField", "enable", "collectionRate") 
-VALUES ('', now(), now(), NULL, 1, '00000000-0000-0000-0000-000000000000', 'DeclineFeeAPIAccount_Caas', '0', 'Count', '2026-03-20 00:00:00+08', '2099-02-01 23:59:59+08', 'Tiered', '0', '20', NULL, 'MasterAccount', NULL, 'I2c', NULL, 't', '0');
-INSERT INTO "public"."accountFee" ( "remarks", "createTime", "updateTime", "deleteTime", "version", "accountId", "feeType", "rate", "mathType", "startTime", "endTime", "type", "low", "high", "threshold", "childFeeType", "raw", "provider", "providerField", "enable", "collectionRate") 
-VALUES ('', now(), now(), NULL, 1, '00000000-0000-0000-0000-000000000000', 'DeclineFeeAPIAccount_Caas', '0.5', 'Count', '2026-03-20 00:00:00+08', '2099-02-01 23:59:59+08', 'Tiered', '20', '100', NULL, 'MasterAccount', NULL, 'I2c', NULL, 't', '0');
-
-
+sql1
+2026-08-01 00:00:00+08	Master	DOM	2003
+2026-08-01 00:00:00+08	Master	INT	1538
+2026-08-01 00:00:00+08	VISA	DOM	388
+2026-08-01 00:00:00+08	VISA	INT	181
+2026-08-02 00:00:00+08	Master	INT	5037
+2026-08-02 00:00:00+08	Master	DOM	1867
+2026-08-02 00:00:00+08	VISA	INT	576
+2026-08-02 00:00:00+08	VISA	DOM	378
+2026-08-03 00:00:00+08	Master	INT	1714
+2026-08-03 00:00:00+08	Master	DOM	295
+2026-08-03 00:00:00+08	VISA	INT	261
+2026-08-03 00:00:00+08	VISA	DOM	47
+2026-08-04 00:00:00+08	Master	INT	458
+2026-08-04 00:00:00+08	VISA	INT	58
+2026-08-04 00:00:00+08	Master	DOM	56
+2026-08-04 00:00:00+08	VISA	DOM	13
+2026-08-05 00:00:00+08	Master	INT	234
+2026-08-05 00:00:00+08	VISA	DOM	46
+2026-08-05 00:00:00+08	Master	DOM	33
+2026-08-05 00:00:00+08	VISA	INT	25
+2026-08-06 00:00:00+08	Master	INT	960
+2026-08-06 00:00:00+08	VISA	INT	22
+2026-08-06 00:00:00+08	Master	DOM	21
+2026-08-06 00:00:00+08	VISA	DOM	1
+2026-08-07 00:00:00+08	Master	INT	81
+2026-08-07 00:00:00+08	Master	DOM	16
+2026-08-07 00:00:00+08	VISA	DOM	3
+2026-08-07 00:00:00+08	VISA	INT	2
+2026-08-08 00:00:00+08	Master	INT	41
+2026-08-08 00:00:00+08	Master	DOM	7
+2026-08-09 00:00:00+08	Master	INT	13
+2026-08-09 00:00:00+08	Master	DOM	4
+2026-08-17 00:00:00+08	Master	DOM	107
+2026-08-17 00:00:00+08	Master	INT	1
+sql2
+not_in_dwm	16487

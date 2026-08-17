@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-12
+-- Updated Time:   2026-08-17 00:00:00
 -- Description:    BB v2 DWS 批量初始化/回刷
 -- 作业元信息：
 --   作业类型：批处理
@@ -898,6 +899,8 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     bb_channel_cashback_comm DECIMAL(20, 4),
     active_card_count        INT,
     total_net_amount         DECIMAL(20, 4),
+    cashback_rate            DECIMAL(20, 8),
+    cashback_income          DECIMAL(20, 4),
     cost_fixed_fee           DECIMAL(20, 4),
     special_fee_type         STRING,
     sale_id                  STRING,
@@ -955,6 +958,8 @@ SELECT
     b.bb_channel_cashback_comm,
     b.active_card_count,
     b.total_net_amount,
+    CAST(0.021195 AS DECIMAL(20, 8)) AS cashback_rate,
+    CAST(b.bb_rebate_base_amt * CAST(0.021195 AS DECIMAL(20, 8)) AS DECIMAL(20, 4)) AS cashback_income,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
     CAST(NULL AS STRING) AS special_fee_type,
     b.sale_id,

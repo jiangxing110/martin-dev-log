@@ -4,7 +4,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-12
--- Updated Time:   2026-08-06 01:03:20
+-- Updated Time:   2026-08-17 00:00:00
 -- Description:    Quantum BB v2 DWS CDC 按月重算写入 v2
 -- 作业元信息：
 --   作业类型：流处理 CDC
@@ -229,8 +229,8 @@ SELECT
     CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_int_clearing_vol,
     CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
     CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_int_clearing_vol,
-    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
-    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
+    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND transaction_type = 'authorization.clearing' AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
+    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND transaction_type = 'authorization.clearing' AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
     CAST(0 AS INT) AS active_card_count,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
     sale_id,
@@ -402,6 +402,8 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     bb_channel_cashback_comm DECIMAL(20, 4),
     active_card_count        INT,
     total_net_amount         DECIMAL(20, 4),
+    cashback_rate            DECIMAL(20, 8),
+    cashback_income          DECIMAL(20, 4),
     cost_fixed_fee           DECIMAL(20, 4),
     special_fee_type         STRING,
     sale_id                  STRING,
@@ -459,6 +461,8 @@ SELECT
     bb_channel_cashback_comm,
     active_card_count,
     total_net_amount,
+    CAST(0.021195 AS DECIMAL(20, 8)) AS cashback_rate,
+    CAST(bb_rebate_base_amt * CAST(0.021195 AS DECIMAL(20, 8)) AS DECIMAL(20, 4)) AS cashback_income,
     cost_fixed_fee,
     CAST(NULL AS STRING) AS special_fee_type,
     sale_id,
