@@ -40,6 +40,36 @@ ODS_KEYS = {
     "ods_sale_fund_profits_2026": ["fund_id"],
 }
 
+# sale 维度表：改为 qi 式「作用域(scope)删除 + 三通道变更窗口」
+# 作用域 = (scope_date, account_id)，覆盖该账户该日所有键变体(含 sale_id/am_id 扇出、status 变更)，
+# 先清后重算，彻底解决“pending 状态长期挂起后翻转”导致的陈旧/重复行问题。
+SALE_SET = {
+    "dws_sale_card_wallet_transaction",
+    "dws_sale_card_transaction",
+    "dws_sale_card_transaction_extend",
+    "dws_sale_card_group_transaction",
+    "dws_sale_transfer",
+    "dws_sale_transfer_extend",
+    "dws_sale_crypto_assets_transfers",
+    "dws_sale_open_card",
+    "dws_sale_physical_card",
+    "ods_sale_fund_profits",
+    "ods_sale_qbit_card",
+}
+# 各 sale 源表的主时间列(主别名统一为 tr)。
+# 注意：updateTime/update_time 在原 INSERT 块里从不出现在窗口条件中，但 qbit 系源表实际有该列；
+# 必须显式纳入变更窗口，才能捕获 status 翻转等长尾更新（否则陈旧行无法被清掉）。
+SALE_TIMECOLS = {
+    "qbitCardWalletTransaction": ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
+    "qbit_card_transaction":     ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
+    "qbitCardGroupTransaction":  ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
+    "transfer":                  ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
+    "crypto_assets_transfers":   ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
+    "qbitCard":                  ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
+    "Transaction":               ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
+    "fund_profits":              ('tr."create_time"', 'tr."update_time"', 'tr."delete_time"'),
+}
+
 # ---------------------------------------------------------------------------
 # 解析工具
 # ---------------------------------------------------------------------------
@@ -258,6 +288,46 @@ def create_date_expr(time_cols):
     c = time_cols.get("create")
     return f'DATE({c})' if c else 'CURRENT_DATE'
 
+def _extract_main_source(block):
+    """返回主查询第一个 FROM 的 (表名, 别名)。sale 表主别名统一为 tr。"""
+    m = re.search(r'\bFROM\s+("?)([\w]+)\1(?:\s+AS\s+("?)([\w]+)\3)?', block)
+    if not m:
+        return None, None
+    table = m.group(2)
+    alias = m.group(4) if m.group(4) else table
+    return table, alias
+
+def sale_scope_info(base, block, cols):
+    """为 sale 维度表构造 qi 式作用域删除所需参数。
+    返回 dict: source_table, account_src, scope_date_src, scope_date_target, change_win(三通道)。"""
+    source_table, _alias = _extract_main_source(block)
+    tc = SALE_TIMECOLS.get(source_table)
+    if tc:
+        create_c, update_c, delete_c = tc
+    else:
+        t = find_time_cols(block)
+        create_c = t["create"] or 'tr."createTime"'
+        update_c = t["update"]
+        delete_c = t["delete"]
+    # 账户列：fund_profits 用 account_id，其余 qbit 系用 accountId（主别名 tr）
+    account_src = 'tr."account_id"' if source_table == "fund_profits" else 'tr."accountId"'
+    # 作用域日期列：DWS 有 create_date 用它，否则用 create_time（如 ods_sale_*）
+    scope_date_target = "create_date" if "create_date" in cols else "create_time"
+    scope_date_src = f"DATE({create_c})"
+    # 三通道变更窗口：create / update / delete 任一在昨天
+    conds = []
+    for c in (create_c, update_c, delete_c):
+        if c:
+            conds.append(f'({c} >= CURRENT_DATE - INTERVAL \'1 day\' AND {c} < CURRENT_DATE)')
+    change_win = " OR ".join(conds) if conds else "FALSE"
+    return {
+        "source_table": source_table,
+        "account_src": account_src,
+        "scope_date_src": scope_date_src,
+        "scope_date_target": scope_date_target,
+        "change_win": change_win,
+    }
+
 def dws_key_exprs(base, keys, p, time_cols):
     """返回 (dws_key_cols_csv, pg_key_exprs_csv)
     pg_key_exprs 用于删除函数的 IN 子查询，类型需与 DWS 列一致。"""
@@ -379,6 +449,67 @@ BEGIN
                 EXECUTE format($fmt$SELECT COUNT(*) FROM public.{base}_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
                 EXECUTE format($fmt$DELETE FROM public.{base}_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
+                GET DIAGNOSTICS v_n = ROW_COUNT;
+            END IF;
+            affected := affected + v_n;
+        END LOOP;
+    END IF;
+    RETURN affected;
+END;
+$function$;
+
+-- 首次部署请先 dry-run 核对影响行数：
+-- SELECT public.fn_delete_{base}_cdc(true);
+"""
+    return body
+
+def delete_fn_block_scope(base, scope_date_src, scope_date_target, account_src, account_target, from_join, change_win):
+    """qi 式作用域删除：先按受影响 (scope_date, account_id) 作用域清空，再重算。
+    覆盖该账户该日所有键变体(含 sale_id/am_id 扇出、status 变更)，彻底解决长尾 pending 行的陈旧/重复问题。"""
+    scope_cte = f"""SELECT DISTINCT {scope_date_src} AS scope_date, {account_src} AS scope_account
+        FROM {from_join}
+        WHERE {change_win}"""
+    body = f"""CREATE OR REPLACE FUNCTION public.fn_delete_{base}_cdc(
+    p_dry_run BOOLEAN DEFAULT false,
+    p_start   DATE DEFAULT NULL,
+    p_end     DATE DEFAULT NULL
+)
+RETURNS BIGINT
+LANGUAGE plpgsql
+AS $function$
+DECLARE
+    affected BIGINT := 0;
+    v_year   INT;
+    v_n      BIGINT;
+BEGIN
+    IF p_start IS NULL THEN
+        -- ===== CDC 模式：qi 式按作用域(scope)精准删（受影响 (日期,账户) 集合，先清后重算）=====
+        FOR v_year IN
+            SELECT DISTINCT EXTRACT(YEAR FROM a.scope_date)::INT
+            FROM ({scope_cte}) a
+        LOOP
+            IF p_dry_run THEN
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.{base}_%s t
+                    WHERE EXISTS (SELECT 1 FROM ({scope_cte}) scope
+                        WHERE DATE(t.{scope_date_target}) = scope.scope_date AND t.{account_target} = scope.scope_account)$fmt$, v_year) INTO v_n;
+            ELSE
+                EXECUTE format($fmt$DELETE FROM public.{base}_%s t
+                    WHERE EXISTS (SELECT 1 FROM ({scope_cte}) scope
+                        WHERE DATE(t.{scope_date_target}) = scope.scope_date AND t.{account_target} = scope.scope_account)$fmt$, v_year);
+                GET DIAGNOSTICS v_n = ROW_COUNT;
+            END IF;
+            affected := affected + v_n;
+        END LOOP;
+    ELSE
+        -- ===== 补数/修复模式：按日期区间跨分表清理 =====
+        FOR v_year IN
+            SELECT DISTINCT gs.y
+            FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
+        LOOP
+            IF p_dry_run THEN
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.{base}_%s WHERE DATE({scope_date_target}) >= $1 AND DATE({scope_date_target}) <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
+            ELSE
+                EXECUTE format($fmt$DELETE FROM public.{base}_%s WHERE DATE({scope_date_target}) >= $1 AND DATE({scope_date_target}) <= $2$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -579,11 +710,36 @@ def main():
 
         # 聚合 SELECT（去掉 id 列），并让输出列名对齐 DWS 列名
         agg_select = ", ".join(alias_to_cols(p["exprs"][1:], p["cols"][1:]))
-        # PG 重算子查询：CTE 找受影响 key，再聚合这些 key 的当前有效源行
-        key_exprs_aliased = ", ".join(f"{e} AS k{i}" for i, e in enumerate(pg_key_exprs.split(", ")))
-        if is_ods:
-            # ODS 原始表：直接取受影响 key 的源行（无聚合）
-            pg_subquery = f"""WITH affected AS (
+
+        if base in SALE_SET:
+            # ---- qi 式作用域(scope)删除：受影响 (scope_date, account_id) 先清后重算 ----
+            si = sale_scope_info(base, block, p["cols"])
+            scope_cte = f"SELECT DISTINCT {si['scope_date_src']} AS scope_date, {si['account_src']} AS scope_account FROM {p['from_join']} WHERE {si['change_win']}"
+            if is_ods:
+                pg_subquery = f"""WITH affected AS (
+        {scope_cte}
+    )
+    SELECT {agg_select}
+    FROM {p['from_join']}
+    JOIN affected a ON ({si['scope_date_src']}) = a.scope_date AND ({si['account_src']}) = a.scope_account
+    WHERE {'TRUE' if not where_no_window else where_no_window}"""
+            else:
+                pg_subquery = f"""WITH affected AS (
+        {scope_cte}
+    )
+    SELECT {agg_select}
+    FROM {p['from_join']}
+    JOIN affected a ON ({si['scope_date_src']}) = a.scope_date AND ({si['account_src']}) = a.scope_account
+    WHERE {'TRUE' if not where_no_window else where_no_window}
+    GROUP BY {p['group_by']}"""
+            fn_text = delete_fn_block_scope(base, si['scope_date_src'], si['scope_date_target'], si['account_src'], "account_id", p['from_join'], si['change_win'])
+        else:
+            # ---- 其余表：按唯一业务键精准删（受影响 key 集合，不再按整天删）----
+            # PG 重算子查询：CTE 找受影响 key，再聚合这些 key 的当前有效源行
+            key_exprs_aliased = ", ".join(f"{e} AS k{i}" for i, e in enumerate(pg_key_exprs.split(", ")))
+            if is_ods:
+                # ODS 原始表：直接取受影响 key 的源行（无聚合）
+                pg_subquery = f"""WITH affected AS (
         SELECT DISTINCT {key_exprs_aliased}
         FROM {p['from_join']}
         WHERE {change_win}
@@ -592,9 +748,9 @@ def main():
     FROM {p['from_join']}
     JOIN affected a ON {" AND ".join(f"({pg_key_exprs.split(', ')[i]}) IS NOT DISTINCT FROM a.k{i}" for i in range(len(keys)))}
     WHERE {'TRUE' if not where_no_window else where_no_window}"""
-        else:
-            key_eq = " AND ".join(f"({pg_key_exprs.split(', ')[i]}) IS NOT DISTINCT FROM a.k{i}" for i in range(len(keys)))
-            pg_subquery = f"""WITH affected AS (
+            else:
+                key_eq = " AND ".join(f"({pg_key_exprs.split(', ')[i]}) IS NOT DISTINCT FROM a.k{i}" for i in range(len(keys)))
+                pg_subquery = f"""WITH affected AS (
         SELECT DISTINCT {key_exprs_aliased}
         FROM {p['from_join']}
         WHERE {change_win}
@@ -604,6 +760,7 @@ def main():
     JOIN affected a ON {key_eq}
     WHERE {'TRUE' if not where_no_window else where_no_window}
     GROUP BY {p['group_by']}"""
+            fn_text = delete_fn_block(base, keys, pg_key_exprs, p["from_join"], change_win, create_expr)
 
         # 嵌套子查询 / 非标准 FROM 的表：原 SELECT 的 FROM 含子查询，
         # 通用解析对“变更窗口引用源别名”可能失效，打上 TODO 标记由人工复核。
@@ -620,7 +777,7 @@ def main():
         with open(os.path.join(tdir, f"{base}_ddl.sql"), "w", encoding="utf-8") as f:
             f.write(todo + f"-- {base} DDL（IF NOT EXISTS，不重建现有表）\n" + ddl_block(base, p["cols"]))
         with open(os.path.join(tdir, f"register_fn_{base}_cdc_delete_v2.sql"), "w", encoding="utf-8") as f:
-            f.write(todo + delete_fn_block(base, keys, pg_key_exprs, p["from_join"], change_win, create_expr))
+            f.write(todo + fn_text)
         with open(os.path.join(cdir, f"{base}-cdc-v2-sql.sql"), "w", encoding="utf-8") as f:
             f.write(todo + cdc_block(base, p["cols"], keys, pg_subquery))
         with open(os.path.join(bdir, f"batch-{base}-v2-sql.sql"), "w", encoding="utf-8") as f:

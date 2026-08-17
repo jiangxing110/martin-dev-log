@@ -43,19 +43,17 @@ CREATE TEMPORARY TABLE source_dws_sale_physical_card (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT tr."accountId" AS k0, ids."sale_or_am_id" AS k1, qc."provider" AS k2, qc."firstSix" AS k3, tr."status" AS k4, DATE(tr."createTime") AS k5
-        FROM "qbitCardWalletTransaction" AS tr
+        SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account FROM "qbitCardWalletTransaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::VARCHAR = osat.transaction_id::VARCHAR
-LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
+LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."deleteTime" < CURRENT_DATE)
     )
     SELECT tr."accountId" AS "account_id", ids."sale_or_am_id" AS "sale_or_am_id", qc."provider" AS "provider", qc."firstSix" AS "bin", tr."status" AS "status", COUNT(*) AS "transaction_count", SUM("originAmount"::numeric) AS "physical_card_fee", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
     FROM "qbitCardWalletTransaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::VARCHAR = osat.transaction_id::VARCHAR
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE
-    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (ids."sale_or_am_id") IS NOT DISTINCT FROM a.k1 AND (qc."provider") IS NOT DISTINCT FROM a.k2 AND (qc."firstSix") IS NOT DISTINCT FROM a.k3 AND (tr."status") IS NOT DISTINCT FROM a.k4 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k5
+    JOIN affected a ON (DATE(tr."createTime")) = a.scope_date AND (tr."accountId") = a.scope_account
     WHERE tr."deleteTime" IS NULL
   AND tr."businessType" = ''TransferOut'' AND tr."remarks" IN (''邮寄费'', ''制卡费'', ''批量邮寄运费'')
     GROUP BY tr."accountId", ids."sale_or_am_id", qc."provider", qc."firstSix", tr."status",TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE) AS src',

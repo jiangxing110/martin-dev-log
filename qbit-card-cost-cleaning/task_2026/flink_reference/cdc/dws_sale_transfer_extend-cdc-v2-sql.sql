@@ -51,8 +51,7 @@ CREATE TEMPORARY TABLE source_dws_sale_transfer_extend (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT "accountId" AS k0, DATE(tr."createTime") AS k1, "status" AS k2, "sale_or_am_id" AS k3
-        FROM "transfer" as tr 
+        SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account FROM "transfer" as tr 
 LEFT JOIN "globalConversion" as ta on ta."recordId"::UUID = tr.id
 LEFT JOIN "ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::UUID = osat.transaction_id::UUID
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE
@@ -60,8 +59,7 @@ WHERE
 tr."deleteTime" IS NULL and ta."deleteTime" IS NULL
 AND tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' 
 AND tr."createTime" < CURRENT_DATE
-) as tt
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
+) as tt WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."deleteTime" < CURRENT_DATE)
     )
     SELECT "accountId" AS "account_id", "sale_or_am_id" AS "sale_or_am_id", "status" AS "status", COALESCE(SUM("dbsReceive"),0) AS "dbsReceive" AS "dbs_receive", COALESCE(SUM("clReceive"),0) AS "clReceive" AS "cl_receive", COALESCE(SUM("epReceive"),0) AS "epReceive" AS "ep_receive", COALESCE(SUM("rdReceive"),0) AS "rdReceive" AS "rd_receive", COALESCE(SUM("settleFxFee"),0) AS "settleFxFee" AS "settle_fx_fee", COALESCE(SUM("conversionFxAmount"),0) AS "conversionFxAmount" AS "conversion_fx_amount", COALESCE(SUM("conversionFxFee"),0) AS "conversionFxFee" AS "conversion_fx_fee", COALESCE(SUM(CASE WHEN "businessTypeDetail" in (''OtherChannelInbound'', ''CCInbound'') and (fee - "clReceive"*0.0005 - "epReceive"*0.0005 - "rdReceive"*0.0005) > 0 THEN 
                (fee - "clReceive"*0.0005 - "epReceive"*0.0005 - "rdReceive"*0.0005)  ELSE 0 END),0) AS "inboundProfit" AS "inbound_profit", COALESCE(SUM (CASE WHEN ("conversionFxFee"-"conversionFxAmount"*0.001)>0 THEN ("conversionFxFee"-"conversionFxAmount"*0.001) ELSE 0 END ),0) AS "conversionFxProfit" AS "conversion_fx_profit", create_date AS "create_date", 1 AS version, -- 初始版本号
@@ -94,7 +92,7 @@ tr."deleteTime" IS NULL and ta."deleteTime" IS NULL
 AND tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' 
 AND tr."createTime" < CURRENT_DATE
 ) as tt
-    JOIN affected a ON ("accountId") IS NOT DISTINCT FROM a.k0 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k1 AND ("status") IS NOT DISTINCT FROM a.k2 AND ("sale_or_am_id") IS NOT DISTINCT FROM a.k3
+    JOIN affected a ON (DATE(tr."createTime")) = a.scope_date AND (tr."accountId") = a.scope_account
     WHERE TRUE
     GROUP BY "accountId",create_date, status,"sale_or_am_id") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',

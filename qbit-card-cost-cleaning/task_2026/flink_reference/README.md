@@ -18,6 +18,19 @@ v2 改为：
 4. **不重建表**：复用现有 `dws_*` / `ods_*` 分表，DDL 用 `IF NOT EXISTS` 仅作结构参考。
 5. **跨年（分表 _YYYY）**：删除函数按源行 `createTime` 的**年份**动态路由分表；v2 会改成按年分区单表（见末）。
 
+## sale 维度表：qi 式「作用域删除 + 三通道变更窗口」
+
+11 张 sale 维度表（`dws_sale_*` 9 张 + `ods_sale_fund_profits` + `ods_sale_qbit_card`）**单列 `sale_or_am_id` 保持不变**（经 `unnest(ARRAY[sale_id, am_id])` 扇出为两行，即用户所说“两条”），但删除策略对齐 `bi-cost/flink/quantum-v2/qi`：
+
+- **删除改为作用域(scope)而非唯一键**：删除函数 `fn_delete_<base>_cdc` 用
+  `WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT 作用域日期, account_id FROM 源 WHERE 变更窗口) scope WHERE DATE(目标.日期列)=scope.日期 AND 目标.account_id=scope.account_id)`，
+  **整段清空该 (日期,账户) 的聚合行后重算**，而非只删当前业务键行。这彻底解决“pending 状态长期挂起后翻转→旧状态行残留/重复”的问题（也对应你“不应该按唯一 key 删”的要求）。
+- **三通道变更窗口**：窗口条件从原来的 `createTime` 单通道，扩展为
+  `createTime OR updateTime OR deleteTime` 任一个落在昨天。原 INSERT 块从不引用 `updateTime`，但 qbit 系源表实际有该列——若不纳入，status 翻转等长尾更新仍会被漏掉、陈旧行清不掉。**`updateTime`/`update_time` 按源表名硬编码强制纳入**（见 `gen_all_jobs.py` 的 `SALE_TIMECOLS`）。
+- **作用域日期列**：`dws_sale_*` 用 `create_date`（= `DATE(createTime)`）；两张 `ods_sale_*` 无 `create_date`，改用 `create_time`。
+- 其余 12 张非 sale 表**维持唯一键精准删**不变。
+- 生成器通过 `SALE_SET` 分支实现，改原 `insert_task_job.sql` 后重跑 `python3 gen_all_jobs.py` 即同步。
+
 ## 目录结构（共 92 个文件 = 23 表 × 4 件套）
 
 ```

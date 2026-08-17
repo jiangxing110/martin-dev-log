@@ -46,12 +46,10 @@ CREATE TEMPORARY TABLE source_dws_sale_open_card (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT tr."status" AS k0, tr."accountId" AS k1, qc.provider AS k2, qc."firstSix" AS k3, ids."sale_or_am_id" AS k4, DATE(tr."createTime") AS k5
-        FROM "Transaction" as "tr"
+        SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account FROM "Transaction" as "tr"
 LEFT JOIN "qbitCard" qc ON qc."id" :: VARCHAR = "tr"."sourceId"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."id"::VARCHAR = osat.transaction_id::VARCHAR
-LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
+LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."deleteTime" < CURRENT_DATE)
     )
     SELECT tr."accountId" AS "account_id", qc.provider AS "provider", qc."firstSix" AS "bin", tr."status" AS "status", ids."sale_or_am_id" AS "sale_or_am_id", COALESCE(sum("senderFee"),0) fee AS "fee", count(*) count AS "count", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS "create_date", 1 AS "version", -- 初始版本号
        NOW() AS "create_time", NOW() AS "update_time"
@@ -59,7 +57,7 @@ LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or
 LEFT JOIN "qbitCard" qc ON qc."id" :: VARCHAR = "tr"."sourceId"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."id"::VARCHAR = osat.transaction_id::VARCHAR
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE
-    JOIN affected a ON (tr."status") IS NOT DISTINCT FROM a.k0 AND (tr."accountId") IS NOT DISTINCT FROM a.k1 AND (qc.provider) IS NOT DISTINCT FROM a.k2 AND (qc."firstSix") IS NOT DISTINCT FROM a.k3 AND (ids."sale_or_am_id") IS NOT DISTINCT FROM a.k4 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k5
+    JOIN affected a ON (DATE(tr."createTime")) = a.scope_date AND (tr."accountId") = a.scope_account
     WHERE tr."deleteTime" is NULL and tr."type" IN (''CreateCard'', ''QbitCardFee'')
     GROUP BY tr."status",tr."accountId",qc.provider,qc."firstSix",ids."sale_or_am_id", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE) AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',

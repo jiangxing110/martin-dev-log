@@ -52,8 +52,7 @@ CREATE TEMPORARY TABLE source_ods_sale_fund_profits (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT tr."id" AS k0
-        FROM fund_profits AS tr
+        SELECT DISTINCT DATE(tr."create_time") AS scope_date, tr."account_id" AS scope_account FROM fund_profits AS tr
 CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee
 LEFT JOIN (
     SELECT sar."createTime", sar."deleteTime", sar."salesId", sar."amId", sar."accountId"
@@ -65,8 +64,7 @@ LEFT JOIN (
     WHERE account."parentAccountId" != ''00000000-0000-0000-0000-000000000000''
 ) AS sar ON tr."account_id"::UUID = sar."accountId"::UUID
 AND tr."create_time" >= sar."createTime" AND (tr."create_time" <= sar."deleteTime" OR sar."deleteTime" IS NULL)
-LEFT JOIN LATERAL (SELECT unnest(ARRAY[sar."salesId"::uuid, sar."amId"::uuid]) AS sale_or_am_id) AS ids ON TRUE
-        WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."create_time" < CURRENT_DATE)
+LEFT JOIN LATERAL (SELECT unnest(ARRAY[sar."salesId"::uuid, sar."amId"::uuid]) AS sale_or_am_id) AS ids ON TRUE WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."delete_time" < CURRENT_DATE)
     )
     SELECT tr."id" AS "fund_id", "create_time" AS "create_time", "update_time" AS "update_time", "delete_time" AS "delete_time", tr."version" AS "version", tr."remarks" AS "remarks", "account_id" AS "account_id", ids."sale_or_am_id" AS "sale_or_am_id", "product_id" AS "product_id", "date" AS "date", "currency" AS "currency", "profit" AS "profit", (CASE WHEN fee->>''type'' = ''SERVICE'' THEN (fee->>''amount'')::numeric ELSE 0 END) AS "service_fee", tr."status" AS "status", "apr" AS "apr", "share" AS "share", "net_value" AS "net_value"
     FROM fund_profits AS tr
@@ -82,7 +80,7 @@ LEFT JOIN (
 ) AS sar ON tr."account_id"::UUID = sar."accountId"::UUID
 AND tr."create_time" >= sar."createTime" AND (tr."create_time" <= sar."deleteTime" OR sar."deleteTime" IS NULL)
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[sar."salesId"::uuid, sar."amId"::uuid]) AS sale_or_am_id) AS ids ON TRUE
-    JOIN affected a ON (tr."id") IS NOT DISTINCT FROM a.k0
+    JOIN affected a ON (DATE(tr."create_time")) = a.scope_date AND (tr."account_id") = a.scope_account
     WHERE tr."delete_time" IS NULL) AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
