@@ -479,8 +479,8 @@ SELECT
     CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_int_clearing_vol,
     CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
     CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_int_clearing_vol,
-    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND transaction_type = 'authorization.clearing' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
-    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND transaction_type = 'authorization.clearing' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
+    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org IN ('Master', 'VISA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
+    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org IN ('Master', 'VISA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
     sale_id,
     am_id
 FROM v_bb_completion_rows
@@ -958,8 +958,8 @@ SELECT
     b.bb_channel_cashback_comm,
     b.active_card_count,
     b.total_net_amount,
-    CAST(0.021195 AS DECIMAL(20, 8)) AS cashback_rate,
-    CAST(b.bb_rebate_base_amt * CAST(0.021195 AS DECIMAL(20, 8)) AS DECIMAL(20, 4)) AS cashback_income,
+    CAST(0.02057316 AS DECIMAL(20, 8)) AS cashback_rate,
+    CAST(b.bb_rebate_base_amt * CAST(0.02057316 AS DECIMAL(20, 8)) AS DECIMAL(20, 4)) AS cashback_income,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
     CAST(NULL AS STRING) AS special_fee_type,
     b.sale_id,
