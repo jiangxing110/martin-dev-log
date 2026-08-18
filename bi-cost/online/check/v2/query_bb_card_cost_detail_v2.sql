@@ -117,3 +117,8 @@ SELECT
     cost_amount
 FROM result_detail
 ORDER BY sort_no;
+
+
+
+
+
