@@ -67,7 +67,7 @@ CREATE TEMPORARY TABLE source_dws_qbit_card_transaction_extend (
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
         WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT tr."accountId" AS "account_id", tr."provider" AS "provider", qc."firstSix" AS "bin", tr."businessType" AS "business_type", tr."status" AS "status", COALESCE(SUM(tr."settleAmount"), 0) AS "settle_amount", tr."transactionCurrency" AS "transaction_currency", tr."specialSourceData"->>''country'' AS "country", COUNT(*) AS "transaction_count", COALESCE(SUM((tr."specialSourceData"->>''markupFee'')::numeric), 0) AS "fx_fee", COALESCE(SUM(CASE WHEN tr.remarks LIKE ''%ATM取现费'' THEN fee::numeric ELSE 0 END), 0) AS "atm_fee", COALESCE(SUM((tr."specialSourceData"->>''applePayFee'')::numeric), 0) AS "apple_pay_fee", COALESCE(SUM((tr."specialSourceData"->>''settleFee'')::numeric), 0) AS "settle_fee", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
+    SELECT CAST(tr."accountId" AS text) AS "account_id", CAST(tr."provider" AS text) AS "provider", CAST(qc."firstSix" AS text) AS "bin", CAST(tr."businessType" AS text) AS "business_type", CAST(tr."status" AS text) AS "status", COALESCE(SUM(tr."settleAmount"), 0) AS "settle_amount", CAST(tr."transactionCurrency" AS text) AS "transaction_currency", CAST(tr."specialSourceData"->>''country'' AS text) AS "country", COUNT(*) AS "transaction_count", COALESCE(SUM((tr."specialSourceData"->>''markupFee'')::numeric), 0) AS "fx_fee", COALESCE(SUM(CASE WHEN tr.remarks LIKE ''%ATM取现费'' THEN fee::numeric ELSE 0 END), 0) AS "atm_fee", COALESCE(SUM((tr."specialSourceData"->>''applePayFee'')::numeric), 0) AS "apple_pay_fee", COALESCE(SUM((tr."specialSourceData"->>''settleFee'')::numeric), 0) AS "settle_fee", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
     FROM "qbit_card_transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
     JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."provider") IS NOT DISTINCT FROM a.k1 AND (qc."firstSix") IS NOT DISTINCT FROM a.k2 AND (tr."businessType") IS NOT DISTINCT FROM a.k3 AND (tr."status") IS NOT DISTINCT FROM a.k4 AND (tr."transactionCurrency") IS NOT DISTINCT FROM a.k5 AND (tr."specialSourceData"->>''country'') IS NOT DISTINCT FROM a.k6 AND (tr."createTime"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k7
@@ -86,31 +86,11 @@ SELECT
     *
 FROM source_dws_qbit_card_transaction_extend;
 
-CREATE TEMPORARY TABLE sink_dws_qbit_card_transaction_extend_2024 (
-    id BIGINT, account_id STRING, provider STRING, bin STRING, business_type STRING, status STRING, settle_amount DECIMAL(18,2), transaction_currency STRING, country STRING, transaction_count INT, fx_fee DECIMAL(18,2), atm_fee DECIMAL(18,2), apple_pay_fee DECIMAL(18,2), settle_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_qbit_card_transaction_extend_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_dws_qbit_card_transaction_extend_2025 (
-    id BIGINT, account_id STRING, provider STRING, bin STRING, business_type STRING, status STRING, settle_amount DECIMAL(18,2), transaction_currency STRING, country STRING, transaction_count INT, fx_fee DECIMAL(18,2), atm_fee DECIMAL(18,2), apple_pay_fee DECIMAL(18,2), settle_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_qbit_card_transaction_extend_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_qbit_card_transaction_extend_2026 (
     id BIGINT, account_id STRING, provider STRING, bin STRING, business_type STRING, status STRING, settle_amount DECIMAL(18,2), transaction_currency STRING, country STRING, transaction_count INT, fx_fee DECIMAL(18,2), atm_fee DECIMAL(18,2), apple_pay_fee DECIMAL(18,2), settle_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_qbit_card_transaction_extend_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
-INSERT INTO sink_dws_qbit_card_transaction_extend_2024
-SELECT id, account_id, provider, bin, business_type, status, settle_amount, transaction_currency, country, transaction_count, fx_fee, atm_fee, apple_pay_fee, settle_fee, create_date, version, create_time, update_time
-FROM v_dws_qbit_card_transaction_extend_base
-CROSS JOIN source_delete_dws_qbit_card_transaction_extend_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2024-01-01' AND create_date < DATE '2025-01-01';
-INSERT INTO sink_dws_qbit_card_transaction_extend_2025
-SELECT id, account_id, provider, bin, business_type, status, settle_amount, transaction_currency, country, transaction_count, fx_fee, atm_fee, apple_pay_fee, settle_fee, create_date, version, create_time, update_time
-FROM v_dws_qbit_card_transaction_extend_base
-CROSS JOIN source_delete_dws_qbit_card_transaction_extend_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2025-01-01' AND create_date < DATE '2026-01-01';
 INSERT INTO sink_dws_qbit_card_transaction_extend_2026
 SELECT id, account_id, provider, bin, business_type, status, settle_amount, transaction_currency, country, transaction_count, fx_fee, atm_fee, apple_pay_fee, settle_fee, create_date, version, create_time, update_time
 FROM v_dws_qbit_card_transaction_extend_base

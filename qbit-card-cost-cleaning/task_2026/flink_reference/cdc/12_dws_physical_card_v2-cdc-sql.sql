@@ -65,7 +65,7 @@ CREATE TEMPORARY TABLE source_dws_physical_card (
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
         WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
     )
-    SELECT tr."accountId" AS "account_id", qc."provider" AS "provider", qc."firstSix" AS "bin", tr."status" AS "status", COUNT(*) AS "transaction_count", SUM(tr."originAmount"::numeric) AS "physical_card_fee", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
+    SELECT CAST(tr."accountId" AS text) AS "account_id", CAST(qc."provider" AS text) AS "provider", CAST(qc."firstSix" AS text) AS "bin", CAST(tr."status" AS text) AS "status", COUNT(*) AS "transaction_count", SUM(tr."originAmount"::numeric) AS "physical_card_fee", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
     FROM "qbitCardWalletTransaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
     JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (qc."provider") IS NOT DISTINCT FROM a.k1 AND (qc."firstSix") IS NOT DISTINCT FROM a.k2 AND (tr."status") IS NOT DISTINCT FROM a.k3 AND (tr."createTime"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k4

@@ -70,9 +70,9 @@ where account."parentAccountId" !=''00000000-0000-0000-0000-000000000000''
 ) AS sar ON tr."accountId" :: UUID = sar."accountId" :: UUID AND tr."createTime" >= sar."createTime" AND ( tr."createTime" <= sar."deleteTime" OR sar."deleteTime" IS NULL )
         WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
     )
-    SELECT sar."salesId" AS sale_id, sar."amId" AS am_id, tr."createTime" as "create_time", NOW( ) AS update_time, -- 默认当前时间
-        NULL AS delete_time, -- 逻辑删除字段，默认 NULL
-        NULL AS remarks, -- 备注字段，默认 NULL
+    SELECT CAST(sar."salesId" AS text) AS "sale_id", CAST(sar."amId" AS text) AS "am_id", tr."createTime" AS "create_time", NOW( ) AS "update_time", -- 默认当前时间
+        NULL AS "delete_time", CAST(-- 逻辑删除字段，默认 NULL
+        NULL AS text) AS "remarks", -- 备注字段，默认 NULL
         1 AS VERSION -- 版本号，默认 1 AS "version"
     FROM "Transaction" tr
 LEFT JOIN (

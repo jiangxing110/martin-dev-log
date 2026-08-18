@@ -67,7 +67,7 @@ CREATE TEMPORARY TABLE source_dws_transfer (
         FROM "transfer" AS tr
         WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
     )
-    SELECT tr."accountId" AS "account_id", tr."businessTypeDetail" AS "business_type_detail", tr."businessCode" AS "business_type_code", tr."settlementCurrency" AS "settlement_currency", tr."status" AS "status", COALESCE(SUM(tr."usdAmount"), 0) AS usd_amount, COUNT(*) AS transaction_count, COALESCE(SUM("fee" * "usdRate"), 0) AS fee, "currency" AS "currency", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS version, NOW() AS create_time, NOW() AS update_time
+    SELECT CAST(tr."accountId" AS text) AS "account_id", CAST(tr."businessTypeDetail" AS text) AS "business_type_detail", CAST(tr."businessCode" AS text) AS "business_type_code", CAST(tr."settlementCurrency" AS text) AS "settlement_currency", CAST(tr."status" AS text) AS "status", COALESCE(SUM(tr."usdAmount"), 0) AS "usd_amount", COUNT(*) AS "transaction_count", COALESCE(SUM("fee" * "usdRate"), 0) AS "fee", CAST("currency" AS text) AS "currency", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
     FROM "transfer" AS tr
     JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessTypeDetail") IS NOT DISTINCT FROM a.k1 AND (tr."businessCode") IS NOT DISTINCT FROM a.k2 AND (tr."settlementCurrency") IS NOT DISTINCT FROM a.k3 AND (tr."createTime"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k4 AND (tr."status") IS NOT DISTINCT FROM a.k5 AND ("currency") IS NOT DISTINCT FROM a.k6
     WHERE tr."deleteTime" IS NULL

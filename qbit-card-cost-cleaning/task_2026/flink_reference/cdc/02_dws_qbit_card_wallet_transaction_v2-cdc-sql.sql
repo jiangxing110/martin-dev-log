@@ -64,7 +64,7 @@ CREATE TEMPORARY TABLE source_dws_qbit_card_wallet_transaction (
         FROM "qbitCardWalletTransaction" AS tr
         WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
     )
-    SELECT tr."accountId" AS "account_id", tr."businessType" AS "business_type", tr."status" AS "status", COALESCE(SUM(tr."originAmount"), 0) AS origin_amount, COUNT(*) AS transaction_count, COALESCE(SUM(tr."fee"), 0) AS fee, tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS version, NOW() AS create_time, NOW() AS update_time
+    SELECT CAST(tr."accountId" AS text) AS "account_id", CAST(tr."businessType" AS text) AS "business_type", CAST(tr."status" AS text) AS "status", COALESCE(SUM(tr."originAmount"), 0) AS "origin_amount", COUNT(*) AS "transaction_count", COALESCE(SUM(tr."fee"), 0) AS "fee", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
     FROM "qbitCardWalletTransaction" AS tr
     JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessType") IS NOT DISTINCT FROM a.k1 AND (tr."createTime"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k2 AND (tr."status") IS NOT DISTINCT FROM a.k3
     WHERE tr."deleteTime" IS NULL

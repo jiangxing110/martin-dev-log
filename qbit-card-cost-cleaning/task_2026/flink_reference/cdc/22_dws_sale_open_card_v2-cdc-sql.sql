@@ -66,7 +66,7 @@ LEFT JOIN "qbitCard" qc ON qc."id" :: VARCHAR = "tr"."sourceId"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."id"::VARCHAR = osat.transaction_id::VARCHAR
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."deleteTime" < CURRENT_DATE)
     )
-    SELECT tr."accountId" AS "account_id", qc.provider AS "provider", qc."firstSix" AS "bin", tr."status" AS "status", ids."sale_or_am_id" AS "sale_or_am_id", COALESCE(sum("senderFee"),0) fee AS "fee", count(*) count AS "count", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", -- 初始版本号
+    SELECT CAST(tr."accountId" AS text) AS "account_id", CAST(qc.provider AS text) AS "provider", CAST(qc."firstSix" AS text) AS "bin", CAST(tr."status" AS text) AS "status", CAST(ids."sale_or_am_id" AS text) AS "sale_or_am_id", COALESCE(sum("senderFee"),0) fee AS "fee", count(*) count AS "count", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", -- 初始版本号
        NOW() AS "create_time", NOW() AS "update_time"
     FROM "Transaction" as "tr"
 LEFT JOIN "qbitCard" qc ON qc."id" :: VARCHAR = "tr"."sourceId"

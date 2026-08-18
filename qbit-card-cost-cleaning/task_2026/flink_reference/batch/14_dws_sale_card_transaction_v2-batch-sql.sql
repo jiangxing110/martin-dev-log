@@ -64,7 +64,7 @@ LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::UUID = osat.transaction_id::UUID
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT tr."accountId" AS "account_id", ids."sale_or_am_id" AS "sale_or_am_id", tr."businessType" AS "business_type", tr."status" AS "status", tr."provider" AS "provider", qc."firstSix" AS "bin", COALESCE(SUM(tr."originalAmount"), 0) AS origin_amount, COALESCE(SUM(tr."settleAmount"), 0) AS settle_amount, COUNT(*) AS transaction_count, COALESCE(SUM(tr."fee"), 0) AS fee, tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS version, NOW() AS create_time, NOW() AS update_time
+    SELECT CAST(tr."accountId" AS text) AS "account_id", CAST(ids."sale_or_am_id" AS text) AS "sale_or_am_id", CAST(tr."businessType" AS text) AS "business_type", CAST(tr."status" AS text) AS "status", CAST(tr."provider" AS text) AS "provider", CAST(qc."firstSix" AS text) AS "bin", COALESCE(SUM(tr."originalAmount"), 0) AS "origin_amount", COALESCE(SUM(tr."settleAmount"), 0) AS "settle_amount", COUNT(*) AS "transaction_count", COALESCE(SUM(tr."fee"), 0) AS "fee", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
     FROM "qbit_card_transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::UUID = osat.transaction_id::UUID
@@ -84,31 +84,11 @@ SELECT
     *
 FROM source_dws_sale_card_transaction;
 
-CREATE TEMPORARY TABLE sink_dws_sale_card_transaction_2024 (
-    id BIGINT, account_id STRING, sale_or_am_id STRING, business_type STRING, status STRING, provider STRING, bin STRING, origin_amount DECIMAL(18,2), settle_amount DECIMAL(18,2), transaction_count INT, fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_card_transaction_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_dws_sale_card_transaction_2025 (
-    id BIGINT, account_id STRING, sale_or_am_id STRING, business_type STRING, status STRING, provider STRING, bin STRING, origin_amount DECIMAL(18,2), settle_amount DECIMAL(18,2), transaction_count INT, fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_card_transaction_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_sale_card_transaction_2026 (
     id BIGINT, account_id STRING, sale_or_am_id STRING, business_type STRING, status STRING, provider STRING, bin STRING, origin_amount DECIMAL(18,2), settle_amount DECIMAL(18,2), transaction_count INT, fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_card_transaction_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
-INSERT INTO sink_dws_sale_card_transaction_2024
-SELECT id, account_id, sale_or_am_id, business_type, status, provider, bin, origin_amount, settle_amount, transaction_count, fee, create_date, version, create_time, update_time
-FROM v_dws_sale_card_transaction_base
-CROSS JOIN source_delete_dws_sale_card_transaction_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2024-01-01' AND create_date < DATE '2025-01-01';
-INSERT INTO sink_dws_sale_card_transaction_2025
-SELECT id, account_id, sale_or_am_id, business_type, status, provider, bin, origin_amount, settle_amount, transaction_count, fee, create_date, version, create_time, update_time
-FROM v_dws_sale_card_transaction_base
-CROSS JOIN source_delete_dws_sale_card_transaction_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2025-01-01' AND create_date < DATE '2026-01-01';
 INSERT INTO sink_dws_sale_card_transaction_2026
 SELECT id, account_id, sale_or_am_id, business_type, status, provider, bin, origin_amount, settle_amount, transaction_count, fee, create_date, version, create_time, update_time
 FROM v_dws_sale_card_transaction_base

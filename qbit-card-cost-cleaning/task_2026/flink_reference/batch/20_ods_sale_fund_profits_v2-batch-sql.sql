@@ -76,7 +76,7 @@ LEFT JOIN (
 AND tr."create_time" >= sar."createTime" AND (tr."create_time" <= sar."deleteTime" OR sar."deleteTime" IS NULL)
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[sar."salesId"::uuid, sar."amId"::uuid]) AS sale_or_am_id) AS ids ON TRUE WHERE (DATE(tr."create_time") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."create_time") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT tr."id" AS "fund_id", "create_time" AS "create_time", "update_time" AS "update_time", "delete_time" AS "delete_time", tr."version" AS "version", tr."remarks" AS "remarks", "account_id" AS "account_id", ids."sale_or_am_id" AS "sale_or_am_id", "product_id" AS "product_id", "date" AS "date", "currency" AS "currency", "profit" AS "profit", (CASE WHEN fee->>''type'' = ''SERVICE'' THEN (fee->>''amount'')::numeric ELSE 0 END) AS "service_fee", tr."status" AS "status", "apr" AS "apr", "share" AS "share", "net_value" AS "net_value"
+    SELECT CAST(tr."id" AS text) AS "fund_id", "create_time" AS "create_time", "update_time" AS "update_time", "delete_time" AS "delete_time", tr."version" AS "version", CAST(tr."remarks" AS text) AS "remarks", CAST("account_id" AS text) AS "account_id", CAST(ids."sale_or_am_id" AS text) AS "sale_or_am_id", CAST("product_id" AS text) AS "product_id", "date" AS "date", CAST("currency" AS text) AS "currency", "profit" AS "profit", (CASE WHEN fee->>''type'' = ''SERVICE'' THEN (fee->>''amount'')::numeric ELSE 0 END) AS "service_fee", CAST(tr."status" AS text) AS "status", "apr" AS "apr", "share" AS "share", "net_value" AS "net_value"
     FROM fund_profits AS tr
 CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee
 LEFT JOIN (
@@ -104,31 +104,11 @@ SELECT
     *
 FROM source_ods_sale_fund_profits;
 
-CREATE TEMPORARY TABLE sink_ods_sale_fund_profits_2024 (
-    id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, date TIMESTAMP(6), currency STRING, profit DECIMAL(18,2), service_fee DECIMAL(18,2), status STRING, apr DECIMAL(18,2), share DECIMAL(18,2), net_value DECIMAL(18,2),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_sale_fund_profits_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_ods_sale_fund_profits_2025 (
-    id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, date TIMESTAMP(6), currency STRING, profit DECIMAL(18,2), service_fee DECIMAL(18,2), status STRING, apr DECIMAL(18,2), share DECIMAL(18,2), net_value DECIMAL(18,2),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_sale_fund_profits_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_ods_sale_fund_profits_2026 (
     id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, date TIMESTAMP(6), currency STRING, profit DECIMAL(18,2), service_fee DECIMAL(18,2), status STRING, apr DECIMAL(18,2), share DECIMAL(18,2), net_value DECIMAL(18,2),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_sale_fund_profits_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
-INSERT INTO sink_ods_sale_fund_profits_2024
-SELECT id, fund_id, create_time, update_time, delete_time, version, remarks, account_id, sale_or_am_id, product_id, date, currency, profit, service_fee, status, apr, share, net_value
-FROM v_ods_sale_fund_profits_base
-CROSS JOIN source_delete_ods_sale_fund_profits_result AS del
-WHERE del.affected_rows >= 0
-  AND create_time >= TIMESTAMP '2024-01-01 00:00:00' AND create_time < TIMESTAMP '2025-01-01 00:00:00';
-INSERT INTO sink_ods_sale_fund_profits_2025
-SELECT id, fund_id, create_time, update_time, delete_time, version, remarks, account_id, sale_or_am_id, product_id, date, currency, profit, service_fee, status, apr, share, net_value
-FROM v_ods_sale_fund_profits_base
-CROSS JOIN source_delete_ods_sale_fund_profits_result AS del
-WHERE del.affected_rows >= 0
-  AND create_time >= TIMESTAMP '2025-01-01 00:00:00' AND create_time < TIMESTAMP '2026-01-01 00:00:00';
 INSERT INTO sink_ods_sale_fund_profits_2026
 SELECT id, fund_id, create_time, update_time, delete_time, version, remarks, account_id, sale_or_am_id, product_id, date, currency, profit, service_fee, status, apr, share, net_value
 FROM v_ods_sale_fund_profits_base

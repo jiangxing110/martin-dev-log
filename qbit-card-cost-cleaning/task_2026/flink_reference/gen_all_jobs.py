@@ -28,6 +28,7 @@ import re, os, sys, datetime
 SRC = os.path.join(os.path.dirname(__file__), "..", "insert_task_job.sql")
 OUT = os.path.dirname(__file__)
 YEARS = [2024, 2025, 2026]  # 不含 2027：表尚未生成，2.0 可能改分区表；需要 2027 时再加回年份并重生成
+BATCH_YEARS = [2026]  # batch 只维护 2026 分表（用户 2026-08-18 决策）；cdc/ddl 仍按 YEARS 全量
 
 # ODS 原始表（无 GROUP BY）的业务键（源表自然主键），用 override 指定
 ODS_KEYS = {
@@ -171,16 +172,28 @@ def _strip_alias(e):
     """去掉 SELECT 表达式尾部 AS 别名（兼容带引号：AS "bin" / AS bin）。"""
     return re.sub(r'\s+AS\s+"?[\w]+"?\s*$', '', e, flags=re.IGNORECASE).strip()
 
-def alias_to_cols(exprs, cols):
+def alias_to_cols(exprs, cols, cast_string_to_text=False):
     """让 PG 子查询 SELECT 输出的列名 == DWS 列名(cols)，保证 Flink source 声明与子查询对齐。
-    表达式已含 `AS "col"` 的沿用；否则补 `AS "col"`（ODS 原始表 SELECT 多不带别名，易错位）。"""
+    表达式已含 `AS "col"` 的沿用；否则补 `AS "col"`（ODS 原始表 SELECT 多不带别名，易错位）。
+    cast_string_to_text: 对声明为 STRING 的输出列，在子查询内包一层 CAST(... AS text)。
+        原因：PG 的 uuid 列经 JDBC 驱动返回 java.util.UUID 对象，Flink 的 STRING 转换器
+        直接 (String) getObject() 会抛 ClassCastException；CAST 成 text 后驱动返回 String，规避该坑。
+        对 varchar/text 列是 no-op，对 uuid 列正好修好，故对全量 STRING 列统一开启安全。"""
     out = []
+    alias_re = re.compile(r'\s+AS\s+"?' + r'(.+?)' + r'"?\s*$', re.IGNORECASE | re.DOTALL)
     for i, c in enumerate(cols):
         e = exprs[i] if i < len(exprs) else c
-        if re.search(r'\s+AS\s+"?' + re.escape(c) + r'"?\s*$', e, re.IGNORECASE):
-            out.append(e)
+        m = alias_re.search(e)
+        if m and m.group(1).strip().strip('"') == c:
+            # 表达式已自带 AS "col"：取别名前部分作为 expr，避免重复别名
+            expr_part = e[:m.start()]
+            alias_part = f'AS "{c}"'
         else:
-            out.append(f'{e} AS "{c}"')
+            expr_part = e
+            alias_part = f'AS "{c}"'
+        if cast_string_to_text and flink_type(c) == "STRING":
+            expr_part = f"CAST({expr_part} AS text)"
+        out.append(f"{expr_part} {alias_part}")
     return out
 
 def route_cond(cols, y):
@@ -616,7 +629,7 @@ def batch_block(base, cols, keys, from_join, where_no_window, pg_key_exprs, crea
     id_expr = "CAST(ABS(HASH_CODE(CONCAT(" + ", ': ', ".join(flink_keys) + "))) AS BIGINT)"
     sinks = []
     inserts = []
-    for y in YEARS:
+    for y in BATCH_YEARS:
         ycols = ", ".join(f"{c} {flink_type(c)}" for c in out_cols)
         sinks.append(f"""CREATE TEMPORARY TABLE sink_{base}_{y} (
     {ycols},
@@ -776,8 +789,9 @@ def main():
             if 0 <= _ci < len(p["exprs"]):
                 p["exprs"][_ci] = create_date_expr(time_cols)
 
-        # 聚合 SELECT（去掉 id 列），并让输出列名对齐 DWS 列名
-        agg_select = ", ".join(alias_to_cols(p["exprs"][1:], p["cols"][1:]))
+        # 聚合 SELECT（去掉 id 列），并让输出列名对齐 DWS 列名；
+        # cast_string_to_text=True：STRING 列在子查询内 CAST(... AS text)，规避 PG uuid→UUID 对象转换炸裂
+        agg_select = ", ".join(alias_to_cols(p["exprs"][1:], p["cols"][1:], cast_string_to_text=True))
 
         if base in SALE_SET:
             # ---- qi 式作用域(scope)删除：受影响 (scope_date, account_id) 先清后重算 ----

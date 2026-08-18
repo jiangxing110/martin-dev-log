@@ -60,7 +60,7 @@ CREATE TEMPORARY TABLE source_dws_open_card (
 LEFT JOIN "qbitCard" AS qc ON qc."id"::VARCHAR = tr."sourceId"
         WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT tr."accountId" AS "account_id", qc."provider" AS "provider", qc."firstSix" AS "bin", tr."status" AS "status", COALESCE(SUM(tr."senderFee"), 0) AS "fee", COUNT(*) AS "count", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
+    SELECT CAST(tr."accountId" AS text) AS "account_id", CAST(qc."provider" AS text) AS "provider", CAST(qc."firstSix" AS text) AS "bin", CAST(tr."status" AS text) AS "status", COALESCE(SUM(tr."senderFee"), 0) AS "fee", COUNT(*) AS "count", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
     FROM "Transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON qc."id"::VARCHAR = tr."sourceId"
     JOIN affected a ON (tr."status") IS NOT DISTINCT FROM a.k0 AND (tr."accountId") IS NOT DISTINCT FROM a.k1 AND (qc."provider") IS NOT DISTINCT FROM a.k2 AND (qc."firstSix") IS NOT DISTINCT FROM a.k3 AND (tr."createTime"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k4
@@ -78,31 +78,11 @@ SELECT
     *
 FROM source_dws_open_card;
 
-CREATE TEMPORARY TABLE sink_dws_open_card_2024 (
-    id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, fee DECIMAL(18,2), count INT, create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_open_card_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_dws_open_card_2025 (
-    id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, fee DECIMAL(18,2), count INT, create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_open_card_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_open_card_2026 (
     id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, fee DECIMAL(18,2), count INT, create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_open_card_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
-INSERT INTO sink_dws_open_card_2024
-SELECT id, account_id, provider, bin, status, fee, count, create_date, version, create_time, update_time
-FROM v_dws_open_card_base
-CROSS JOIN source_delete_dws_open_card_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2024-01-01' AND create_date < DATE '2025-01-01';
-INSERT INTO sink_dws_open_card_2025
-SELECT id, account_id, provider, bin, status, fee, count, create_date, version, create_time, update_time
-FROM v_dws_open_card_base
-CROSS JOIN source_delete_dws_open_card_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2025-01-01' AND create_date < DATE '2026-01-01';
 INSERT INTO sink_dws_open_card_2026
 SELECT id, account_id, provider, bin, status, fee, count, create_date, version, create_time, update_time
 FROM v_dws_open_card_base

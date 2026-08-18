@@ -72,7 +72,7 @@ CREATE TEMPORARY TABLE source_ods_qbit_card (
         FROM "qbitCard" AS tr
         WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
     )
-    SELECT tr."createTime" AS "create_time", tr."updateTime" AS "update_time", tr."deleteTime" AS "delete_time", tr."version" AS "version", tr."remarks" AS "remarks", tr."id" AS "card_id", tr."accountId" AS "account_id", tr."currency" AS "currency", tr."status" AS "status", tr."provider" AS "provider", tr."type" AS "type", tr."token" AS "token", tr."userDeleteTime" AS "user_delete_time", tr."deleteCardTime" AS "delete_card_time", tr."firstSix" AS "first_six", tr."cardBelong" AS "card_belong", tr."physicalCardStatus" AS "physical_card_status", tr."cardMode" AS "card_mode"
+    SELECT tr."createTime" AS "create_time", tr."updateTime" AS "update_time", tr."deleteTime" AS "delete_time", tr."version" AS "version", CAST(tr."remarks" AS text) AS "remarks", CAST(tr."id" AS text) AS "card_id", CAST(tr."accountId" AS text) AS "account_id", CAST(tr."currency" AS text) AS "currency", CAST(tr."status" AS text) AS "status", CAST(tr."provider" AS text) AS "provider", CAST(tr."type" AS text) AS "type", CAST(tr."token" AS text) AS "token", CAST(tr."userDeleteTime" AS text) AS "user_delete_time", CAST(tr."deleteCardTime" AS text) AS "delete_card_time", CAST(tr."firstSix" AS text) AS "first_six", CAST(tr."cardBelong" AS text) AS "card_belong", CAST(tr."physicalCardStatus" AS text) AS "physical_card_status", CAST(tr."cardMode" AS text) AS "card_mode"
     FROM "qbitCard" AS tr
     JOIN affected a ON (tr."id") IS NOT DISTINCT FROM a.k0
     WHERE tr."deleteTime" IS NULL) AS src',

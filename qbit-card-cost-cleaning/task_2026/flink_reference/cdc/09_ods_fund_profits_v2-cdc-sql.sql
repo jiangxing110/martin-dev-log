@@ -71,7 +71,7 @@ CREATE TEMPORARY TABLE source_ods_fund_profits (
 CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee
         WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."create_time" < CURRENT_DATE)
     )
-    SELECT tr."id" AS "fund_id", tr."create_time" AS "create_time", tr."update_time" AS "update_time", tr."delete_time" AS "delete_time", tr."version" AS "version", tr."remarks" AS "remarks", tr."account_id" AS "account_id", tr."product_id" AS "product_id", tr."date" AS "date", tr."currency" AS "currency", tr."profit" AS "profit", (CASE WHEN fee->>''type'' = ''SERVICE'' THEN (fee->>''amount'')::numeric ELSE 0 END) AS "service_fee", tr."status" AS "status", tr."apr" AS "apr", tr."share" AS "share", tr."net_value" AS "net_value"
+    SELECT CAST(tr."id" AS text) AS "fund_id", tr."create_time" AS "create_time", tr."update_time" AS "update_time", tr."delete_time" AS "delete_time", tr."version" AS "version", CAST(tr."remarks" AS text) AS "remarks", CAST(tr."account_id" AS text) AS "account_id", CAST(tr."product_id" AS text) AS "product_id", tr."date" AS "date", CAST(tr."currency" AS text) AS "currency", tr."profit" AS "profit", (CASE WHEN fee->>''type'' = ''SERVICE'' THEN (fee->>''amount'')::numeric ELSE 0 END) AS "service_fee", CAST(tr."status" AS text) AS "status", tr."apr" AS "apr", tr."share" AS "share", tr."net_value" AS "net_value"
     FROM "fund_profits" AS tr
 CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee
     JOIN affected a ON (tr."id") IS NOT DISTINCT FROM a.k0

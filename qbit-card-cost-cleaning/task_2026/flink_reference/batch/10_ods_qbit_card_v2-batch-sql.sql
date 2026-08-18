@@ -67,7 +67,7 @@ CREATE TEMPORARY TABLE source_ods_qbit_card (
         FROM "qbitCard" AS tr
         WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT tr."createTime" AS "create_time", tr."updateTime" AS "update_time", tr."deleteTime" AS "delete_time", tr."version" AS "version", tr."remarks" AS "remarks", tr."id" AS "card_id", tr."accountId" AS "account_id", tr."currency" AS "currency", tr."status" AS "status", tr."provider" AS "provider", tr."type" AS "type", tr."token" AS "token", tr."userDeleteTime" AS "user_delete_time", tr."deleteCardTime" AS "delete_card_time", tr."firstSix" AS "first_six", tr."cardBelong" AS "card_belong", tr."physicalCardStatus" AS "physical_card_status", tr."cardMode" AS "card_mode"
+    SELECT tr."createTime" AS "create_time", tr."updateTime" AS "update_time", tr."deleteTime" AS "delete_time", tr."version" AS "version", CAST(tr."remarks" AS text) AS "remarks", CAST(tr."id" AS text) AS "card_id", CAST(tr."accountId" AS text) AS "account_id", CAST(tr."currency" AS text) AS "currency", CAST(tr."status" AS text) AS "status", CAST(tr."provider" AS text) AS "provider", CAST(tr."type" AS text) AS "type", CAST(tr."token" AS text) AS "token", CAST(tr."userDeleteTime" AS text) AS "user_delete_time", CAST(tr."deleteCardTime" AS text) AS "delete_card_time", CAST(tr."firstSix" AS text) AS "first_six", CAST(tr."cardBelong" AS text) AS "card_belong", CAST(tr."physicalCardStatus" AS text) AS "physical_card_status", CAST(tr."cardMode" AS text) AS "card_mode"
     FROM "qbitCard" AS tr
     JOIN affected a ON (tr."id") IS NOT DISTINCT FROM a.k0
     WHERE tr."deleteTime" IS NULL) AS src',
@@ -83,31 +83,11 @@ SELECT
     *
 FROM source_ods_qbit_card;
 
-CREATE TEMPORARY TABLE sink_ods_qbit_card_2024 (
-    id BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, card_id STRING, account_id STRING, currency STRING, status STRING, provider STRING, type STRING, token STRING, user_delete_time STRING, delete_card_time STRING, first_six STRING, card_belong STRING, physical_card_status STRING, card_mode STRING,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_qbit_card_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_ods_qbit_card_2025 (
-    id BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, card_id STRING, account_id STRING, currency STRING, status STRING, provider STRING, type STRING, token STRING, user_delete_time STRING, delete_card_time STRING, first_six STRING, card_belong STRING, physical_card_status STRING, card_mode STRING,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_qbit_card_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_ods_qbit_card_2026 (
     id BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, card_id STRING, account_id STRING, currency STRING, status STRING, provider STRING, type STRING, token STRING, user_delete_time STRING, delete_card_time STRING, first_six STRING, card_belong STRING, physical_card_status STRING, card_mode STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_qbit_card_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
-INSERT INTO sink_ods_qbit_card_2024
-SELECT id, create_time, update_time, delete_time, version, remarks, card_id, account_id, currency, status, provider, type, token, user_delete_time, delete_card_time, first_six, card_belong, physical_card_status, card_mode
-FROM v_ods_qbit_card_base
-CROSS JOIN source_delete_ods_qbit_card_result AS del
-WHERE del.affected_rows >= 0
-  AND create_time >= TIMESTAMP '2024-01-01 00:00:00' AND create_time < TIMESTAMP '2025-01-01 00:00:00';
-INSERT INTO sink_ods_qbit_card_2025
-SELECT id, create_time, update_time, delete_time, version, remarks, card_id, account_id, currency, status, provider, type, token, user_delete_time, delete_card_time, first_six, card_belong, physical_card_status, card_mode
-FROM v_ods_qbit_card_base
-CROSS JOIN source_delete_ods_qbit_card_result AS del
-WHERE del.affected_rows >= 0
-  AND create_time >= TIMESTAMP '2025-01-01 00:00:00' AND create_time < TIMESTAMP '2026-01-01 00:00:00';
 INSERT INTO sink_ods_qbit_card_2026
 SELECT id, create_time, update_time, delete_time, version, remarks, card_id, account_id, currency, status, provider, type, token, user_delete_time, delete_card_time, first_six, card_belong, physical_card_status, card_mode
 FROM v_ods_qbit_card_base

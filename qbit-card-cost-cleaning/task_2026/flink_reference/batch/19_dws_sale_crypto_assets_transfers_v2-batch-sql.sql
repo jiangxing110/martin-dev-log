@@ -69,7 +69,7 @@ CREATE TEMPORARY TABLE source_dws_sale_crypto_assets_transfers (
 LEFT JOIN "ods_sale_am_transaction_2026" AS osat ON tr."transaction_id"::UUID = osat.transaction_id::UUID
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT "account_id" AS "account_id", ids."sale_or_am_id" AS "sale_or_am_id", "status" AS "status", "sender_type" AS "sender_type", "recipient_type" AS "recipient_type", COUNT(*) AS transaction_count, SUM("origin_amount" * "usd_rate") AS origin_amount, SUM("settlement_amount" * "usd_rate") AS settlement_amount, SUM("fee" * "usd_rate") AS fee, SUM("fee2" * "usd_rate") AS fee2, SUM("cross_chain_fee" * "usd_rate") AS cross_chain_fee, SUM(CASE WHEN tr."status" = ''Closed'' AND tr."action" = ''sell'' AND tr.hidden = FALSE AND (tr."fee" - tr."origin_amount" * 0.0009) > 0 THEN (tr."fee" - tr."origin_amount" * 0.0009) ELSE 0 END) AS exchange_profit, SUM(CASE WHEN tr."recipient_type" IN (''wire'',''outside_bank'') AND tr."status" IN (''Processing'',''Closed'') AND (tr."fee" - 25) > 0 THEN (tr."fee" - 25) ELSE 0 END) AS withdraw_fee_diff AS "payment_profit", "hidden" AS "hidden", tr."create_time"::DATE::TIMESTAMP AS "create_date", "currency" AS "currency", "action" AS "action", 1 AS version, NOW() AS create_time, NOW() AS update_time
+    SELECT CAST("account_id" AS text) AS "account_id", CAST(ids."sale_or_am_id" AS text) AS "sale_or_am_id", CAST("status" AS text) AS "status", CAST("sender_type" AS text) AS "sender_type", CAST("recipient_type" AS text) AS "recipient_type", COUNT(*) AS "transaction_count", SUM("origin_amount" * "usd_rate") AS "origin_amount", SUM("settlement_amount" * "usd_rate") AS "settlement_amount", SUM("fee" * "usd_rate") AS "fee", SUM("fee2" * "usd_rate") AS "fee2", SUM("cross_chain_fee" * "usd_rate") AS "cross_chain_fee", SUM(CASE WHEN tr."status" = ''Closed'' AND tr."action" = ''sell'' AND tr.hidden = FALSE AND (tr."fee" - tr."origin_amount" * 0.0009) > 0 THEN (tr."fee" - tr."origin_amount" * 0.0009) ELSE 0 END) AS "exchange_profit", SUM(CASE WHEN tr."recipient_type" IN (''wire'',''outside_bank'') AND tr."status" IN (''Processing'',''Closed'') AND (tr."fee" - 25) > 0 THEN (tr."fee" - 25) ELSE 0 END) AS withdraw_fee_diff AS "payment_profit", "hidden" AS "hidden", tr."create_time"::DATE::TIMESTAMP AS "create_date", CAST("currency" AS text) AS "currency", CAST("action" AS text) AS "action", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
     FROM "crypto_assets_transfers" AS tr
 LEFT JOIN "ods_sale_am_transaction_2026" AS osat ON tr."transaction_id"::UUID = osat.transaction_id::UUID
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE
@@ -88,31 +88,11 @@ SELECT
     *
 FROM source_dws_sale_crypto_assets_transfers;
 
-CREATE TEMPORARY TABLE sink_dws_sale_crypto_assets_transfers_2024 (
-    id BIGINT, account_id STRING, sale_or_am_id STRING, status STRING, sender_type STRING, recipient_type STRING, transaction_count INT, origin_amount DECIMAL(18,2), settlement_amount DECIMAL(18,2), fee DECIMAL(18,2), fee2 DECIMAL(18,2), cross_chain_fee DECIMAL(18,2), exchange_profit DECIMAL(18,2), payment_profit DECIMAL(18,2), hidden BOOLEAN, create_date TIMESTAMP(6), currency STRING, action STRING, version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_crypto_assets_transfers_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_dws_sale_crypto_assets_transfers_2025 (
-    id BIGINT, account_id STRING, sale_or_am_id STRING, status STRING, sender_type STRING, recipient_type STRING, transaction_count INT, origin_amount DECIMAL(18,2), settlement_amount DECIMAL(18,2), fee DECIMAL(18,2), fee2 DECIMAL(18,2), cross_chain_fee DECIMAL(18,2), exchange_profit DECIMAL(18,2), payment_profit DECIMAL(18,2), hidden BOOLEAN, create_date TIMESTAMP(6), currency STRING, action STRING, version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_crypto_assets_transfers_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_sale_crypto_assets_transfers_2026 (
     id BIGINT, account_id STRING, sale_or_am_id STRING, status STRING, sender_type STRING, recipient_type STRING, transaction_count INT, origin_amount DECIMAL(18,2), settlement_amount DECIMAL(18,2), fee DECIMAL(18,2), fee2 DECIMAL(18,2), cross_chain_fee DECIMAL(18,2), exchange_profit DECIMAL(18,2), payment_profit DECIMAL(18,2), hidden BOOLEAN, create_date TIMESTAMP(6), currency STRING, action STRING, version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_crypto_assets_transfers_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
-INSERT INTO sink_dws_sale_crypto_assets_transfers_2024
-SELECT id, account_id, sale_or_am_id, status, sender_type, recipient_type, transaction_count, origin_amount, settlement_amount, fee, fee2, cross_chain_fee, exchange_profit, payment_profit, hidden, create_date, currency, action, version, create_time, update_time
-FROM v_dws_sale_crypto_assets_transfers_base
-CROSS JOIN source_delete_dws_sale_crypto_assets_transfers_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2024-01-01' AND create_date < DATE '2025-01-01';
-INSERT INTO sink_dws_sale_crypto_assets_transfers_2025
-SELECT id, account_id, sale_or_am_id, status, sender_type, recipient_type, transaction_count, origin_amount, settlement_amount, fee, fee2, cross_chain_fee, exchange_profit, payment_profit, hidden, create_date, currency, action, version, create_time, update_time
-FROM v_dws_sale_crypto_assets_transfers_base
-CROSS JOIN source_delete_dws_sale_crypto_assets_transfers_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2025-01-01' AND create_date < DATE '2026-01-01';
 INSERT INTO sink_dws_sale_crypto_assets_transfers_2026
 SELECT id, account_id, sale_or_am_id, status, sender_type, recipient_type, transaction_count, origin_amount, settlement_amount, fee, fee2, cross_chain_fee, exchange_profit, payment_profit, hidden, create_date, currency, action, version, create_time, update_time
 FROM v_dws_sale_crypto_assets_transfers_base

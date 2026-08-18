@@ -65,9 +65,9 @@ where account."parentAccountId" !=''00000000-0000-0000-0000-000000000000''
 ) AS sar ON tr."accountId" :: UUID = sar."accountId" :: UUID AND tr."createTime" >= sar."createTime" AND ( tr."createTime" <= sar."deleteTime" OR sar."deleteTime" IS NULL )
         WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT sar."salesId" AS sale_id, sar."amId" AS am_id, tr."createTime" as "create_time", NOW( ) AS update_time, -- 默认当前时间
-        NULL AS delete_time, -- 逻辑删除字段，默认 NULL
-        NULL AS remarks, -- 备注字段，默认 NULL
+    SELECT CAST(sar."salesId" AS text) AS "sale_id", CAST(sar."amId" AS text) AS "am_id", tr."createTime" AS "create_time", NOW( ) AS "update_time", -- 默认当前时间
+        NULL AS "delete_time", CAST(-- 逻辑删除字段，默认 NULL
+        NULL AS text) AS "remarks", -- 备注字段，默认 NULL
         1 AS VERSION -- 版本号，默认 1 AS "version"
     FROM "Transaction" tr
 LEFT JOIN (
@@ -93,31 +93,11 @@ SELECT
     *
 FROM source_ods_sale_am_transaction;
 
-CREATE TEMPORARY TABLE sink_ods_sale_am_transaction_2024 (
-    id BIGINT, sale_id STRING, am_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), remarks STRING, version INT,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_sale_am_transaction_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_ods_sale_am_transaction_2025 (
-    id BIGINT, sale_id STRING, am_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), remarks STRING, version INT,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_sale_am_transaction_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_ods_sale_am_transaction_2026 (
     id BIGINT, sale_id STRING, am_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), remarks STRING, version INT,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_sale_am_transaction_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
-INSERT INTO sink_ods_sale_am_transaction_2024
-SELECT id, sale_id, am_id, create_time, update_time, delete_time, remarks, version
-FROM v_ods_sale_am_transaction_base
-CROSS JOIN source_delete_ods_sale_am_transaction_result AS del
-WHERE del.affected_rows >= 0
-  AND create_time >= TIMESTAMP '2024-01-01 00:00:00' AND create_time < TIMESTAMP '2025-01-01 00:00:00';
-INSERT INTO sink_ods_sale_am_transaction_2025
-SELECT id, sale_id, am_id, create_time, update_time, delete_time, remarks, version
-FROM v_ods_sale_am_transaction_base
-CROSS JOIN source_delete_ods_sale_am_transaction_result AS del
-WHERE del.affected_rows >= 0
-  AND create_time >= TIMESTAMP '2025-01-01 00:00:00' AND create_time < TIMESTAMP '2026-01-01 00:00:00';
 INSERT INTO sink_ods_sale_am_transaction_2026
 SELECT id, sale_id, am_id, create_time, update_time, delete_time, remarks, version
 FROM v_ods_sale_am_transaction_base

@@ -61,7 +61,7 @@ LEFT JOIN "qbitCard" qc ON qc."id" :: VARCHAR = "tr"."sourceId"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."id"::VARCHAR = osat.transaction_id::VARCHAR
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT tr."accountId" AS "account_id", qc.provider AS "provider", qc."firstSix" AS "bin", tr."status" AS "status", ids."sale_or_am_id" AS "sale_or_am_id", COALESCE(sum("senderFee"),0) fee AS "fee", count(*) count AS "count", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", -- 初始版本号
+    SELECT CAST(tr."accountId" AS text) AS "account_id", CAST(qc.provider AS text) AS "provider", CAST(qc."firstSix" AS text) AS "bin", CAST(tr."status" AS text) AS "status", CAST(ids."sale_or_am_id" AS text) AS "sale_or_am_id", COALESCE(sum("senderFee"),0) fee AS "fee", count(*) count AS "count", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", -- 初始版本号
        NOW() AS "create_time", NOW() AS "update_time"
     FROM "Transaction" as "tr"
 LEFT JOIN "qbitCard" qc ON qc."id" :: VARCHAR = "tr"."sourceId"
@@ -82,31 +82,11 @@ SELECT
     *
 FROM source_dws_sale_open_card;
 
-CREATE TEMPORARY TABLE sink_dws_sale_open_card_2024 (
-    id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, sale_or_am_id STRING, fee DECIMAL(18,2), count INT, create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_open_card_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_dws_sale_open_card_2025 (
-    id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, sale_or_am_id STRING, fee DECIMAL(18,2), count INT, create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_open_card_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_sale_open_card_2026 (
     id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, sale_or_am_id STRING, fee DECIMAL(18,2), count INT, create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_open_card_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
-INSERT INTO sink_dws_sale_open_card_2024
-SELECT id, account_id, provider, bin, status, sale_or_am_id, fee, count, create_date, version, create_time, update_time
-FROM v_dws_sale_open_card_base
-CROSS JOIN source_delete_dws_sale_open_card_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2024-01-01' AND create_date < DATE '2025-01-01';
-INSERT INTO sink_dws_sale_open_card_2025
-SELECT id, account_id, provider, bin, status, sale_or_am_id, fee, count, create_date, version, create_time, update_time
-FROM v_dws_sale_open_card_base
-CROSS JOIN source_delete_dws_sale_open_card_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2025-01-01' AND create_date < DATE '2026-01-01';
 INSERT INTO sink_dws_sale_open_card_2026
 SELECT id, account_id, provider, bin, status, sale_or_am_id, fee, count, create_date, version, create_time, update_time
 FROM v_dws_sale_open_card_base
