@@ -4,16 +4,16 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-12
--- Updated Time:   2026-08-17 00:00:00
--- Description:    Quantum BB v2 DWS CDC 按月重算写入 v2
+-- Updated Time:   2026-08-18 00:00:00
+-- Description:    Quantum BB v2 DWS CDC 按日重算写入 v2（report_date 逐日粒度，对齐 QI）
 -- 作业元信息：
 --   作业类型：流处理 CDC
---   运行方式：默认按昨天变更扫描，按受影响月份整月删除后重算
+--   运行方式：默认按昨天变更扫描，按受影响日期逐日重算
 --   运行参数：无
---   源库变更响应：源表 update_time / delete_time 变化后，重刷对应月份
+--   源库变更响应：源表 update_time / delete_time 变化后，重刷对应日期
 -- Notes:
 --   1. 主链路: DWM transaction/auth -> DWS
---   2. 粒度: account_id + report_date(月初) + sale_id + am_id
+--   2. 粒度: account_id + report_date(日) + sale_id + am_id；active card fee 仍按月初承载
 --   3. 固定成本和 Active Card fee 由独立特殊行脚本处理，主链路保持 0。
 --********************************************************************--
 
@@ -39,7 +39,7 @@ CREATE TEMPORARY TABLE source_bb_changed_keys (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT DISTINCT date_trunc(''month'', event_time)::date AS report_date, account_id FROM (SELECT transaction_time AS event_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE transaction_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT original_completion_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE original_completion_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT settlement_post_date, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE settlement_post_date IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT auth_time, account_id FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE auth_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp))) changed) AS bb_changed_keys_f',
+    'table-name' = '(SELECT DISTINCT event_time::date AS report_date, account_id FROM (SELECT transaction_time AS event_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE transaction_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT original_completion_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE original_completion_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT settlement_post_date, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE settlement_post_date IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT auth_time, account_id FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE auth_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp))) changed) AS bb_changed_keys_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -92,7 +92,7 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_transaction_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(WITH changed_keys AS (SELECT DISTINCT date_trunc(''month'', event_time)::date AS report_date, account_id FROM (SELECT transaction_time AS event_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE transaction_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT original_completion_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE original_completion_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT settlement_post_date, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE settlement_post_date IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT auth_time, account_id FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE auth_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp))) changed) SELECT t.id, t.txn_id, t.settlement_id, t.source_id, t.card_transaction_id, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.transaction_time, t.original_completion_time, t.business_type, t.business_code_list, t.remarks, t.detail, t.card_org, t.tx_country, t.settle_country, t.is_dom, t.resp_code, t.reason_code, t.transaction_type, t.is_valid_settle, t.is_clearing, t.is_reversal, t.is_refund, t.billing_amount, t.settlement_post_date, t.settlement_txn_date, t.sale_id, t.am_id, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_transaction_detail_v2_p t WHERE t.delete_time IS NULL AND EXISTS (SELECT 1 FROM changed_keys k WHERE t.account_id = k.account_id AND (date_trunc(''month'', t.transaction_time)::date = k.report_date OR date_trunc(''month'', t.original_completion_time)::date = k.report_date OR date_trunc(''month'', t.settlement_post_date)::date = k.report_date))) AS dwm_bb_card_transaction_detail_v2_p_f',
+    'table-name' = '(WITH changed_keys AS (SELECT DISTINCT event_time::date AS report_date, account_id FROM (SELECT transaction_time AS event_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE transaction_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT original_completion_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE original_completion_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT settlement_post_date, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE settlement_post_date IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT auth_time, account_id FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE auth_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp))) changed) SELECT t.id, t.txn_id, t.settlement_id, t.source_id, t.card_transaction_id, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.transaction_time, t.original_completion_time, t.business_type, t.business_code_list, t.remarks, t.detail, t.card_org, t.tx_country, t.settle_country, t.is_dom, t.resp_code, t.reason_code, t.transaction_type, t.is_valid_settle, t.is_clearing, t.is_reversal, t.is_refund, t.billing_amount, t.settlement_post_date, t.settlement_txn_date, t.sale_id, t.am_id, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_transaction_detail_v2_p t WHERE t.delete_time IS NULL AND EXISTS (SELECT 1 FROM changed_keys k WHERE t.account_id = k.account_id AND (date_trunc(''month'', t.transaction_time)::date = k.report_date OR date_trunc(''month'', t.original_completion_time)::date = k.report_date OR date_trunc(''month'', t.settlement_post_date)::date = k.report_date))) AS dwm_bb_card_transaction_detail_v2_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -136,7 +136,7 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(WITH changed_keys AS (SELECT DISTINCT date_trunc(''month'', event_time)::date AS report_date, account_id FROM (SELECT transaction_time AS event_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE transaction_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT original_completion_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE original_completion_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT settlement_post_date, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE settlement_post_date IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT auth_time, account_id FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE auth_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp))) changed) SELECT t.id, t.auth_txn_guid, t.card_proxy, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.auth_time, t.program_name, t.merchant_country, t.request_code, t.request_description, t.response_code, t.reason_code, t.txn_amount, t.settle_amount, t.txn_currency, t.merchant_name, t.mcc, t.card_org, t.is_dom, t.is_decline, t.is_account_verification, t.is_excluded_request, t.sale_id, t.am_id, t.source_table, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_auth_detail_v2_p t WHERE t.delete_time IS NULL AND EXISTS (SELECT 1 FROM changed_keys k WHERE t.account_id = k.account_id AND date_trunc(''month'', t.auth_time)::date = k.report_date)) AS dwm_bb_card_auth_detail_v2_p_f',
+    'table-name' = '(WITH changed_keys AS (SELECT DISTINCT event_time::date AS report_date, account_id FROM (SELECT transaction_time AS event_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE transaction_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT original_completion_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE original_completion_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT settlement_post_date, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE settlement_post_date IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT auth_time, account_id FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE auth_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp))) changed) SELECT t.id, t.auth_txn_guid, t.card_proxy, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.auth_time, t.program_name, t.merchant_country, t.request_code, t.request_description, t.response_code, t.reason_code, t.txn_amount, t.settle_amount, t.txn_currency, t.merchant_name, t.mcc, t.card_org, t.is_dom, t.is_decline, t.is_account_verification, t.is_excluded_request, t.sale_id, t.am_id, t.source_table, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_auth_detail_v2_p t WHERE t.delete_time IS NULL AND EXISTS (SELECT 1 FROM changed_keys k WHERE t.account_id = k.account_id AND date_trunc(''month'', t.auth_time)::date = k.report_date)) AS dwm_bb_card_auth_detail_v2_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -152,36 +152,36 @@ WHERE report_date >= DATE '2021-01-01';
 
 CREATE TEMPORARY VIEW v_bb_metric_rows AS
 SELECT
-    CAST(DATE_FORMAT(CAST(s.transaction_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
+    CAST(s.transaction_time AS DATE) AS report_date,
     s.*,
     'txn_time' AS metric_basis
 FROM source_dwm_bb_card_transaction_detail_v2_p s
 INNER JOIN v_bb_changed_keys k
-    ON CAST(DATE_FORMAT(CAST(s.transaction_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = k.report_date
+    ON CAST(s.transaction_time AS DATE) = k.report_date
    AND s.account_id = k.account_id
 WHERE s.delete_time IS NULL
   AND s.transaction_time IS NOT NULL
   AND CAST(s.transaction_time AS DATE) >= DATE '2021-01-01'
 UNION ALL
 SELECT
-    CAST(DATE_FORMAT(CAST(s.original_completion_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
+    CAST(s.original_completion_time AS DATE) AS report_date,
     s.*,
     'completion_time' AS metric_basis
 FROM source_dwm_bb_card_transaction_detail_v2_p s
 INNER JOIN v_bb_changed_keys k
-    ON CAST(DATE_FORMAT(CAST(s.original_completion_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = k.report_date
+    ON CAST(s.original_completion_time AS DATE) = k.report_date
    AND s.account_id = k.account_id
 WHERE s.delete_time IS NULL
   AND s.original_completion_time IS NOT NULL
   AND CAST(s.original_completion_time AS DATE) >= DATE '2021-01-01'
 UNION ALL
 SELECT
-    CAST(DATE_FORMAT(CAST(s.settlement_post_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
+    CAST(s.settlement_post_date AS DATE) AS report_date,
     s.*,
     'post_date' AS metric_basis
 FROM source_dwm_bb_card_transaction_detail_v2_p s
 INNER JOIN v_bb_changed_keys k
-    ON CAST(DATE_FORMAT(CAST(s.settlement_post_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = k.report_date
+    ON CAST(s.settlement_post_date AS DATE) = k.report_date
    AND s.account_id = k.account_id
 WHERE s.delete_time IS NULL
   AND s.settlement_post_date IS NOT NULL
@@ -191,7 +191,7 @@ CREATE TEMPORARY VIEW v_bb_auth_scope_rows AS
 SELECT s.*
 FROM source_dwm_bb_card_auth_detail_v2_p s
 INNER JOIN v_bb_changed_keys k
-    ON CAST(DATE_FORMAT(CAST(s.auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = k.report_date
+    ON CAST(s.auth_time AS DATE) = k.report_date
    AND s.account_id = k.account_id
 WHERE s.delete_time IS NULL
   AND s.auth_time IS NOT NULL
@@ -245,7 +245,7 @@ GROUP BY report_date, account_id, account_type, account_category, system_type, s
 
 CREATE TEMPORARY VIEW v_bb_auth_month_rows AS
 SELECT
-    CAST(DATE_FORMAT(CAST(auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
+    CAST(auth_time AS DATE) AS report_date,
     account_id,
     account_type,
     account_category,

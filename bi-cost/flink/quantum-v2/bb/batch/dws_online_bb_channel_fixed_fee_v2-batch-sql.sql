@@ -1,10 +1,12 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-16
--- Description:    BB v2 渠道固定成本批量回刷
+-- Updated Time:   2026-08-18 00:00:00
+-- Description:    BB v2 渠道固定成本批量回刷（月固定成本按天均分，逐日分摊）
 -- 作业元信息：
 --   作业类型：批处理
 --   运行方式：按 start_time/end_time 覆盖月份删除并重算 BB 固定成本特殊行
+--   分摊口径：月固定成本 / 当月天数 = 日固定成本；每天按该日账户净额占比分摊到逐日 report_date
 --   运行参数：start_time, end_time
 -- Notes:
 --   1. 只写入 cost_fixed_fee 和 special_fee_type，不再使用 active_card_account_fee。
@@ -86,9 +88,9 @@ FROM (
 WHERE report_month IS NOT NULL;
 
 CREATE TEMPORARY VIEW v_month_channel_cost AS
-SELECT report_month, amount AS month_fixed_fee
+SELECT report_month, next_month, amount AS month_fixed_fee
 FROM (
-    SELECT m.report_month, t.amount,
+    SELECT m.report_month, m.next_month, t.amount,
         ROW_NUMBER() OVER (
             PARTITION BY m.report_month
             ORDER BY CASE WHEN t.detail = 'DEFAULT_FALLBACK' THEN 1 ELSE 0 END, t.statistics_time DESC, t.update_time DESC, t.id DESC
@@ -106,6 +108,15 @@ FROM (
 ) ranked
 WHERE rn = 1;
 
+-- 月固定成本按当月天数均分 → 日固定成本
+CREATE TEMPORARY VIEW v_day_channel_cost AS
+SELECT
+    report_month,
+    next_month,
+    month_fixed_fee,
+    month_fixed_fee / DATEDIFF(next_month, report_month) AS day_fixed_fee
+FROM v_month_channel_cost;
+
 CREATE TEMPORARY VIEW v_allocation_base AS
 SELECT *
 FROM source_dws_bb_card_finance_daily_v2_p
@@ -116,12 +127,13 @@ WHERE delete_time IS NULL
       WHERE report_date >= m.report_month AND report_date < m.next_month
   );
 
-CREATE TEMPORARY VIEW v_month_net_amount AS
+CREATE TEMPORARY VIEW v_day_net_amount AS
 SELECT
     CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month,
-    SUM(COALESCE(total_net_amount, CAST(0 AS DECIMAL(20, 4)))) AS month_total_net_amount
+    report_date,
+    SUM(COALESCE(total_net_amount, CAST(0 AS DECIMAL(20, 4)))) AS day_total_net_amount
 FROM v_allocation_base
-GROUP BY CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE);
+GROUP BY CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE), report_date;
 
 CREATE TEMPORARY VIEW v_fixed_fee_rows AS
 SELECT
@@ -133,15 +145,15 @@ SELECT
     b.system_type,
     b.sale_id,
     b.am_id,
-    CAST(c.month_fixed_fee * COALESCE(b.total_net_amount, CAST(0 AS DECIMAL(20, 4))) / NULLIF(na.month_total_net_amount, 0) AS DECIMAL(20, 4)) AS cost_fixed_fee
+    CAST(c.day_fixed_fee * COALESCE(b.total_net_amount, CAST(0 AS DECIMAL(20, 4))) / NULLIF(na.day_total_net_amount, 0) AS DECIMAL(20, 4)) AS cost_fixed_fee
 FROM v_allocation_base b
-INNER JOIN v_month_net_amount na
-    ON CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = na.report_month
-INNER JOIN v_month_channel_cost c
+INNER JOIN v_day_net_amount na
+    ON b.report_date = na.report_date
+INNER JOIN v_day_channel_cost c
     ON c.report_month = na.report_month
 WHERE c.month_fixed_fee IS NOT NULL
   AND c.month_fixed_fee <> CAST(0 AS DECIMAL(20, 4))
-  AND na.month_total_net_amount <> CAST(0 AS DECIMAL(20, 4));
+  AND na.day_total_net_amount <> CAST(0 AS DECIMAL(20, 4));
 
 CREATE TEMPORARY VIEW v_obsolete_fixed_fee_rows AS
 SELECT

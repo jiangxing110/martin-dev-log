@@ -1,8 +1,8 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-04
--- Updated Time:   2026-08-06 01:20:00
--- Description:    BB v2 DWS 批量初始化/回刷
+-- Updated Time:   2026-08-18 00:00:00
+-- Description:    BB v2 DWS 批量初始化/回刷（report_date 逐日粒度，对齐 QI）
 -- 作业元信息：
 --   作业类型：批处理
 --   运行方式：一次性初始化/按 report_date 回刷
@@ -10,7 +10,7 @@
 --   源库变更响应：源库变化不会自动触发本作业。
 -- Notes:
 --   1. 主链路: dwm_bb_card_transaction_detail_v2_p + dwm_bb_card_auth_detail_v2_p -> dws_bb_card_finance_daily_p。
---   2. DWS 粒度: account_id + report_date(月初) + sale_id + am_id。
+--   2. DWS 粒度: account_id + report_date(日) + sale_id + am_id；active card fee 仍按月初承载。
 --   3. 固定成本和 Active Card fee 由独立特殊行脚本处理，主链路保持 0。
 -- Notes:
 --   1. v2 在同一个 Flink SQL 作业中通过 JDBC source 调用 dws.fn_delete_bb_card_finance_daily_v2_monthly_cdc(false) 先清理目标数据。
@@ -169,7 +169,7 @@ CREATE TEMPORARY VIEW v_bb_txn_time_rows AS
 SELECT
     -- Count/Reversal 采用北京时间月窗口 [月初 08:00, 次月月初 08:00)，
     -- 窗口末尾 8 小时仍属于本次成本月，不能按 transaction_time 自然月归到次月。
-    CAST(DATE_FORMAT(CAST(CURRENT_DATE - INTERVAL '1' MONTH AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
+    CAST(transaction_time AS DATE) AS report_date,
     account_id,
     account_type,
     account_category,
@@ -221,7 +221,7 @@ WHERE delete_time IS NULL
 
 CREATE TEMPORARY VIEW v_bb_completion_rows AS
 SELECT
-    CAST(DATE_FORMAT(CAST(original_completion_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
+    CAST(original_completion_time AS DATE) AS report_date,
     account_id,
     account_type,
     account_category,
@@ -273,7 +273,7 @@ WHERE delete_time IS NULL
 
 CREATE TEMPORARY VIEW v_bb_post_rows AS
 SELECT
-    CAST(DATE_FORMAT(CAST(settlement_post_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
+    CAST(settlement_post_date AS DATE) AS report_date,
     account_id,
     account_type,
     account_category,
@@ -621,7 +621,7 @@ GROUP BY report_date, account_id, account_type, account_category, system_type, s
 
 CREATE TEMPORARY VIEW v_bb_auth_month_rows AS
 SELECT
-    CAST(DATE_FORMAT(CAST(auth_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_date,
+    CAST(auth_time AS DATE) AS report_date,
     account_id,
     account_type,
     account_category,
