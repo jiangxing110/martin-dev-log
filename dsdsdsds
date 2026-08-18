@@ -1,69 +1,1594 @@
-BB实际渠道成本：
-2026-07:432,056
-2026-06:413824
-2026-05:458271
-2026-04:493871
-2026-03:581667.94
-2026-02:528265.38
-2026-01:694143.68
-昨天晚上
-2026-01	689213.7314	394406.9196
-2026-02	517386.3935	327340.9571
-2026-03	578162.7194	377910.0063
-2026-04	493430.9672	339556.0396
-2026-05	502225.9000	352991.0602
-2026-06	402327.1690	332479.9334
-2026-07	432056.0019	359663.0785
-2026-08	213903.1168	164429.4192
-今天
-2026-01	689213.7314	394406.9196
-2026-02	517386.3935	327340.9571
-2026-03	578162.7194	377910.0063
-2026-04	493430.9672	339556.0396
-2026-05	502225.9000	352991.0602
-2026-06	402327.1690	332479.9334
-2026-07	458459.7274	362940.1131
-2026-08	276088.5781	174357.6507
-
-| 月份      |     BB实际成本 |           昨晚 |             昨晚差值 |           今天 |             今天差值 |            今天-昨晚 |
-| ------- | ---------: | -----------: | ---------------: | -----------: | ---------------: | ---------------: |
-| 2026-01 | 694,143.68 | 689,213.7314 |  **-4,929.9486** | 689,213.7314 |  **-4,929.9486** |                0 |
-| 2026-02 | 528,265.38 | 517,386.3935 | **-10,878.9865** | 517,386.3935 | **-10,878.9865** |                0 |
-| 2026-03 | 581,667.94 | 578,162.7194 |  **-3,505.2206** | 578,162.7194 |  **-3,505.2206** |                0 |
-| 2026-04 | 493,871.00 | 493,430.9672 |    **-440.0328** | 493,430.9672 |    **-440.0328** |                0 |
-| 2026-05 | 458,271.00 | 502,225.9000 | **+43,954.9000** | 502,225.9000 | **+43,954.9000** |                0 |
-| 2026-06 | 413,824.00 | 402,327.1690 | **-11,496.8310** | 402,327.1690 | **-11,496.8310** |                0 |
-| 2026-07 | 432,056.00 | 432,056.0019 |      **+0.0019** | 458,459.7274 | **+26,403.7274** | **+26,403.7255** |
-
-
-11622d71-56bd-4a0c-beae-6a9fbdf0da51	bb_active_card_count_v2	1	1	1	edfc4d0a-2131-440f-87a3-f3781767fa7f		0.0000
-11622d71-56bd-4a0c-beae-6a9fbdf0da51	bb_channel_fixed_fee_v2	3	2	2	edfc4d0a-2131-440f-87a3-f3781767fa7f	f3086b59-5078-4c00-b2f7-c38ab62a6f44	0.0000
-11622d71-56bd-4a0c-beae-6a9fbdf0da51	bb_v2_cdc	3	2	2	edfc4d0a-2131-440f-87a3-f3781767fa7f	f3086b59-5078-4c00-b2f7-c38ab62a6f44	1729630.6500
-12ecac04-b0a7-4e35-95bb-44e053499432	bb_active_card_count_v2	1	1	1	cc5ffd12-c894-42dc-a74f-8380f7c1bc3f		0.0000
-12ecac04-b0a7-4e35-95bb-44e053499432	bb_channel_fixed_fee_v2	2	2	1	cc5ffd12-c894-42dc-a74f-8380f7c1bc3f		0.0000
-12ecac04-b0a7-4e35-95bb-44e053499432	bb_v2_cdc	2	2	1	cc5ffd12-c894-42dc-a74f-8380f7c1bc3f		18135.9000
-350a84df-060c-4b7f-8e48-fa32f095c990	bb_active_card_count_v2	1	1	1	cc5ffd12-c894-42dc-a74f-8380f7c1bc3f		0.0000
-350a84df-060c-4b7f-8e48-fa32f095c990	bb_channel_fixed_fee_v2	2	2	1	cc5ffd12-c894-42dc-a74f-8380f7c1bc3f		0.0000
-350a84df-060c-4b7f-8e48-fa32f095c990	bb_v2_cdc	2	2	1	cc5ffd12-c894-42dc-a74f-8380f7c1bc3f		-234.9700
-78ad30f2-5794-47c7-b413-62cc599ab203	bb_active_card_count_v2	1	1	1	cfd8b2a8-af2d-474a-9923-3a5ef0335f52	7ba5aa24-bfb8-424b-84f9-d8cc067b8e6e	0.0000
-78ad30f2-5794-47c7-b413-62cc599ab203	bb_channel_fixed_fee_v2	3	2	2	cfd8b2a8-af2d-474a-9923-3a5ef0335f52	7ba5aa24-bfb8-424b-84f9-d8cc067b8e6e	0.0000
-78ad30f2-5794-47c7-b413-62cc599ab203	bb_v2_cdc	3	2	2	cfd8b2a8-af2d-474a-9923-3a5ef0335f52	7ba5aa24-bfb8-424b-84f9-d8cc067b8e6e	569330.2700
-951dc911-aa77-474b-b47d-6ed560e3e46e	bb_active_card_count_v2	1	1	1	cfd8b2a8-af2d-474a-9923-3a5ef0335f52	3c2f4044-4762-44b6-a274-e0cd5286d428	0.0000
-951dc911-aa77-474b-b47d-6ed560e3e46e	bb_channel_fixed_fee_v2	2	1	2	cfd8b2a8-af2d-474a-9923-3a5ef0335f52	3c2f4044-4762-44b6-a274-e0cd5286d428	0.0000
-951dc911-aa77-474b-b47d-6ed560e3e46e	bb_v2_cdc	2	1	2	cfd8b2a8-af2d-474a-9923-3a5ef0335f52	3c2f4044-4762-44b6-a274-e0cd5286d428	20297.9500
-d9dd758b-fa2d-4148-a6f4-f85793b78a68	bb_active_card_count_v2	1	1	1	7ba0e61c-ed0d-411a-bc13-99ed5997aae5		0.0000
-d9dd758b-fa2d-4148-a6f4-f85793b78a68	bb_channel_fixed_fee_v2	2	2	1	7ba0e61c-ed0d-411a-bc13-99ed5997aae5		0.0000
-d9dd758b-fa2d-4148-a6f4-f85793b78a68	bb_v2_cdc	2	2	1	7ba0e61c-ed0d-411a-bc13-99ed5997aae5		19960.8300
-fa08c2ee-0ad1-484e-941b-f21595a0bfe5	bb_active_card_count_v2	1	1	1			0.0000
-fa08c2ee-0ad1-484e-941b-f21595a0bfe5	bb_channel_fixed_fee_v2	1	1	1			0.0000
-fa08c2ee-0ad1-484e-941b-f21595a0bfe5	bb_v2_cdc	1	1	1			2786.9400
-
-350a84df-060c-4b7f-8e48-fa32f095c990	1134	1040	0	1	0
-951dc911-aa77-474b-b47d-6ed560e3e46e	403	403	335	1	1
-78ad30f2-5794-47c7-b413-62cc599ab203	10801	10748	7518	1	1
-12ecac04-b0a7-4e35-95bb-44e053499432	3089	3066	0	1	0
-fa08c2ee-0ad1-484e-941b-f21595a0bfe5	143	0	0	0	0
-11622d71-56bd-4a0c-beae-6a9fbdf0da51	157584	156902	156902	1	1
-d9dd758b-fa2d-4148-a6f4-f85793b78a68	1939	1890	0	1	0
-
-118	1444.8600	0
+{
+    "data": [
+        {
+            "id": "doubao-seedance-2-0-260128",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "video"
+            ]
+        },
+        {
+            "id": "doubao-seedance-1-5-pro-251215",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "video"
+            ]
+        },
+        {
+            "id": "doubao-seedance-2-0-fast-260128",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "video"
+            ]
+        },
+        {
+            "id": "mj_imagine",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "midjourney",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "mj_reroll",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "midjourney",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "mj_upscale",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "midjourney",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "mj_edits",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "midjourney",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "mj_variation",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "midjourney",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "kimi-k3",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "kimi-k2.6",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "MiniMax-M2.7",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "qwen3.8-max",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "kimi-k2.5",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "MiniMax-M3",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "mimo-v2.5-pro",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "MiniMax-M2.5",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "glm-5.2",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "glm-5",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai",
+                "anthropic"
+            ]
+        },
+        {
+            "id": "qwen3.5-plus",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "glm-5.1",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai",
+                "anthropic"
+            ]
+        },
+        {
+            "id": "kimi-k2.7-code",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "qwen3.7-plus",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "qwen3.7-max",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "glm-5.3",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "deepseek-v4-pro",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "mimo-v2.5",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai",
+                "openai-response"
+            ]
+        },
+        {
+            "id": "gpt-5.6-luna",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "qwen3.6-plus",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "deepseek-v4-flash",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "deepseek-v3.2-251201",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "deepseek-v3.1-terminus",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "deepseek-r1-250528",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "bge-m3",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "embeddings"
+            ]
+        },
+        {
+            "id": "qwen2.5-vl-72b-instruct",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "deepseek-v3-250324",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "flux-2-pro",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "image-generation",
+                "openai"
+            ]
+        },
+        {
+            "id": "flux-pro-1.1",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "image-generation",
+                "openai"
+            ]
+        },
+        {
+            "id": "flux-kontext-pro",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "image-generation",
+                "openai"
+            ]
+        },
+        {
+            "id": "flux-2-max",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "image-generation",
+                "openai"
+            ]
+        },
+        {
+            "id": "flux-kontext-max",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "image-generation"
+            ]
+        },
+        {
+            "id": "kling-v2-5-turbo",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "text2video"
+            ]
+        },
+        {
+            "id": "kling-v3",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "text2video"
+            ]
+        },
+        {
+            "id": "kling-v2-6",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "text2video"
+            ]
+        },
+        {
+            "id": "viduq3-turbo",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "text2video"
+            ]
+        },
+        {
+            "id": "viduq3-pro",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "text2video"
+            ]
+        },
+        {
+            "id": "grok-4.6",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai",
+                "openai-response"
+            ]
+        },
+        {
+            "id": "grok-imagine-video",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "xai",
+            "supported_endpoint_types": [
+                "video_generations"
+            ]
+        },
+        {
+            "id": "grok-imagine-video-1.5",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "video_generations"
+            ]
+        },
+        {
+            "id": "grok-4.20-0309-non-reasoning",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai",
+                "openai-response"
+            ]
+        },
+        {
+            "id": "grok-4.20-0309-reasoning",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai",
+                "openai-response"
+            ]
+        },
+        {
+            "id": "grok-imagine-image-2.0",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai",
+                "openai-response"
+            ]
+        },
+        {
+            "id": "grok-imagine-image",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "xai",
+            "supported_endpoint_types": [
+                "image-generation"
+            ]
+        },
+        {
+            "id": "grok-4.3",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai",
+                "openai-response"
+            ]
+        },
+        {
+            "id": "grok-4.5",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai",
+                "openai-response"
+            ]
+        },
+        {
+            "id": "glm-5-turbo",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "glm-4v-plus",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "zhipu_4v",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "glm-5v-turbo",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "glm-4.7",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai",
+                "anthropic"
+            ]
+        },
+        {
+            "id": "kimi-k2.7-code-highspeed",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "ByteDance-Seed-2.0-lite-260328",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "ByteDance-Seedream-5.0-pro",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "ByteDance-Seedream-5.0",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "ByteDance-Seed-1.6",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "ByteDance-Seedream-4.5",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "image-generation"
+            ]
+        },
+        {
+            "id": "ByteDance-Seed-1.6-flash",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "ByteDance-Seedance-1.0-pro-fast",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "videos",
+                "doubao"
+            ]
+        },
+        {
+            "id": "ByteDance-Seed-1.8",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "ByteDance-Seedream-4.0",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai",
+                "image-generation"
+            ]
+        },
+        {
+            "id": "ByteDance-Seed-2.0-pro-260328",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "ByteDance-Seed-2.0-mini-260328",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "ByteDance-Seedance-1.5-pro",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "videos",
+                "doubao"
+            ]
+        },
+        {
+            "id": "ByteDance-Seed-2.0-code-preview-260328",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "doubao-seed-2-1-turbo-260628",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "doubao-seed-2-1-pro-260628",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "doubao-seed-2-0-pro-260215",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "doubao-seed-2-0-lite-260428",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "qwen3.5-35b-a3b",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "qwen3.6-35b-a3b",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "deepseek-v3.2-exp",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "MiniMax-M2.1",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "minimax",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "qwen3.6-flash",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "qwen3.7-flash",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "deepseek-v4-pro-of",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "qwen-image-max",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "image-generation"
+            ]
+        },
+        {
+            "id": "qwen-mt-flash-sp",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "qwen3-max-preview",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "qwen3.6-max-preview",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai",
+                "openai-response"
+            ]
+        },
+        {
+            "id": "qwen-mt-flash",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "qwen3-max",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-5.4",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai-response",
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-5.3-codex",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "codex",
+            "supported_endpoint_types": [
+                "openai",
+                "openai-response"
+            ]
+        },
+        {
+            "id": "gpt-3.5-turbo-0125",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-4o",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-3.5-turbo",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-5",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "codex",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-5.1",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "codex",
+            "supported_endpoint_types": [
+                "openai",
+                "openai-response"
+            ]
+        },
+        {
+            "id": "gpt-5.5-pro",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai-response"
+            ]
+        },
+        {
+            "id": "gpt-image-1.5",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "image-generation",
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-4.1-mini",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-5.4-nano",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-5.4-mini",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-4.1",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-5-mini",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-4o-mini",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-5.2",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "codex",
+            "supported_endpoint_types": [
+                "openai",
+                "openai-response"
+            ]
+        },
+        {
+            "id": "gpt-5.5",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-3.5-turbo-16k",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-5.4-pro",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai",
+                "openai-response"
+            ]
+        },
+        {
+            "id": "gpt-5-nano",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-image-2",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "image-generation"
+            ]
+        },
+        {
+            "id": "gpt-5.6-terra",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-4.1-2025-04-14",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-5.6-sol",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "text-embedding-ada-002",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-5-codex",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "codex",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "o3",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-5.2-codex",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "codex",
+            "supported_endpoint_types": [
+                "openai",
+                "openai-response"
+            ]
+        },
+        {
+            "id": "text-embedding-3-small",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "text-embedding-3-large",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-4.1-nano",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-image-1",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+                "image-generation",
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-5.3-chat",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-image-2-4K",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-image-2-sp",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-image-2-adobe",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "gpt-oss-120b",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai"
+            ]
+        },
+        {
+            "id": "claude-sonnet-4-5-20250929",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "anthropic"
+            ]
+        },
+        {
+            "id": "claude-opus-5",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "anthropic",
+                "openai"
+            ]
+        },
+        {
+            "id": "claude-opus-4-8",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "anthropic"
+            ]
+        },
+        {
+            "id": "claude-haiku-4-5-20251001",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "anthropic"
+            ]
+        },
+        {
+            "id": "claude-sonnet-4-5-20250929-thinking",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "anthropic"
+            ]
+        },
+        {
+            "id": "claude-fable-5",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "anthropic"
+            ]
+        },
+        {
+            "id": "claude-sonnet-4-6",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "aws",
+            "supported_endpoint_types": [
+                "anthropic"
+            ]
+        },
+        {
+            "id": "claude-opus-4-7",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "anthropic"
+            ]
+        },
+        {
+            "id": "claude-opus-4-6",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "anthropic"
+            ]
+        },
+        {
+            "id": "claude-opus-4-5-20251101-thinking",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "anthropic"
+            ]
+        },
+        {
+            "id": "claude-opus-4-5-20251101",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "anthropic",
+                "openai"
+            ]
+        },
+        {
+            "id": "claude-sonnet-5",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "anthropic",
+                "openai"
+            ]
+        },
+        {
+            "id": "claude-haiku-4-5-20251001-thinking",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai",
+                "anthropic"
+            ]
+        },
+        {
+            "id": "claude-opus-4-6-thinking",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "anthropic",
+                "openai"
+            ]
+        },
+        {
+            "id": "claude-sonnet-4-6-thinking",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "anthropic",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-3.1-pro-preview-customtools",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "gemini"
+            ]
+        },
+        {
+            "id": "gemini-3.5-flash",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-2.5-flash",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-3.1-pro-preview",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "gemini"
+            ]
+        },
+        {
+            "id": "gemini-3.1-pro-preview-cursor",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-3.1-flash-image",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-3-pro-preview",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "gemini"
+            ]
+        },
+        {
+            "id": "gemini-2.5-flash-lite",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "gemini"
+            ]
+        },
+        {
+            "id": "gemini-3.6-flash",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-3-flash-preview",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-3.7-flash",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-2.5-pro",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "gemini"
+            ]
+        },
+        {
+            "id": "gemini-3.1-flash-lite-preview",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "gemini"
+            ]
+        },
+        {
+            "id": "gemini-3.1-flash-lite",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-3.1-flash-tts-preview",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-3-pro-image-preview",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "gemini",
+                "image-generation"
+            ]
+        },
+        {
+            "id": "gemini-2.5-pro-preview-tts",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-3.5-flash-lite",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-flash-latest",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "gemini"
+            ]
+        },
+        {
+            "id": "gemini-flash-lite-latest",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "gemini"
+            ]
+        },
+        {
+            "id": "gemini-3.1-flash-image-preview",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "image-generation"
+            ]
+        },
+        {
+            "id": "gemini-2.5-flash-image",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "vertex-ai",
+            "supported_endpoint_types": [
+                "openai",
+                "gemini"
+            ]
+        },
+        {
+            "id": "gemini-3.1-flash-image-preview-4k",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "openai",
+                "gemini",
+                "image-generation"
+            ]
+        },
+        {
+            "id": "gemini-3-pro-image",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-3.1-flash-image-preview-sp",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-3.1-flash-lite-image",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-3-pro-image-preview-sp",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        },
+        {
+            "id": "gemini-3-pro-image-preview-spe",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "custom",
+            "supported_endpoint_types": [
+                "gemini",
+                "openai"
+            ]
+        }
+    ],
+    "object": "list",
+    "success": true
+}
