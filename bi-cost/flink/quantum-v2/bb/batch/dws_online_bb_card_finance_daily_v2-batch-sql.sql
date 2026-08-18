@@ -8,6 +8,8 @@
 --   运行方式：一次性初始化/按 report_date 回刷
 --   运行参数：start_date, end_date
 --   源库变更响应：源库变化不会自动触发本作业。
+-- ⚠️ 角色：仅用于一次性历史初始化与手动回刷工具；日常 DWS 写入由 daily CDC（唯一写入者）承担。
+--   回刷前必须删除目标范围 DWS 数据（先删后插），避免与 CDC 并存。
 -- Notes:
 --   1. 主链路: dwm_bb_card_transaction_detail_v2_p + dwm_bb_card_auth_detail_v2_p -> dws_bb_card_finance_daily_p。
 --   2. DWS 粒度: account_id + report_date(日) + sale_id + am_id；active card fee 仍按月初承载。
@@ -151,8 +153,7 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
 
 CREATE TEMPORARY VIEW v_bb_txn_time_rows AS
 SELECT
-    -- Count/Reversal 采用北京时间月窗口 [月初 08:00, 次月月初 08:00)，
-    -- 窗口末尾 8 小时仍属于本次成本月，不能按 transaction_time 自然月归到次月。
+    -- Count/Reversal 采用自然日窗口 [start_date, end_date)，与 report_date、CDC、QI 口径一致
     CAST(transaction_time AS DATE) AS report_date,
     account_id,
     account_type,
@@ -200,8 +201,8 @@ SELECT
     billing_amount
 FROM source_dwm_bb_card_transaction_detail_v2_p
 WHERE delete_time IS NULL
-  AND transaction_time >= CAST('${start_date}' AS TIMESTAMP(6)) + INTERVAL '8' HOUR
-  AND transaction_time < CAST('${end_date}' AS TIMESTAMP(6)) + INTERVAL '8' HOUR;
+  AND transaction_time >= CAST('${start_date}' AS TIMESTAMP(6))
+  AND transaction_time < CAST('${end_date}' AS TIMESTAMP(6));
 
 CREATE TEMPORARY VIEW v_bb_completion_rows AS
 SELECT
@@ -910,7 +911,7 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     create_time              TIMESTAMP(6),
     update_time              TIMESTAMP(6),
     delete_time              TIMESTAMP(6),
-    PRIMARY KEY (id, report_date) NOT ENFORCED
+    PRIMARY KEY (report_date, account_id, sale_id, am_id, special_fee_type) NOT ENFORCED
 ) WITH (
     'connector' = 'adbpg',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
@@ -961,9 +962,9 @@ SELECT
     CAST(0.02057316 AS DECIMAL(20, 8)) AS cashback_rate,
     CAST(b.bb_rebate_base_amt * CAST(0.02057316 AS DECIMAL(20, 8)) AS DECIMAL(20, 4)) AS cashback_income,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
-    CAST(NULL AS STRING) AS special_fee_type,
-    b.sale_id,
-    b.am_id,
+    CAST('NORMAL' AS STRING) AS special_fee_type,
+    COALESCE(b.sale_id, '') AS sale_id,
+    COALESCE(b.am_id, '') AS am_id,
     b.version,
     b.remarks,
     b.create_time,

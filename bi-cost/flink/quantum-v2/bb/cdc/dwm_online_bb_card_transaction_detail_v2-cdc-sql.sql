@@ -413,7 +413,7 @@ SELECT
     CAST(REPLACE(REPLACE(JSON_VALUE(s.raw_data, '$.txnDate'), 'T', ' '), 'Z', '') AS TIMESTAMP(6)) AS settlement_txn_date,
     1 AS version,
     COALESCE(t.create_time, CURRENT_TIMESTAMP) AS create_time,
-    COALESCE(t.update_time, t.create_time, CURRENT_TIMESTAMP) AS update_time,
+    CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM v_bb_tx t
 LEFT JOIN v_matched_settle s
@@ -456,7 +456,7 @@ SELECT
     CAST(REPLACE(REPLACE(JSON_VALUE(s.raw_data, '$.txnDate'), 'T', ' '), 'Z', '') AS TIMESTAMP(6)) AS settlement_txn_date,
     1 AS version,
     COALESCE(t.create_time, CURRENT_TIMESTAMP) AS create_time,
-    COALESCE(t.update_time, t.create_time, CURRENT_TIMESTAMP) AS update_time,
+    CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM source_bb_quantum_card_transaction_refund_direct t
 INNER JOIN v_qbit_card_settlement_refund_direct s

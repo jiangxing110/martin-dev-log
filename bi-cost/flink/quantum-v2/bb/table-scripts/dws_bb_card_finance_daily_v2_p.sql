@@ -1,15 +1,20 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-15
+-- Updated Time:   2026-08-18 00:00:00
 -- Description:    BB v2 渠道财务汇总表
 -- Notes:
 --   1. v2 表不替换旧 dws_bb_card_finance_daily_p，先并行落地。
---   2. 粒度为 report_date(月初) + account_id + sale_id + am_id。
+--   2. 粒度为 report_date(日) + account_id + sale_id + am_id；逐日承载（对齐 QI）。
 --   3. Active Card 按月去重，只在月初 report_date 承载。
+--   4. 主键为业务键五元组：PK(report_date, account_id, sale_id, am_id, special_fee_type)；
+--      special_fee_type 归一非空（普通行 'NORMAL'，特殊行 ACTIVE_CARD_ACCOUNT_FEE / CHANNEL_FIXED_FEE）；
+--      sale_id / am_id 非空（无归属存 ''）；id 降级为普通业务指纹列。
+--   5. ⚠️ 结构变更需重建 2026 分区（ALTER TABLE 由 DBA 在停任务窗口执行，脚本部署在其后）。
 --********************************************************************--
 
 CREATE TABLE "dws"."dws_bb_card_finance_daily_v2_p" (
-  "id" int8 NOT NULL,
+  "id" int8,
   "report_date" date NOT NULL,
   "account_id" varchar(36) COLLATE "pg_catalog"."default" NOT NULL,
   "account_type" varchar(30) COLLATE "pg_catalog"."default",
@@ -47,15 +52,15 @@ CREATE TABLE "dws"."dws_bb_card_finance_daily_v2_p" (
   "cashback_rate" numeric(20,8) DEFAULT 0,
   "cashback_income" numeric(20,4) DEFAULT 0,
   "cost_fixed_fee" numeric(20,4) DEFAULT 0,
-  "special_fee_type" varchar(64) COLLATE "pg_catalog"."default",
-  "sale_id" varchar(64) COLLATE "pg_catalog"."default",
-  "am_id" varchar(64) COLLATE "pg_catalog"."default",
+  "special_fee_type" varchar(64) COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'NORMAL',
+  "sale_id" varchar(64) COLLATE "pg_catalog"."default" NOT NULL DEFAULT '',
+  "am_id" varchar(64) COLLATE "pg_catalog"."default" NOT NULL DEFAULT '',
   "version" int4 DEFAULT 1,
   "remarks" varchar(255) COLLATE "pg_catalog"."default",
   "create_time" timestamp(6) NOT NULL DEFAULT now(),
   "update_time" timestamp(6) NOT NULL DEFAULT now(),
   "delete_time" timestamp(6),
-  CONSTRAINT "dws_bb_card_finance_daily_v2_pkey" PRIMARY KEY ("id", "report_date")
+  CONSTRAINT "dws_bb_card_finance_daily_v2_pkey" PRIMARY KEY ("report_date", "account_id", "sale_id", "am_id", "special_fee_type")
 )
 PARTITION BY RANGE (
   "report_date" "pg_catalog"."date_ops"

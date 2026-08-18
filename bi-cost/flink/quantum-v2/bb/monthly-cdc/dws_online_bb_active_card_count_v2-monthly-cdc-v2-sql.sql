@@ -266,7 +266,7 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     create_time                TIMESTAMP(6),
     update_time                TIMESTAMP(6),
     delete_time                TIMESTAMP(6),
-    PRIMARY KEY (id, report_date) NOT ENFORCED
+    PRIMARY KEY (report_date, account_id, sale_id, am_id, special_fee_type) NOT ENFORCED
 ) WITH (
     'connector' = 'adbpg',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',

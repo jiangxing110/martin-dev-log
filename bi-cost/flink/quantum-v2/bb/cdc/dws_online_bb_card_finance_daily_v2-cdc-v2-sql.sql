@@ -55,6 +55,7 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_transaction_detail_v2_p (
     id                       STRING,
     txn_id                   BIGINT,
     settlement_id            STRING,
+    settlement_match_type    STRING,
     source_id                STRING,
     card_transaction_id      STRING,
     account_id               STRING,
@@ -92,7 +93,7 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_transaction_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(WITH changed_keys AS (SELECT DISTINCT event_time::date AS report_date, account_id FROM (SELECT transaction_time AS event_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE transaction_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT original_completion_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE original_completion_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT settlement_post_date, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE settlement_post_date IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT auth_time, account_id FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE auth_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp))) changed) SELECT t.id, t.txn_id, t.settlement_id, t.source_id, t.card_transaction_id, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.transaction_time, t.original_completion_time, t.business_type, t.business_code_list, t.remarks, t.detail, t.card_org, t.tx_country, t.settle_country, t.is_dom, t.resp_code, t.reason_code, t.transaction_type, t.is_valid_settle, t.is_clearing, t.is_reversal, t.is_refund, t.billing_amount, t.settlement_post_date, t.settlement_txn_date, t.sale_id, t.am_id, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_transaction_detail_v2_p t WHERE t.delete_time IS NULL AND EXISTS (SELECT 1 FROM changed_keys k WHERE t.account_id = k.account_id AND (date_trunc(''month'', t.transaction_time)::date = k.report_date OR date_trunc(''month'', t.original_completion_time)::date = k.report_date OR date_trunc(''month'', t.settlement_post_date)::date = k.report_date))) AS dwm_bb_card_transaction_detail_v2_p_f',
+    'table-name' = '(WITH changed_keys AS (SELECT DISTINCT event_time::date AS report_date, account_id FROM (SELECT transaction_time AS event_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE transaction_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT original_completion_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE original_completion_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT settlement_post_date, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE settlement_post_date IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT auth_time, account_id FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE auth_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp))) changed) SELECT t.id, t.txn_id, t.settlement_id, t.settlement_match_type, t.source_id, t.card_transaction_id, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.transaction_time, t.original_completion_time, t.business_type, t.business_code_list, t.remarks, t.detail, t.card_org, t.tx_country, t.settle_country, t.is_dom, t.resp_code, t.reason_code, t.transaction_type, t.is_valid_settle, t.is_clearing, t.is_reversal, t.is_refund, t.billing_amount, t.settlement_post_date, t.settlement_txn_date, t.sale_id, t.am_id, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_transaction_detail_v2_p t WHERE t.delete_time IS NULL AND EXISTS (SELECT 1 FROM changed_keys k WHERE t.account_id = k.account_id AND (date_trunc(''month'', t.transaction_time)::date = k.report_date OR date_trunc(''month'', t.original_completion_time)::date = k.report_date OR date_trunc(''month'', t.settlement_post_date)::date = k.report_date))) AS dwm_bb_card_transaction_detail_v2_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -197,6 +198,28 @@ WHERE s.delete_time IS NULL
   AND s.auth_time IS NOT NULL
   AND CAST(s.auth_time AS DATE) >= DATE '2021-01-01';
 
+-- 黑名单 settlement 标记：对齐 batch（bb_v2_batch_q3_refund_net_20260721）口径
+CREATE TEMPORARY VIEW v_bb_metric_rows_ext AS
+SELECT s.*, COALESCE(s.settlement_id IN (
+    '234e26db-0e1d-424f-952b-053ab2e42d30',
+    '82ff7fa6-8035-4c7b-8c18-ace860c3dfae',
+    '711e7995-ea26-499f-a1c5-9e4faf15f31f',
+    '5e974989-8792-401f-93b6-b107e0b46e51',
+    '0af98098-eb5e-4d5b-a5ad-76c1b1c0ae72',
+    'a97006e9-2609-4e70-a165-2ae6b9f49689',
+    'ad861604-ff4f-4cd1-997e-fe613c67970e',
+    '37959ee2-880f-49ea-8d74-976a69382c90',
+    'bebf7744-ed33-46cd-8ca6-40bc43d928eb',
+    'ece578c8-e8c1-46ec-83b9-116ea049a2e8',
+    '69e04460-0cb4-4d9d-9001-2b786cfc3d7b',
+    '7fa7ea4f-40fa-4153-9ec1-426f4b2c5470',
+    'cff4d9c4-ee01-43fa-9518-62872afbbe91',
+    '160b403b-2a16-4b43-afac-a3b37916c968',
+    '0fd4e8ed-e208-44e5-b463-ece053a915f3',
+    '4a63f4ec-637e-4627-a668-5339fe64b9be'
+), FALSE) AS is_excluded_settlement
+FROM v_bb_metric_rows s;
+
 CREATE TEMPORARY VIEW v_dws_bb_txn_daily_base AS
 SELECT
     CAST(ABS(HASH_CODE(CONCAT(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', account_id, ':', COALESCE(sale_id, ''), ':', COALESCE(am_id, '')))) AS BIGINT) AS id,
@@ -205,32 +228,33 @@ SELECT
     account_type,
     account_category,
     system_type,
-    CAST(COUNT(DISTINCT CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND card_org = 'Master' AND is_dom = TRUE AND resp_code = 'APPROVE' AND (is_clearing = TRUE OR is_reversal = TRUE) THEN source_id END) AS INT) AS m_dom_auth_count,
-    CAST(COUNT(DISTINCT CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND card_org = 'Master' AND is_dom = FALSE AND resp_code = 'APPROVE' AND (is_clearing = TRUE OR is_reversal = TRUE) THEN source_id END) AS INT) AS m_int_auth_count,
-    CAST(COUNT(DISTINCT CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND card_org = 'VISA' AND is_dom = TRUE AND resp_code = 'APPROVE' AND (is_clearing = TRUE OR is_reversal = TRUE) THEN source_id END) AS INT) AS v_dom_auth_count,
-    CAST(COUNT(DISTINCT CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND card_org = 'VISA' AND is_dom = FALSE AND resp_code = 'APPROVE' AND (is_clearing = TRUE OR is_reversal = TRUE) THEN source_id END) AS INT) AS v_int_auth_count,
-    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND is_valid_settle = TRUE AND resp_code = 'DECLINE' THEN 1 ELSE 0 END) AS INT) AS m_int_decline_count,
-    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND is_valid_settle = TRUE AND is_dom = FALSE AND resp_code = 'DECLINE' THEN 1 ELSE 0 END) AS INT) AS v_int_decline_count,
-    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND tx_country NOT IN ('US', 'USA') AND is_valid_settle = TRUE AND resp_code = 'DECLINE' THEN 1 ELSE 0 END) AS INT) AS dom_decline_count,
+    CAST(COUNT(DISTINCT CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND is_dom = TRUE AND resp_code = 'APPROVE' AND (is_clearing = TRUE OR is_reversal = TRUE) AND is_excluded_settlement = FALSE THEN source_id END) AS INT) AS m_dom_auth_count,
+    CAST(COUNT(DISTINCT CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND is_dom = FALSE AND resp_code = 'APPROVE' AND (is_clearing = TRUE OR is_reversal = TRUE) AND is_excluded_settlement = FALSE THEN source_id END) AS INT) AS m_int_auth_count,
+    CAST(COUNT(DISTINCT CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND is_dom = TRUE AND resp_code = 'APPROVE' AND (is_clearing = TRUE OR is_reversal = TRUE) AND is_excluded_settlement = FALSE THEN source_id END) AS INT) AS v_dom_auth_count,
+    CAST(COUNT(DISTINCT CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND is_dom = FALSE AND resp_code = 'APPROVE' AND (is_clearing = TRUE OR is_reversal = TRUE) AND is_excluded_settlement = FALSE THEN source_id END) AS INT) AS v_int_auth_count,
+    -- decline 由 auth 分支（v_dws_bb_auth_daily_base）统一提供，txn 分支置 0，避免与 auth 双计（对齐 batch 口径）
+    CAST(0 AS INT) AS m_int_decline_count,
+    CAST(0 AS INT) AS v_int_decline_count,
+    CAST(0 AS INT) AS dom_decline_count,
     CAST(0 AS INT) AS ac_m_int_decline_count,
     CAST(0 AS INT) AS ac_v_int_decline_count,
     CAST(0 AS INT) AS ac_dom_decline_count,
-    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' THEN 1 ELSE 0 END) AS INT) AS m_int_reversal_count,
-    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' THEN 1 ELSE 0 END) AS INT) AS v_int_reversal_count,
-    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' THEN 1 ELSE 0 END) AS INT) AS dom_reversal_count,
-    CAST(SUM(CASE WHEN metric_basis = 'post_date' AND business_type = 'Credit' AND card_org = 'Master' AND is_valid_settle = TRUE AND settle_country NOT IN ('US', 'USA') AND is_refund = TRUE AND resp_code = 'APPROVE' THEN 1 ELSE 0 END) AS INT) AS m_int_refund_count,
-    CAST(SUM(CASE WHEN metric_basis = 'post_date' AND business_type = 'Credit' AND card_org = 'VISA' AND is_valid_settle = TRUE AND settle_country NOT IN ('US', 'USA') AND is_refund = TRUE AND resp_code = 'APPROVE' THEN 1 ELSE 0 END) AS INT) AS v_int_refund_count,
-    CAST(SUM(CASE WHEN metric_basis = 'post_date' AND business_type = 'Credit' AND settle_country NOT IN ('US', 'USA') AND is_refund = TRUE AND resp_code = 'APPROVE' THEN 1 ELSE 0 END) AS INT) AS dom_refund_count,
-    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'Master' AND tx_country IN ('US', 'USA') AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS INT) AS av_m_dom_count,
-    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS INT) AS av_m_int_count,
-    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'VISA' AND tx_country IN ('US', 'USA') AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS INT) AS av_v_dom_count,
-    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND (resp_code IS NULL OR resp_code <> 'DECLINE') THEN 1 ELSE 0 END) AS INT) AS av_v_int_count,
-    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_dom_clearing_vol,
-    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_int_clearing_vol,
-    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
-    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_int_clearing_vol,
-    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND card_org IN ('Master', 'VISA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
-    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND card_org IN ('Master', 'VISA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
+    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS INT) AS m_int_reversal_count,
+    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS INT) AS v_int_reversal_count,
+    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list NOT LIKE '%1010%' AND tx_country IN ('US', 'USA') AND resp_code = 'APPROVE' AND reason_code = 'APPROVE' AND transaction_type = 'authorization.reversal' AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS INT) AS dom_reversal_count,
+    CAST(SUM(CASE WHEN metric_basis = 'post_date' AND business_type = 'Credit' AND card_org = 'Master' AND settle_country NOT IN ('US', 'USA') AND is_refund = TRUE AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS INT) AS m_int_refund_count,
+    CAST(SUM(CASE WHEN metric_basis = 'post_date' AND business_type = 'Credit' AND card_org = 'VISA' AND settle_country NOT IN ('US', 'USA') AND is_refund = TRUE AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS INT) AS v_int_refund_count,
+    CAST(SUM(CASE WHEN metric_basis = 'post_date' AND business_type = 'Credit' AND settle_country NOT IN ('US', 'USA') AND is_refund = TRUE AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS INT) AS dom_refund_count,
+    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'Master' AND tx_country IN ('US', 'USA') AND (resp_code IS NULL OR resp_code <> 'DECLINE') AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS INT) AS av_m_dom_count,
+    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'Master' AND tx_country NOT IN ('US', 'USA') AND (resp_code IS NULL OR resp_code <> 'DECLINE') AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS INT) AS av_m_int_count,
+    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'VISA' AND tx_country IN ('US', 'USA') AND (resp_code IS NULL OR resp_code <> 'DECLINE') AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS INT) AS av_v_dom_count,
+    CAST(SUM(CASE WHEN metric_basis = 'txn_time' AND business_type = 'Consumption' AND business_code_list LIKE '%1010%' AND card_org = 'VISA' AND tx_country NOT IN ('US', 'USA') AND (resp_code IS NULL OR resp_code <> 'DECLINE') AND is_excluded_settlement = FALSE THEN 1 ELSE 0 END) AS INT) AS av_v_int_count,
+    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_dom_clearing_vol,
+    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_int_clearing_vol,
+    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
+    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_int_clearing_vol,
+    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND card_org IN ('Master', 'VISA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
+    CAST(SUM(CASE WHEN metric_basis = 'completion_time' AND business_type IN ('Credit', 'Consumption') AND card_org IN ('Master', 'VISA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
     CAST(0 AS INT) AS active_card_count,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
     sale_id,
@@ -240,7 +264,7 @@ SELECT
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
-FROM v_bb_metric_rows
+FROM v_bb_metric_rows_ext
 GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id;
 
 CREATE TEMPORARY VIEW v_bb_auth_month_rows AS
@@ -413,7 +437,7 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     create_time              TIMESTAMP(6),
     update_time              TIMESTAMP(6),
     delete_time              TIMESTAMP(6),
-    PRIMARY KEY (id, report_date) NOT ENFORCED
+    PRIMARY KEY (report_date, account_id, sale_id, am_id, special_fee_type) NOT ENFORCED
 ) WITH (
     'connector' = 'adbpg',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
@@ -423,6 +447,19 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'writeMode' = 'upsert',
     'batchSize' = '2000'
+);
+
+-- 重算前先删除受影响 (report_date, account_id) 的普通行（仅普通行，保留 active/fixed 特殊行），杜绝并存
+CREATE TEMPORARY TABLE source_delete_bb_card_finance_daily_v2_cdc_result (
+    affected_rows BIGINT
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT dws.fn_delete_bb_card_finance_daily_v2_cdc(false) AS affected_rows) AS delete_result',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1'
 );
 
 INSERT INTO sink_dws_bb_card_finance_daily_v2_p
@@ -464,13 +501,15 @@ SELECT
     CAST(0.02057316 AS DECIMAL(20, 8)) AS cashback_rate,
     CAST(bb_rebate_base_amt * CAST(0.02057316 AS DECIMAL(20, 8)) AS DECIMAL(20, 4)) AS cashback_income,
     cost_fixed_fee,
-    CAST(NULL AS STRING) AS special_fee_type,
-    sale_id,
-    am_id,
+    CAST('NORMAL' AS STRING) AS special_fee_type,
+    COALESCE(sale_id, '') AS sale_id,
+    COALESCE(am_id, '') AS am_id,
     version,
     remarks,
     create_time,
     update_time,
     delete_time
 FROM v_dws_bb_daily_base
-WHERE report_date >= DATE '2021-01-01';
+CROSS JOIN source_delete_bb_card_finance_daily_v2_cdc_result AS delete_result
+WHERE report_date >= DATE '2021-01-01'
+  AND delete_result.affected_rows >= 0;

@@ -8,7 +8,9 @@
 --   运行参数：无
 -- Notes:
 --   1. 函数返回受影响行数。
---   2. BB 普通 DWS CDC 不再删除目标数据；该函数只统计匹配行数，用于作业依赖触发。
+--   2. 逐日化改造后：fn_delete_bb_card_finance_daily_v2_cdc 由"只统计"改为"真删除"——
+--      p_dry_run=true 只计数；false 删除受影响 (report_date, account_id) 的普通行（保留 active/fixed 特殊行）。
+--      由 DWS CDC 作业在重算前调用，保证"先删后算"幂等，杜绝 batch/CDC 并存。
 --********************************************************************--
 
 CREATE OR REPLACE FUNCTION dws.fn_delete_bb_card_finance_daily_v2_cdc(p_dry_run BOOLEAN DEFAULT true)
@@ -18,6 +20,54 @@ AS $function$
 DECLARE
     affected_rows BIGINT;
 BEGIN
+    IF p_dry_run THEN
+        WITH changed_keys AS (
+            SELECT DISTINCT event_time::date AS report_date, account_id
+            FROM (
+                SELECT transaction_time AS event_time, account_id
+                FROM dwm.dwm_bb_card_transaction_detail_v2_p
+                WHERE (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
+                   OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE)
+
+                UNION ALL
+
+                SELECT original_completion_time, account_id
+                FROM dwm.dwm_bb_card_transaction_detail_v2_p
+                WHERE (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
+                   OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE)
+
+                UNION ALL
+
+                SELECT settlement_post_date, account_id
+                FROM dwm.dwm_bb_card_transaction_detail_v2_p
+                WHERE (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
+                   OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE)
+
+                UNION ALL
+
+                SELECT auth_time, account_id
+                FROM dwm.dwm_bb_card_auth_detail_v2_p
+                WHERE (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
+                   OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE)
+            ) changed
+            WHERE event_time IS NOT NULL
+              AND account_id IS NOT NULL
+        )
+        SELECT COUNT(*)
+        INTO affected_rows
+        FROM dws.dws_bb_card_finance_daily_v2_p AS target
+        WHERE (target.special_fee_type IS NULL
+               OR target.special_fee_type NOT IN ('ACTIVE_CARD_ACCOUNT_FEE', 'CHANNEL_FIXED_FEE'))
+          AND EXISTS (
+              SELECT 1
+              FROM changed_keys scope
+              WHERE target.report_date = scope.report_date
+                AND target.account_id = scope.account_id
+          );
+
+        RETURN affected_rows;
+    END IF;
+
     WITH changed_keys AS (
         SELECT DISTINCT event_time::date AS report_date, account_id
         FROM (
@@ -50,9 +100,7 @@ BEGIN
         WHERE event_time IS NOT NULL
           AND account_id IS NOT NULL
     )
-    SELECT COUNT(*)
-    INTO affected_rows
-    FROM dws.dws_bb_card_finance_daily_v2_p AS target
+    DELETE FROM dws.dws_bb_card_finance_daily_v2_p AS target
     WHERE (target.special_fee_type IS NULL
            OR target.special_fee_type NOT IN ('ACTIVE_CARD_ACCOUNT_FEE', 'CHANNEL_FIXED_FEE'))
       AND EXISTS (
@@ -62,6 +110,7 @@ BEGIN
             AND target.account_id = scope.account_id
       );
 
+    GET DIAGNOSTICS affected_rows = ROW_COUNT;
     RETURN affected_rows;
 END;
 $function$;
