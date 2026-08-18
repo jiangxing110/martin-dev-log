@@ -43,22 +43,22 @@ CREATE TEMPORARY TABLE source_delete_dws_transfer_extend_result (
 CREATE TEMPORARY TABLE source_dws_transfer_extend (
     account_id STRING,
     status STRING,
-    dbs_receive DECIMAL(20,4),
-    cl_receive DECIMAL(20,4),
-    ep_receive DECIMAL(20,4),
-    rd_receive DECIMAL(20,4),
-    settle_fx_fee DECIMAL(20,4),
-    conversion_fx_amount DECIMAL(20,4),
-    conversion_fx_fee DECIMAL(20,4),
-    create_date DATE,
-    version BIGINT,
+    dbs_receive DECIMAL(18,2),
+    cl_receive DECIMAL(18,2),
+    ep_receive DECIMAL(18,2),
+    rd_receive DECIMAL(18,2),
+    settle_fx_fee DECIMAL(18,2),
+    conversion_fx_amount DECIMAL(18,2),
+    conversion_fx_fee DECIMAL(18,2),
+    create_date TIMESTAMP(6),
+    version INT,
     create_time TIMESTAMP(6),
     update_time TIMESTAMP(6)
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT tr."accountId" AS k0, DATE(tr."createTime") AS k1, tr."status" AS k2
+        SELECT DISTINCT tr."accountId" AS k0, DATE_TRUNC(''day'' AS k1, tr."createTime")::TIMESTAMP AS k2, tr."status" AS k3
         FROM "transfer" AS tr
 LEFT JOIN "globalConversion" AS ta ON ta."recordId"::UUID = tr.id
         WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
@@ -66,7 +66,7 @@ LEFT JOIN "globalConversion" AS ta ON ta."recordId"::UUID = tr.id
     SELECT tr."accountId" AS "account_id", tr."status" AS "status", COALESCE(SUM(CASE WHEN tr."businessTypeDetail" IN (''OtherChannelInbound'') AND UPPER((tr."rawData"::jsonb->> 0)::jsonb->>''source'') IN (''OTT'',''寻汇'',''BEEPAY'') THEN "usdAmount" ELSE 0 END), 0) AS "dbs_receive", COALESCE(SUM(CASE WHEN tr."businessTypeDetail" IN (''OtherChannelInbound'',''CCInbound'') AND tr."provider" = ''Column'' THEN "usdAmount" ELSE 0 END), 0) AS "cl_receive", COALESCE(SUM(CASE WHEN tr."businessTypeDetail" IN (''OtherChannelInbound'',''CCInbound'') AND tr."provider" = ''EP''THEN "usdAmount" ELSE 0 END), 0) AS "ep_receive", COALESCE(SUM(CASE WHEN tr."businessTypeDetail" IN (''OtherChannelInbound'',''CCInbound'') AND tr."provider" = ''RD'' THEN "usdAmount" ELSE 0 END), 0) AS "rd_receive", COALESCE(SUM(CASE WHEN ta."toCurrency" = ''CNY'' AND tr."status" = ''Closed'' AND ta.status = ''Closed'' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END), 0) AS "settle_fx_fee", COALESCE(SUM(CASE WHEN tr."settlementCurrency" != ''CNY'' AND tr."status" = ''Closed'' AND ta.status = ''Closed''  AND tr."businessTypeDetail" IN (''Payment'',''ConversionOut'',''InnerTransferOut'') THEN tr."usdAmount" ELSE 0 END), 0) AS "conversion_fx_amount", COALESCE(SUM(CASE WHEN ta."toCurrency" != ''CNY'' AND tr."status" = ''Closed'' AND ta.status = ''Closed'' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END), 0) AS "conversion_fx_fee", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS create_date, 1 AS version, NOW() AS create_time, NOW() AS update_time
     FROM "transfer" AS tr
 LEFT JOIN "globalConversion" AS ta ON ta."recordId"::UUID = tr.id
-    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k1 AND (tr."status") IS NOT DISTINCT FROM a.k2
+    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (DATE_TRUNC(''day'') IS NOT DISTINCT FROM a.k1 AND (tr."createTime")::TIMESTAMP) IS NOT DISTINCT FROM a.k2
     WHERE tr."deleteTime" IS NULL AND ta."deleteTime" IS NULL
     GROUP BY tr."accountId", create_date, tr.status) AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
@@ -82,15 +82,15 @@ SELECT
 FROM source_dws_transfer_extend;
 
 CREATE TEMPORARY TABLE sink_dws_transfer_extend_2024 (
-    id BIGINT, account_id STRING, status STRING, dbs_receive DECIMAL(20,4), cl_receive DECIMAL(20,4), ep_receive DECIMAL(20,4), rd_receive DECIMAL(20,4), settle_fx_fee DECIMAL(20,4), conversion_fx_amount DECIMAL(20,4), conversion_fx_fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, status STRING, dbs_receive DECIMAL(18,2), cl_receive DECIMAL(18,2), ep_receive DECIMAL(18,2), rd_receive DECIMAL(18,2), settle_fx_fee DECIMAL(18,2), conversion_fx_amount DECIMAL(18,2), conversion_fx_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_transfer_extend_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_transfer_extend_2025 (
-    id BIGINT, account_id STRING, status STRING, dbs_receive DECIMAL(20,4), cl_receive DECIMAL(20,4), ep_receive DECIMAL(20,4), rd_receive DECIMAL(20,4), settle_fx_fee DECIMAL(20,4), conversion_fx_amount DECIMAL(20,4), conversion_fx_fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, status STRING, dbs_receive DECIMAL(18,2), cl_receive DECIMAL(18,2), ep_receive DECIMAL(18,2), rd_receive DECIMAL(18,2), settle_fx_fee DECIMAL(18,2), conversion_fx_amount DECIMAL(18,2), conversion_fx_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_transfer_extend_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_transfer_extend_2026 (
-    id BIGINT, account_id STRING, status STRING, dbs_receive DECIMAL(20,4), cl_receive DECIMAL(20,4), ep_receive DECIMAL(20,4), rd_receive DECIMAL(20,4), settle_fx_fee DECIMAL(20,4), conversion_fx_amount DECIMAL(20,4), conversion_fx_fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, status STRING, dbs_receive DECIMAL(18,2), cl_receive DECIMAL(18,2), ep_receive DECIMAL(18,2), rd_receive DECIMAL(18,2), settle_fx_fee DECIMAL(18,2), conversion_fx_amount DECIMAL(18,2), conversion_fx_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_transfer_extend_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 

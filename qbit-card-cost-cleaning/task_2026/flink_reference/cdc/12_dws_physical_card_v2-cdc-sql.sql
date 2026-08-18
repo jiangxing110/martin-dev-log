@@ -50,17 +50,17 @@ CREATE TEMPORARY TABLE source_dws_physical_card (
     provider STRING,
     bin STRING,
     status STRING,
-    transaction_count BIGINT,
-    physical_card_fee DECIMAL(20,4),
-    create_date DATE,
-    version BIGINT,
+    transaction_count INT,
+    physical_card_fee DECIMAL(18,2),
+    create_date TIMESTAMP(6),
+    version INT,
     create_time TIMESTAMP(6),
     update_time TIMESTAMP(6)
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT tr."accountId" AS k0, qc."provider" AS k1, qc."firstSix" AS k2, tr."status" AS k3, DATE(tr."createTime") AS k4
+        SELECT DISTINCT tr."accountId" AS k0, qc."provider" AS k1, qc."firstSix" AS k2, tr."status" AS k3, DATE_TRUNC(''day'' AS k4, tr."createTime")::TIMESTAMP AS k5
         FROM "qbitCardWalletTransaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
         WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
@@ -68,7 +68,7 @@ LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
     SELECT tr."accountId" AS "account_id", qc."provider" AS "provider", qc."firstSix" AS "bin", tr."status" AS "status", COUNT(*) AS "transaction_count", SUM(tr."originAmount"::numeric) AS "physical_card_fee", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
     FROM "qbitCardWalletTransaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
-    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (qc."provider") IS NOT DISTINCT FROM a.k1 AND (qc."firstSix") IS NOT DISTINCT FROM a.k2 AND (tr."status") IS NOT DISTINCT FROM a.k3 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k4
+    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (qc."provider") IS NOT DISTINCT FROM a.k1 AND (qc."firstSix") IS NOT DISTINCT FROM a.k2 AND (tr."status") IS NOT DISTINCT FROM a.k3 AND (DATE_TRUNC(''day'') IS NOT DISTINCT FROM a.k4
     WHERE tr."deleteTime" IS NULL AND tr."businessType" = ''TransferOut'' AND tr."remarks" IN (''邮寄费'', ''制卡费'', ''批量邮寄运费'')
     GROUP BY tr."accountId", qc."provider", qc."firstSix", tr."status", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE) AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
@@ -91,15 +91,15 @@ FROM source_dws_physical_card;
 -- 3. 分表 SINK（每个 _YYYY 一个，upsert 按 key 幂等）
 -- ==============================================
 CREATE TEMPORARY TABLE sink_dws_physical_card_2024 (
-    id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, transaction_count BIGINT, physical_card_fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, transaction_count INT, physical_card_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_physical_card_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_physical_card_2025 (
-    id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, transaction_count BIGINT, physical_card_fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, transaction_count INT, physical_card_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_physical_card_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_physical_card_2026 (
-    id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, transaction_count BIGINT, physical_card_fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, transaction_count INT, physical_card_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_physical_card_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 

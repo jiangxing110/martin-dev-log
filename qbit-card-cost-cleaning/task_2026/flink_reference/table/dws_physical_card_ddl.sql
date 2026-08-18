@@ -5,10 +5,10 @@ CREATE TABLE IF NOT EXISTS public.dws_physical_card_2024 (
     "provider" STRING,,
     "bin" STRING,,
     "status" STRING,,
-    "transaction_count" BIGINT,,
-    "physical_card_fee" DECIMAL(20,4),,
-    "create_date" DATE,,
-    "version" BIGINT,,
+    "transaction_count" INT,,
+    "physical_card_fee" DECIMAL(18,2),,
+    "create_date" TIMESTAMP(6),,
+    "version" INT,,
     "create_time" TIMESTAMP(6),,
     "update_time" TIMESTAMP(6)
 );
@@ -19,10 +19,10 @@ CREATE TABLE IF NOT EXISTS public.dws_physical_card_2025 (
     "provider" STRING,,
     "bin" STRING,,
     "status" STRING,,
-    "transaction_count" BIGINT,,
-    "physical_card_fee" DECIMAL(20,4),,
-    "create_date" DATE,,
-    "version" BIGINT,,
+    "transaction_count" INT,,
+    "physical_card_fee" DECIMAL(18,2),,
+    "create_date" TIMESTAMP(6),,
+    "version" INT,,
     "create_time" TIMESTAMP(6),,
     "update_time" TIMESTAMP(6)
 );
@@ -33,10 +33,10 @@ CREATE TABLE IF NOT EXISTS public.dws_physical_card_2026 (
     "provider" STRING,,
     "bin" STRING,,
     "status" STRING,,
-    "transaction_count" BIGINT,,
-    "physical_card_fee" DECIMAL(20,4),,
-    "create_date" DATE,,
-    "version" BIGINT,,
+    "transaction_count" INT,,
+    "physical_card_fee" DECIMAL(18,2),,
+    "create_date" TIMESTAMP(6),,
+    "version" INT,,
     "create_time" TIMESTAMP(6),,
     "update_time" TIMESTAMP(6)
 );

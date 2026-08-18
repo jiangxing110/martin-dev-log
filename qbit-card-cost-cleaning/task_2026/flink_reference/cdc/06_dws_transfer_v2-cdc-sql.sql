@@ -51,25 +51,25 @@ CREATE TEMPORARY TABLE source_dws_transfer (
     business_type_code STRING,
     settlement_currency STRING,
     status STRING,
-    usd_amount DECIMAL(20,4),
-    transaction_count BIGINT,
-    fee DECIMAL(20,4),
+    usd_amount DECIMAL(18,2),
+    transaction_count INT,
+    fee DECIMAL(18,2),
     currency STRING,
-    create_date DATE,
-    version BIGINT,
+    create_date TIMESTAMP(6),
+    version INT,
     create_time TIMESTAMP(6),
     update_time TIMESTAMP(6)
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT tr."accountId" AS k0, tr."businessTypeDetail" AS k1, tr."businessCode" AS k2, tr."settlementCurrency" AS k3, DATE(tr."createTime") AS k4, tr."status" AS k5, "currency" AS k6
+        SELECT DISTINCT tr."accountId" AS k0, tr."businessTypeDetail" AS k1, tr."businessCode" AS k2, tr."settlementCurrency" AS k3, DATE_TRUNC(''day'' AS k4, tr."createTime")::TIMESTAMP AS k5, tr."status" AS k6, "currency" AS k7
         FROM "transfer" AS tr
         WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
     )
     SELECT tr."accountId" AS "account_id", tr."businessTypeDetail" AS "business_type_detail", tr."businessCode" AS "business_type_code", tr."settlementCurrency" AS "settlement_currency", tr."status" AS "status", COALESCE(SUM(tr."usdAmount"), 0) AS usd_amount, COUNT(*) AS transaction_count, COALESCE(SUM("fee" * "usdRate"), 0) AS fee, "currency" AS "currency", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS create_date, 1 AS version, NOW() AS create_time, NOW() AS update_time
     FROM "transfer" AS tr
-    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessTypeDetail") IS NOT DISTINCT FROM a.k1 AND (tr."businessCode") IS NOT DISTINCT FROM a.k2 AND (tr."settlementCurrency") IS NOT DISTINCT FROM a.k3 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k4 AND (tr."status") IS NOT DISTINCT FROM a.k5 AND ("currency") IS NOT DISTINCT FROM a.k6
+    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessTypeDetail") IS NOT DISTINCT FROM a.k1 AND (tr."businessCode") IS NOT DISTINCT FROM a.k2 AND (tr."settlementCurrency") IS NOT DISTINCT FROM a.k3 AND (DATE_TRUNC(''day'') IS NOT DISTINCT FROM a.k4 AND (tr."createTime")::TIMESTAMP) IS NOT DISTINCT FROM a.k5 AND (tr."status") IS NOT DISTINCT FROM a.k6
     WHERE tr."deleteTime" IS NULL
     GROUP BY tr."accountId", tr."businessTypeDetail",tr."businessCode", tr."settlementCurrency", create_date, status, "currency") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
@@ -92,15 +92,15 @@ FROM source_dws_transfer;
 -- 3. 分表 SINK（每个 _YYYY 一个，upsert 按 key 幂等）
 -- ==============================================
 CREATE TEMPORARY TABLE sink_dws_transfer_2024 (
-    id BIGINT, account_id STRING, business_type_detail STRING, business_type_code STRING, settlement_currency STRING, status STRING, usd_amount DECIMAL(20,4), transaction_count BIGINT, fee DECIMAL(20,4), currency STRING, create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, business_type_detail STRING, business_type_code STRING, settlement_currency STRING, status STRING, usd_amount DECIMAL(18,2), transaction_count INT, fee DECIMAL(18,2), currency STRING, create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_transfer_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_transfer_2025 (
-    id BIGINT, account_id STRING, business_type_detail STRING, business_type_code STRING, settlement_currency STRING, status STRING, usd_amount DECIMAL(20,4), transaction_count BIGINT, fee DECIMAL(20,4), currency STRING, create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, business_type_detail STRING, business_type_code STRING, settlement_currency STRING, status STRING, usd_amount DECIMAL(18,2), transaction_count INT, fee DECIMAL(18,2), currency STRING, create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_transfer_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_transfer_2026 (
-    id BIGINT, account_id STRING, business_type_detail STRING, business_type_code STRING, settlement_currency STRING, status STRING, usd_amount DECIMAL(20,4), transaction_count BIGINT, fee DECIMAL(20,4), currency STRING, create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, business_type_detail STRING, business_type_code STRING, settlement_currency STRING, status STRING, usd_amount DECIMAL(18,2), transaction_count INT, fee DECIMAL(18,2), currency STRING, create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_transfer_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 

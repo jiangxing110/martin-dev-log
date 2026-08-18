@@ -14,16 +14,16 @@ BEGIN
     IF p_start IS NULL THEN
         -- ===== CDC 模式：按唯一业务键精准删（受影响 key 集合，不再按整天删）=====
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."createTime"))::INT
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE_TRUNC('day', tr."createTime")::TIMESTAMP)::INT
             FROM "Transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON qc."id"::VARCHAR = tr."sourceId"
             WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_open_card_%s WHERE (status, account_id, provider, bin, create_date) IN (SELECT DISTINCT tr."status", tr."accountId", qc."provider", qc."firstSix", DATE(tr."createTime") FROM "Transaction" AS tr
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_open_card_%s WHERE (status, account_id, provider, bin, create_date) IN (SELECT DISTINCT tr."status", tr."accountId", qc."provider", qc."firstSix", DATE_TRUNC('day', tr."createTime")::TIMESTAMP FROM "Transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON qc."id"::VARCHAR = tr."sourceId" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_open_card_%s WHERE (status, account_id, provider, bin, create_date) IN (SELECT DISTINCT tr."status", tr."accountId", qc."provider", qc."firstSix", DATE(tr."createTime") FROM "Transaction" AS tr
+                EXECUTE format($fmt$DELETE FROM public.dws_open_card_%s WHERE (status, account_id, provider, bin, create_date) IN (SELECT DISTINCT tr."status", tr."accountId", qc."provider", qc."firstSix", DATE_TRUNC('day', tr."createTime")::TIMESTAMP FROM "Transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON qc."id"::VARCHAR = tr."sourceId" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;

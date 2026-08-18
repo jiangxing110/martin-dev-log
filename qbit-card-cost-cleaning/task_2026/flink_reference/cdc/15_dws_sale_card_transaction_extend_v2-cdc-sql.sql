@@ -52,16 +52,16 @@ CREATE TEMPORARY TABLE source_dws_sale_card_transaction_extend (
     provider STRING,
     bin STRING,
     status STRING,
-    settle_amount DECIMAL(20,4),
+    settle_amount DECIMAL(18,2),
     transaction_currency STRING,
     country STRING,
-    transaction_count BIGINT,
-    fx_fee DECIMAL(20,4),
-    atm_fee DECIMAL(20,4),
-    apple_pay_fee DECIMAL(20,4),
-    settle_fee DECIMAL(20,4),
-    create_date DATE,
-    version BIGINT,
+    transaction_count INT,
+    fx_fee DECIMAL(18,2),
+    atm_fee DECIMAL(18,2),
+    apple_pay_fee DECIMAL(18,2),
+    settle_fee DECIMAL(18,2),
+    create_date TIMESTAMP(6),
+    version INT,
     create_time TIMESTAMP(6),
     update_time TIMESTAMP(6)
 ) WITH (
@@ -102,15 +102,15 @@ FROM source_dws_sale_card_transaction_extend;
 -- 3. 分表 SINK（每个 _YYYY 一个，upsert 按 key 幂等）
 -- ==============================================
 CREATE TEMPORARY TABLE sink_dws_sale_card_transaction_extend_2024 (
-    id BIGINT, account_id STRING, sale_or_am_id STRING, business_type STRING, provider STRING, bin STRING, status STRING, settle_amount DECIMAL(20,4), transaction_currency STRING, country STRING, transaction_count BIGINT, fx_fee DECIMAL(20,4), atm_fee DECIMAL(20,4), apple_pay_fee DECIMAL(20,4), settle_fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, sale_or_am_id STRING, business_type STRING, provider STRING, bin STRING, status STRING, settle_amount DECIMAL(18,2), transaction_currency STRING, country STRING, transaction_count INT, fx_fee DECIMAL(18,2), atm_fee DECIMAL(18,2), apple_pay_fee DECIMAL(18,2), settle_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_card_transaction_extend_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_sale_card_transaction_extend_2025 (
-    id BIGINT, account_id STRING, sale_or_am_id STRING, business_type STRING, provider STRING, bin STRING, status STRING, settle_amount DECIMAL(20,4), transaction_currency STRING, country STRING, transaction_count BIGINT, fx_fee DECIMAL(20,4), atm_fee DECIMAL(20,4), apple_pay_fee DECIMAL(20,4), settle_fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, sale_or_am_id STRING, business_type STRING, provider STRING, bin STRING, status STRING, settle_amount DECIMAL(18,2), transaction_currency STRING, country STRING, transaction_count INT, fx_fee DECIMAL(18,2), atm_fee DECIMAL(18,2), apple_pay_fee DECIMAL(18,2), settle_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_card_transaction_extend_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_sale_card_transaction_extend_2026 (
-    id BIGINT, account_id STRING, sale_or_am_id STRING, business_type STRING, provider STRING, bin STRING, status STRING, settle_amount DECIMAL(20,4), transaction_currency STRING, country STRING, transaction_count BIGINT, fx_fee DECIMAL(20,4), atm_fee DECIMAL(20,4), apple_pay_fee DECIMAL(20,4), settle_fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, sale_or_am_id STRING, business_type STRING, provider STRING, bin STRING, status STRING, settle_amount DECIMAL(18,2), transaction_currency STRING, country STRING, transaction_count INT, fx_fee DECIMAL(18,2), atm_fee DECIMAL(18,2), apple_pay_fee DECIMAL(18,2), settle_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_card_transaction_extend_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 

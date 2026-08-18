@@ -14,7 +14,7 @@ BEGIN
     IF p_start IS NULL THEN
         -- ===== CDC 模式：按唯一业务键精准删（受影响 key 集合，不再按整天删）=====
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."create_time"))::INT
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE_TRUNC('day', tr."create_time")::TIMESTAMP)::INT
             FROM "fund_profits" AS tr
 CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee
             WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE)

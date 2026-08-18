@@ -51,19 +51,19 @@ CREATE TEMPORARY TABLE source_dws_sale_crypto_assets_transfers (
     status STRING,
     sender_type STRING,
     recipient_type STRING,
-    transaction_count BIGINT,
-    origin_amount DECIMAL(20,4),
-    settlement_amount DECIMAL(20,4),
-    fee DECIMAL(20,4),
-    fee2 DECIMAL(20,4),
-    cross_chain_fee DECIMAL(20,4),
-    exchange_profit DECIMAL(20,4),
-    payment_profit DECIMAL(20,4),
+    transaction_count INT,
+    origin_amount DECIMAL(18,2),
+    settlement_amount DECIMAL(18,2),
+    fee DECIMAL(18,2),
+    fee2 DECIMAL(18,2),
+    cross_chain_fee DECIMAL(18,2),
+    exchange_profit DECIMAL(18,2),
+    payment_profit DECIMAL(18,2),
     hidden BOOLEAN,
-    create_date DATE,
+    create_date TIMESTAMP(6),
     currency STRING,
     action STRING,
-    version BIGINT,
+    version INT,
     create_time TIMESTAMP(6),
     update_time TIMESTAMP(6)
 ) WITH (
@@ -101,15 +101,15 @@ FROM source_dws_sale_crypto_assets_transfers;
 -- 3. 分表 SINK（每个 _YYYY 一个，upsert 按 key 幂等）
 -- ==============================================
 CREATE TEMPORARY TABLE sink_dws_sale_crypto_assets_transfers_2024 (
-    id BIGINT, account_id STRING, sale_or_am_id STRING, status STRING, sender_type STRING, recipient_type STRING, transaction_count BIGINT, origin_amount DECIMAL(20,4), settlement_amount DECIMAL(20,4), fee DECIMAL(20,4), fee2 DECIMAL(20,4), cross_chain_fee DECIMAL(20,4), exchange_profit DECIMAL(20,4), payment_profit DECIMAL(20,4), hidden BOOLEAN, create_date DATE, currency STRING, action STRING, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, sale_or_am_id STRING, status STRING, sender_type STRING, recipient_type STRING, transaction_count INT, origin_amount DECIMAL(18,2), settlement_amount DECIMAL(18,2), fee DECIMAL(18,2), fee2 DECIMAL(18,2), cross_chain_fee DECIMAL(18,2), exchange_profit DECIMAL(18,2), payment_profit DECIMAL(18,2), hidden BOOLEAN, create_date TIMESTAMP(6), currency STRING, action STRING, version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_crypto_assets_transfers_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_sale_crypto_assets_transfers_2025 (
-    id BIGINT, account_id STRING, sale_or_am_id STRING, status STRING, sender_type STRING, recipient_type STRING, transaction_count BIGINT, origin_amount DECIMAL(20,4), settlement_amount DECIMAL(20,4), fee DECIMAL(20,4), fee2 DECIMAL(20,4), cross_chain_fee DECIMAL(20,4), exchange_profit DECIMAL(20,4), payment_profit DECIMAL(20,4), hidden BOOLEAN, create_date DATE, currency STRING, action STRING, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, sale_or_am_id STRING, status STRING, sender_type STRING, recipient_type STRING, transaction_count INT, origin_amount DECIMAL(18,2), settlement_amount DECIMAL(18,2), fee DECIMAL(18,2), fee2 DECIMAL(18,2), cross_chain_fee DECIMAL(18,2), exchange_profit DECIMAL(18,2), payment_profit DECIMAL(18,2), hidden BOOLEAN, create_date TIMESTAMP(6), currency STRING, action STRING, version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_crypto_assets_transfers_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_sale_crypto_assets_transfers_2026 (
-    id BIGINT, account_id STRING, sale_or_am_id STRING, status STRING, sender_type STRING, recipient_type STRING, transaction_count BIGINT, origin_amount DECIMAL(20,4), settlement_amount DECIMAL(20,4), fee DECIMAL(20,4), fee2 DECIMAL(20,4), cross_chain_fee DECIMAL(20,4), exchange_profit DECIMAL(20,4), payment_profit DECIMAL(20,4), hidden BOOLEAN, create_date DATE, currency STRING, action STRING, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, sale_or_am_id STRING, status STRING, sender_type STRING, recipient_type STRING, transaction_count INT, origin_amount DECIMAL(18,2), settlement_amount DECIMAL(18,2), fee DECIMAL(18,2), fee2 DECIMAL(18,2), cross_chain_fee DECIMAL(18,2), exchange_profit DECIMAL(18,2), payment_profit DECIMAL(18,2), hidden BOOLEAN, create_date TIMESTAMP(6), currency STRING, action STRING, version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_crypto_assets_transfers_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 

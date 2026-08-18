@@ -50,19 +50,19 @@ CREATE TEMPORARY TABLE source_ods_sale_fund_profits (
     create_time TIMESTAMP(6),
     update_time TIMESTAMP(6),
     delete_time TIMESTAMP(6),
-    version BIGINT,
+    version INT,
     remarks STRING,
     account_id STRING,
     sale_or_am_id STRING,
     product_id STRING,
-    date DATE,
+    date TIMESTAMP(6),
     currency STRING,
-    profit DECIMAL(20,4),
-    service_fee DECIMAL(20,4),
+    profit DECIMAL(18,2),
+    service_fee DECIMAL(18,2),
     status STRING,
-    apr DECIMAL(20,4),
-    share DECIMAL(20,4),
-    net_value DECIMAL(20,4)
+    apr DECIMAL(18,2),
+    share DECIMAL(18,2),
+    net_value DECIMAL(18,2)
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
@@ -117,15 +117,15 @@ FROM source_ods_sale_fund_profits;
 -- 3. 分表 SINK（每个 _YYYY 一个，upsert 按 key 幂等）
 -- ==============================================
 CREATE TEMPORARY TABLE sink_ods_sale_fund_profits_2024 (
-    id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version BIGINT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, date DATE, currency STRING, profit DECIMAL(20,4), service_fee DECIMAL(20,4), status STRING, apr DECIMAL(20,4), share DECIMAL(20,4), net_value DECIMAL(20,4),
+    id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, date TIMESTAMP(6), currency STRING, profit DECIMAL(18,2), service_fee DECIMAL(18,2), status STRING, apr DECIMAL(18,2), share DECIMAL(18,2), net_value DECIMAL(18,2),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_sale_fund_profits_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_ods_sale_fund_profits_2025 (
-    id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version BIGINT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, date DATE, currency STRING, profit DECIMAL(20,4), service_fee DECIMAL(20,4), status STRING, apr DECIMAL(20,4), share DECIMAL(20,4), net_value DECIMAL(20,4),
+    id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, date TIMESTAMP(6), currency STRING, profit DECIMAL(18,2), service_fee DECIMAL(18,2), status STRING, apr DECIMAL(18,2), share DECIMAL(18,2), net_value DECIMAL(18,2),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_sale_fund_profits_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_ods_sale_fund_profits_2026 (
-    id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version BIGINT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, date DATE, currency STRING, profit DECIMAL(20,4), service_fee DECIMAL(20,4), status STRING, apr DECIMAL(20,4), share DECIMAL(20,4), net_value DECIMAL(20,4),
+    id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, date TIMESTAMP(6), currency STRING, profit DECIMAL(18,2), service_fee DECIMAL(18,2), status STRING, apr DECIMAL(18,2), share DECIMAL(18,2), net_value DECIMAL(18,2),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_sale_fund_profits_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 

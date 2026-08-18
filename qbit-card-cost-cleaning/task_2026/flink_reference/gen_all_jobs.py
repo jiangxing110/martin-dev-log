@@ -286,7 +286,7 @@ def remove_create_window(where):
 
 def create_date_expr(time_cols):
     c = time_cols.get("create")
-    return f'DATE({c})' if c else 'CURRENT_DATE'
+    return f"DATE_TRUNC('day', {c})::TIMESTAMP" if c else 'CURRENT_DATE::TIMESTAMP'
 
 def _extract_main_source(block):
     """返回主查询第一个 FROM 的 (表名, 别名)。sale 表主别名统一为 tr。"""
@@ -349,11 +349,11 @@ def dws_key_exprs(base, keys, p, time_cols):
 def flink_type(col):
     c = col.lower()
     if c in ("create_date", "date"):
-        return "DATE"
+        return "TIMESTAMP(6)"
     if c in ("create_time", "update_time", "delete_time"):
         return "TIMESTAMP(6)"
     if c in ("transaction_count", "count", "version"):
-        return "BIGINT"
+        return "INT"
     if c in ("hidden",):
         return "BOOLEAN"
     if any(t in c for t in ("amount", "fee", "profit", "share", "net_value", "apr",
@@ -364,7 +364,7 @@ def flink_type(col):
                             "withdraw_fee_diff", "dbs_receive", "cl_receive", "ep_receive",
                             "rd_receive", "settle_fx_fee", "service_fee", "fee2",
                             "rate_diff_income", "from_amount")):
-        return "DECIMAL(20,4)"
+        return "DECIMAL(18,2)"
     if c == "id":
         return "BIGINT"
     return "STRING"

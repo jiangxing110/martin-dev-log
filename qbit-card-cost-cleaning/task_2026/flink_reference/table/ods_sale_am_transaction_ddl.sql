@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS public.ods_sale_am_transaction_2024 (
     "update_time" TIMESTAMP(6),,
     "delete_time" TIMESTAMP(6),,
     "remarks" STRING,,
-    "version" BIGINT
+    "version" INT
 );
 
 CREATE TABLE IF NOT EXISTS public.ods_sale_am_transaction_2025 (
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS public.ods_sale_am_transaction_2025 (
     "update_time" TIMESTAMP(6),,
     "delete_time" TIMESTAMP(6),,
     "remarks" STRING,,
-    "version" BIGINT
+    "version" INT
 );
 
 CREATE TABLE IF NOT EXISTS public.ods_sale_am_transaction_2026 (
@@ -29,5 +29,5 @@ CREATE TABLE IF NOT EXISTS public.ods_sale_am_transaction_2026 (
     "update_time" TIMESTAMP(6),,
     "delete_time" TIMESTAMP(6),,
     "remarks" STRING,,
-    "version" BIGINT
+    "version" INT
 );

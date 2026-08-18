@@ -14,14 +14,14 @@ BEGIN
     IF p_start IS NULL THEN
         -- ===== CDC 模式：按唯一业务键精准删（受影响 key 集合，不再按整天删）=====
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."createTime"))::INT
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE_TRUNC('day', tr."createTime")::TIMESTAMP)::INT
             FROM "transfer" AS tr
             WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_transfer_%s WHERE (account_id, business_type_detail, business_type_code, settlement_currency, create_date, status, currency) IN (SELECT DISTINCT tr."accountId", tr."businessTypeDetail", tr."businessCode", tr."settlementCurrency", DATE(tr."createTime"), tr."status", "currency" FROM "transfer" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_transfer_%s WHERE (account_id, business_type_detail, business_type_code, settlement_currency, create_date, status, currency) IN (SELECT DISTINCT tr."accountId", tr."businessTypeDetail", tr."businessCode", tr."settlementCurrency", DATE_TRUNC('day', tr."createTime")::TIMESTAMP, tr."status", "currency" FROM "transfer" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_transfer_%s WHERE (account_id, business_type_detail, business_type_code, settlement_currency, create_date, status, currency) IN (SELECT DISTINCT tr."accountId", tr."businessTypeDetail", tr."businessCode", tr."settlementCurrency", DATE(tr."createTime"), tr."status", "currency" FROM "transfer" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.dws_transfer_%s WHERE (account_id, business_type_detail, business_type_code, settlement_currency, create_date, status, currency) IN (SELECT DISTINCT tr."accountId", tr."businessTypeDetail", tr."businessCode", tr."settlementCurrency", DATE_TRUNC('day', tr."createTime")::TIMESTAMP, tr."status", "currency" FROM "transfer" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;

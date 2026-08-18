@@ -44,24 +44,24 @@ CREATE TEMPORARY TABLE source_dws_qbit_card_group_transaction (
     account_id STRING,
     business_type STRING,
     status STRING,
-    origin_amount DECIMAL(20,4),
-    transaction_count BIGINT,
-    fee DECIMAL(20,4),
-    create_date DATE,
-    version BIGINT,
+    origin_amount DECIMAL(18,2),
+    transaction_count INT,
+    fee DECIMAL(18,2),
+    create_date TIMESTAMP(6),
+    version INT,
     create_time TIMESTAMP(6),
     update_time TIMESTAMP(6)
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT tr."accountId" AS k0, tr."businessType" AS k1, DATE(tr."createTime") AS k2, tr."status" AS k3
+        SELECT DISTINCT tr."accountId" AS k0, tr."businessType" AS k1, DATE_TRUNC(''day'' AS k2, tr."createTime")::TIMESTAMP AS k3, tr."status" AS k4
         FROM "qbitCardGroupTransaction" AS tr
         WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
     SELECT tr."accountId" AS "account_id", tr."businessType" AS "business_type", tr."status" AS "status", COALESCE(SUM(tr."originalAmount"), 0) AS origin_amount, COUNT(*) AS transaction_count, COALESCE(SUM(tr."fee"), 0) AS fee, TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS create_date, 1 AS version, NOW() AS create_time, NOW() AS update_time
     FROM "qbitCardGroupTransaction" AS tr
-    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessType") IS NOT DISTINCT FROM a.k1 AND (DATE(tr."createTime")) IS NOT DISTINCT FROM a.k2 AND (tr."status") IS NOT DISTINCT FROM a.k3
+    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessType") IS NOT DISTINCT FROM a.k1 AND (DATE_TRUNC(''day'') IS NOT DISTINCT FROM a.k2 AND (tr."createTime")::TIMESTAMP) IS NOT DISTINCT FROM a.k3
     WHERE tr."deleteTime" IS NULL
     GROUP BY tr."accountId", tr."businessType", create_date, tr."status") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
@@ -77,15 +77,15 @@ SELECT
 FROM source_dws_qbit_card_group_transaction;
 
 CREATE TEMPORARY TABLE sink_dws_qbit_card_group_transaction_2024 (
-    id BIGINT, account_id STRING, business_type STRING, status STRING, origin_amount DECIMAL(20,4), transaction_count BIGINT, fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, business_type STRING, status STRING, origin_amount DECIMAL(18,2), transaction_count INT, fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_qbit_card_group_transaction_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_qbit_card_group_transaction_2025 (
-    id BIGINT, account_id STRING, business_type STRING, status STRING, origin_amount DECIMAL(20,4), transaction_count BIGINT, fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, business_type STRING, status STRING, origin_amount DECIMAL(18,2), transaction_count INT, fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_qbit_card_group_transaction_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_qbit_card_group_transaction_2026 (
-    id BIGINT, account_id STRING, business_type STRING, status STRING, origin_amount DECIMAL(20,4), transaction_count BIGINT, fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, business_type STRING, status STRING, origin_amount DECIMAL(18,2), transaction_count INT, fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_qbit_card_group_transaction_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
