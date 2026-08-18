@@ -41,9 +41,9 @@ flink_reference/
 │   ├── <base>_ddl.sql                    # 分表结构参考（IF NOT EXISTS，不重建）
 │   └── register_fn_<base>_cdc_delete_v2.sql  # 按 key 精准删的删除函数
 ├── cdc/                                 # 23 × 每日增量作业（BATCH 模式 + 每日定时）
-│   └── <base>-cdc-v2-sql.sql
+│   └── <base>_v2-cdc-sql.sql
 └── batch/                               # 23 × 一次性修复/补数作业
-    └── batch-<base>-v2-sql.sql
+    └── <base>_v2-batch-sql.sql
 ```
 
 ## 23 张目标表与业务键（即删除/upsert 的唯一 key）

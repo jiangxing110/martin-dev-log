@@ -3,14 +3,14 @@
 """
 gen_all_jobs.py
 ================
-从 old/insert_task_job.sql 解析出每张 insert 目标表，按 quantum-v2 范式
+从 ../insert_task_job.sql 解析出每张 insert 目标表，按 quantum-v2 范式
 （确定性哈希主键 + 按唯一业务键精准删 + upsert）生成 4 件套：
 
   flink_reference/
     table/<base>_ddl.sql                        # IF NOT EXISTS，不重建现有表
     table/register_fn_<base>_cdc_delete_v2.sql # 删除函数（真·按 key 删）
-    cdc/<base>-cdc-v2-sql.sql                  # 每日增量（BATCH 定时）
-    batch/<base>-batch-sql.sql                 # 一次性修复/补数
+    cdc/<base>_v2-cdc-sql.sql                  # 每日增量（BATCH 定时）
+    batch/<base>_v2-batch-sql.sql              # 一次性修复/补数
 
 设计要点：
   * 聚合逻辑留在 PostgreSQL（JDBC source 子查询直接跑原版聚合），Flink 只算 id + upsert，
@@ -25,7 +25,7 @@ gen_all_jobs.py
 """
 import re, os, sys
 
-SRC = os.path.join(os.path.dirname(__file__), "..", "old", "insert_task_job.sql")
+SRC = os.path.join(os.path.dirname(__file__), "..", "insert_task_job.sql")
 OUT = os.path.dirname(__file__)
 YEARS = [2024, 2025, 2026, 2027]
 
@@ -778,9 +778,9 @@ def main():
             f.write(todo + f"-- {base} DDL（IF NOT EXISTS，不重建现有表）\n" + ddl_block(base, p["cols"]))
         with open(os.path.join(tdir, f"register_fn_{base}_cdc_delete_v2.sql"), "w", encoding="utf-8") as f:
             f.write(todo + fn_text)
-        with open(os.path.join(cdir, f"{base}-cdc-v2-sql.sql"), "w", encoding="utf-8") as f:
+        with open(os.path.join(cdir, f"{base}_v2-cdc-sql.sql"), "w", encoding="utf-8") as f:
             f.write(todo + cdc_block(base, p["cols"], keys, pg_subquery))
-        with open(os.path.join(bdir, f"batch-{base}-v2-sql.sql"), "w", encoding="utf-8") as f:
+        with open(os.path.join(bdir, f"{base}_v2-batch-sql.sql"), "w", encoding="utf-8") as f:
             f.write(todo + batch_block(base, p["cols"], keys, p["from_join"], where_no_window, pg_key_exprs, create_expr, pg_subquery))
         print(f"[OK] {section:>2} {base:<45} keys={dws_keys}")
 

@@ -48,10 +48,10 @@ SELECT public.fn_delete_qbit_card_transaction_cdc(true, DATE '2026-01-01', DATE 
 
 | 作业 | 文件 | 类型 | 运行模式 |
 |------|------|------|----------|
-| 修复作业 | `batch/dws_qbit_card_transaction-batch-sql.sql` | 批处理 | BATCH（按需手动触发） |
-| 修复作业 | `batch/dws_qbit_card_transaction_extend-batch-sql.sql` | 批处理 | BATCH（按需手动触发） |
-| 增量作业 | `cdc/dws_qbit_card_transaction-cdc-v2-sql.sql` | 流/增量 | BATCH + 每日定时 |
-| 增量作业 | `cdc/dws_qbit_card_transaction_extend-cdc-v2-sql.sql` | 流/增量 | BATCH + 每日定时 |
+| 修复作业 | `batch/dws_qbit_card_transaction_v2-batch-sql.sql` | 批处理 | BATCH（按需手动触发） |
+| 修复作业 | `batch/dws_qbit_card_transaction_extend_v2-batch-sql.sql` | 批处理 | BATCH（按需手动触发） |
+| 增量作业 | `cdc/dws_qbit_card_transaction_v2-cdc-sql.sql` | 流/增量 | BATCH + 每日定时 |
+| 增量作业 | `cdc/dws_qbit_card_transaction_extend_v2-cdc-sql.sql` | 流/增量 | BATCH + 每日定时 |
 
 建作业步骤：
 
@@ -109,11 +109,11 @@ flink_reference/
 │   ├── dws_qbit_card_transaction_ddl.sql                       # 结构参考（IF NOT EXISTS）
 │   └── dws_qbit_card_transaction_extend_ddl.sql               # extend 结构参考
 ├── cdc/                 # 流作业，每表一个（步骤 2 / 4）
-│   ├── dws_qbit_card_transaction-cdc-v2-sql.sql
-│   └── dws_qbit_card_transaction_extend-cdc-v2-sql.sql
+│   ├── dws_qbit_card_transaction_v2-cdc-sql.sql
+│   └── dws_qbit_card_transaction_extend_v2-cdc-sql.sql
 └── batch/               # 批作业（修复/补数），每表一个（步骤 3）
-    ├── dws_qbit_card_transaction-batch-sql.sql
-    └── dws_qbit_card_transaction_extend-batch-sql.sql
+    ├── dws_qbit_card_transaction_v2-batch-sql.sql
+    └── dws_qbit_card_transaction_extend_v2-batch-sql.sql
 ```
 
 ## 8. 上线检查清单（建议顺序）
