@@ -719,31 +719,32 @@ ORDER BY t.seq;
 
 
 1月查询清洗库的成本
-Mastercard Domestic Count Fee	18342.6290
-Mastercard International Count Fee	124283.9400
-VISA Domestic Count Fee	5589.9675
-VISA International Count Fee	42568.9110
-AC Mastercard Domestic Count Fee	44046.6820
-AC Mastercard International Count Fee	46085.6400
-AC VISA Domestic Count Fee	4820.7425
-AC VISA International Count Fee	9647.3250
-Mastercard Domestic Dollar Volume Fee	10228.0801
-Mastercard International Dollar Volume Fee	106761.9372
-Visa Domestic Dollar Volume Fee	2988.1087
-Visa International Dollar Volume Fee	17410.9965
-Mastercard International Reversal Fee	13151.9480
-Visa International Reversal Fee	6546.6660
-Domestic Reversal Fee	3551.6340
-Mastercard International Refund Fee	1896.8175
-VISA International Refund Fee	557.1360
-Domestic Refund Fee	677.9800
-Mastercard International Decline Fee	55533.0435
-Visa International Decline Fee	23268.1890
-Domestic Decline Fee	28138.0620
-AC Mastercard International Decline Fee	6325.7620
-AC Visa International Decline Fee	1384.4460
-AC Domestic Decline Fee	10490.6970
-Active Card Account Fee	20767.8000
-Volume Fee Cost	81428.8912
+Mastercard Domestic Count Fee	10140.7060
+Mastercard International Count Fee	82339.3215
+VISA Domestic Count Fee	3178.9075
+VISA International Count Fee	17488.2510
+AC Mastercard Domestic Count Fee	11691.4490
+AC Mastercard International Count Fee	6827.5740
+AC VISA Domestic Count Fee	1344.2950
+AC VISA International Count Fee	2734.1640
+Mastercard Domestic Dollar Volume Fee	11170.8053
+Mastercard International Dollar Volume Fee	102321.4994
+Visa Domestic Dollar Volume Fee	1981.0737
+Visa International Dollar Volume Fee	9954.6267
+Mastercard International Reversal Fee	7200.0660
+Visa International Reversal Fee	11578.2240
+Domestic Reversal Fee	2479.1840
+Mastercard International Refund Fee	1724.8200
+VISA International Refund Fee	302.8950
+Domestic Refund Fee	544.2370
+Mastercard International Decline Fee	47837.9460
+Visa International Decline Fee	9168.8310
+Domestic Decline Fee	17315.6620
+AC Mastercard International Decline Fee	2591.9950
+AC Visa International Decline Fee	609.0420
+AC Domestic Decline Fee	6549.3320
+Active Card Account Fee	12955.9000
+Volume Fee Cost	76535.6509
+Cashback Income	345902.2150
 Fixed Fee	0.0000
-TOTAL	686494.0317
+TOTAL	458566.4579
