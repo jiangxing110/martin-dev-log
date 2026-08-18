@@ -1,4 +1,12 @@
 -- =============================================================================
+-- 母客户级别成本报表 v2 —— 2026-04 月（由 BB客户成本-v2.sql / 2026-01 按月份参数推导生成）
+-- 注意【每月调整项，已沿用 2026-01 值作占位，请按当月实际账单核实替换】：
+--   1) cashback_rate        (tmp_params 中，默认 0.020795)
+--   2) fixed_fee            (tmp_params 中，默认 0.0)
+--   3) tmp_excluded_settlement_ids 排除ID清单（默认沿用 2026-01 清单）
+-- 已自动按月份推导：日期区间、bb_card_auth_detail_2026-04 分表名。
+-- =============================================================================
+-- =============================================================================
 -- 母客户级别成本报表 v2（汇总版：不输出 month/displayid/account_id，数值全量求和）
 -- 每月只需修改 tmp_params 中的参数值即可
 -- =============================================================================
@@ -7,15 +15,15 @@
 DROP TABLE IF EXISTS tmp_params;
 CREATE TEMP TABLE tmp_params AS
 SELECT 
-    '2026-01-01'::timestamp AS month_start,          -- 报表月份第一天 00:00:00
-    '2026-02-01'::timestamp AS month_end,            -- 报表月份下个月第一天 00:00:00
-    '2026-01-01 08:00:00'::timestamp AS txn_start,   -- transaction_time 开始（带时区偏移）
-    '2026-02-01 08:00:00'::timestamp AS txn_end,     -- transaction_time 结束（带时区偏移）
-    '2025-12-01 00:00:00'::timestamp AS settle_start, -- settle表开始时间前延一个月
-    '2026-01-10 00:00:00'::timestamp AS settle_end,   -- settle表结束时间后延一个月
-    '2026-01-01'::date AS post_start,                 -- post_date-计算退款 开始时间
-    '2026-02-01'::date AS post_end,                   -- post_date-计算退款 结束时间
-    '2026-01'::text AS month_label,                   -- 输出月份标签
+    '2026-04-01'::timestamp AS month_start,          -- 报表月份第一天 00:00:00
+    '2026-05-01'::timestamp AS month_end,            -- 报表月份下个月第一天 00:00:00
+    '2026-04-01 08:00:00'::timestamp AS txn_start,   -- transaction_time 开始（带时区偏移）
+    '2026-05-01 08:00:00'::timestamp AS txn_end,     -- transaction_time 结束（带时区偏移）
+    '2026-03-01 00:00:00'::timestamp AS settle_start, -- settle表开始时间前延一个月
+    '2026-05-10 00:00:00'::timestamp AS settle_end,   -- settle表结束时间后延一个月
+    '2026-04-01'::date AS post_start,                 -- post_date-计算退款 开始时间
+    '2026-05-01'::date AS post_end,                   -- post_date-计算退款 结束时间
+    '2026-04'::text AS month_label,                   -- 输出月份标签
     0.020795::numeric AS cashback_rate,               -- 每月调整账单的Cashback 费率
     0.0::numeric AS fixed_fee;                        -- Fixed Fee 固定费（默认0，每月调整）
 
@@ -351,7 +359,7 @@ q6 AS (
             AND A."Request Description" != 'Account Verification'
             THEN A."Auth Txn GUID" 
         END) AS dom_decline_count
-    FROM "bb_card_auth_detail_2026-01" A --每月调整
+    FROM "bb_card_auth_detail_2026-04" A --每月调整
     LEFT JOIN "qbitCard" C ON A."Card Proxy" = C."token"
     LEFT JOIN "account" B ON C."accountId" = B."id"
     INNER JOIN tmp_account_master AM ON B."id" = AM.account_id
@@ -400,7 +408,7 @@ q7 AS (
             AND A."Request Description" = 'Account Verification'
             THEN A."Auth Txn GUID" 
         END) AS ac_dom_decline_count
-    FROM "bb_card_auth_detail_2026-01" A --每月调整
+    FROM "bb_card_auth_detail_2026-04" A --每月调整
     LEFT JOIN "qbitCard" C ON A."Card Proxy" = C."token"
     LEFT JOIN "account" B ON C."accountId" = B."id"
     INNER JOIN tmp_account_master AM ON B."id" = AM.account_id
@@ -426,7 +434,7 @@ q8 AS (
     SELECT 
         AM.master_client_id,
         COUNT(DISTINCT A."Card Proxy") * 0.1 AS active_card_account_fee
-    FROM "bb_card_auth_detail_2026-01" A--每月调整
+    FROM "bb_card_auth_detail_2026-04" A--每月调整
     LEFT JOIN "qbitCard" C ON A."Card Proxy" = C."token"
     LEFT JOIN "account" B ON C."accountId" = B."id"
     INNER JOIN tmp_account_master AM ON B."id" = AM.account_id
@@ -706,3 +714,37 @@ FROM (
            + (SELECT fixed_fee FROM tmp_params)
 ) t
 ORDER BY t.seq;
+
+
+
+
+1月查询清洗库的成本
+Mastercard Domestic Count Fee	13648.6530
+Mastercard International Count Fee	95039.0355
+VISA Domestic Count Fee	3540.3200
+VISA International Count Fee	16924.4370
+AC Mastercard Domestic Count Fee	20616.2600
+AC Mastercard International Count Fee	9426.9165
+AC VISA Domestic Count Fee	1779.2950
+AC VISA International Count Fee	3513.1050
+Mastercard Domestic Dollar Volume Fee	9683.1799
+Mastercard International Dollar Volume Fee	100730.4947
+Visa Domestic Dollar Volume Fee	1971.5581
+Visa International Dollar Volume Fee	9155.8197
+Mastercard International Reversal Fee	6418.5130
+Visa International Reversal Fee	9655.4220
+Domestic Reversal Fee	5425.7960
+Mastercard International Refund Fee	1718.5215
+VISA International Refund Fee	476.0460
+Domestic Refund Fee	532.9010
+Mastercard International Decline Fee	49595.9010
+Visa International Decline Fee	13668.1020
+Domestic Decline Fee	20407.6110
+AC Mastercard International Decline Fee	3010.0935
+AC Visa International Decline Fee	746.8440
+AC Domestic Decline Fee	8376.5910
+Active Card Account Fee	14314.1000
+Volume Fee Cost	72829.5040
+Cashback Income	326634.8839
+Fixed Fee	0.0000
+TOTAL	493205.0204
