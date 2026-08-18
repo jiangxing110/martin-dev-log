@@ -60,13 +60,13 @@ CREATE TEMPORARY TABLE source_dws_qbit_card_group_transaction (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT tr."accountId" AS k0, tr."businessType" AS k1, DATE_TRUNC(''day'' AS k2, tr."createTime")::TIMESTAMP AS k3, tr."status" AS k4
+        SELECT DISTINCT tr."accountId" AS k0, tr."businessType" AS k1, tr."createTime"::DATE::TIMESTAMP AS k2, tr."status" AS k3
         FROM "qbitCardGroupTransaction" AS tr
         WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
     )
-    SELECT tr."accountId" AS "account_id", tr."businessType" AS "business_type", tr."status" AS "status", COALESCE(SUM(tr."originalAmount"), 0) AS origin_amount, COUNT(*) AS transaction_count, COALESCE(SUM(tr."fee"), 0) AS fee, TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS create_date, 1 AS version, NOW() AS create_time, NOW() AS update_time
+    SELECT tr."accountId" AS "account_id", tr."businessType" AS "business_type", tr."status" AS "status", COALESCE(SUM(tr."originalAmount"), 0) AS origin_amount, COUNT(*) AS transaction_count, COALESCE(SUM(tr."fee"), 0) AS fee, tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS version, NOW() AS create_time, NOW() AS update_time
     FROM "qbitCardGroupTransaction" AS tr
-    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessType") IS NOT DISTINCT FROM a.k1 AND (DATE_TRUNC(''day'') IS NOT DISTINCT FROM a.k2 AND (tr."createTime")::TIMESTAMP) IS NOT DISTINCT FROM a.k3
+    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessType") IS NOT DISTINCT FROM a.k1 AND (tr."createTime"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k2 AND (tr."status") IS NOT DISTINCT FROM a.k3
     WHERE tr."deleteTime" IS NULL
     GROUP BY tr."accountId", tr."businessType", create_date, tr."status") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',

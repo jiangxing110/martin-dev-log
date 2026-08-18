@@ -286,7 +286,7 @@ def remove_create_window(where):
 
 def create_date_expr(time_cols):
     c = time_cols.get("create")
-    return f"DATE_TRUNC('day', {c})::TIMESTAMP" if c else 'CURRENT_DATE::TIMESTAMP'
+    return f"{c}::DATE::TIMESTAMP" if c else 'CURRENT_DATE::TIMESTAMP'
 
 def _extract_main_source(block):
     """返回主查询第一个 FROM 的 (表名, 别名)。sale 表主别名统一为 tr。"""
@@ -768,6 +768,13 @@ def main():
         where_no_window = remove_create_window(p["where"])
         create_expr = create_date_expr(time_cols)
         dws_keys, pg_key_exprs = dws_key_exprs(base, keys, p, time_cols)
+
+        # 主 SELECT 的 create_date 表达式覆盖为 TIMESTAMP(6) 版（与 Flink 声明/物理表一致），
+        # 用逗号免费的 ::DATE::TIMESTAMP，避免源子查询返回 DATE 与声明 TIMESTAMP(6) 错配；按天聚合不变。
+        if "create_date" in p["cols"]:
+            _ci = p["cols"].index("create_date")
+            if 0 <= _ci < len(p["exprs"]):
+                p["exprs"][_ci] = create_date_expr(time_cols)
 
         # 聚合 SELECT（去掉 id 列），并让输出列名对齐 DWS 列名
         agg_select = ", ".join(alias_to_cols(p["exprs"][1:], p["cols"][1:]))

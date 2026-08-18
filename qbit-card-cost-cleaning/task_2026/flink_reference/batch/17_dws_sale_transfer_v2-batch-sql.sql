@@ -63,7 +63,7 @@ CREATE TEMPORARY TABLE source_dws_sale_transfer (
 LEFT JOIN "ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::UUID = osat.transaction_id::UUID
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT tr."accountId" AS "account_id", ids."sale_or_am_id" AS "sale_or_am_id", tr."businessTypeDetail" AS "business_type_detail", tr."businessCode" AS "business_type_code", tr."settlementCurrency" AS "settlement_currency", tr."status" AS "status", COALESCE(SUM(tr."usdAmount"), 0) AS usd_amount, COUNT(*) AS transaction_count, COALESCE(SUM(tr."fee" * tr."usdRate"), 0) AS fee, tr."currency" AS "currency", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS create_date, 1 AS version, NOW() AS create_time, NOW() AS update_time
+    SELECT tr."accountId" AS "account_id", ids."sale_or_am_id" AS "sale_or_am_id", tr."businessTypeDetail" AS "business_type_detail", tr."businessCode" AS "business_type_code", tr."settlementCurrency" AS "settlement_currency", tr."status" AS "status", COALESCE(SUM(tr."usdAmount"), 0) AS usd_amount, COUNT(*) AS transaction_count, COALESCE(SUM(tr."fee" * tr."usdRate"), 0) AS fee, tr."currency" AS "currency", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS version, NOW() AS create_time, NOW() AS update_time
     FROM "transfer" AS tr
 LEFT JOIN "ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::UUID = osat.transaction_id::UUID
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE

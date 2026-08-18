@@ -58,13 +58,13 @@ CREATE TEMPORARY TABLE source_dws_transfer (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT tr."accountId" AS k0, tr."businessTypeDetail" AS k1, tr."businessCode" AS k2, tr."settlementCurrency" AS k3, DATE_TRUNC(''day'' AS k4, tr."createTime")::TIMESTAMP AS k5, tr."status" AS k6, "currency" AS k7
+        SELECT DISTINCT tr."accountId" AS k0, tr."businessTypeDetail" AS k1, tr."businessCode" AS k2, tr."settlementCurrency" AS k3, tr."createTime"::DATE::TIMESTAMP AS k4, tr."status" AS k5, "currency" AS k6
         FROM "transfer" AS tr
         WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT tr."accountId" AS "account_id", tr."businessTypeDetail" AS "business_type_detail", tr."businessCode" AS "business_type_code", tr."settlementCurrency" AS "settlement_currency", tr."status" AS "status", COALESCE(SUM(tr."usdAmount"), 0) AS usd_amount, COUNT(*) AS transaction_count, COALESCE(SUM("fee" * "usdRate"), 0) AS fee, "currency" AS "currency", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS create_date, 1 AS version, NOW() AS create_time, NOW() AS update_time
+    SELECT tr."accountId" AS "account_id", tr."businessTypeDetail" AS "business_type_detail", tr."businessCode" AS "business_type_code", tr."settlementCurrency" AS "settlement_currency", tr."status" AS "status", COALESCE(SUM(tr."usdAmount"), 0) AS usd_amount, COUNT(*) AS transaction_count, COALESCE(SUM("fee" * "usdRate"), 0) AS fee, "currency" AS "currency", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS version, NOW() AS create_time, NOW() AS update_time
     FROM "transfer" AS tr
-    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessTypeDetail") IS NOT DISTINCT FROM a.k1 AND (tr."businessCode") IS NOT DISTINCT FROM a.k2 AND (tr."settlementCurrency") IS NOT DISTINCT FROM a.k3 AND (DATE_TRUNC(''day'') IS NOT DISTINCT FROM a.k4 AND (tr."createTime")::TIMESTAMP) IS NOT DISTINCT FROM a.k5 AND (tr."status") IS NOT DISTINCT FROM a.k6
+    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessTypeDetail") IS NOT DISTINCT FROM a.k1 AND (tr."businessCode") IS NOT DISTINCT FROM a.k2 AND (tr."settlementCurrency") IS NOT DISTINCT FROM a.k3 AND (tr."createTime"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k4 AND (tr."status") IS NOT DISTINCT FROM a.k5 AND ("currency") IS NOT DISTINCT FROM a.k6
     WHERE tr."deleteTime" IS NULL
     GROUP BY tr."accountId", tr."businessTypeDetail",tr."businessCode", tr."settlementCurrency", create_date, status, "currency") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',

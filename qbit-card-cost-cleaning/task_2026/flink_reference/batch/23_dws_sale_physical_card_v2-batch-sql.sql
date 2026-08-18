@@ -61,7 +61,7 @@ LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::VARCHAR = osat.transaction_id::VARCHAR
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT tr."accountId" AS "account_id", ids."sale_or_am_id" AS "sale_or_am_id", qc."provider" AS "provider", qc."firstSix" AS "bin", tr."status" AS "status", COUNT(*) AS "transaction_count", SUM("originAmount"::numeric) AS "physical_card_fee", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
+    SELECT tr."accountId" AS "account_id", ids."sale_or_am_id" AS "sale_or_am_id", qc."provider" AS "provider", qc."firstSix" AS "bin", tr."status" AS "status", COUNT(*) AS "transaction_count", SUM("originAmount"::numeric) AS "physical_card_fee", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
     FROM "qbitCardWalletTransaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::VARCHAR = osat.transaction_id::VARCHAR

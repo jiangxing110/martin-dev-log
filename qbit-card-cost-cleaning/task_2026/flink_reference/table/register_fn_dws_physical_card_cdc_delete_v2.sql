@@ -14,16 +14,16 @@ BEGIN
     IF p_start IS NULL THEN
         -- ===== CDC 模式：按唯一业务键精准删（受影响 key 集合，不再按整天删）=====
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM DATE_TRUNC('day', tr."createTime")::TIMESTAMP)::INT
+            SELECT DISTINCT EXTRACT(YEAR FROM tr."createTime"::DATE::TIMESTAMP)::INT
             FROM "qbitCardWalletTransaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
             WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_physical_card_%s WHERE (account_id, provider, bin, status, create_date) IN (SELECT DISTINCT tr."accountId", qc."provider", qc."firstSix", tr."status", DATE_TRUNC('day', tr."createTime")::TIMESTAMP FROM "qbitCardWalletTransaction" AS tr
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_physical_card_%s WHERE (account_id, provider, bin, status, create_date) IN (SELECT DISTINCT tr."accountId", qc."provider", qc."firstSix", tr."status", tr."createTime"::DATE::TIMESTAMP FROM "qbitCardWalletTransaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_physical_card_%s WHERE (account_id, provider, bin, status, create_date) IN (SELECT DISTINCT tr."accountId", qc."provider", qc."firstSix", tr."status", DATE_TRUNC('day', tr."createTime")::TIMESTAMP FROM "qbitCardWalletTransaction" AS tr
+                EXECUTE format($fmt$DELETE FROM public.dws_physical_card_%s WHERE (account_id, provider, bin, status, create_date) IN (SELECT DISTINCT tr."accountId", qc."provider", qc."firstSix", tr."status", tr."createTime"::DATE::TIMESTAMP FROM "qbitCardWalletTransaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;

@@ -69,7 +69,7 @@ LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::UUID = osat.transaction_id::UUID
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."deleteTime" < CURRENT_DATE)
     )
-    SELECT tr."accountId" AS "account_id", ids."sale_or_am_id" AS "sale_or_am_id", tr."businessType" AS "business_type", tr."status" AS "status", tr."provider" AS "provider", qc."firstSix" AS "bin", COALESCE(SUM(tr."originalAmount"), 0) AS origin_amount, COALESCE(SUM(tr."settleAmount"), 0) AS settle_amount, COUNT(*) AS transaction_count, COALESCE(SUM(tr."fee"), 0) AS fee, TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS create_date, 1 AS version, NOW() AS create_time, NOW() AS update_time
+    SELECT tr."accountId" AS "account_id", ids."sale_or_am_id" AS "sale_or_am_id", tr."businessType" AS "business_type", tr."status" AS "status", tr."provider" AS "provider", qc."firstSix" AS "bin", COALESCE(SUM(tr."originalAmount"), 0) AS origin_amount, COALESCE(SUM(tr."settleAmount"), 0) AS settle_amount, COUNT(*) AS transaction_count, COALESCE(SUM(tr."fee"), 0) AS fee, tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS version, NOW() AS create_time, NOW() AS update_time
     FROM "qbit_card_transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::UUID = osat.transaction_id::UUID

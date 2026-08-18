@@ -62,13 +62,13 @@ CREATE TEMPORARY TABLE source_dws_crypto_assets_transfers (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT "account_id" AS k0, "status" AS k1, "sender_type" AS k2, "recipient_type" AS k3, "hidden" AS k4, DATE_TRUNC(''day'' AS k5, tr."create_time")::TIMESTAMP AS k6, "currency" AS k7, "action" AS k8
+        SELECT DISTINCT "account_id" AS k0, "status" AS k1, "sender_type" AS k2, "recipient_type" AS k3, "hidden" AS k4, tr."create_time"::DATE::TIMESTAMP AS k5, "currency" AS k6, "action" AS k7
         FROM "crypto_assets_transfers" AS tr
         WHERE (DATE(tr."create_time") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."create_time") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT "account_id" AS "account_id", "status" AS "status", "sender_type" AS "sender_type", "recipient_type" AS "recipient_type", COUNT(*) AS transaction_count, SUM("origin_amount" * "usd_rate") AS origin_amount, SUM("settlement_amount" * "usd_rate") AS settlement_amount, SUM("fee" * "usd_rate") AS fee, SUM("fee2" * "usd_rate") AS fee2, SUM("cross_chain_fee" * "usd_rate") AS cross_chain_fee, "hidden" AS "hidden", TO_CHAR("create_time", ''YYYY-MM-DD'')::DATE AS create_date, "currency" AS "currency", "action" AS "action", 1 AS version, NOW() AS create_time, NOW() AS update_time
+    SELECT "account_id" AS "account_id", "status" AS "status", "sender_type" AS "sender_type", "recipient_type" AS "recipient_type", COUNT(*) AS transaction_count, SUM("origin_amount" * "usd_rate") AS origin_amount, SUM("settlement_amount" * "usd_rate") AS settlement_amount, SUM("fee" * "usd_rate") AS fee, SUM("fee2" * "usd_rate") AS fee2, SUM("cross_chain_fee" * "usd_rate") AS cross_chain_fee, "hidden" AS "hidden", tr."create_time"::DATE::TIMESTAMP AS "create_date", "currency" AS "currency", "action" AS "action", 1 AS version, NOW() AS create_time, NOW() AS update_time
     FROM "crypto_assets_transfers" AS tr
-    JOIN affected a ON ("account_id") IS NOT DISTINCT FROM a.k0 AND ("status") IS NOT DISTINCT FROM a.k1 AND ("sender_type") IS NOT DISTINCT FROM a.k2 AND ("recipient_type") IS NOT DISTINCT FROM a.k3 AND ("hidden") IS NOT DISTINCT FROM a.k4 AND (DATE_TRUNC(''day'') IS NOT DISTINCT FROM a.k5 AND (tr."create_time")::TIMESTAMP) IS NOT DISTINCT FROM a.k6 AND ("currency") IS NOT DISTINCT FROM a.k7
+    JOIN affected a ON ("account_id") IS NOT DISTINCT FROM a.k0 AND ("status") IS NOT DISTINCT FROM a.k1 AND ("sender_type") IS NOT DISTINCT FROM a.k2 AND ("recipient_type") IS NOT DISTINCT FROM a.k3 AND ("hidden") IS NOT DISTINCT FROM a.k4 AND (tr."create_time"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k5 AND ("currency") IS NOT DISTINCT FROM a.k6 AND ("action") IS NOT DISTINCT FROM a.k7
     WHERE tr."delete_time" IS NULL
     GROUP BY "account_id","status","sender_type","recipient_type","hidden",create_date,"currency","action") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',

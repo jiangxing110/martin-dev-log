@@ -60,7 +60,7 @@ CREATE TEMPORARY TABLE source_dws_sale_card_wallet_transaction (
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::UUID = osat.transaction_id::UUID
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT tr."accountId" AS "account_id", ids."sale_or_am_id" AS "sale_or_am_id", tr."businessType" AS "business_type", tr."status" AS "status", COALESCE(SUM(tr."originAmount"), 0) AS origin_amount, COUNT(*) AS transaction_count, COALESCE(SUM(tr."fee"), 0) AS fee, TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS create_date, 1 AS version, NOW() AS create_time, NOW() AS update_time
+    SELECT tr."accountId" AS "account_id", ids."sale_or_am_id" AS "sale_or_am_id", tr."businessType" AS "business_type", tr."status" AS "status", COALESCE(SUM(tr."originAmount"), 0) AS origin_amount, COUNT(*) AS transaction_count, COALESCE(SUM(tr."fee"), 0) AS fee, tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS version, NOW() AS create_time, NOW() AS update_time
     FROM "qbitCardWalletTransaction" AS tr
 LEFT JOIN "public"."ods_sale_am_transaction_2026" AS osat ON tr."transactionId"::UUID = osat.transaction_id::UUID
 LEFT JOIN LATERAL (SELECT unnest(ARRAY[osat."sale_id", osat."am_id"]) AS sale_or_am_id) AS ids ON TRUE

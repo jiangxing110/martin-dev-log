@@ -55,15 +55,15 @@ CREATE TEMPORARY TABLE source_dws_open_card (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT tr."status" AS k0, tr."accountId" AS k1, qc."provider" AS k2, qc."firstSix" AS k3, DATE_TRUNC(''day'' AS k4, tr."createTime")::TIMESTAMP AS k5
+        SELECT DISTINCT tr."status" AS k0, tr."accountId" AS k1, qc."provider" AS k2, qc."firstSix" AS k3, tr."createTime"::DATE::TIMESTAMP AS k4
         FROM "Transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON qc."id"::VARCHAR = tr."sourceId"
         WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT tr."accountId" AS "account_id", qc."provider" AS "provider", qc."firstSix" AS "bin", tr."status" AS "status", COALESCE(SUM(tr."senderFee"), 0) AS "fee", COUNT(*) AS "count", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
+    SELECT tr."accountId" AS "account_id", qc."provider" AS "provider", qc."firstSix" AS "bin", tr."status" AS "status", COALESCE(SUM(tr."senderFee"), 0) AS "fee", COUNT(*) AS "count", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
     FROM "Transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON qc."id"::VARCHAR = tr."sourceId"
-    JOIN affected a ON (tr."status") IS NOT DISTINCT FROM a.k0 AND (tr."accountId") IS NOT DISTINCT FROM a.k1 AND (qc."provider") IS NOT DISTINCT FROM a.k2 AND (qc."firstSix") IS NOT DISTINCT FROM a.k3 AND (DATE_TRUNC(''day'') IS NOT DISTINCT FROM a.k4
+    JOIN affected a ON (tr."status") IS NOT DISTINCT FROM a.k0 AND (tr."accountId") IS NOT DISTINCT FROM a.k1 AND (qc."provider") IS NOT DISTINCT FROM a.k2 AND (qc."firstSix") IS NOT DISTINCT FROM a.k3 AND (tr."createTime"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k4
     WHERE tr."deleteTime" IS NULL AND tr."type" IN (''CreateCard'', ''QbitCardFee'')
     GROUP BY tr."status", tr."accountId", qc."provider", qc."firstSix", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE) AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',

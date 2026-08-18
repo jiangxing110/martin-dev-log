@@ -14,7 +14,7 @@ BEGIN
     IF p_start IS NULL THEN
         -- ===== CDC 模式：按唯一业务键精准删（受影响 key 集合，不再按整天删）=====
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM DATE_TRUNC('day', tr."createTime")::TIMESTAMP)::INT
+            SELECT DISTINCT EXTRACT(YEAR FROM tr."createTime"::DATE::TIMESTAMP)::INT
             FROM "Transaction" tr
 LEFT JOIN (
 select sar."createTime",sar."deleteTime",sar."salesId",sar."amId",sar."accountId" as "accountId"   
