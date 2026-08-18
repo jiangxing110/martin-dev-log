@@ -23,7 +23,7 @@ gen_all_jobs.py
 注意：生成结果是“参考脚手架”，上线前需对照线上 Flink catalog 校准列类型
 （尤其 UUID / JSON / boolean 等），以及对少数复杂聚合（如 sale_transfer_extend 嵌套子查询）做复核。
 """
-import re, os, sys
+import re, os, sys, datetime
 
 SRC = os.path.join(os.path.dirname(__file__), "..", "insert_task_job.sql")
 OUT = os.path.dirname(__file__)
@@ -628,17 +628,14 @@ FROM v_{base}_base
 CROSS JOIN source_delete_{base}_result AS del
 WHERE del.affected_rows >= 0
   AND {route_cond(cols, y)};""")
-    # batch 用日期区间清理（修复模式），默认 2026 全量；可改
+    # batch 用日期区间清理（修复模式），区间由作业参数 start_date/end_date 传入
     return f"""{SET_BLOCK}
--- 说明：batch 用于一次性修复/补数。删除函数走“修复模式”(传入 p_start/p_end)，按 create_date
---       区间整段清理后由下方重算 upsert 覆盖（幂等）。默认区间 2026-01-01~2026-08-17，按需调整。
-
 CREATE TEMPORARY TABLE source_delete_{base}_result (
     affected_rows BIGINT
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${{secret_values.ADB_PG_VPC_HOSTNAME}}:${{secret_values.ADB_PG_VPC_PORT}}/${{secret_values.ADB_PG_DATABASE}}',
-    'table-name' = '(SELECT public.fn_delete_{base}_cdc(false, DATE ''2026-01-01'', DATE ''2026-08-17'') AS affected_rows) AS delete_result',
+    'table-name' = '(SELECT public.fn_delete_{base}_cdc(false, CAST(''${{start_date}}'' AS DATE), CAST(''${{end_date}}'' AS DATE)) AS affected_rows) AS delete_result',
     'username' = '${{secret_values.ADB_PG_USERNAME}}',
     'password' = '${{secret_values.ADB_PG_PASSWORD}}',
     'driver' = 'org.postgresql.Driver',
@@ -682,12 +679,76 @@ def ddl_block(base, cols):
     return "\n\n".join(creates) + "\n"
 
 # ---------------------------------------------------------------------------
+# 文件头 / batch 补数窗口（生成器统一产出，避免 regen 冲掉）
+# ---------------------------------------------------------------------------
+GEN_DATE = datetime.date.today().isoformat()
+
+def header_block(kind, base, params, notes):
+    """bb 式结构化文件头：作者 / 创建更新时间 / 作业元信息 / 运行参数 / Notes。
+    kind: 'cdc' | 'batch'。"""
+    kind_zh = "批处理" if kind == "batch" else "流处理(CDC)"
+    if kind == "batch":
+        run_mode = ("一次性修复/补数：VVR 作业参数 start_date/end_date 指定回刷区间（含两端，"
+                    "YYYY-MM-DD）；删除函数走修复模式按 create_date 跨分表清理，再由重算 upsert 覆盖（幂等）。")
+    else:
+        run_mode = "每日增量（BATCH 定时触发）：自动按昨天变更窗口(CDC 模式)精准删受影响 key 后 upsert 覆盖。"
+    bar = "--" + "*" * 68
+    lines = [
+        bar,
+        "-- Author:         martinJiang",
+        f"-- Created Time:   {GEN_DATE}",
+        f"-- Updated Time:   {GEN_DATE}",
+        f"-- Description:    {base} {kind_zh} 作业（quantum-v2 范式：确定性哈希主键 + 先清后写）",
+        "-- 作业元信息：",
+        f"--   作业类型：{kind_zh}",
+        f"--   运行方式：{run_mode}",
+        f"--   运行参数：{params}",
+        "-- Notes:",
+    ]
+    for i, n in enumerate(notes, 1):
+        lines.append(f"--   {i}. {n}")
+    lines.append(bar)
+    return "\n".join(lines) + "\n"
+
+def batch_window(time_cols=None, scope_date_src=None):
+    """batch 补数模式变更窗口：按传入 start_date/end_date 区间（含两端，YYYY-MM-DD）。
+    与删除函数“修复模式”(create_date >= p_start AND <= p_end) 严格对齐。
+    注意：返回原始单引号 SQL，由调用方 .replace(\"'\", \"''\") 转义为 Flink 字面量。"""
+    if scope_date_src:
+        return (f"({scope_date_src} >= CAST('${{start_date}}' AS DATE) "
+                f"AND {scope_date_src} <= CAST('${{end_date}}' AS DATE))")
+    c = time_cols.get("create") if time_cols else None
+    if c:
+        return (f"(DATE({c}) >= CAST('${{start_date}}' AS DATE) "
+                f"AND DATE({c}) <= CAST('${{end_date}}' AS DATE))")
+    return "FALSE"
+
+CDC_NOTES = [
+    "聚合逻辑留在 PostgreSQL（JDBC source 子查询），Flink 仅算 id + upsert，类型转换最少。",
+    "删除函数按唯一业务键 / 作用域精准删受影响 key，先清后写保证幂等。",
+    "按 create_date 年份动态路由分表（_YYYY），跨年安全。",
+    "上线前需对照线上 Flink catalog 校准列类型（UUID / JSON / boolean 等）。",
+]
+BATCH_NOTES = [
+    "一次性修复/补数作业：通过 VVR 作业参数 start_date/end_date 指定回刷区间（YYYY-MM-DD，含两端）。",
+    "删除函数走“修复模式”，按 create_date 区间跨分表整段清理。",
+    "源聚合仅重算该区间内受影响 key 的当前有效行，upsert 覆盖（幂等）。",
+    "删除与重算必须严格共用同一 start_date/end_date，否则出现区间缺口或越界残留。",
+    "上线前需对照线上 Flink catalog 校准列类型（UUID / JSON / boolean 等）。",
+]
+
+# ---------------------------------------------------------------------------
 # 主流程
 # ---------------------------------------------------------------------------
 def main():
     raw = open(SRC, encoding="utf-8").read()
     blocks = split_blocks(raw)
-    for section, target, block in blocks:
+    outputs = []  # (phase, order_idx, dir, fname, content)
+    PHASE_RANK = {"ddl": 0, "fn": 1, "cdc": 2, "batch": 3}
+    tdir = os.path.join(OUT, "table")
+    cdir = os.path.join(OUT, "cdc")
+    bdir = os.path.join(OUT, "batch")
+    for order_idx, (section, target, block) in enumerate(blocks):
         base = re.sub(r'_\d{4}$', '', target)  # 去掉 _2026 等
         p = parse_block(block)
         is_ods = (p["group_by"] is None)
@@ -715,9 +776,18 @@ def main():
             # ---- qi 式作用域(scope)删除：受影响 (scope_date, account_id) 先清后重算 ----
             si = sale_scope_info(base, block, p["cols"])
             scope_cte = f"SELECT DISTINCT {si['scope_date_src']} AS scope_date, {si['account_src']} AS scope_account FROM {p['from_join']} WHERE {si['change_win']}"
+            # batch：作用域窗口改走 start_date/end_date 参数（与删除函数修复模式对齐）
+            scope_cte_batch = f"SELECT DISTINCT {si['scope_date_src']} AS scope_date, {si['account_src']} AS scope_account FROM {p['from_join']} WHERE {batch_window(scope_date_src=si['scope_date_src'])}"
             if is_ods:
                 pg_subquery = f"""WITH affected AS (
         {scope_cte}
+    )
+    SELECT {agg_select}
+    FROM {p['from_join']}
+    JOIN affected a ON ({si['scope_date_src']}) = a.scope_date AND ({si['account_src']}) = a.scope_account
+    WHERE {'TRUE' if not where_no_window else where_no_window}"""
+                pg_subquery_batch = f"""WITH affected AS (
+        {scope_cte_batch}
     )
     SELECT {agg_select}
     FROM {p['from_join']}
@@ -732,32 +802,62 @@ def main():
     JOIN affected a ON ({si['scope_date_src']}) = a.scope_date AND ({si['account_src']}) = a.scope_account
     WHERE {'TRUE' if not where_no_window else where_no_window}
     GROUP BY {p['group_by']}"""
+                pg_subquery_batch = f"""WITH affected AS (
+        {scope_cte_batch}
+    )
+    SELECT {agg_select}
+    FROM {p['from_join']}
+    JOIN affected a ON ({si['scope_date_src']}) = a.scope_date AND ({si['account_src']}) = a.scope_account
+    WHERE {'TRUE' if not where_no_window else where_no_window}
+    GROUP BY {p['group_by']}"""
             fn_text = delete_fn_block_scope(base, si['scope_date_src'], si['scope_date_target'], si['account_src'], "account_id", p['from_join'], si['change_win'])
         else:
             # ---- 其余表：按唯一业务键精准删（受影响 key 集合，不再按整天删）----
             # PG 重算子查询：CTE 找受影响 key，再聚合这些 key 的当前有效源行
             key_exprs_aliased = ", ".join(f"{e} AS k{i}" for i, e in enumerate(pg_key_exprs.split(", ")))
+            key_join = " AND ".join(f"({pg_key_exprs.split(', ')[i]}) IS NOT DISTINCT FROM a.k{i}" for i in range(len(keys)))
+            # batch 窗口：cdc 用昨天 change_win；batch 用 start_date/end_date 参数
+            win_cdc = change_win
+            win_batch = batch_window(time_cols)
             if is_ods:
                 # ODS 原始表：直接取受影响 key 的源行（无聚合）
                 pg_subquery = f"""WITH affected AS (
         SELECT DISTINCT {key_exprs_aliased}
         FROM {p['from_join']}
-        WHERE {change_win}
+        WHERE {win_cdc}
     )
     SELECT {agg_select}
     FROM {p['from_join']}
-    JOIN affected a ON {" AND ".join(f"({pg_key_exprs.split(', ')[i]}) IS NOT DISTINCT FROM a.k{i}" for i in range(len(keys)))}
+    JOIN affected a ON {key_join}
+    WHERE {'TRUE' if not where_no_window else where_no_window}"""
+                pg_subquery_batch = f"""WITH affected AS (
+        SELECT DISTINCT {key_exprs_aliased}
+        FROM {p['from_join']}
+        WHERE {win_batch}
+    )
+    SELECT {agg_select}
+    FROM {p['from_join']}
+    JOIN affected a ON {key_join}
     WHERE {'TRUE' if not where_no_window else where_no_window}"""
             else:
-                key_eq = " AND ".join(f"({pg_key_exprs.split(', ')[i]}) IS NOT DISTINCT FROM a.k{i}" for i in range(len(keys)))
                 pg_subquery = f"""WITH affected AS (
         SELECT DISTINCT {key_exprs_aliased}
         FROM {p['from_join']}
-        WHERE {change_win}
+        WHERE {win_cdc}
     )
     SELECT {agg_select}
     FROM {p['from_join']}
-    JOIN affected a ON {key_eq}
+    JOIN affected a ON {key_join}
+    WHERE {'TRUE' if not where_no_window else where_no_window}
+    GROUP BY {p['group_by']}"""
+                pg_subquery_batch = f"""WITH affected AS (
+        SELECT DISTINCT {key_exprs_aliased}
+        FROM {p['from_join']}
+        WHERE {win_batch}
+    )
+    SELECT {agg_select}
+    FROM {p['from_join']}
+    JOIN affected a ON {key_join}
     WHERE {'TRUE' if not where_no_window else where_no_window}
     GROUP BY {p['group_by']}"""
             fn_text = delete_fn_block(base, keys, pg_key_exprs, p["from_join"], change_win, create_expr)
@@ -770,19 +870,53 @@ def main():
                 f"--        删除函数的变更窗口与聚合子查询的源别名引用可能需要人工校准，上线前务必核对。\n"
                 if nested else "")
 
-        # 写文件
-        tdir = os.path.join(OUT, "table"); cdir = os.path.join(OUT, "cdc"); bdir = os.path.join(OUT, "batch")
-        for d in (tdir, cdir, bdir):
-            os.makedirs(d, exist_ok=True)
-        with open(os.path.join(tdir, f"{base}_ddl.sql"), "w", encoding="utf-8") as f:
-            f.write(todo + f"-- {base} DDL（IF NOT EXISTS，不重建现有表）\n" + ddl_block(base, p["cols"]))
-        with open(os.path.join(tdir, f"register_fn_{base}_cdc_delete_v2.sql"), "w", encoding="utf-8") as f:
-            f.write(todo + fn_text)
-        with open(os.path.join(cdir, f"{base}_v2-cdc-sql.sql"), "w", encoding="utf-8") as f:
-            f.write(todo + cdc_block(base, p["cols"], keys, pg_subquery))
-        with open(os.path.join(bdir, f"{base}_v2-batch-sql.sql"), "w", encoding="utf-8") as f:
-            f.write(todo + batch_block(base, p["cols"], keys, p["from_join"], where_no_window, pg_key_exprs, create_expr, pg_subquery))
+        # 收集输出：循环结束后按执行顺序(ddl→fn→cdc→batch)统一编号写出，避免执行遗漏
+        ddl_content = todo + f"-- {base} DDL（IF NOT EXISTS，不重建现有表）\n" + ddl_block(base, p["cols"])
+        fn_content = todo + fn_text
+        cdc_content = todo + header_block("cdc", base, "（无；CDC 模式自动按昨天变更窗口）", CDC_NOTES) + cdc_block(base, p["cols"], keys, pg_subquery)
+        batch_content = todo + header_block("batch", base, "start_date, end_date（YYYY-MM-DD，含两端）", BATCH_NOTES) + batch_block(base, p["cols"], keys, p["from_join"], where_no_window, pg_key_exprs, create_expr, pg_subquery_batch)
+        outputs.append(("ddl", order_idx, tdir, f"{base}_ddl.sql", ddl_content))
+        outputs.append(("fn", order_idx, tdir, f"register_fn_{base}_cdc_delete_v2.sql", fn_content))
+        outputs.append(("cdc", order_idx, cdir, f"{base}_v2-cdc-sql.sql", cdc_content))
+        outputs.append(("batch", order_idx, bdir, f"{base}_v2-batch-sql.sql", batch_content))
         print(f"[OK] {section:>2} {base:<45} keys={dws_keys}")
+
+    # ---- 写出文件 ----
+    # 命名约定（防执行遗漏）：
+    #   table/ 下的 DDL 与 register_fn 保持原文件名（不加编号）；
+    #   cdc/ 与 batch/ 各自从 01_ 顺序编号（每目录 01..NN，对应同一批表的源顺序）。
+    for d in (tdir, cdir, bdir):
+        os.makedirs(d, exist_ok=True)
+    # 先清理旧的生成文件（含上一版误加的全局编号 47_/70_ 等），避免与新命名并存
+    for d, pat in ((cdir, "_v2-cdc-sql.sql"), (bdir, "_v2-batch-sql.sql")):
+        for fn in os.listdir(d):
+            if fn.endswith(pat):
+                try:
+                    os.remove(os.path.join(d, fn))
+                except OSError:
+                    pass
+    for fn in os.listdir(tdir):
+        if re.match(r"^\d+_", fn) and fn.endswith(("_ddl.sql", "_cdc_delete_v2.sql")):
+            try:
+                os.remove(os.path.join(tdir, fn))
+            except OSError:
+                pass
+    cdc_seq = 0
+    batch_seq = 0
+    total = 0
+    for kind, idx, d, fname, content in sorted(outputs, key=lambda o: (PHASE_RANK[o[0]], o[1])):
+        if kind == "cdc":
+            cdc_seq += 1
+            out_name = f"{cdc_seq:02d}_{fname}"
+        elif kind == "batch":
+            batch_seq += 1
+            out_name = f"{batch_seq:02d}_{fname}"
+        else:  # ddl / fn：保持原名，不加编号
+            out_name = fname
+        with open(os.path.join(d, out_name), "w", encoding="utf-8") as f:
+            f.write(content)
+        total += 1
+    print(f"[DONE] 写出 {total} 个文件：table 保持原名(无编号) + cdc 01..{cdc_seq:02d}_ + batch 01..{batch_seq:02d}_，已清理旧编号文件。")
 
 if __name__ == "__main__":
     main()

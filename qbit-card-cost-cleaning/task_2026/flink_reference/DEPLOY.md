@@ -11,6 +11,19 @@
 - **凭证**：通过平台「变量」里的 secret 类型变量 `${secret_values.ADB_PG_*}` 注入。
 - **目标库**：现有 `dws_qbit_card_transaction_<YYYY>` / `_extend_<YYYY>` 分表（含线上数据，不重建）。
 
+## 0.5 文件编号约定（防执行遗漏）
+
+`flink_reference/` 下所有脚本已统一加 `01_`、`02_`…`92_` 顺序前缀，按**执行先后顺序**编号，照数字顺序跑即可避免遗漏：
+
+| 编号区间 | 目录 | 内容 | 说明 |
+|----------|------|------|------|
+| `01_`–`23_` | `table/` | `*_ddl.sql` | 建表（IF NOT EXISTS，不重建现有表） |
+| `24_`–`46_` | `table/` | `register_fn_*_cdc_delete_v2.sql` | 注册删除函数（须先于作业） |
+| `47_`–`69_` | `cdc/` | `*_v2-cdc-sql.sql` | 每日增量作业 |
+| `70_`–`92_` | `batch/` | `*_v2-batch-sql.sql` | 一次性修复/补数作业 |
+
+> 每个文件头部都带 bb 式结构化注释（Author / 作业元信息 / 运行参数 / Notes）。batch 作业通过 VVR 作业参数 `start_date`、`end_date`（YYYY-MM-DD，含两端）指定回刷区间，与删除函数修复模式严格对齐。
+
 ## 1. 准备阶段（目标库，一次性）
 
 ### 1.1 注册删除函数
@@ -18,7 +31,8 @@
 删除函数被 Flink 作业里的 JDBC 临时表调用，**必须先于任何作业注册**。它只建函数、不碰任何表。
 
 ```bash
-psql "$ADB_PG_DSN" -f table/register_fn_dws_qbit_card_transaction_cdc_delete_v2.sql
+psql "$ADB_PG_DSN" -f table/26_register_fn_dws_qbit_card_transaction_cdc_delete_v2.sql
+psql "$ADB_PG_DSN" -f table/27_register_fn_dws_qbit_card_transaction_extend_cdc_delete_v2.sql
 ```
 
 创建：
@@ -48,10 +62,10 @@ SELECT public.fn_delete_qbit_card_transaction_cdc(true, DATE '2026-01-01', DATE 
 
 | 作业 | 文件 | 类型 | 运行模式 |
 |------|------|------|----------|
-| 修复作业 | `batch/dws_qbit_card_transaction_v2-batch-sql.sql` | 批处理 | BATCH（按需手动触发） |
-| 修复作业 | `batch/dws_qbit_card_transaction_extend_v2-batch-sql.sql` | 批处理 | BATCH（按需手动触发） |
-| 增量作业 | `cdc/dws_qbit_card_transaction_v2-cdc-sql.sql` | 流/增量 | BATCH + 每日定时 |
-| 增量作业 | `cdc/dws_qbit_card_transaction_extend_v2-cdc-sql.sql` | 流/增量 | BATCH + 每日定时 |
+| 修复作业 | `batch/72_dws_qbit_card_transaction_v2-batch-sql.sql` | 批处理 | BATCH（按需手动触发） |
+| 修复作业 | `batch/73_dws_qbit_card_transaction_extend_v2-batch-sql.sql` | 批处理 | BATCH（按需手动触发） |
+| 增量作业 | `cdc/49_dws_qbit_card_transaction_v2-cdc-sql.sql` | 流/增量 | BATCH + 每日定时 |
+| 增量作业 | `cdc/50_dws_qbit_card_transaction_extend_v2-cdc-sql.sql` | 流/增量 | BATCH + 每日定时 |
 
 建作业步骤：
 
@@ -105,15 +119,16 @@ flink_reference/
 ├── README.md            # 设计说明（为何改、v1/v2 路线图）
 ├── DEPLOY.md            # 本文件：运行部署指南
 ├── table/
-│   ├── register_fn_dws_qbit_card_transaction_cdc_delete_v2.sql  # 删除函数（步骤 1.1）
-│   ├── dws_qbit_card_transaction_ddl.sql                       # 结构参考（IF NOT EXISTS）
-│   └── dws_qbit_card_transaction_extend_ddl.sql               # extend 结构参考
+│   ├── 26_register_fn_dws_qbit_card_transaction_cdc_delete_v2.sql  # 删除函数（步骤 1.1）
+│   ├── 27_register_fn_dws_qbit_card_transaction_extend_cdc_delete_v2.sql
+│   ├── 03_dws_qbit_card_transaction_ddl.sql                       # 结构参考（IF NOT EXISTS）
+│   └── 04_dws_qbit_card_transaction_extend_ddl.sql               # extend 结构参考
 ├── cdc/                 # 流作业，每表一个（步骤 2 / 4）
-│   ├── dws_qbit_card_transaction_v2-cdc-sql.sql
-│   └── dws_qbit_card_transaction_extend_v2-cdc-sql.sql
+│   ├── 49_dws_qbit_card_transaction_v2-cdc-sql.sql
+│   └── 50_dws_qbit_card_transaction_extend_v2-cdc-sql.sql
 └── batch/               # 批作业（修复/补数），每表一个（步骤 3）
-    ├── dws_qbit_card_transaction_v2-batch-sql.sql
-    └── dws_qbit_card_transaction_extend_v2-batch-sql.sql
+    ├── 72_dws_qbit_card_transaction_v2-batch-sql.sql
+    └── 73_dws_qbit_card_transaction_extend_v2-batch-sql.sql
 ```
 
 ## 8. 上线检查清单（建议顺序）
