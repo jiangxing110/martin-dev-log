@@ -95,10 +95,6 @@ CREATE TEMPORARY TABLE sink_ods_fund_profits_2026 (
     id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version BIGINT, remarks STRING, account_id STRING, product_id STRING, date DATE, currency STRING, profit DECIMAL(20,4), service_fee DECIMAL(20,4), status STRING, apr DECIMAL(20,4), share DECIMAL(20,4), net_value DECIMAL(20,4),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_fund_profits_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_ods_fund_profits_2027 (
-    id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version BIGINT, remarks STRING, account_id STRING, product_id STRING, date DATE, currency STRING, profit DECIMAL(20,4), service_fee DECIMAL(20,4), status STRING, apr DECIMAL(20,4), share DECIMAL(20,4), net_value DECIMAL(20,4),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_fund_profits_2027','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
 INSERT INTO sink_ods_fund_profits_2024
 SELECT id, fund_id, create_time, update_time, delete_time, version, remarks, account_id, product_id, date, currency, profit, service_fee, status, apr, share, net_value
@@ -118,9 +114,3 @@ FROM v_ods_fund_profits_base
 CROSS JOIN source_delete_ods_fund_profits_result AS del
 WHERE del.affected_rows >= 0
   AND create_time >= TIMESTAMP '2026-01-01 00:00:00' AND create_time < TIMESTAMP '2027-01-01 00:00:00';
-INSERT INTO sink_ods_fund_profits_2027
-SELECT id, fund_id, create_time, update_time, delete_time, version, remarks, account_id, product_id, date, currency, profit, service_fee, status, apr, share, net_value
-FROM v_ods_fund_profits_base
-CROSS JOIN source_delete_ods_fund_profits_result AS del
-WHERE del.affected_rows >= 0
-  AND create_time >= TIMESTAMP '2027-01-01 00:00:00' AND create_time < TIMESTAMP '2028-01-01 00:00:00';

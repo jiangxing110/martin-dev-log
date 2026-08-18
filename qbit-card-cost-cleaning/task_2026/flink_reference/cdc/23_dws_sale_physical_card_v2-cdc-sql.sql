@@ -106,10 +106,6 @@ CREATE TEMPORARY TABLE sink_dws_sale_physical_card_2026 (
     id BIGINT, account_id STRING, sale_or_am_id STRING, provider STRING, bin STRING, status STRING, transaction_count BIGINT, physical_card_fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_physical_card_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_dws_sale_physical_card_2027 (
-    id BIGINT, account_id STRING, sale_or_am_id STRING, provider STRING, bin STRING, status STRING, transaction_count BIGINT, physical_card_fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_physical_card_2027','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
 -- ==============================================
 -- 4. 写入（CROSS JOIN 确保删除函数先执行；upsert 覆盖同 key / 新增异 key）
@@ -132,9 +128,3 @@ FROM v_dws_sale_physical_card_base
 CROSS JOIN source_delete_dws_sale_physical_card_result AS del
 WHERE del.affected_rows >= 0
   AND create_date >= DATE '2026-01-01' AND create_date < DATE '2027-01-01';
-INSERT INTO sink_dws_sale_physical_card_2027
-SELECT id, account_id, sale_or_am_id, provider, bin, status, transaction_count, physical_card_fee, create_date, version, create_time, update_time
-FROM v_dws_sale_physical_card_base
-CROSS JOIN source_delete_dws_sale_physical_card_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2027-01-01' AND create_date < DATE '2028-01-01';

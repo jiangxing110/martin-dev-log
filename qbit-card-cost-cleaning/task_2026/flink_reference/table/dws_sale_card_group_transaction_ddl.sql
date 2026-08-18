@@ -43,18 +43,3 @@ CREATE TABLE IF NOT EXISTS public.dws_sale_card_group_transaction_2026 (
     "create_time" TIMESTAMP(6),,
     "update_time" TIMESTAMP(6)
 );
-
-CREATE TABLE IF NOT EXISTS public.dws_sale_card_group_transaction_2027 (
-    "id" BIGINT,,
-    "account_id" STRING,,
-    "sale_or_am_id" STRING,,
-    "business_type" STRING,,
-    "status" STRING,,
-    "origin_amount" DECIMAL(20,4),,
-    "transaction_count" BIGINT,,
-    "fee" DECIMAL(20,4),,
-    "create_date" DATE,,
-    "version" BIGINT,,
-    "create_time" TIMESTAMP(6),,
-    "update_time" TIMESTAMP(6)
-);

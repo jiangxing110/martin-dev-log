@@ -1,6 +1,3 @@
--- [TODO] ods_sale_fund_profits 检测到嵌套/非标准 FROM（fund_profits AS tr
-CROSS JOIN LATERAL js...），
---        删除函数的变更窗口与聚合子查询的源别名引用可能需要人工校准，上线前务必核对。
 CREATE OR REPLACE FUNCTION public.fn_delete_ods_sale_fund_profits_cdc(
     p_dry_run BOOLEAN DEFAULT false,
     p_start   DATE DEFAULT NULL,

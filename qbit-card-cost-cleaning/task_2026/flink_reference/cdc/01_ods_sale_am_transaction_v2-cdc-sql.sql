@@ -117,10 +117,6 @@ CREATE TEMPORARY TABLE sink_ods_sale_am_transaction_2026 (
     id BIGINT, sale_id STRING, am_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), remarks STRING, version BIGINT,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_sale_am_transaction_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_ods_sale_am_transaction_2027 (
-    id BIGINT, sale_id STRING, am_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), remarks STRING, version BIGINT,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_sale_am_transaction_2027','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
 -- ==============================================
 -- 4. 写入（CROSS JOIN 确保删除函数先执行；upsert 覆盖同 key / 新增异 key）
@@ -143,9 +139,3 @@ FROM v_ods_sale_am_transaction_base
 CROSS JOIN source_delete_ods_sale_am_transaction_result AS del
 WHERE del.affected_rows >= 0
   AND create_time >= TIMESTAMP '2026-01-01 00:00:00' AND create_time < TIMESTAMP '2027-01-01 00:00:00';
-INSERT INTO sink_ods_sale_am_transaction_2027
-SELECT id, sale_id, am_id, create_time, update_time, delete_time, remarks, version
-FROM v_ods_sale_am_transaction_base
-CROSS JOIN source_delete_ods_sale_am_transaction_result AS del
-WHERE del.affected_rows >= 0
-  AND create_time >= TIMESTAMP '2027-01-01 00:00:00' AND create_time < TIMESTAMP '2028-01-01 00:00:00';

@@ -1,7 +1,3 @@
--- [TODO] ods_sale_qbit_card 检测到嵌套/非标准 FROM（"qbitCard" AS tr
-LEFT JOIN (
-    SELECT ...），
---        删除函数的变更窗口与聚合子查询的源别名引用可能需要人工校准，上线前务必核对。
 --********************************************************************
 -- Author:         martinJiang
 -- Created Time:   2026-08-18
@@ -132,10 +128,6 @@ CREATE TEMPORARY TABLE sink_ods_sale_qbit_card_2026 (
     id BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version BIGINT, remarks STRING, sale_or_am_id STRING, card_id STRING, account_id STRING, currency STRING, status STRING, provider STRING, type STRING, token STRING, user_delete_time STRING, delete_card_time STRING, first_six STRING, card_belong STRING, physical_card_status STRING, card_mode STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_sale_qbit_card_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_ods_sale_qbit_card_2027 (
-    id BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version BIGINT, remarks STRING, sale_or_am_id STRING, card_id STRING, account_id STRING, currency STRING, status STRING, provider STRING, type STRING, token STRING, user_delete_time STRING, delete_card_time STRING, first_six STRING, card_belong STRING, physical_card_status STRING, card_mode STRING,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_sale_qbit_card_2027','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
 -- ==============================================
 -- 4. 写入（CROSS JOIN 确保删除函数先执行；upsert 覆盖同 key / 新增异 key）
@@ -158,9 +150,3 @@ FROM v_ods_sale_qbit_card_base
 CROSS JOIN source_delete_ods_sale_qbit_card_result AS del
 WHERE del.affected_rows >= 0
   AND create_time >= TIMESTAMP '2026-01-01 00:00:00' AND create_time < TIMESTAMP '2027-01-01 00:00:00';
-INSERT INTO sink_ods_sale_qbit_card_2027
-SELECT id, create_time, update_time, delete_time, version, remarks, sale_or_am_id, card_id, account_id, currency, status, provider, type, token, user_delete_time, delete_card_time, first_six, card_belong, physical_card_status, card_mode
-FROM v_ods_sale_qbit_card_base
-CROSS JOIN source_delete_ods_sale_qbit_card_result AS del
-WHERE del.affected_rows >= 0
-  AND create_time >= TIMESTAMP '2027-01-01 00:00:00' AND create_time < TIMESTAMP '2028-01-01 00:00:00';

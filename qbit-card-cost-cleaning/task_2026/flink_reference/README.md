@@ -80,11 +80,11 @@ flink_reference/
 
 ```bash
 cd flink_reference
-python3 gen_all_jobs.py     # 解析 ../old/insert_task_job.sql，覆盖生成 92 个文件
+python3 gen_all_jobs.py     # 解析 ../insert_task_job.sql，覆盖生成 92 个文件（cdc/batch 各 23 + table 46）
 ```
 - 聚合逻辑**留在 PostgreSQL**（JDBC source 直接跑原版聚合子查询，Flink 只算 id + upsert），类型转换最少、原 SQL 复用度最高。
 - 新增一张目标表：只需在原 `insert_task_job.sql` 里加一段 `INSERT INTO ... SELECT ... GROUP BY ...`，重跑生成器即出 4 件套。
-- 新增 2027 分表：脚本已为每个 `_YYYY` 留了 2024~2027 的 SINK 与年份路由，扩到 2028 只需在 `YEARS` 列表加一年。
+- 年份分表范围：**`YEARS = [2024, 2025, 2026]`（不含 2027）**。2027 表尚未生成，且 2.0 可能改分区表，故脚本不产出 2027 的 SINK / DDL / 年份路由。需要 2027 时，在 `gen_all_jobs.py` 的 `YEARS` 列表补回 `2027` 并重跑生成器即可（路由边界自动延展）。
 
 ## ⚠️ 上线前必读（参考脚手架性质）
 

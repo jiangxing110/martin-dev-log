@@ -110,10 +110,6 @@ CREATE TEMPORARY TABLE sink_dws_qbit_card_transaction_extend_2026 (
     id BIGINT, account_id STRING, provider STRING, bin STRING, business_type STRING, status STRING, settle_amount DECIMAL(20,4), transaction_currency STRING, country STRING, transaction_count BIGINT, fx_fee DECIMAL(20,4), atm_fee DECIMAL(20,4), apple_pay_fee DECIMAL(20,4), settle_fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_qbit_card_transaction_extend_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_dws_qbit_card_transaction_extend_2027 (
-    id BIGINT, account_id STRING, provider STRING, bin STRING, business_type STRING, status STRING, settle_amount DECIMAL(20,4), transaction_currency STRING, country STRING, transaction_count BIGINT, fx_fee DECIMAL(20,4), atm_fee DECIMAL(20,4), apple_pay_fee DECIMAL(20,4), settle_fee DECIMAL(20,4), create_date DATE, version BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_qbit_card_transaction_extend_2027','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
 -- ==============================================
 -- 4. 写入（CROSS JOIN 确保删除函数先执行；upsert 覆盖同 key / 新增异 key）
@@ -136,9 +132,3 @@ FROM v_dws_qbit_card_transaction_extend_base
 CROSS JOIN source_delete_dws_qbit_card_transaction_extend_result AS del
 WHERE del.affected_rows >= 0
   AND create_date >= DATE '2026-01-01' AND create_date < DATE '2027-01-01';
-INSERT INTO sink_dws_qbit_card_transaction_extend_2027
-SELECT id, account_id, provider, bin, business_type, status, settle_amount, transaction_currency, country, transaction_count, fx_fee, atm_fee, apple_pay_fee, settle_fee, create_date, version, create_time, update_time
-FROM v_dws_qbit_card_transaction_extend_base
-CROSS JOIN source_delete_dws_qbit_card_transaction_extend_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2027-01-01' AND create_date < DATE '2028-01-01';

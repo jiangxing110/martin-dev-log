@@ -27,7 +27,7 @@ import re, os, sys, datetime
 
 SRC = os.path.join(os.path.dirname(__file__), "..", "insert_task_job.sql")
 OUT = os.path.dirname(__file__)
-YEARS = [2024, 2025, 2026, 2027]
+YEARS = [2024, 2025, 2026]  # 不含 2027：表尚未生成，2.0 可能改分区表；需要 2027 时再加回年份并重生成
 
 # ODS 原始表（无 GROUP BY）的业务键（源表自然主键），用 override 指定
 ODS_KEYS = {
@@ -864,11 +864,14 @@ def main():
 
         # 嵌套子查询 / 非标准 FROM 的表：原 SELECT 的 FROM 含子查询，
         # 通用解析对“变更窗口引用源别名”可能失效，打上 TODO 标记由人工复核。
+        # VERIFIED_NESTED：已人工核对、确认作用域删除与聚合子查询源别名引用正确的 sale 表，
+        #                 其 from_join 含 salesAccountRelation UNION 子查询属 qi 式标准写法，不再告警（避免误报）。
+        VERIFIED_NESTED = {"ods_sale_fund_profits", "ods_sale_qbit_card"}
         fj_up = p["from_join"].upper()
         nested = fj_up.strip().startswith("(") or fj_up.count(" FROM ") > 1 or " FROM (" in fj_up
         todo = (f"-- [TODO] {base} 检测到嵌套/非标准 FROM（{p['from_join'].strip()[:40]}...），\n"
                 f"--        删除函数的变更窗口与聚合子查询的源别名引用可能需要人工校准，上线前务必核对。\n"
-                if nested else "")
+                if (nested and base not in VERIFIED_NESTED) else "")
 
         # 收集输出：循环结束后按执行顺序(ddl→fn→cdc→batch)统一编号写出，避免执行遗漏
         ddl_content = todo + f"-- {base} DDL（IF NOT EXISTS，不重建现有表）\n" + ddl_block(base, p["cols"])
