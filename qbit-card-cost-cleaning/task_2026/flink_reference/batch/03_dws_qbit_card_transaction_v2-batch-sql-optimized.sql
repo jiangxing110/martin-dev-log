@@ -1,18 +1,16 @@
 --********************************************************************
 -- Author:         martinJiang
--- Created Time:   2026-08-18
--- Updated Time:   2026-08-18
--- Description:    dws_qbit_card_transaction 批处理 作业（quantum-v2 范式：确定性哈希主键 + 先清后写）
--- 作业元信息：
---   作业类型：批处理
---   运行方式：一次性修复/补数：VVR 作业参数 start_date/end_date 指定回刷区间（含两端，YYYY-MM-DD）；删除函数走修复模式按 create_date 跨分表清理，再由重算 upsert 覆盖（幂等）。
---   运行参数：start_date, end_date（YYYY-MM-DD，含两端）
+-- Created Time:   2026-08-19
+-- Updated Time:   2026-08-19
+-- Description:    dws_qbit_card_transaction 批处理作业优化版本（直接查询分区表）
+-- 优化点：
+--   1. 显式指定分区表，避免主表扫描，利用分区剪裁
+--   2. 仅查询受影响日期范围内的分区，减少数据量
+--   3. 保持原有的"修复模式"逻辑：删除 → 聚合 → upsert
 -- Notes:
---   1. 一次性修复/补数作业：通过 VVR 作业参数 start_date/end_date 指定回刷区间（YYYY-MM-DD，含两端）。
---   2. 删除函数走“修复模式”，按 create_date 区间跨分表整段清理。
---   3. 源聚合仅重算该区间内受影响 key 的当前有效行，upsert 覆盖（幂等）。
---   4. 删除与重算必须严格共用同一 start_date/end_date，否则出现区间缺口或越界残留。
---   5. 上线前需对照线上 Flink catalog 校准列类型（UUID / JSON / boolean 等）。
+--   1. 分区表命名规则：qbit_card_transaction_YYYYqN（如 2026q1, 2026q2）
+--   2. 需要根据 start_date/end_date 手动调整 UNION ALL 的分区表
+--   3. 建议按季度分批执行，避免单次跨过多分区
 --********************************************************************
 SET 'parallelism.default' = '1';
 SET 'pipeline.operator-chaining' = 'true';
@@ -40,6 +38,8 @@ CREATE TEMPORARY TABLE source_delete_dws_qbit_card_transaction_result (
     'scan.fetch-size' = '1'
 );
 
+-- 根据日期范围调整以下 UNION ALL 的分区表
+-- 2026 全年示例：qbit_card_transaction_2026q1 ~ 2026q4
 CREATE TEMPORARY TABLE source_dws_qbit_card_transaction (
     account_id STRING,
     business_type STRING,
@@ -59,13 +59,39 @@ CREATE TEMPORARY TABLE source_dws_qbit_card_transaction (
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
         SELECT DISTINCT tr."accountId" AS k0, tr."provider" AS k1, qc."firstSix" AS k2, tr."businessType" AS k3, tr."createTime"::DATE::TIMESTAMP AS k4, tr."status" AS k5
-        FROM "qbit_card_transaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
+        FROM (
+            -- Q1 2026
+            SELECT * FROM "qbit_card_transaction_2026q1"
+            UNION ALL
+            -- Q2 2026
+            SELECT * FROM "qbit_card_transaction_2026q2"
+            UNION ALL
+            -- Q3 2026
+            SELECT * FROM "qbit_card_transaction_2026q3"
+            UNION ALL
+            -- Q4 2026
+            SELECT * FROM "qbit_card_transaction_2026q4"
+            -- 根据实际日期范围添加/移除分区表
+        ) AS tr
+        LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
         WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
     SELECT CAST(tr."accountId" AS text) AS "account_id", CAST(tr."businessType" AS text) AS "business_type", CAST(tr."status" AS text) AS "status", CAST(tr."provider" AS text) AS "provider", CAST(qc."firstSix" AS text) AS "bin", CAST(COALESCE(SUM(tr."originalAmount"), 0) AS DECIMAL(18,2)) AS "origin_amount", CAST(COALESCE(SUM(tr."settleAmount"), 0) AS DECIMAL(18,2)) AS "settle_amount", CAST(COUNT(*) AS INTEGER) AS "transaction_count", CAST(COALESCE(SUM(tr."fee"), 0) AS DECIMAL(18,2)) AS "fee", tr."createTime"::DATE::TIMESTAMP AS "create_date", 1 AS "version", NOW() AS "create_time", NOW() AS "update_time"
-    FROM "qbit_card_transaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
+    FROM (
+        -- Q1 2026
+        SELECT * FROM "qbit_card_transaction_2026q1"
+        UNION ALL
+        -- Q2 2026
+        SELECT * FROM "qbit_card_transaction_2026q2"
+        UNION ALL
+        -- Q3 2026
+        SELECT * FROM "qbit_card_transaction_2026q3"
+        UNION ALL
+        -- Q4 2026
+        SELECT * FROM "qbit_card_transaction_2026q4"
+        -- 根据实际日期范围添加/移除分区表
+    ) AS tr
+    LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
     JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."provider") IS NOT DISTINCT FROM a.k1 AND (qc."firstSix") IS NOT DISTINCT FROM a.k2 AND (tr."businessType") IS NOT DISTINCT FROM a.k3 AND (tr."createTime"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k4 AND (tr."status") IS NOT DISTINCT FROM a.k5
     WHERE tr."deleteTime" IS NULL
     GROUP BY tr."accountId", tr."provider", qc."firstSix", tr."businessType", create_date, tr."status") AS src',
