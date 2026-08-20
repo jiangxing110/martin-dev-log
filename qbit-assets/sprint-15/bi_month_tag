@@ -43,15 +43,4 @@ WHERE COALESCE(NULLIF(extra->>'fee_cost', '')::NUMERIC, 0) > 0;
 收入调整减少 ， 收入调整增加：收入
 并更新到sale commision统计逻辑中
 
-参考
-/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/online/batch/total_cost/finance/global_account
-2.结汇成本 SETTLEMENT_COST("SETTLEMENT_COST", "结汇成本")在金融渠道成本更新
-SELECT "accountId",sum("usdAmount") FROM transfer 
-WHERE "deleteTime" is null AND status='Closed'
-and "settlementCurrency"='CNY' AND "transferType"='Settle'
-AND "transactionTime">='2026-07-01 00:00:00'
-AND "transactionTime"<'2026-08-01 00:00:00'
-GROUP BY "accountId"
-我要对全球账户结汇成本进行均摊
-开头在/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/online/batch/total_cost/finance/global_account这个文件中
-给我生成一个关于结汇的脚本
+
