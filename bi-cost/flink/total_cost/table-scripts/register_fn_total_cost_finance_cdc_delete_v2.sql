@@ -210,6 +210,19 @@ AS $function$
     );
 $function$;
 
+CREATE OR REPLACE FUNCTION dwm.fn_delete_finance_global_account_settlement_cost_cdc(p_dry_run BOOLEAN DEFAULT false)
+RETURNS BIGINT
+LANGUAGE sql
+AS $function$
+    SELECT dwm.fn_delete_finance_channel_cost_cdc(
+        'GLOBAL_ACCOUNT',
+        ARRAY['SETTLEMENT'],
+        ARRAY['SETTLEMENT_COST'],
+        'global_account_settlement_cdc',
+        p_dry_run
+    );
+$function$;
+
 CREATE OR REPLACE FUNCTION dwm.fn_delete_finance_quantum_card_bpc_cost_cdc(p_dry_run BOOLEAN DEFAULT false)
 RETURNS BIGINT
 LANGUAGE sql
@@ -271,6 +284,7 @@ SELECT
     dwm.fn_delete_finance_crypto_asset_tz_cost_cdc(true) AS finance_crypto_asset_tz_cost_cdc_matched_rows,
     dwm.fn_delete_finance_global_account_bz_cost_cdc(true) AS finance_global_account_bz_cost_cdc_matched_rows,
     dwm.fn_delete_finance_global_account_cl_cost_cdc(true) AS finance_global_account_cl_cost_cdc_matched_rows,
+    dwm.fn_delete_finance_global_account_settlement_cost_cdc(true) AS finance_global_account_settlement_cost_cdc_matched_rows,
     dwm.fn_delete_finance_quantum_card_bpc_cost_cdc(true) AS finance_quantum_card_bpc_cost_cdc_matched_rows,
     dwm.fn_delete_finance_quantum_card_hz_bank_cost_cdc(true) AS finance_quantum_card_hz_bank_cost_cdc_matched_rows,
     dwm.fn_delete_finance_quantum_card_idemia_cost_cdc(true) AS finance_quantum_card_idemia_cost_cdc_matched_rows,
