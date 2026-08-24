@@ -1,0 +1,15 @@
+我们开始的时间是2026-01-01  
+1.其实我看了的跑batch 一个月一个月的跑还是快的所以我现在想能不能这么弄呢,我们在cdc 的时候是先清库在全量insert 
+只不过我们/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/quantum-v2/bb/cdc/dws_online_bb_card_finance_daily_v2-cdc-v2-sql.sql 内部可以改成
+时间一个月一个月的跑,
+我们这部分cdc 跑完以后在跑active_card ,和固定成本的脚本
+2.然后返现的rate可以和qi一样写到ods_bi_month_tag
+3.有一个问题需要我们重新思考 volume_fee_cost这个成本
+是一个阶梯的数据
+比如bb这个月是1600万
+汇总：500万×0.55%+500万×0.45%+（1600万-500万-500万）×0.4%=74000
+分摊：每个客户再按照净消费分摊
+我们需要改变策略,所以这部分可能也要和活跃卡一样 只不过整理可能是统计总净消费在均摊到每个人每天
+3./Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/quantum-v2/qi/table-scripts/dws_qi_card_finance_daily_v2_p.sql
+我想加一个净消费字段
+

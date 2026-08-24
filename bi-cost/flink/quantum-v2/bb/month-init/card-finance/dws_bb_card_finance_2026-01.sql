@@ -6,7 +6,7 @@
 -- 作业元信息：
 --   作业类型：批处理
 --   运行方式：一次性初始化/按 report_date 回刷
---   运行参数：start_date, end_date
+--   运行参数：无（月份已固化）
 --   源库变更响应：源库变化不会自动触发本作业。
 -- ⚠️ 角色：仅用于一次性历史初始化与手动回刷工具；日常 DWS 写入由 daily CDC（唯一写入者）承担。
 --   回刷前必须删除目标范围 DWS 数据（先删后插），避免与 CDC 并存。
@@ -100,7 +100,7 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_transaction_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT t.id, t.txn_id, t.settlement_id, t.settlement_match_type, t.source_id, t.card_transaction_id, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.transaction_time, t.original_completion_time, t.business_type, t.business_code_list, t.remarks, t.detail, t.card_org, t.tx_country, t.settle_country, t.is_dom, t.resp_code, t.reason_code, t.transaction_type, t.is_valid_settle, t.is_clearing, t.is_reversal, t.is_refund, t.billing_amount, t.settlement_post_date, t.settlement_txn_date, t.sale_id, t.am_id, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_transaction_detail_v2_p t WHERE t.delete_time IS NULL AND ((t.transaction_time >= CAST(''${start_date}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR AND t.transaction_time < CAST(''${end_date}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR) OR (t.original_completion_time >= CAST(''${start_date}'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''${end_date}'' AS TIMESTAMP(6))) OR (t.settlement_post_date >= CAST(''${start_date}'' AS TIMESTAMP(6)) AND t.settlement_post_date < CAST(''${end_date}'' AS TIMESTAMP(6)))) ) AS dwm_bb_card_transaction_detail_v2_f',
+    'table-name' = '(SELECT t.id, t.txn_id, t.settlement_id, t.settlement_match_type, t.source_id, t.card_transaction_id, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.transaction_time, t.original_completion_time, t.business_type, t.business_code_list, t.remarks, t.detail, t.card_org, t.tx_country, t.settle_country, t.is_dom, t.resp_code, t.reason_code, t.transaction_type, t.is_valid_settle, t.is_clearing, t.is_reversal, t.is_refund, t.billing_amount, t.settlement_post_date, t.settlement_txn_date, t.sale_id, t.am_id, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_transaction_detail_v2_p t WHERE t.delete_time IS NULL AND ((t.transaction_time >= CAST(''2026-01-01 00:00:00'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR AND t.transaction_time < CAST(''2026-02-01 00:00:00'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR) OR (t.original_completion_time >= CAST(''2026-01-01 00:00:00'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''2026-02-01 00:00:00'' AS TIMESTAMP(6))) OR (t.settlement_post_date >= CAST(''2026-01-01 00:00:00'' AS TIMESTAMP(6)) AND t.settlement_post_date < CAST(''2026-02-01 00:00:00'' AS TIMESTAMP(6)))) ) AS dwm_bb_card_transaction_detail_v2_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -144,7 +144,7 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT t.id, t.auth_txn_guid, t.card_proxy, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.auth_time, t.program_name, t.merchant_country, t.request_code, t.request_description, t.response_code, t.reason_code, t.txn_amount, t.settle_amount, t.txn_currency, t.merchant_name, t.mcc, t.card_org, t.is_dom, t.is_decline, t.is_account_verification, t.is_excluded_request, t.sale_id, t.am_id, t.source_table, t.version, t.create_time, t.update_time, t.delete_time FROM generate_series(date_trunc(''day'', CAST(''${start_date}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR), date_trunc(''day'', CAST(''${end_date}'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR) - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(day_start) JOIN dwm.dwm_bb_card_auth_detail_v2_p t ON t.delete_time IS NULL AND t.auth_time >= gs.day_start AND t.auth_time < LEAST(gs.day_start + INTERVAL ''1 day'', CAST(''${end_date}'' AS TIMESTAMP(6)))) AS dwm_bb_card_auth_detail_v2_f',
+    'table-name' = '(SELECT t.id, t.auth_txn_guid, t.card_proxy, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.auth_time, t.program_name, t.merchant_country, t.request_code, t.request_description, t.response_code, t.reason_code, t.txn_amount, t.settle_amount, t.txn_currency, t.merchant_name, t.mcc, t.card_org, t.is_dom, t.is_decline, t.is_account_verification, t.is_excluded_request, t.sale_id, t.am_id, t.source_table, t.version, t.create_time, t.update_time, t.delete_time FROM generate_series(date_trunc(''day'', CAST(''2026-01-01 00:00:00'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR), date_trunc(''day'', CAST(''2026-02-01 00:00:00'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR) - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(day_start) JOIN dwm.dwm_bb_card_auth_detail_v2_p t ON t.delete_time IS NULL AND t.auth_time >= gs.day_start AND t.auth_time < LEAST(gs.day_start + INTERVAL ''1 day'', CAST(''2026-02-01 00:00:00'' AS TIMESTAMP(6)))) AS dwm_bb_card_auth_detail_v2_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -201,8 +201,8 @@ SELECT
     billing_amount
 FROM source_dwm_bb_card_transaction_detail_v2_p
 WHERE delete_time IS NULL
-  AND transaction_time >= CAST('${start_date}' AS TIMESTAMP(6))
-  AND transaction_time < CAST('${end_date}' AS TIMESTAMP(6));
+  AND transaction_time >= CAST('2026-01-01 00:00:00' AS TIMESTAMP(6))
+  AND transaction_time < CAST('2026-02-01 00:00:00' AS TIMESTAMP(6));
 
 CREATE TEMPORARY VIEW v_bb_completion_rows AS
 SELECT
@@ -253,8 +253,8 @@ SELECT
     billing_amount
 FROM source_dwm_bb_card_transaction_detail_v2_p
 WHERE delete_time IS NULL
-  AND original_completion_time >= CAST('${start_date}' AS TIMESTAMP(6))
-  AND original_completion_time < CAST('${end_date}' AS TIMESTAMP(6));
+  AND original_completion_time >= CAST('2026-01-01 00:00:00' AS TIMESTAMP(6))
+  AND original_completion_time < CAST('2026-02-01 00:00:00' AS TIMESTAMP(6));
 
 CREATE TEMPORARY VIEW v_bb_post_rows AS
 SELECT
@@ -305,8 +305,8 @@ SELECT
     billing_amount
 FROM source_dwm_bb_card_transaction_detail_v2_p
 WHERE delete_time IS NULL
-  AND settlement_post_date >= CAST('${start_date}' AS TIMESTAMP(6))
-  AND settlement_post_date < CAST('${end_date}' AS TIMESTAMP(6));
+  AND settlement_post_date >= CAST('2026-01-01 00:00:00' AS TIMESTAMP(6))
+  AND settlement_post_date < CAST('2026-02-01 00:00:00' AS TIMESTAMP(6));
 
 CREATE TEMPORARY VIEW v_bb_txn_count_metric_rows AS
 SELECT
@@ -621,8 +621,8 @@ SELECT
     am_id
 FROM source_dwm_bb_card_auth_detail_v2_p
 WHERE delete_time IS NULL
-  AND auth_time >= CAST('${start_date}' AS TIMESTAMP(6))
-  AND auth_time < CAST('${end_date}' AS TIMESTAMP(6));
+  AND auth_time >= CAST('2026-01-01 00:00:00' AS TIMESTAMP(6))
+  AND auth_time < CAST('2026-02-01 00:00:00' AS TIMESTAMP(6));
 
 CREATE TEMPORARY VIEW v_bb_auth_count_metrics AS
 SELECT

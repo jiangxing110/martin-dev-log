@@ -1,19 +1,14 @@
--- Notes:
---   1. v2 在同一个 Flink SQL 作业中通过 JDBC source 调用按月份范围的删除函数。
---   2. 部署时需要在“附加依赖文件”添加 PostgreSQL JDBC driver，例如 postgresql-42.7.4.jar。
---   3. 首次执行可将函数参数 false 改为 true 做 dry-run。
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-16
--- Updated Time:   2026-08-23 21:30:00
--- Description:    BB v2 Active Card Count CDC 每日重算写入 v2
+-- Description:    BB v2 Active Card Count 批量回刷
 -- 作业元信息：
---   作业类型：批式 CDC 修复任务
---   运行方式：传入 start_time、end_time，每次只处理一个月份范围
---   运行参数：无
+--   作业类型：批处理
+--   运行方式：按 start_time/end_time 覆盖月份删除并重算 active_card_count 特殊行
+--   运行参数：无（月份已固化）
 -- Notes:
 --   1. 只维护 active_card_count。
---   2. 只落每月 1 号特殊行，special_fee_type = ACTIVE_CARD_ACCOUNT_FEE。
+--   2. 只落每月 1 号特殊行，special_fee_type = ACTIVE_CARD_ACCOUNT_FEE，费用金额由 cost_fixed_fee 承载。
 --   3. 销售归属取执行时客户最新有效关系，不按 auth_time 历史关系拆分。
 --********************************************************************--
 
@@ -25,26 +20,12 @@ SET 'pipeline.default-parallelism' = '4';
 SET 'table.exec.resource.default-parallelism' = '4';
 SET 'pipeline.operator-chaining' = 'true';
 SET 'table.exec.mini-batch.enabled' = 'false';
-SET 'execution.multi-jobs-in-application.enable' = 'false';
+SET 'execution.application-management.enabled' = 'true';
+SET 'execution.multi-jobs-in-application.enable' = 'true';
 SET 'table.dml-sync' = 'true';
 SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
-
--- ==============================================
--- 0. 【临时表】ADBPG 删除函数调用结果
--- ==============================================
-CREATE TEMPORARY TABLE source_delete_bb_active_card_count_v2_cdc_result (
-    affected_rows BIGINT
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT dws.fn_delete_bb_active_card_count_v2_cdc(CAST(''${start_time}'' AS date), CAST(''${end_time}'' AS date), false) AS affected_rows) AS delete_result',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1'
-);
 
 CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
     id               STRING,
@@ -60,7 +41,43 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, card_proxy, account_id, account_type, account_category, system_type, auth_time, update_time, delete_time FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE delete_time IS NULL AND auth_time >= CAST(''${start_time}'' AS timestamp) AND auth_time < CAST(''${end_time}'' AS timestamp)) AS dwm_bb_card_auth_detail_v2_p_f',
+    'table-name' = '(SELECT id, card_proxy, account_id, account_type, account_category, system_type, auth_time, update_time, delete_time FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE auth_time >= CAST(''2026-02-01 00:00:00'' AS timestamp) AND auth_time < CAST(''2026-03-01 00:00:00'' AS timestamp)) AS dwm_bb_card_auth_detail_v2_p_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '5000'
+);
+
+CREATE TEMPORARY TABLE source_month_scope (
+    report_month DATE,
+    PRIMARY KEY (report_month) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT CAST(gs.month_start AS DATE) AS report_month FROM generate_series(date_trunc(''month'', CAST(''2026-02-01 00:00:00'' AS TIMESTAMP(6))), date_trunc(''month'', CAST(''2026-03-01 00:00:00'' AS TIMESTAMP(6))) - INTERVAL ''1 month'', INTERVAL ''1 month'') AS gs(month_start)) AS month_scope_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '100'
+);
+
+CREATE TEMPORARY TABLE source_dws_bb_card_finance_daily_v2_p (
+    id               BIGINT,
+    report_date      DATE,
+    account_id       STRING,
+    account_type     STRING,
+    account_category STRING,
+    system_type      STRING,
+    sale_id          STRING,
+    am_id            STRING,
+    special_fee_type STRING,
+    remarks          STRING,
+    delete_time      TIMESTAMP(6),
+    PRIMARY KEY (id, report_date) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT id, report_date, account_id, account_type, account_category, system_type, sale_id, am_id, special_fee_type, remarks, delete_time FROM dws.dws_bb_card_finance_daily_v2_p WHERE report_date >= CAST(''2026-02-01 00:00:00'' AS date) AND report_date < CAST(''2026-03-01 00:00:00'' AS date)) AS dws_bb_card_finance_daily_v2_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -103,8 +120,9 @@ CREATE TEMPORARY TABLE source_api_account_relation (
 
 CREATE TEMPORARY VIEW v_month_scope AS
 SELECT
-    CAST('${start_time}' AS DATE) AS report_month,
-    CAST('${end_time}' AS DATE) AS next_month;
+    report_month,
+    CAST(DATE_FORMAT(CAST(DATE_ADD(report_month, 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS next_month
+FROM source_month_scope;
 
 CREATE TEMPORARY VIEW v_active_account_month AS
 SELECT
@@ -189,6 +207,30 @@ LEFT JOIN v_latest_root_sale_relation r
     ON r.account_id = b.account_id
    AND d.account_id IS NULL;
 
+CREATE TEMPORARY VIEW v_obsolete_active_card_rows AS
+SELECT
+    existing_row.id,
+    existing_row.report_date,
+    existing_row.account_id,
+    existing_row.account_type,
+    existing_row.account_category,
+    existing_row.system_type,
+    existing_row.sale_id,
+    existing_row.am_id
+FROM source_dws_bb_card_finance_daily_v2_p existing_row
+LEFT JOIN v_bb_active_card_count_rows fresh
+    ON fresh.id = existing_row.id
+   AND fresh.report_date = existing_row.report_date
+WHERE existing_row.special_fee_type = 'ACTIVE_CARD_ACCOUNT_FEE'
+  AND existing_row.delete_time IS NULL
+  AND EXISTS (
+      SELECT 1
+      FROM v_month_scope m
+      WHERE existing_row.report_date >= m.report_month
+        AND existing_row.report_date < m.next_month
+  )
+  AND fresh.id IS NULL;
+
 CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     id                         BIGINT,
     report_date                DATE,
@@ -214,7 +256,7 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     'targetSchema' = 'dws',
     'userName' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'writeMode' = 'insert',
+    'writeMode' = 'upsert',
     'batchSize' = '2000'
 );
 
@@ -237,5 +279,22 @@ SELECT
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM v_bb_active_card_count_rows
-CROSS JOIN source_delete_bb_active_card_count_v2_cdc_result AS delete_result
-WHERE delete_result.affected_rows >= 0;
+UNION ALL
+SELECT
+    id,
+    report_date,
+    account_id,
+    account_type,
+    account_category,
+    system_type,
+    CAST(0 AS INT) AS active_card_count,
+    CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
+    'ACTIVE_CARD_ACCOUNT_FEE' AS special_fee_type,
+    COALESCE(sale_id, '') AS sale_id,
+    COALESCE(am_id, '') AS am_id,
+    1 AS version,
+    'bb_active_card_count_v2_soft_delete' AS remarks,
+    CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
+    CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
+    CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS delete_time
+FROM v_obsolete_active_card_rows;

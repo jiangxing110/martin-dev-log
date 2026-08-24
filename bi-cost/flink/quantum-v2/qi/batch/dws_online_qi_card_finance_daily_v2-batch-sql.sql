@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-15
--- Updated Time:   2026-07-15
+-- Updated Time:   2026-08-23 21:40:00
 -- Description:    Quantum QI v2 DWS 批量初始化/回刷
 -- 作业元信息：
 --   作业类型：批处理
@@ -128,6 +128,11 @@ SELECT
     CAST(NULL AS TIMESTAMP(6)) AS delete_time,
     sale_id,
     am_id,
+    CAST(SUM(CASE
+        WHEN status IN ('Closed', 'Pending') AND business_type IN ('Consumption', 'Reversal', 'Credit')
+            THEN billing_amount * CASE WHEN business_type = 'Consumption' THEN 1 ELSE -1 END
+        ELSE CAST(0 AS DECIMAL(20, 4))
+    END) AS DECIMAL(20, 4)) AS total_net_amount,
     CAST(SUM(CASE WHEN is_hk_region = FALSE AND business_type = 'Consumption' AND status IN ('Closed', 'Pending') THEN billing_amount * CAST(0.0135 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS cost_reimbursement_base_amt,
     CAST(SUM(CASE WHEN is_hk_region = FALSE AND status IN ('Closed', 'Pending') AND business_type IN ('Consumption', 'Reversal', 'Credit') THEN
         CASE
@@ -247,6 +252,7 @@ CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_v2_p (
     delete_time                   TIMESTAMP(6),
     sale_id                       STRING,
     am_id                         STRING,
+    total_net_amount              DECIMAL(20, 4),
     cost_reimbursement_base_amt   DECIMAL(20, 4),
     cost_service_base_amt         DECIMAL(20, 4),
     cost_acs_regular_base_amt     DECIMAL(20, 4),
@@ -296,6 +302,7 @@ SELECT
     b.delete_time,
     b.sale_id,
     b.am_id,
+    b.total_net_amount,
     b.cost_reimbursement_base_amt,
     b.cost_service_base_amt,
     b.cost_acs_regular_base_amt,

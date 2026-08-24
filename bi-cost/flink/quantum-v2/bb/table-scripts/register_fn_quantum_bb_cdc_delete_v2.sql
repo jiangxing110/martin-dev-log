@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-06 01:03:20
+-- Updated Time:   2026-08-23 21:31:00
 -- Description:    注册 BB quantum-v2 CDC v2 删除函数
 -- 作业元信息：
 --   作业类型：ADBPG 函数注册
@@ -8,9 +9,9 @@
 --   运行参数：无
 -- Notes:
 --   1. 函数返回受影响行数。
---   2. 逐日化改造后：fn_delete_bb_card_finance_daily_v2_cdc 由"只统计"改为"真删除"——
---      p_dry_run=true 只计数；false 删除受影响 (report_date, account_id) 的普通行（保留 active/fixed 特殊行）。
---      由 DWS CDC 作业在重算前调用，保证"先删后算"幂等，杜绝 batch/CDC 并存。
+--   2. 当前 CDC 重建范围为 2026-01-01 至 CURRENT_DATE（不包含当天）：
+--      p_dry_run=true 只计数；false 删除该范围内的普通行（保留 active/fixed 特殊行）。
+--      由 DWS CDC 作业在全量重算前调用，保证"先删后算"幂等。
 --********************************************************************--
 
 CREATE OR REPLACE FUNCTION dws.fn_delete_bb_card_finance_daily_v2_cdc(p_dry_run BOOLEAN DEFAULT true)
@@ -19,96 +20,59 @@ LANGUAGE plpgsql
 AS $function$
 DECLARE
     affected_rows BIGINT;
+    rebuild_start DATE := DATE '2026-01-01';
+    rebuild_end DATE := CURRENT_DATE;
 BEGIN
     IF p_dry_run THEN
-        WITH changed_keys AS (
-            SELECT DISTINCT event_time::date AS report_date, account_id
-            FROM (
-                SELECT transaction_time AS event_time, account_id
-                FROM dwm.dwm_bb_card_transaction_detail_v2_p
-                WHERE (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
-                   OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE)
-
-                UNION ALL
-
-                SELECT original_completion_time, account_id
-                FROM dwm.dwm_bb_card_transaction_detail_v2_p
-                WHERE (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
-                   OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE)
-
-                UNION ALL
-
-                SELECT settlement_post_date, account_id
-                FROM dwm.dwm_bb_card_transaction_detail_v2_p
-                WHERE (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
-                   OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE)
-
-                UNION ALL
-
-                SELECT auth_time, account_id
-                FROM dwm.dwm_bb_card_auth_detail_v2_p
-                WHERE (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
-                   OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE)
-            ) changed
-            WHERE event_time IS NOT NULL
-              AND account_id IS NOT NULL
-        )
         SELECT COUNT(*)
         INTO affected_rows
         FROM dws.dws_bb_card_finance_daily_v2_p AS target
         WHERE (target.special_fee_type IS NULL
                OR target.special_fee_type NOT IN ('ACTIVE_CARD_ACCOUNT_FEE', 'CHANNEL_FIXED_FEE'))
-          AND EXISTS (
-              SELECT 1
-              FROM changed_keys scope
-              WHERE target.report_date = scope.report_date
-                AND target.account_id = scope.account_id
-          );
+          AND target.report_date >= rebuild_start
+          AND target.report_date < rebuild_end;
 
         RETURN affected_rows;
     END IF;
 
-    WITH changed_keys AS (
-        SELECT DISTINCT event_time::date AS report_date, account_id
-        FROM (
-            SELECT transaction_time AS event_time, account_id
-            FROM dwm.dwm_bb_card_transaction_detail_v2_p
-            WHERE (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
-               OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE)
-
-            UNION ALL
-
-            SELECT original_completion_time, account_id
-            FROM dwm.dwm_bb_card_transaction_detail_v2_p
-            WHERE (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
-               OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE)
-
-            UNION ALL
-
-            SELECT settlement_post_date, account_id
-            FROM dwm.dwm_bb_card_transaction_detail_v2_p
-            WHERE (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
-               OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE)
-
-            UNION ALL
-
-            SELECT auth_time, account_id
-            FROM dwm.dwm_bb_card_auth_detail_v2_p
-            WHERE (update_time >= CURRENT_DATE - INTERVAL '1 day' AND update_time < CURRENT_DATE)
-               OR (delete_time >= CURRENT_DATE - INTERVAL '1 day' AND delete_time < CURRENT_DATE)
-        ) changed
-        WHERE event_time IS NOT NULL
-          AND account_id IS NOT NULL
-    )
     DELETE FROM dws.dws_bb_card_finance_daily_v2_p AS target
     WHERE (target.special_fee_type IS NULL
            OR target.special_fee_type NOT IN ('ACTIVE_CARD_ACCOUNT_FEE', 'CHANNEL_FIXED_FEE'))
-      AND EXISTS (
-          SELECT 1
-          FROM changed_keys scope
-          WHERE target.report_date = scope.report_date
-            AND target.account_id = scope.account_id
-      );
+      AND target.report_date >= rebuild_start
+      AND target.report_date < rebuild_end;
+
+    GET DIAGNOSTICS affected_rows = ROW_COUNT;
+    RETURN affected_rows;
+END;
+$function$;
+
+-- 月度 CDC 使用此重载函数，只删除本次月份范围内的普通行。
+CREATE OR REPLACE FUNCTION dws.fn_delete_bb_card_finance_daily_v2_cdc(
+    p_start_date DATE,
+    p_end_date DATE,
+    p_dry_run BOOLEAN DEFAULT false
+)
+RETURNS BIGINT
+LANGUAGE plpgsql
+AS $function$
+DECLARE
+    affected_rows BIGINT;
+BEGIN
+    IF p_dry_run THEN
+        SELECT COUNT(*) INTO affected_rows
+        FROM dws.dws_bb_card_finance_daily_v2_p AS target
+        WHERE (target.special_fee_type IS NULL
+               OR target.special_fee_type NOT IN ('ACTIVE_CARD_ACCOUNT_FEE', 'CHANNEL_FIXED_FEE'))
+          AND target.report_date >= p_start_date
+          AND target.report_date < p_end_date;
+        RETURN affected_rows;
+    END IF;
+
+    DELETE FROM dws.dws_bb_card_finance_daily_v2_p AS target
+    WHERE (target.special_fee_type IS NULL
+           OR target.special_fee_type NOT IN ('ACTIVE_CARD_ACCOUNT_FEE', 'CHANNEL_FIXED_FEE'))
+      AND target.report_date >= p_start_date
+      AND target.report_date < p_end_date;
 
     GET DIAGNOSTICS affected_rows = ROW_COUNT;
     RETURN affected_rows;
@@ -121,24 +85,54 @@ LANGUAGE plpgsql
 AS $function$
 DECLARE
     affected_rows BIGINT;
-    month_start DATE := DATE_TRUNC('month', CURRENT_DATE)::date;
-    month_end DATE := (DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month')::date;
+    rebuild_start DATE := DATE '2026-01-01';
+    rebuild_end DATE := CURRENT_DATE;
 BEGIN
     IF p_dry_run THEN
         SELECT COUNT(*)
         INTO affected_rows
         FROM dws.dws_bb_card_finance_daily_v2_p AS target
         WHERE target.special_fee_type = 'ACTIVE_CARD_ACCOUNT_FEE'
-          AND target.report_date >= month_start
-          AND target.report_date < month_end;
+          AND target.report_date >= rebuild_start
+          AND target.report_date < rebuild_end;
 
         RETURN affected_rows;
     END IF;
 
     DELETE FROM dws.dws_bb_card_finance_daily_v2_p AS target
     WHERE target.special_fee_type = 'ACTIVE_CARD_ACCOUNT_FEE'
-      AND target.report_date >= month_start
-      AND target.report_date < month_end;
+      AND target.report_date >= rebuild_start
+      AND target.report_date < rebuild_end;
+
+    GET DIAGNOSTICS affected_rows = ROW_COUNT;
+    RETURN affected_rows;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION dws.fn_delete_bb_active_card_count_v2_cdc(
+    p_start_date DATE,
+    p_end_date DATE,
+    p_dry_run BOOLEAN DEFAULT false
+)
+RETURNS BIGINT
+LANGUAGE plpgsql
+AS $function$
+DECLARE
+    affected_rows BIGINT;
+BEGIN
+    IF p_dry_run THEN
+        SELECT COUNT(*) INTO affected_rows
+        FROM dws.dws_bb_card_finance_daily_v2_p AS target
+        WHERE target.special_fee_type = 'ACTIVE_CARD_ACCOUNT_FEE'
+          AND target.report_date >= p_start_date
+          AND target.report_date < p_end_date;
+        RETURN affected_rows;
+    END IF;
+
+    DELETE FROM dws.dws_bb_card_finance_daily_v2_p AS target
+    WHERE target.special_fee_type = 'ACTIVE_CARD_ACCOUNT_FEE'
+      AND target.report_date >= p_start_date
+      AND target.report_date < p_end_date;
 
     GET DIAGNOSTICS affected_rows = ROW_COUNT;
     RETURN affected_rows;
@@ -151,50 +145,54 @@ LANGUAGE plpgsql
 AS $function$
 DECLARE
     affected_rows BIGINT;
+    rebuild_start DATE := DATE '2026-01-01';
+    rebuild_end DATE := CURRENT_DATE;
 BEGIN
     IF p_dry_run THEN
-        WITH changed_months AS (
-            SELECT DISTINCT DATE_TRUNC('month', statistics_time)::date AS report_month
-            FROM ods.ods_bi_month_tag
-            WHERE delete_time IS NULL
-              AND tag = 'CHANNEL_COST'
-              AND provider = 'BB'
-              AND update_time >= CURRENT_DATE - INTERVAL '1 day'
-              AND update_time < CURRENT_DATE
-              AND statistics_time IS NOT NULL
-        )
         SELECT COUNT(*)
         INTO affected_rows
         FROM dws.dws_bb_card_finance_daily_v2_p AS target
         WHERE target.special_fee_type = 'CHANNEL_FIXED_FEE'
-          AND EXISTS (
-              SELECT 1
-              FROM changed_months month_scope
-              WHERE target.report_date >= month_scope.report_month
-                AND target.report_date < month_scope.report_month + INTERVAL '1 month'
-          );
+          AND target.report_date >= rebuild_start
+          AND target.report_date < rebuild_end;
 
         RETURN affected_rows;
     END IF;
 
-    WITH changed_months AS (
-        SELECT DISTINCT DATE_TRUNC('month', statistics_time)::date AS report_month
-        FROM ods.ods_bi_month_tag
-        WHERE delete_time IS NULL
-          AND tag = 'CHANNEL_COST'
-          AND provider = 'BB'
-          AND update_time >= CURRENT_DATE - INTERVAL '1 day'
-          AND update_time < CURRENT_DATE
-          AND statistics_time IS NOT NULL
-    )
     DELETE FROM dws.dws_bb_card_finance_daily_v2_p AS target
     WHERE target.special_fee_type = 'CHANNEL_FIXED_FEE'
-      AND EXISTS (
-          SELECT 1
-          FROM changed_months month_scope
-          WHERE target.report_date >= month_scope.report_month
-            AND target.report_date < month_scope.report_month + INTERVAL '1 month'
-      );
+      AND target.report_date >= rebuild_start
+      AND target.report_date < rebuild_end;
+
+    GET DIAGNOSTICS affected_rows = ROW_COUNT;
+    RETURN affected_rows;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION dws.fn_delete_bb_channel_fixed_fee_v2_cdc(
+    p_start_date DATE,
+    p_end_date DATE,
+    p_dry_run BOOLEAN DEFAULT false
+)
+RETURNS BIGINT
+LANGUAGE plpgsql
+AS $function$
+DECLARE
+    affected_rows BIGINT;
+BEGIN
+    IF p_dry_run THEN
+        SELECT COUNT(*) INTO affected_rows
+        FROM dws.dws_bb_card_finance_daily_v2_p AS target
+        WHERE target.special_fee_type = 'CHANNEL_FIXED_FEE'
+          AND target.report_date >= p_start_date
+          AND target.report_date < p_end_date;
+        RETURN affected_rows;
+    END IF;
+
+    DELETE FROM dws.dws_bb_card_finance_daily_v2_p AS target
+    WHERE target.special_fee_type = 'CHANNEL_FIXED_FEE'
+      AND target.report_date >= p_start_date
+      AND target.report_date < p_end_date;
 
     GET DIAGNOSTICS affected_rows = ROW_COUNT;
     RETURN affected_rows;

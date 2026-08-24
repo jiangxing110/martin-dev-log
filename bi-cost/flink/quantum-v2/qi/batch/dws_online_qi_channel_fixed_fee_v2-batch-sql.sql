@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-16
--- Updated Time:   2026-07-30 16:12:12
+-- Updated Time:   2026-08-23 21:41:00
 -- Description:    QI v2 渠道固定成本批量回刷
 --********************************************************************--
 
@@ -45,6 +45,7 @@ CREATE TEMPORARY TABLE source_dws_qi_card_finance_daily_v2_p (
     system_type STRING,
     sale_id STRING,
     am_id STRING,
+    total_net_amount DECIMAL(20, 4),
     rebate_incentive_base_amt DECIMAL(20, 4),
     special_fee_type STRING,
     delete_time TIMESTAMP(6),
@@ -52,7 +53,7 @@ CREATE TEMPORARY TABLE source_dws_qi_card_finance_daily_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, report_date, account_id, account_type, account_category, system_type, sale_id, am_id, rebate_incentive_base_amt, special_fee_type, delete_time FROM dws.dws_qi_card_finance_daily_v2_p WHERE report_date >= CAST(''${start_time}'' AS date) AND report_date < CAST(''${end_time}'' AS date)) AS dws_qi_card_finance_daily_v2_p_f',
+    'table-name' = '(SELECT id, report_date, account_id, account_type, account_category, system_type, sale_id, am_id, total_net_amount, rebate_incentive_base_amt, special_fee_type, delete_time FROM dws.dws_qi_card_finance_daily_v2_p WHERE report_date >= CAST(''${start_time}'' AS date) AND report_date < CAST(''${end_time}'' AS date)) AS dws_qi_card_finance_daily_v2_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -104,7 +105,7 @@ WHERE delete_time IS NULL
 CREATE TEMPORARY VIEW v_month_net_amount AS
 SELECT
     CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month,
-    CAST(SUM(COALESCE(rebate_incentive_base_amt, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS month_total_net_amount
+    CAST(SUM(COALESCE(total_net_amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS month_total_net_amount
 FROM v_allocation_base
 GROUP BY CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE);
 
@@ -118,7 +119,7 @@ SELECT
     b.system_type,
     b.sale_id,
     b.am_id,
-    CAST(c.month_fixed_fee * COALESCE(b.rebate_incentive_base_amt, CAST(0 AS DECIMAL(20, 4))) / NULLIF(na.month_total_net_amount, 0) AS DECIMAL(20, 4)) AS cost_fixed_fee
+    CAST(c.month_fixed_fee * COALESCE(b.total_net_amount, CAST(0 AS DECIMAL(20, 4))) / NULLIF(na.month_total_net_amount, 0) AS DECIMAL(20, 4)) AS cost_fixed_fee
 FROM v_allocation_base b
 INNER JOIN v_month_net_amount na ON CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) = na.report_month
 INNER JOIN v_month_channel_cost c ON c.report_month = na.report_month

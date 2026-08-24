@@ -1,21 +1,19 @@
 --********************************************************************--
 -- Author:         martinJiang
--- Created Time:   2026-08-04
+-- Created Time:   2026-07-12
 -- Updated Time:   2026-08-18 00:00:00
 -- Description:    BB v2 DWS 批量初始化/回刷（report_date 逐日粒度，对齐 QI）
 -- 作业元信息：
 --   作业类型：批处理
 --   运行方式：一次性初始化/按 report_date 回刷
---   运行参数：无，自动取上月完整窗口
+--   运行参数：无（月份已固化）
 --   源库变更响应：源库变化不会自动触发本作业。
+-- ⚠️ 角色：仅用于一次性历史初始化与手动回刷工具；日常 DWS 写入由 daily CDC（唯一写入者）承担。
+--   回刷前必须删除目标范围 DWS 数据（先删后插），避免与 CDC 并存。
 -- Notes:
 --   1. 主链路: dwm_bb_card_transaction_detail_v2_p + dwm_bb_card_auth_detail_v2_p -> dws_bb_card_finance_daily_p。
 --   2. DWS 粒度: account_id + report_date(日) + sale_id + am_id；active card fee 仍按月初承载。
 --   3. 固定成本和 Active Card fee 由独立特殊行脚本处理，主链路保持 0。
--- Notes:
---   1. v2 在同一个 Flink SQL 作业中通过 JDBC source 调用 dws.fn_delete_bb_card_finance_daily_v2_monthly_cdc(false) 先清理目标数据。
---   2. 部署时需要在“附加依赖文件”添加 PostgreSQL JDBC driver，例如 postgresql-42.7.4.jar。
---   3. 首次执行可将函数参数 false 改为 true 做 dry-run。
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
@@ -38,18 +36,6 @@ SET 'heartbeat.interval' = '30 s';
 SET 'heartbeat.timeout' = '600 s';
 -- 禁止将同源 JDBC 表扫描合并为 Expand，因 JDBC connector 不支持该物理算子
 SET 'table.optimizer.union-any-expand' = 'false';
-
-CREATE TEMPORARY TABLE source_delete_bb_card_finance_daily_v2_monthly_cdc_result (
-    affected_rows BIGINT
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT dws.fn_delete_bb_card_finance_daily_v2_monthly_cdc(false) AS affected_rows) AS delete_result',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1'
-);
 
 CREATE TEMPORARY TABLE source_bi_month_tag (
     id              BIGINT,
@@ -114,7 +100,7 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_transaction_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT t.id, t.txn_id, t.settlement_id, t.settlement_match_type, t.source_id, t.card_transaction_id, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.transaction_time, t.original_completion_time, t.business_type, t.business_code_list, t.remarks, t.detail, t.card_org, t.tx_country, t.settle_country, t.is_dom, t.resp_code, t.reason_code, t.transaction_type, t.is_valid_settle, t.is_clearing, t.is_reversal, t.is_refund, t.billing_amount, t.settlement_post_date, t.settlement_txn_date, t.sale_id, t.am_id, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_transaction_detail_v2_p t WHERE t.delete_time IS NULL AND ((t.transaction_time >= date_trunc(''month'', CURRENT_DATE - INTERVAL ''1 month'') + INTERVAL ''8'' HOUR AND t.transaction_time < date_trunc(''month'', CURRENT_DATE) + INTERVAL ''8'' HOUR) OR (t.original_completion_time >= date_trunc(''month'', CURRENT_DATE - INTERVAL ''1 month'') AND t.original_completion_time < date_trunc(''month'', CURRENT_DATE)) OR (t.settlement_post_date >= date_trunc(''month'', CURRENT_DATE - INTERVAL ''1 month'') AND t.settlement_post_date < date_trunc(''month'', CURRENT_DATE))) ) AS dwm_bb_card_transaction_detail_v2_f',
+    'table-name' = '(SELECT t.id, t.txn_id, t.settlement_id, t.settlement_match_type, t.source_id, t.card_transaction_id, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.transaction_time, t.original_completion_time, t.business_type, t.business_code_list, t.remarks, t.detail, t.card_org, t.tx_country, t.settle_country, t.is_dom, t.resp_code, t.reason_code, t.transaction_type, t.is_valid_settle, t.is_clearing, t.is_reversal, t.is_refund, t.billing_amount, t.settlement_post_date, t.settlement_txn_date, t.sale_id, t.am_id, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_transaction_detail_v2_p t WHERE t.delete_time IS NULL AND ((t.transaction_time >= CAST(''2026-02-01 00:00:00'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR AND t.transaction_time < CAST(''2026-03-01 00:00:00'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR) OR (t.original_completion_time >= CAST(''2026-02-01 00:00:00'' AS TIMESTAMP(6)) AND t.original_completion_time < CAST(''2026-03-01 00:00:00'' AS TIMESTAMP(6))) OR (t.settlement_post_date >= CAST(''2026-02-01 00:00:00'' AS TIMESTAMP(6)) AND t.settlement_post_date < CAST(''2026-03-01 00:00:00'' AS TIMESTAMP(6)))) ) AS dwm_bb_card_transaction_detail_v2_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -158,7 +144,7 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT t.id, t.auth_txn_guid, t.card_proxy, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.auth_time, t.program_name, t.merchant_country, t.request_code, t.request_description, t.response_code, t.reason_code, t.txn_amount, t.settle_amount, t.txn_currency, t.merchant_name, t.mcc, t.card_org, t.is_dom, t.is_decline, t.is_account_verification, t.is_excluded_request, t.sale_id, t.am_id, t.source_table, t.version, t.create_time, t.update_time, t.delete_time FROM generate_series(date_trunc(''day'', date_trunc(''month'', CURRENT_DATE - INTERVAL ''1 month'') + INTERVAL ''8'' HOUR), date_trunc(''day'', date_trunc(''month'', CURRENT_DATE) + INTERVAL ''8'' HOUR) - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(day_start) JOIN dwm.dwm_bb_card_auth_detail_v2_p t ON t.delete_time IS NULL AND t.auth_time >= gs.day_start AND t.auth_time < LEAST(gs.day_start + INTERVAL ''1 day'', date_trunc(''month'', CURRENT_DATE))) AS dwm_bb_card_auth_detail_v2_f',
+    'table-name' = '(SELECT t.id, t.auth_txn_guid, t.card_proxy, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.auth_time, t.program_name, t.merchant_country, t.request_code, t.request_description, t.response_code, t.reason_code, t.txn_amount, t.settle_amount, t.txn_currency, t.merchant_name, t.mcc, t.card_org, t.is_dom, t.is_decline, t.is_account_verification, t.is_excluded_request, t.sale_id, t.am_id, t.source_table, t.version, t.create_time, t.update_time, t.delete_time FROM generate_series(date_trunc(''day'', CAST(''2026-02-01 00:00:00'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR), date_trunc(''day'', CAST(''2026-03-01 00:00:00'' AS TIMESTAMP(6)) + INTERVAL ''8'' HOUR) - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(day_start) JOIN dwm.dwm_bb_card_auth_detail_v2_p t ON t.delete_time IS NULL AND t.auth_time >= gs.day_start AND t.auth_time < LEAST(gs.day_start + INTERVAL ''1 day'', CAST(''2026-03-01 00:00:00'' AS TIMESTAMP(6)))) AS dwm_bb_card_auth_detail_v2_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -167,8 +153,7 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
 
 CREATE TEMPORARY VIEW v_bb_txn_time_rows AS
 SELECT
-    -- Count/Reversal 采用北京时间月窗口 [月初 08:00, 次月月初 08:00)，
-    -- 窗口末尾 8 小时仍属于本次成本月，不能按 transaction_time 自然月归到次月。
+    -- Count/Reversal 采用自然日窗口 [start_date, end_date)，与 report_date、CDC、QI 口径一致
     CAST(transaction_time AS DATE) AS report_date,
     account_id,
     account_type,
@@ -216,8 +201,8 @@ SELECT
     billing_amount
 FROM source_dwm_bb_card_transaction_detail_v2_p
 WHERE delete_time IS NULL
-  AND transaction_time >= CAST(DATE_FORMAT(CAST(CURRENT_DATE - INTERVAL '1' MONTH AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6)) + INTERVAL '8' HOUR
-  AND transaction_time < CAST(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6)) + INTERVAL '8' HOUR;
+  AND transaction_time >= CAST('2026-02-01 00:00:00' AS TIMESTAMP(6))
+  AND transaction_time < CAST('2026-03-01 00:00:00' AS TIMESTAMP(6));
 
 CREATE TEMPORARY VIEW v_bb_completion_rows AS
 SELECT
@@ -268,8 +253,8 @@ SELECT
     billing_amount
 FROM source_dwm_bb_card_transaction_detail_v2_p
 WHERE delete_time IS NULL
-  AND original_completion_time >= CAST(DATE_FORMAT(CAST(CURRENT_DATE - INTERVAL '1' MONTH AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6))
-  AND original_completion_time < CAST(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6));
+  AND original_completion_time >= CAST('2026-02-01 00:00:00' AS TIMESTAMP(6))
+  AND original_completion_time < CAST('2026-03-01 00:00:00' AS TIMESTAMP(6));
 
 CREATE TEMPORARY VIEW v_bb_post_rows AS
 SELECT
@@ -320,8 +305,8 @@ SELECT
     billing_amount
 FROM source_dwm_bb_card_transaction_detail_v2_p
 WHERE delete_time IS NULL
-  AND settlement_post_date >= CAST(DATE_FORMAT(CAST(CURRENT_DATE - INTERVAL '1' MONTH AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6))
-  AND settlement_post_date < CAST(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6));
+  AND settlement_post_date >= CAST('2026-02-01 00:00:00' AS TIMESTAMP(6))
+  AND settlement_post_date < CAST('2026-03-01 00:00:00' AS TIMESTAMP(6));
 
 CREATE TEMPORARY VIEW v_bb_txn_count_metric_rows AS
 SELECT
@@ -495,8 +480,8 @@ SELECT
     CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'Master' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS m_int_clearing_vol,
     CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_dom_clearing_vol,
     CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org = 'VISA' AND settle_country NOT IN ('US', 'USA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS v_int_clearing_vol,
-    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND transaction_type = 'authorization.clearing' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
-    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND transaction_type = 'authorization.clearing' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
+    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org IN ('Master', 'VISA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_rebate_base_amt,
+    CAST(SUM(CASE WHEN business_type IN ('Credit', 'Consumption') AND card_org IN ('Master', 'VISA') AND transaction_type IN ('authorization.clearing', 'refund.clearing') AND settlement_match_type = 'card_transaction_id' AND resp_code = 'APPROVE' AND is_excluded_settlement = FALSE THEN -billing_amount ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS bb_channel_cashback_comm,
     sale_id,
     am_id
 FROM v_bb_completion_rows
@@ -636,8 +621,8 @@ SELECT
     am_id
 FROM source_dwm_bb_card_auth_detail_v2_p
 WHERE delete_time IS NULL
-  AND auth_time >= CAST(DATE_FORMAT(CAST(CURRENT_DATE - INTERVAL '1' MONTH AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6))
-  AND auth_time < CAST(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM-01') AS TIMESTAMP(6));
+  AND auth_time >= CAST('2026-02-01 00:00:00' AS TIMESTAMP(6))
+  AND auth_time < CAST('2026-03-01 00:00:00' AS TIMESTAMP(6));
 
 CREATE TEMPORARY VIEW v_bb_auth_count_metrics AS
 SELECT
@@ -880,6 +865,70 @@ FROM (
     GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id
 ) aggregated;
 
+CREATE TEMPORARY VIEW v_bb_monthly_volume_fee AS
+SELECT
+    report_month,
+    month_total_net_amount,
+    CAST(
+        CASE
+            WHEN month_total_net_amount <= CAST(0 AS DECIMAL(20, 4)) THEN 0
+            WHEN month_total_net_amount <= CAST(5000000 AS DECIMAL(20, 4))
+                THEN month_total_net_amount * CAST(0.0055 AS DECIMAL(20, 8))
+            WHEN month_total_net_amount <= CAST(10000000 AS DECIMAL(20, 4))
+                THEN CAST(5000000 AS DECIMAL(20, 4)) * CAST(0.0055 AS DECIMAL(20, 8))
+                   + (month_total_net_amount - CAST(5000000 AS DECIMAL(20, 4))) * CAST(0.0045 AS DECIMAL(20, 8))
+            ELSE CAST(5000000 AS DECIMAL(20, 4)) * CAST(0.0055 AS DECIMAL(20, 8))
+               + CAST(5000000 AS DECIMAL(20, 4)) * CAST(0.0045 AS DECIMAL(20, 8))
+               + (month_total_net_amount - CAST(10000000 AS DECIMAL(20, 4))) * CAST(0.004 AS DECIMAL(20, 8))
+        END AS DECIMAL(20, 4)
+    ) AS month_volume_fee_cost
+FROM (
+    SELECT
+        CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month,
+        CAST(SUM(COALESCE(total_net_amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS month_total_net_amount
+    FROM v_dws_bb_daily_base
+    GROUP BY CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE)
+) monthly_net;
+
+CREATE TEMPORARY VIEW v_bb_monthly_cash_rate AS
+SELECT
+    m.report_month,
+    CAST(
+        COALESCE(
+            MAX(CASE WHEN t.detail <> 'DEFAULT_FALLBACK' THEN t.amount END),
+            MAX(CASE WHEN t.detail = 'DEFAULT_FALLBACK' THEN t.amount END),
+            CAST(0.02059391 AS DECIMAL(20, 8))
+        ) AS DECIMAL(20, 8)
+    ) AS cashback_rate
+FROM (
+    SELECT DISTINCT CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
+    FROM v_dws_bb_daily_base
+) m
+LEFT JOIN source_bi_month_tag t
+    ON t.tag = 'BB_CASH_RATE'
+   AND t.delete_time IS NULL
+   AND (t.detail = CAST(DATE_FORMAT(CAST(m.report_month AS TIMESTAMP(6)), 'yyyy-MM') AS STRING)
+        OR t.detail = 'DEFAULT_FALLBACK')
+GROUP BY m.report_month;
+
+CREATE TEMPORARY VIEW v_dws_bb_daily_with_cost AS
+SELECT
+    b.*,
+    CAST(
+        CASE
+            WHEN f.month_total_net_amount = CAST(0 AS DECIMAL(20, 4)) THEN 0
+            ELSE COALESCE(b.total_net_amount, CAST(0 AS DECIMAL(20, 4)))
+                 / f.month_total_net_amount * f.month_volume_fee_cost
+        END AS DECIMAL(20, 4)
+    ) AS volume_fee_cost,
+    r.cashback_rate,
+    CAST(COALESCE(b.bb_rebate_base_amt, CAST(0 AS DECIMAL(20, 4))) * r.cashback_rate AS DECIMAL(20, 4)) AS cashback_income
+FROM v_dws_bb_daily_base b
+INNER JOIN v_bb_monthly_volume_fee f
+    ON f.report_month = CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE)
+INNER JOIN v_bb_monthly_cash_rate r
+    ON r.report_month = f.report_month;
+
 CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     id                       BIGINT,
     report_date              DATE,
@@ -915,6 +964,9 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     bb_channel_cashback_comm DECIMAL(20, 4),
     active_card_count        INT,
     total_net_amount         DECIMAL(20, 4),
+    volume_fee_cost          DECIMAL(20, 4),
+    cashback_rate            DECIMAL(20, 8),
+    cashback_income          DECIMAL(20, 4),
     cost_fixed_fee           DECIMAL(20, 4),
     special_fee_type         STRING,
     sale_id                  STRING,
@@ -932,7 +984,7 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     'targetSchema' = 'dws',
     'userName' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'writeMode' = 'insert',
+    'writeMode' = 'upsert',
     'batchSize' = '2000'
 );
 
@@ -972,6 +1024,9 @@ SELECT
     b.bb_channel_cashback_comm,
     b.active_card_count,
     b.total_net_amount,
+    b.volume_fee_cost,
+    b.cashback_rate,
+    b.cashback_income,
     CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
     CAST('NORMAL' AS STRING) AS special_fee_type,
     COALESCE(b.sale_id, '') AS sale_id,
@@ -981,6 +1036,4 @@ SELECT
     b.create_time,
     b.update_time,
     b.delete_time
-FROM v_dws_bb_daily_base b
-CROSS JOIN source_delete_bb_card_finance_daily_v2_monthly_cdc_result AS delete_result
-WHERE delete_result.affected_rows >= 0;
+FROM v_dws_bb_daily_with_cost b;

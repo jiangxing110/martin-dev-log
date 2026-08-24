@@ -1,0 +1,68 @@
+SELECT * FROM system_department
+WHERE name like'%销售%'
+
+INSERT INTO "system_department" ("id", "name", "parent_id", "sort", "create_time", "update_time", "delete_time", "version", "remarks", "status", "department_type") VALUES (2090383286824607748, '销售1组', 1740319923059597313, 1, '2026-08-20 18:19:47.68', '2026-08-20 18:19:47.68', NULL, 1, NULL, 0, 1);
+INSERT INTO "system_department" ("id", "name", "parent_id", "sort", "create_time", "update_time", "delete_time", "version", "remarks", "status", "department_type") VALUES (2090383286824607749, '销售2组', 1740319923059597313, 1, '2026-08-20 18:19:47.68', '2026-08-20 18:19:47.68', NULL, 1, NULL, 0, 1);
+INSERT INTO "system_department" ("id", "name", "parent_id", "sort", "create_time", "update_time", "delete_time", "version", "remarks", "status", "department_type") VALUES (2090383286824607750, '销售3组', 1740319923059597313, 1, '2026-08-20 18:19:47.68', '2026-08-20 18:19:47.68', NULL, 1, NULL, 0, 1);
+INSERT INTO "system_department" ("id", "name", "parent_id", "sort", "create_time", "update_time", "delete_time", "version", "remarks", "status", "department_type") VALUES (1740319905791647746, '销售一部', 1740319822094311426, 1, '2023-12-28 18:32:53.778', '2023-12-28 18:32:53.778', NULL, 1, NULL, 0, 1);
+INSERT INTO "system_department" ("id", "name", "parent_id", "sort", "create_time", "update_time", "delete_time", "version", "remarks", "status", "department_type") VALUES (1740319923059597313, '销售二部', 1740319822094311426, 1, '2023-12-28 18:32:57.895', '2023-12-28 18:32:57.895', NULL, 1, NULL, 0, 1);
+INSERT INTO "system_department" ("id", "name", "parent_id", "sort", "create_time", "update_time", "delete_time", "version", "remarks", "status", "department_type") VALUES (2090383286824607745, '销售1组', 1740319905791647746, 1, '2026-08-20 18:19:47.68', '2026-08-20 18:19:47.68', NULL, 1, NULL, 0, 1);
+INSERT INTO "system_department" ("id", "name", "parent_id", "sort", "create_time", "update_time", "delete_time", "version", "remarks", "status", "department_type") VALUES (2090383394756632577, '销售2组', 1740319905791647746, 2, '2026-08-20 18:20:13.413', '2026-08-20 18:20:13.413', NULL, 1, NULL, 0, 1);
+INSERT INTO "system_department" ("id", "name", "parent_id", "sort", "create_time", "update_time", "delete_time", "version", "remarks", "status", "department_type") VALUES (2090383286824607746, '销售3组', 1740319905791647746, 1, '2026-08-20 18:19:47.68', '2026-08-20 18:19:47.68', NULL, 1, NULL, 0, 1);
+INSERT INTO "system_department" ("id", "name", "parent_id", "sort", "create_time", "update_time", "delete_time", "version", "remarks", "status", "department_type") VALUES (2090383286824607747, '销售4组', 1740319905791647746, 1, '2026-08-20 18:19:47.68', '2026-08-20 18:19:47.68', NULL, 1, NULL, 0, 1);
+INSERT INTO "system_department" ("id", "name", "parent_id", "sort", "create_time", "update_time", "delete_time", "version", "remarks", "status", "department_type") VALUES (1740319822094311426, '销售部', 1740318931912007682, 1, '2023-12-28 18:32:33.823', '2023-12-28 18:32:33.823', NULL, 1, NULL, 0, 1);
+我找到当前数据库的部分数据如上面
+现在希望改变当前部门的展示逻辑就是树形结构
+
+非销售人员:全部的树结构 部门下面挂销售
+销售:
+部门负责人可以看到当前所有小组数据，组长可以看到所有成员数据
+平台销售
+看自己的树
+
+curl --url 'https://circle-test.qbitnetwork.com/api/admin/system/department/sales' \
+  -X 'POST' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRjNWVlNzA1LTFkYjgtNDcyOS04OTU0LTJiY2I4NjZiNmZkZCIsImFjY291bnQiOiIrODYxODU1ODI0MTQ0MCIsInJvbGUiOiJBZG1pbiIsImFjY291bnRJZCI6ImZjMzgyN2VjLTU4ZTktNGY0Mi1hNjYxLWEzYWE2NThjM2U2MSIsInBob25lIjoiKzg2MTg1NTgyNDE0NDAiLCJpc01vcmUiOmZhbHNlLCJpYXQiOjE3ODcyOTg1NTYsImV4cCI6MTc4NzM4NDk1Nn0.eclUlzUHMPrjxg5fFYR7Lv4umIE4fupAxgFR0BOC_dg' \
+  -H 'content-length: 0' \
+  -H 'domain: test-admin.qbitnetwork.com' \
+  -H 'fingerprint: 901aaab3ea524de187e73c7c1ed9d966' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: ef92ebbda1e3966dce52e605776d39d068cf765862b2dd39aee1ebfce775bce0' \
+  -H 'origin: https://test-admin-v3.qbitnetwork.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://test-admin-v3.qbitnetwork.com/' \
+  -H 'sec-ch-ua: "Not=A?Brand";v="99", "Google Chrome";v="151", "Chromium";v="151"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-site' \
+  -H 'sign: 8fe2ab1105472e96853f53120c5ce47c98dfc02208ea70c3679bbe582815f5ff' \
+  -H 'timestamp: 1787298670209' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36'
+
+  curl --url 'https://circle-test.qbitnetwork.com/api/admin/employees/sales' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRjNWVlNzA1LTFkYjgtNDcyOS04OTU0LTJiY2I4NjZiNmZkZCIsImFjY291bnQiOiIrODYxODU1ODI0MTQ0MCIsInJvbGUiOiJBZG1pbiIsImFjY291bnRJZCI6ImZjMzgyN2VjLTU4ZTktNGY0Mi1hNjYxLWEzYWE2NThjM2U2MSIsInBob25lIjoiKzg2MTg1NTgyNDE0NDAiLCJpc01vcmUiOmZhbHNlLCJpYXQiOjE3ODcyOTg1NTYsImV4cCI6MTc4NzM4NDk1Nn0.eclUlzUHMPrjxg5fFYR7Lv4umIE4fupAxgFR0BOC_dg' \
+  -H 'content-type: application/json' \
+  -H 'domain: test-admin.qbitnetwork.com' \
+  -H 'fingerprint: 901aaab3ea524de187e73c7c1ed9d966' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: c8d48a28db067e0b5fe0222c6eb9088825eccb47d2a636cf0ddac4777b895aca' \
+  -H 'origin: https://test-admin-v3.qbitnetwork.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://test-admin-v3.qbitnetwork.com/' \
+  -H 'sec-ch-ua: "Not=A?Brand";v="99", "Google Chrome";v="151", "Chromium";v="151"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-site' \
+  -H 'sign: 2ccfefedf8f120cca17ed41e5a71720fc172f8199898a7551a06ef374456a77f' \
+  -H 'timestamp: 1787298670468' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36' \
+  --data-raw '{"departmentId":"1740319822094311426"}'
+  之前是两个接口 但是我现在新加一个接口

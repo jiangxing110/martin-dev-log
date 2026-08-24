@@ -1,0 +1,154 @@
+CREATE OR REPLACE PROCEDURE "public"."sp_init_bb_card_dwm_history_fast_v2"("p_start_time" timestamp, "p_end_time" timestamp)
+ AS $BODY$
+DECLARE
+    v_curr_start       TIMESTAMP := p_start_time;
+    v_curr_end         TIMESTAMP;
+    v_batch_interval   INTERVAL := INTERVAL '1 day';
+    v_dwm_table_name   TEXT;
+    v_tx_table_name    TEXT;
+    v_settle_table_name TEXT;
+BEGIN
+    WHILE v_curr_start < p_end_time LOOP
+
+        v_curr_end := LEAST(v_curr_start + v_batch_interval, p_end_time);
+
+        v_dwm_table_name := 'dwm_bb_card_tx_' || to_char(v_curr_start, 'YYYY_MM');
+        v_tx_table_name := 'qbit_card_transaction_clean_2026_m' || to_char(v_curr_start, 'MM');
+        v_settle_table_name := 'qbit_card_settlement_bb_clean_2026_m' || to_char(v_curr_start, 'MM');
+
+        RAISE NOTICE 'BB DWM 直写子表: %, 时间段: % 至 %',
+            v_dwm_table_name,
+            v_curr_start,
+            v_curr_end;
+
+        EXECUTE 'SET LOCAL synchronous_commit = off';
+        EXECUTE 'SET LOCAL work_mem = ''256MB''';
+
+        EXECUTE format($SQL$
+            INSERT INTO public.%I (
+                id,
+                account_id,
+                card_id,
+                transaction_time,
+                third_complete_time,
+                business_type,
+                status,
+                remarks,
+                card_org,
+                settle_country,
+                tx_country,
+                is_dom,
+                resp_code,
+                request_code,
+                reason_code,
+                is_valid_settle,
+                is_clearing,
+                is_reversal,
+                is_refund,
+                billing_amount,
+                version
+            )
+            WITH bb_providers AS (
+                SELECT system_provider
+                FROM public.card_bin
+                WHERE brand = 'BlueBanc'
+            ),
+            base_tx AS (
+                SELECT
+                    a.*,
+                    c."type" AS card_type
+                FROM public.%I a
+                LEFT JOIN public."qbitCard" c
+                    ON a."cardId" = c."id"
+                WHERE a."createTime" >= %L
+                  AND a."createTime" < %L
+                  AND a."provider" IN (
+                      SELECT system_provider FROM bb_providers
+                  )
+            ),
+            matched_settle AS (
+                SELECT
+                    t.id AS tx_uuid,
+                    b.*
+                FROM base_tx t
+                INNER JOIN public.%I b
+                    ON t."sourceId" = b."transactionId"
+                WHERE b."provider" = 'BlueBancCard'
+
+                UNION ALL
+
+                SELECT
+                    t.id AS tx_uuid,
+                    b.*
+                FROM base_tx t
+                INNER JOIN public.%I b
+                    ON b."qbitCardTransactionId" = t.id::text
+                WHERE b."provider" = 'BlueBancCard'
+            )
+            SELECT DISTINCT ON (base.id)
+                base.id,
+                base."accountId",
+                base."cardId",
+                base."createTime",
+                base."thirdCompleteTime",
+                base."businessType",
+                base."status",
+                base."remarks",
+                base.card_type,
+                NULLIF(RIGHT(safe_json_text(m."rawData", 'txnLocation'), 2), '') AS settle_country,
+                NULLIF(base."specialSourceData"->>'country', '') AS tx_country,
+                CASE
+                    WHEN RIGHT(safe_json_text(m."rawData", 'txnLocation'), 2) IN ('US', 'USA')
+                      OR base."specialSourceData"->>'country' IN ('US', 'USA')
+                    THEN TRUE
+                    ELSE FALSE
+                END AS is_dom,
+                safe_json_text(m."rawData", 'responseCode'),
+                safe_json_text(m."rawData", 'requestCode'),
+                safe_json_text(m."rawData", 'reasonCode'),
+                CASE
+                    WHEN m."transactionType" NOT IN (
+                        'ST-REFUND_ADV',
+                        'ST-PURCHASE_ADV',
+                        'ST-ECOMM_ADV',
+                        'ST-SETT_ADV',
+                        'ST-ATM_ADV'
+                    )
+                    THEN TRUE
+                    ELSE FALSE
+                END AS is_valid_settle,
+                CASE WHEN m."transactionType" = 'authorization.clearing' THEN TRUE ELSE FALSE END,
+                CASE WHEN m."transactionType" = 'authorization.reversal' THEN TRUE ELSE FALSE END,
+                CASE WHEN m."transactionType" = 'refund.clearing' THEN TRUE ELSE FALSE END,
+                COALESCE(m."billingAmount", 0)::numeric(20, 2),
+                1
+            FROM base_tx base
+            LEFT JOIN matched_settle m
+                ON base.id = m.tx_uuid
+            ORDER BY base.id, m."createTime" DESC NULLS LAST
+            ON CONFLICT (id, transaction_time)
+            DO UPDATE SET
+                update_time = NOW(),
+                settle_country = EXCLUDED.settle_country,
+                tx_country = EXCLUDED.tx_country,
+                billing_amount = EXCLUDED.billing_amount,
+                status = EXCLUDED.status,
+                version = public.%I.version + 1
+        $SQL$,
+            v_dwm_table_name,
+            v_tx_table_name,
+            v_curr_start,
+            v_curr_end,
+            v_settle_table_name,
+            v_settle_table_name,
+            v_dwm_table_name
+        );
+
+        COMMIT;
+
+        v_curr_start := v_curr_end;
+
+    END LOOP;
+END;
+$BODY$
+  LANGUAGE plpgsql

@@ -1,29 +1,31 @@
 -- Notes:
---   1. BB 普通 DWS CDC 不执行目标表删除，只按 DWM 变更范围重算写入。
+--   1. BB DWS 按月份重建：先清理本次月份范围的普通行，再重算写入。
 --   2. 部署时需要在“附加依赖文件”添加 PostgreSQL JDBC driver，例如 postgresql-42.7.4.jar。
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-12
--- Updated Time:   2026-08-18 00:00:00
+-- Updated Time:   2026-08-23 21:16:02
 -- Description:    Quantum BB v2 DWS CDC 按日重算写入 v2（report_date 逐日粒度，对齐 QI）
 -- 作业元信息：
 --   作业类型：流处理 CDC
---   运行方式：默认按昨天变更扫描，按受影响日期逐日重算
+--   运行方式：传入 start_time、end_time，每次只处理一个月份范围
 --   运行参数：无
---   源库变更响应：源表 update_time / delete_time 变化后，重刷对应日期
+--   源库变更响应：本脚本用于全量重建；日常变更 CDC 不应复用本脚本
 -- Notes:
 --   1. 主链路: DWM transaction/auth -> DWS
 --   2. 粒度: account_id + report_date(日) + sale_id + am_id；active card fee 仍按月初承载
 --   3. 固定成本和 Active Card fee 由独立特殊行脚本处理，主链路保持 0。
 --********************************************************************--
 
-SET 'parallelism.default' = '1';
+SET 'parallelism.default' = '4';
 SET 'taskmanager.memory.network.min' = '1gb';
 SET 'taskmanager.memory.network.max' = '3gb';
 SET 'taskmanager.memory.network.fraction' = '0.2';
-SET 'pipeline.default-parallelism' = '1';
-SET 'table.exec.resource.default-parallelism' = '1';
+SET 'pipeline.default-parallelism' = '4';
+SET 'table.exec.resource.default-parallelism' = '4';
 SET 'pipeline.operator-chaining' = 'true';
+SET 'table.optimizer.reuse-source-enabled' = 'true';
+SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
 SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'execution.multi-jobs-in-application.enable' = 'false';
 SET 'table.dml-sync' = 'true';
@@ -31,25 +33,27 @@ SET 'restart-strategy.type' = 'fixed-delay';
 SET 'restart-strategy.fixed-delay.attempts' = '3';
 SET 'restart-strategy.fixed-delay.delay' = '60s';
 SET 'heartbeat.interval' = '30 s';
-SET 'heartbeat.timeout' = '600 s';
-
-CREATE TEMPORARY TABLE source_bb_changed_keys (
-    report_date DATE,
-    account_id  STRING
-) WITH (
-    'connector' = 'jdbc',
-    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT DISTINCT event_time::date AS report_date, account_id FROM (SELECT transaction_time AS event_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE transaction_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT original_completion_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE original_completion_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT settlement_post_date, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE settlement_post_date IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT auth_time, account_id FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE auth_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp))) changed) AS bb_changed_keys_f',
-    'username' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '1000'
-);
+SET 'heartbeat.timeout' = '1800 s';
 
 SET 'execution.checkpointing.interval' = '10s';
 SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
 SET 'execution.checkpointing.timeout' = '30min';
 
+CREATE TEMPORARY TABLE source_bb_cash_rate (
+    tag             STRING,
+    statistics_time TIMESTAMP(6),
+    amount          DECIMAL(20, 8),
+    detail          STRING,
+    delete_time     TIMESTAMP(6)
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT tag, statistics_time, amount, detail, delete_time FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND provider = ''BB'' AND product_line = ''BB'' AND tag = ''BB_CASH_RATE'') AS bb_cash_rate_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '100'
+);
 
 CREATE TEMPORARY TABLE source_dwm_bb_card_transaction_detail_v2_p (
     id                       STRING,
@@ -93,11 +97,11 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_transaction_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(WITH changed_keys AS (SELECT DISTINCT event_time::date AS report_date, account_id FROM (SELECT transaction_time AS event_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE transaction_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT original_completion_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE original_completion_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT settlement_post_date, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE settlement_post_date IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT auth_time, account_id FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE auth_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp))) changed) SELECT t.id, t.txn_id, t.settlement_id, t.settlement_match_type, t.source_id, t.card_transaction_id, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.transaction_time, t.original_completion_time, t.business_type, t.business_code_list, t.remarks, t.detail, t.card_org, t.tx_country, t.settle_country, t.is_dom, t.resp_code, t.reason_code, t.transaction_type, t.is_valid_settle, t.is_clearing, t.is_reversal, t.is_refund, t.billing_amount, t.settlement_post_date, t.settlement_txn_date, t.sale_id, t.am_id, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_transaction_detail_v2_p t WHERE t.delete_time IS NULL AND EXISTS (SELECT 1 FROM changed_keys k WHERE t.account_id = k.account_id AND (date_trunc(''month'', t.transaction_time)::date = k.report_date OR date_trunc(''month'', t.original_completion_time)::date = k.report_date OR date_trunc(''month'', t.settlement_post_date)::date = k.report_date))) AS dwm_bb_card_transaction_detail_v2_p_f',
+    'table-name' = '(SELECT t.id, t.txn_id, t.settlement_id, t.settlement_match_type, t.source_id, t.card_transaction_id, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.transaction_time, t.original_completion_time, t.business_type, t.business_code_list, t.remarks, t.detail, t.card_org, t.tx_country, t.settle_country, t.is_dom, t.resp_code, t.reason_code, t.transaction_type, t.is_valid_settle, t.is_clearing, t.is_reversal, t.is_refund, t.billing_amount, t.settlement_post_date, t.settlement_txn_date, t.sale_id, t.am_id, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_transaction_detail_v2_p t WHERE t.delete_time IS NULL AND ((t.transaction_time >= CAST(''${start_time}'' AS timestamp) AND t.transaction_time < CAST(''${end_time}'' AS timestamp)) OR (t.original_completion_time >= CAST(''${start_time}'' AS timestamp) AND t.original_completion_time < CAST(''${end_time}'' AS timestamp)) OR (t.settlement_post_date >= CAST(''${start_time}'' AS timestamp) AND t.settlement_post_date < CAST(''${end_time}'' AS timestamp)))) AS dwm_bb_card_transaction_detail_v2_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
-    'scan.fetch-size' = '5000'
+    'scan.fetch-size' = '1000'
 );
 
 CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
@@ -137,19 +141,12 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(WITH changed_keys AS (SELECT DISTINCT event_time::date AS report_date, account_id FROM (SELECT transaction_time AS event_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE transaction_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT original_completion_time, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE original_completion_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT settlement_post_date, account_id FROM dwm.dwm_bb_card_transaction_detail_v2_p WHERE settlement_post_date IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp)) UNION ALL SELECT auth_time, account_id FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE auth_time IS NOT NULL AND account_id IS NOT NULL AND ((update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) OR (delete_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND delete_time < CURRENT_DATE::timestamp))) changed) SELECT t.id, t.auth_txn_guid, t.card_proxy, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.auth_time, t.program_name, t.merchant_country, t.request_code, t.request_description, t.response_code, t.reason_code, t.txn_amount, t.settle_amount, t.txn_currency, t.merchant_name, t.mcc, t.card_org, t.is_dom, t.is_decline, t.is_account_verification, t.is_excluded_request, t.sale_id, t.am_id, t.source_table, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_auth_detail_v2_p t WHERE t.delete_time IS NULL AND EXISTS (SELECT 1 FROM changed_keys k WHERE t.account_id = k.account_id AND date_trunc(''month'', t.auth_time)::date = k.report_date)) AS dwm_bb_card_auth_detail_v2_p_f',
+    'table-name' = '(SELECT t.id, t.auth_txn_guid, t.card_proxy, t.account_id, t.account_type, t.account_category, t.system_type, t.card_id, t.auth_time, t.program_name, t.merchant_country, t.request_code, t.request_description, t.response_code, t.reason_code, t.txn_amount, t.settle_amount, t.txn_currency, t.merchant_name, t.mcc, t.card_org, t.is_dom, t.is_decline, t.is_account_verification, t.is_excluded_request, t.sale_id, t.am_id, t.source_table, t.version, t.create_time, t.update_time, t.delete_time FROM dwm.dwm_bb_card_auth_detail_v2_p t WHERE t.delete_time IS NULL AND t.auth_time >= CAST(''${start_time}'' AS timestamp) AND t.auth_time < CAST(''${end_time}'' AS timestamp)) AS dwm_bb_card_auth_detail_v2_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
     'scan.fetch-size' = '5000'
 );
-
-CREATE TEMPORARY VIEW v_bb_changed_keys AS
-SELECT DISTINCT
-    report_date,
-    account_id
-FROM source_bb_changed_keys
-WHERE report_date >= DATE '2021-01-01';
 
 CREATE TEMPORARY VIEW v_bb_metric_rows AS
 SELECT
@@ -157,46 +154,38 @@ SELECT
     s.*,
     'txn_time' AS metric_basis
 FROM source_dwm_bb_card_transaction_detail_v2_p s
-INNER JOIN v_bb_changed_keys k
-    ON CAST(s.transaction_time AS DATE) = k.report_date
-   AND s.account_id = k.account_id
 WHERE s.delete_time IS NULL
   AND s.transaction_time IS NOT NULL
-  AND CAST(s.transaction_time AS DATE) >= DATE '2021-01-01'
+  AND CAST(s.transaction_time AS DATE) >= CAST('${start_time}' AS DATE)
+  AND CAST(s.transaction_time AS DATE) < CAST('${end_time}' AS DATE)
 UNION ALL
 SELECT
     CAST(s.original_completion_time AS DATE) AS report_date,
     s.*,
     'completion_time' AS metric_basis
 FROM source_dwm_bb_card_transaction_detail_v2_p s
-INNER JOIN v_bb_changed_keys k
-    ON CAST(s.original_completion_time AS DATE) = k.report_date
-   AND s.account_id = k.account_id
 WHERE s.delete_time IS NULL
   AND s.original_completion_time IS NOT NULL
-  AND CAST(s.original_completion_time AS DATE) >= DATE '2021-01-01'
+  AND CAST(s.original_completion_time AS DATE) >= CAST('${start_time}' AS DATE)
+  AND CAST(s.original_completion_time AS DATE) < CAST('${end_time}' AS DATE)
 UNION ALL
 SELECT
     CAST(s.settlement_post_date AS DATE) AS report_date,
     s.*,
     'post_date' AS metric_basis
 FROM source_dwm_bb_card_transaction_detail_v2_p s
-INNER JOIN v_bb_changed_keys k
-    ON CAST(s.settlement_post_date AS DATE) = k.report_date
-   AND s.account_id = k.account_id
 WHERE s.delete_time IS NULL
   AND s.settlement_post_date IS NOT NULL
-  AND CAST(s.settlement_post_date AS DATE) >= DATE '2021-01-01';
+  AND CAST(s.settlement_post_date AS DATE) >= CAST('${start_time}' AS DATE)
+  AND CAST(s.settlement_post_date AS DATE) < CAST('${end_time}' AS DATE);
 
 CREATE TEMPORARY VIEW v_bb_auth_scope_rows AS
 SELECT s.*
 FROM source_dwm_bb_card_auth_detail_v2_p s
-INNER JOIN v_bb_changed_keys k
-    ON CAST(s.auth_time AS DATE) = k.report_date
-   AND s.account_id = k.account_id
 WHERE s.delete_time IS NULL
   AND s.auth_time IS NOT NULL
-  AND CAST(s.auth_time AS DATE) >= DATE '2021-01-01';
+  AND CAST(s.auth_time AS DATE) >= CAST('${start_time}' AS DATE)
+  AND CAST(s.auth_time AS DATE) < CAST('${end_time}' AS DATE);
 
 -- 黑名单 settlement 标记：对齐 batch（bb_v2_batch_q3_refund_net_20260721）口径
 CREATE TEMPORARY VIEW v_bb_metric_rows_ext AS
@@ -391,6 +380,66 @@ FULL OUTER JOIN v_dws_bb_auth_daily_base a
    AND COALESCE(t.sale_id, '') = COALESCE(a.sale_id, '')
    AND COALESCE(t.am_id, '') = COALESCE(a.am_id, '');
 
+-- Volume Fee 按 BB 月度总净消费计算阶梯总额，再按普通行净消费占比分摊。
+CREATE TEMPORARY VIEW v_bb_monthly_volume_fee AS
+SELECT
+    report_month,
+    month_total_net_amount,
+    CAST(
+        CASE
+            WHEN month_total_net_amount <= CAST(0 AS DECIMAL(20, 4)) THEN 0
+            WHEN month_total_net_amount <= CAST(5000000 AS DECIMAL(20, 4))
+                THEN month_total_net_amount * CAST(0.0055 AS DECIMAL(20, 8))
+            WHEN month_total_net_amount <= CAST(10000000 AS DECIMAL(20, 4))
+                THEN CAST(5000000 AS DECIMAL(20, 4)) * CAST(0.0055 AS DECIMAL(20, 8))
+                   + (month_total_net_amount - CAST(5000000 AS DECIMAL(20, 4))) * CAST(0.0045 AS DECIMAL(20, 8))
+            ELSE CAST(5000000 AS DECIMAL(20, 4)) * CAST(0.0055 AS DECIMAL(20, 8))
+               + CAST(5000000 AS DECIMAL(20, 4)) * CAST(0.0045 AS DECIMAL(20, 8))
+               + (month_total_net_amount - CAST(10000000 AS DECIMAL(20, 4))) * CAST(0.004 AS DECIMAL(20, 8))
+        END AS DECIMAL(20, 4)
+    ) AS month_volume_fee_cost
+FROM (
+    SELECT
+        CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month,
+        CAST(SUM(COALESCE(total_net_amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS month_total_net_amount
+    FROM v_dws_bb_daily_base
+    GROUP BY CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE)
+) monthly_net;
+
+CREATE TEMPORARY VIEW v_dws_bb_daily_with_volume_fee AS
+SELECT
+    b.*,
+    CAST(
+        CASE
+            WHEN f.month_total_net_amount = CAST(0 AS DECIMAL(20, 4)) THEN 0
+            ELSE COALESCE(b.total_net_amount, CAST(0 AS DECIMAL(20, 4)))
+                 / f.month_total_net_amount * f.month_volume_fee_cost
+        END AS DECIMAL(20, 4)
+    ) AS volume_fee_cost,
+    CAST(COALESCE(r.month_cash_rate, fallback.fallback_cash_rate, CAST(0.02059391 AS DECIMAL(20, 8))) AS DECIMAL(20, 8)) AS cashback_rate,
+    CAST(
+        COALESCE(b.bb_rebate_base_amt, CAST(0 AS DECIMAL(20, 4)))
+        * COALESCE(r.month_cash_rate, fallback.fallback_cash_rate, CAST(0.02059391 AS DECIMAL(20, 8)))
+        AS DECIMAL(20, 4)
+    ) AS cashback_income
+FROM v_dws_bb_daily_base b
+INNER JOIN v_bb_monthly_volume_fee f
+    ON f.report_month = CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE)
+LEFT JOIN (
+    SELECT
+        CAST(DATE_FORMAT(CAST(statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month,
+        MAX(amount) AS month_cash_rate
+    FROM source_bb_cash_rate
+    WHERE detail <> 'DEFAULT_FALLBACK'
+    GROUP BY CAST(DATE_FORMAT(CAST(statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE)
+) r
+    ON r.report_month = CAST(DATE_FORMAT(CAST(b.report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE)
+CROSS JOIN (
+    SELECT MAX(amount) AS fallback_cash_rate
+    FROM source_bb_cash_rate
+    WHERE detail = 'DEFAULT_FALLBACK'
+) fallback;
+
 CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     id                       BIGINT,
     report_date              DATE,
@@ -426,6 +475,7 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     bb_channel_cashback_comm DECIMAL(20, 4),
     active_card_count        INT,
     total_net_amount         DECIMAL(20, 4),
+    volume_fee_cost          DECIMAL(20, 4),
     cashback_rate            DECIMAL(20, 8),
     cashback_income          DECIMAL(20, 4),
     cost_fixed_fee           DECIMAL(20, 4),
@@ -455,7 +505,7 @@ CREATE TEMPORARY TABLE source_delete_bb_card_finance_daily_v2_cdc_result (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT dws.fn_delete_bb_card_finance_daily_v2_cdc(false) AS affected_rows) AS delete_result',
+    'table-name' = '(SELECT dws.fn_delete_bb_card_finance_daily_v2_cdc(CAST(''${start_time}'' AS date), CAST(''${end_time}'' AS date), false) AS affected_rows) AS delete_result',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -498,8 +548,9 @@ SELECT
     bb_channel_cashback_comm,
     active_card_count,
     total_net_amount,
-    CAST(0.02057316 AS DECIMAL(20, 8)) AS cashback_rate,
-    CAST(bb_rebate_base_amt * CAST(0.02057316 AS DECIMAL(20, 8)) AS DECIMAL(20, 4)) AS cashback_income,
+    volume_fee_cost,
+    cashback_rate,
+    cashback_income,
     cost_fixed_fee,
     CAST('NORMAL' AS STRING) AS special_fee_type,
     COALESCE(sale_id, '') AS sale_id,
@@ -509,7 +560,8 @@ SELECT
     create_time,
     update_time,
     delete_time
-FROM v_dws_bb_daily_base
+FROM v_dws_bb_daily_with_volume_fee
 CROSS JOIN source_delete_bb_card_finance_daily_v2_cdc_result AS delete_result
-WHERE report_date >= DATE '2021-01-01'
+WHERE report_date >= CAST('${start_time}' AS DATE)
+  AND report_date < CAST('${end_time}' AS DATE)
   AND delete_result.affected_rows >= 0;

@@ -5,11 +5,11 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-12
--- Updated Time:   2026-08-09 11:44:08
+-- Updated Time:   2026-08-23 21:40:00
 -- Description:    Quantum QI v2 DWS CDC 按月重算写入 v2
 -- 作业元信息：
 --   作业类型：批式 CDC 修复任务
---   运行方式：默认扫描昨天 DWM/source tag 变更，按受影响月份整月删除后重算
+--   运行方式：无参数重算 2026-01-01 至 CURRENT_DATE 前一日的全部月份
 --   运行参数：无
 -- Notes:
 --   1. 主链路: DWM v2 -> DWS v2
@@ -73,13 +73,13 @@ CREATE TEMPORARY TABLE source_bi_month_tag (
     'scan.fetch-size' = '1000'
 );
 
-CREATE TEMPORARY TABLE source_qi_changed_keys (
-    report_date DATE,
-    account_id  STRING
+CREATE TEMPORARY TABLE source_qi_month_scope (
+    report_month DATE,
+    PRIMARY KEY (report_month) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(WITH fact_changed_keys AS (SELECT DISTINCT transaction_time::date AS report_date, account_id FROM dwm.dwm_qi_card_transaction_detail_v2_p WHERE transaction_time IS NOT NULL AND account_id IS NOT NULL AND ((source_update_time >= CURRENT_DATE - INTERVAL ''1 day'' AND source_update_time < CURRENT_DATE) OR (source_delete_time >= CURRENT_DATE - INTERVAL ''1 day'' AND source_delete_time < CURRENT_DATE) OR (update_time >= CURRENT_DATE - INTERVAL ''1 day'' AND update_time < CURRENT_DATE) OR (delete_time >= CURRENT_DATE - INTERVAL ''1 day'' AND delete_time < CURRENT_DATE))), config_changed_months AS (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS report_month FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND provider = ''IQ'' AND tag IN (''QI_COST_REIMBURSEMENT_RATE'', ''QI_COST_SERVICE_RATE'', ''QI_COST_ACS_REGULAR_RATE'', ''QI_COST_ACS_VIP_RATE'', ''QI_COST_VRM_RATE'', ''QI_COST_HK_REGULAR_RATE'', ''QI_COST_HK_VIP_RATE'', ''QI_COST_DCSF_RATE'', ''QI_REBATE_INTERCHANGE_RATE'', ''QI_REBATE_INCENTIVE_RATE'') AND update_time >= CURRENT_DATE - INTERVAL ''1 day'' AND update_time < CURRENT_DATE AND statistics_time IS NOT NULL), config_changed_keys AS (SELECT DISTINCT s.transaction_time::date AS report_date, s.account_id FROM dwm.dwm_qi_card_transaction_detail_v2_p s JOIN config_changed_months m ON s.transaction_time >= m.report_month AND s.transaction_time < m.report_month + INTERVAL ''1 month'' WHERE s.delete_time IS NULL AND s.transaction_time IS NOT NULL AND s.account_id IS NOT NULL), changed_keys AS (SELECT report_date, account_id FROM fact_changed_keys UNION SELECT report_date, account_id FROM config_changed_keys) SELECT report_date, account_id FROM changed_keys) AS qi_changed_keys_f',
+    'table-name' = '(SELECT gs.month_start::date AS report_month FROM generate_series(DATE ''2026-01-01'', DATE_TRUNC(''month'', CURRENT_DATE)::date, INTERVAL ''1 month'') AS gs(month_start)) AS qi_month_scope_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -118,8 +118,7 @@ CREATE TEMPORARY TABLE source_dwm_qi_card_transaction_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    -- CDC 按受影响 report_date + account_id 重算，避免整月全账户重刷导致 TM heartbeat timeout。
-    'table-name' = '(WITH fact_changed_keys AS (SELECT DISTINCT transaction_time::date AS report_date, account_id FROM dwm.dwm_qi_card_transaction_detail_v2_p WHERE transaction_time IS NOT NULL AND account_id IS NOT NULL AND ((source_update_time >= CURRENT_DATE - INTERVAL ''1 day'' AND source_update_time < CURRENT_DATE) OR (source_delete_time >= CURRENT_DATE - INTERVAL ''1 day'' AND source_delete_time < CURRENT_DATE) OR (update_time >= CURRENT_DATE - INTERVAL ''1 day'' AND update_time < CURRENT_DATE) OR (delete_time >= CURRENT_DATE - INTERVAL ''1 day'' AND delete_time < CURRENT_DATE))), config_changed_months AS (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS report_month FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND provider = ''IQ'' AND tag IN (''QI_COST_REIMBURSEMENT_RATE'', ''QI_COST_SERVICE_RATE'', ''QI_COST_ACS_REGULAR_RATE'', ''QI_COST_ACS_VIP_RATE'', ''QI_COST_VRM_RATE'', ''QI_COST_HK_REGULAR_RATE'', ''QI_COST_HK_VIP_RATE'', ''QI_COST_DCSF_RATE'', ''QI_REBATE_INTERCHANGE_RATE'', ''QI_REBATE_INCENTIVE_RATE'') AND update_time >= CURRENT_DATE - INTERVAL ''1 day'' AND update_time < CURRENT_DATE AND statistics_time IS NOT NULL), config_changed_keys AS (SELECT DISTINCT s.transaction_time::date AS report_date, s.account_id FROM dwm.dwm_qi_card_transaction_detail_v2_p s JOIN config_changed_months m ON s.transaction_time >= m.report_month AND s.transaction_time < m.report_month + INTERVAL ''1 month'' WHERE s.delete_time IS NULL AND s.transaction_time IS NOT NULL AND s.account_id IS NOT NULL), changed_keys AS (SELECT report_date, account_id FROM fact_changed_keys UNION SELECT report_date, account_id FROM config_changed_keys) SELECT id, transaction_id, account_id, account_type, account_category, system_type, status, transaction_time, version, remarks, create_time, update_time, delete_time, source_update_time, source_delete_time, is_current_valid, billing_amount, is_qbit_provision, is_hk_region, is_consumption, is_reversal_or_credit, has_special_code, is_vip_account, business_type, card_id, sale_id, am_id FROM dwm.dwm_qi_card_transaction_detail_v2_p s WHERE s.delete_time IS NULL AND EXISTS (SELECT 1 FROM changed_keys k WHERE s.transaction_time >= k.report_date AND s.transaction_time < k.report_date + INTERVAL ''1 day'' AND s.account_id = k.account_id)) AS dwm_qi_card_transaction_detail_v2_p_f',
+    'table-name' = '(SELECT id, transaction_id, account_id, account_type, account_category, system_type, status, transaction_time, version, remarks, create_time, update_time, delete_time, source_update_time, source_delete_time, is_current_valid, billing_amount, is_qbit_provision, is_hk_region, is_consumption, is_reversal_or_credit, has_special_code, is_vip_account, business_type, card_id, sale_id, am_id FROM dwm.dwm_qi_card_transaction_detail_v2_p WHERE delete_time IS NULL AND transaction_time >= TIMESTAMP ''2026-01-01 00:00:00'' AND transaction_time < CURRENT_DATE::timestamp) AS dwm_qi_card_transaction_detail_v2_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -127,11 +126,11 @@ CREATE TEMPORARY TABLE source_dwm_qi_card_transaction_detail_v2_p (
     'scan.auto-commit' = 'false'
 );
 
-CREATE TEMPORARY VIEW v_qi_changed_months AS
+CREATE TEMPORARY VIEW v_qi_month_scope AS
 SELECT DISTINCT
-    CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month,
-    CAST(DATE_FORMAT(CAST(DATE_ADD(CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE), 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS next_month
-FROM source_qi_changed_keys;
+    report_month,
+    CAST(DATE_FORMAT(CAST(DATE_ADD(report_month, 32) AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS next_month
+FROM source_qi_month_scope;
 
 CREATE TEMPORARY VIEW v_qi_dwm_month_rows AS
 SELECT
@@ -148,9 +147,6 @@ SELECT
     s.sale_id,
     s.am_id
 FROM source_dwm_qi_card_transaction_detail_v2_p s
-INNER JOIN source_qi_changed_keys k
-    ON CAST(s.transaction_time AS DATE) = k.report_date
-   AND s.account_id = k.account_id
 WHERE s.delete_time IS NULL;
 
 CREATE TEMPORARY VIEW v_dws_qi_month_base AS
@@ -168,6 +164,11 @@ SELECT
     CAST(NULL AS TIMESTAMP(6)) AS delete_time,
     s.sale_id,
     s.am_id,
+    CAST(SUM(CASE
+        WHEN s.status IN ('Closed', 'Pending') AND s.business_type IN ('Consumption', 'Reversal', 'Credit')
+            THEN s.billing_amount * CASE WHEN s.business_type = 'Consumption' THEN 1 ELSE -1 END
+        ELSE CAST(0 AS DECIMAL(20, 4))
+    END) AS DECIMAL(20, 4)) AS total_net_amount,
     CAST(SUM(CASE WHEN s.is_hk_region = FALSE AND s.business_type = 'Consumption' AND s.status IN ('Closed', 'Pending') THEN s.billing_amount * CAST(0.0135 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS cost_reimbursement_base_amt,
     CAST(SUM(CASE WHEN s.is_hk_region = FALSE AND s.status IN ('Closed', 'Pending') AND s.business_type IN ('Consumption', 'Reversal', 'Credit') THEN
         CASE
@@ -241,7 +242,7 @@ FROM (
                 t.update_time DESC,
                 t.id DESC
         ) AS rn
-    FROM v_qi_changed_months m
+    FROM v_qi_month_scope m
     LEFT JOIN source_bi_month_tag t
         ON t.provider = 'IQ'
        AND t.delete_time IS NULL
@@ -283,6 +284,7 @@ CREATE TEMPORARY TABLE sink_dws_qi_card_finance_daily_v2_p (
     delete_time                   TIMESTAMP(6),
     sale_id                       STRING,
     am_id                         STRING,
+    total_net_amount              DECIMAL(20, 4),
     cost_reimbursement_base_amt   DECIMAL(20, 4),
     cost_service_base_amt         DECIMAL(20, 4),
     cost_acs_regular_base_amt     DECIMAL(20, 4),
@@ -332,6 +334,7 @@ SELECT
     b.delete_time,
     b.sale_id,
     b.am_id,
+    b.total_net_amount,
     b.cost_reimbursement_base_amt,
     b.cost_service_base_amt,
     b.cost_acs_regular_base_amt,
