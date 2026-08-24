@@ -1,154 +1,25 @@
-CREATE OR REPLACE PROCEDURE "public"."sp_init_bb_card_dwm_history_fast_v2"("p_start_time" timestamp, "p_end_time" timestamp)
- AS $BODY$
-DECLARE
-    v_curr_start       TIMESTAMP := p_start_time;
-    v_curr_end         TIMESTAMP;
-    v_batch_interval   INTERVAL := INTERVAL '1 day';
-    v_dwm_table_name   TEXT;
-    v_tx_table_name    TEXT;
-    v_settle_table_name TEXT;
-BEGIN
-    WHILE v_curr_start < p_end_time LOOP
+结果1
+2026-01	17857222.8100	394644.6424	394407.0000	0.02208669	394406.9445	-0.0555
+2026-02	14852124.1700	326746.7370	327341.0000	0.02204001	327340.9652	-0.0348
+2026-03	17306074.1300	377272.4281	377910.0000	0.02183684	377909.9718	-0.0282
+2026-04	15707372.4600	339279.2692	339556.0000	0.02161762	339556.0090	0.0090
+2026-05	16633909.2700	352638.8806	352991.0000	0.02122117	352991.0164	0.0164
+2026-06	15943919.2400	333227.9343	332480.0000	0.02085309	332479.9829	-0.0171
+2026-07	17464530.0900	359769.3318	359663.0000	0.02059391	359662.9609	-0.0391
+结果2
+2026-01	17857222.81000000	0.02208669	0.02208669	0.02208669	1	394406.94446540	394406.93520000	394407.0000	-0.05553460	-0.06480000
+2026-02	14852124.17000000	0.02204001	0.02204001	0.02204001	1	327340.96522804	327340.96480000	327341.0000	-0.03477196	-0.03520000
+2026-03	17306074.13000000	0.02183684	0.02183684	0.02183684	1	377909.97180495	377909.96780000	377910.0000	-0.02819505	-0.03220000
+2026-04	15707372.46000000	0.02161762	0.02161762	0.02161762	1	339556.00903875	339556.02080000	339556.0000	0.00903875	0.02080000
+2026-05	16633909.27000000	0.02122117	0.02122117	0.02122117	1	352991.01638325	352990.99040000	352991.0000	0.01638325	-0.00960000
+2026-06	15943919.24000000	0.02085309	0.02085309	0.02085309	1	332479.98286445	332480.00700000	332480.0000	-0.01713555	0.00700000
+2026-07	17464530.09000000	0.02059391	0.02059391	0.02059391	1	359662.96086575	359662.97910000	359663.0000	-0.03913425	-0.02090000
 
-        v_curr_end := LEAST(v_curr_start + v_batch_interval, p_end_time);
-
-        v_dwm_table_name := 'dwm_bb_card_tx_' || to_char(v_curr_start, 'YYYY_MM');
-        v_tx_table_name := 'qbit_card_transaction_clean_2026_m' || to_char(v_curr_start, 'MM');
-        v_settle_table_name := 'qbit_card_settlement_bb_clean_2026_m' || to_char(v_curr_start, 'MM');
-
-        RAISE NOTICE 'BB DWM 直写子表: %, 时间段: % 至 %',
-            v_dwm_table_name,
-            v_curr_start,
-            v_curr_end;
-
-        EXECUTE 'SET LOCAL synchronous_commit = off';
-        EXECUTE 'SET LOCAL work_mem = ''256MB''';
-
-        EXECUTE format($SQL$
-            INSERT INTO public.%I (
-                id,
-                account_id,
-                card_id,
-                transaction_time,
-                third_complete_time,
-                business_type,
-                status,
-                remarks,
-                card_org,
-                settle_country,
-                tx_country,
-                is_dom,
-                resp_code,
-                request_code,
-                reason_code,
-                is_valid_settle,
-                is_clearing,
-                is_reversal,
-                is_refund,
-                billing_amount,
-                version
-            )
-            WITH bb_providers AS (
-                SELECT system_provider
-                FROM public.card_bin
-                WHERE brand = 'BlueBanc'
-            ),
-            base_tx AS (
-                SELECT
-                    a.*,
-                    c."type" AS card_type
-                FROM public.%I a
-                LEFT JOIN public."qbitCard" c
-                    ON a."cardId" = c."id"
-                WHERE a."createTime" >= %L
-                  AND a."createTime" < %L
-                  AND a."provider" IN (
-                      SELECT system_provider FROM bb_providers
-                  )
-            ),
-            matched_settle AS (
-                SELECT
-                    t.id AS tx_uuid,
-                    b.*
-                FROM base_tx t
-                INNER JOIN public.%I b
-                    ON t."sourceId" = b."transactionId"
-                WHERE b."provider" = 'BlueBancCard'
-
-                UNION ALL
-
-                SELECT
-                    t.id AS tx_uuid,
-                    b.*
-                FROM base_tx t
-                INNER JOIN public.%I b
-                    ON b."qbitCardTransactionId" = t.id::text
-                WHERE b."provider" = 'BlueBancCard'
-            )
-            SELECT DISTINCT ON (base.id)
-                base.id,
-                base."accountId",
-                base."cardId",
-                base."createTime",
-                base."thirdCompleteTime",
-                base."businessType",
-                base."status",
-                base."remarks",
-                base.card_type,
-                NULLIF(RIGHT(safe_json_text(m."rawData", 'txnLocation'), 2), '') AS settle_country,
-                NULLIF(base."specialSourceData"->>'country', '') AS tx_country,
-                CASE
-                    WHEN RIGHT(safe_json_text(m."rawData", 'txnLocation'), 2) IN ('US', 'USA')
-                      OR base."specialSourceData"->>'country' IN ('US', 'USA')
-                    THEN TRUE
-                    ELSE FALSE
-                END AS is_dom,
-                safe_json_text(m."rawData", 'responseCode'),
-                safe_json_text(m."rawData", 'requestCode'),
-                safe_json_text(m."rawData", 'reasonCode'),
-                CASE
-                    WHEN m."transactionType" NOT IN (
-                        'ST-REFUND_ADV',
-                        'ST-PURCHASE_ADV',
-                        'ST-ECOMM_ADV',
-                        'ST-SETT_ADV',
-                        'ST-ATM_ADV'
-                    )
-                    THEN TRUE
-                    ELSE FALSE
-                END AS is_valid_settle,
-                CASE WHEN m."transactionType" = 'authorization.clearing' THEN TRUE ELSE FALSE END,
-                CASE WHEN m."transactionType" = 'authorization.reversal' THEN TRUE ELSE FALSE END,
-                CASE WHEN m."transactionType" = 'refund.clearing' THEN TRUE ELSE FALSE END,
-                COALESCE(m."billingAmount", 0)::numeric(20, 2),
-                1
-            FROM base_tx base
-            LEFT JOIN matched_settle m
-                ON base.id = m.tx_uuid
-            ORDER BY base.id, m."createTime" DESC NULLS LAST
-            ON CONFLICT (id, transaction_time)
-            DO UPDATE SET
-                update_time = NOW(),
-                settle_country = EXCLUDED.settle_country,
-                tx_country = EXCLUDED.tx_country,
-                billing_amount = EXCLUDED.billing_amount,
-                status = EXCLUDED.status,
-                version = public.%I.version + 1
-        $SQL$,
-            v_dwm_table_name,
-            v_tx_table_name,
-            v_curr_start,
-            v_curr_end,
-            v_settle_table_name,
-            v_settle_table_name,
-            v_dwm_table_name
-        );
-
-        COMMIT;
-
-        v_curr_start := v_curr_end;
-
-    END LOOP;
-END;
-$BODY$
-  LANGUAGE plpgsql
+单刷结果2 的结果
+2026-01	17857222.81000000	0.02208669	0.02210000	0.02210000	1	394406.94446540	394644.64240000	394407.0000	-0.05553460	237.64240000
+2026-02	14852124.17000000	0.02204001	0.02200000	0.02200000	1	327340.96522804	326746.73700000	327341.0000	-0.03477196	-594.26300000
+2026-03	17306074.13000000	0.02183684	0.02180000	0.02180000	1	377909.97180495	377272.42810000	377910.0000	-0.02819505	-637.57190000
+2026-04	15707372.46000000	0.02161762	0.02160000	0.02160000	1	339556.00903875	339279.26920000	339556.0000	0.00903875	-276.73080000
+2026-05	16633909.27000000	0.02122117	0.02120000	0.02120000	1	352991.01638325	352638.88060000	352991.0000	0.01638325	-352.11940000
+2026-06	15943919.24000000	0.02085309	0.02090000	0.02090000	1	332479.98286445	333227.93430000	332480.0000	-0.01713555	747.93430000
+2026-07	17464530.09000000	0.02059391	0.02060000	0.02060000	1	359662.96086575	359769.33180000	359663.0000	-0.03913425	106.33180000

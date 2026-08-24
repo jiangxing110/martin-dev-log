@@ -6,7 +6,7 @@
 --   1. 修改 params 中的 start_date / end_date。
 --   2. end_date 使用左闭右开，不包含当天。
 --   3. Active Card Account Fee 按 active_card_count * 0.1 计算。
---   4. Volume Fee Cost 按老月度 SQL 的 total_net_amount 阶梯费率计算。
+--   4. Volume Fee Cost 直接汇总 DWS 已按月分摊的 volume_fee_cost。
 --   5. Fixed Fee 按 cost_fixed_fee 汇总，放在 Excel 对账项之后。
 --   6. BB Channel Cashback Base / BB Cashback Income 仅展示核对，不计入 TOTAL。
 --********************************************************************--
@@ -51,6 +51,7 @@ bb_base AS (
         
         COALESCE(SUM(bb.active_card_count * 0.1), 0) AS active_card_account_fee,
         COALESCE(SUM(bb.total_net_amount), 0) AS total_net_amount,
+        COALESCE(SUM(bb.volume_fee_cost), 0) AS volume_fee_cost,
         COALESCE(SUM(bb.bb_channel_cashback_comm), 0) AS bb_channel_cashback_comm,
         COALESCE(SUM(bb.cashback_income), 0) AS cashback_income,
         COALESCE(SUM(bb.cost_fixed_fee), 0) AS fixed_fee
@@ -61,14 +62,7 @@ bb_base AS (
       AND bb.report_date < p.end_date
 ),
 bb_detail AS (
-    SELECT
-        *,
-        CASE
-            WHEN total_net_amount = 0 THEN 0
-            WHEN total_net_amount <= 5000000 THEN total_net_amount * 0.0055
-            WHEN total_net_amount <= 10000000 THEN 5000000 * 0.0055 + (total_net_amount - 5000000) * 0.0045
-            ELSE 5000000 * 0.0055 + 5000000 * 0.0045 + (total_net_amount - 10000000) * 0.004
-        END AS volume_fee_cost
+    SELECT *
     FROM bb_base
 ),
 bb_cost_item AS (

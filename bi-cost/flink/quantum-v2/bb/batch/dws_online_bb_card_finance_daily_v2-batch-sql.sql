@@ -43,7 +43,7 @@ CREATE TEMPORARY TABLE source_bi_month_tag (
     provider        STRING,
     tag             STRING,
     statistics_time TIMESTAMP(6),
-    amount          DECIMAL(20, 4),
+    amount          DECIMAL(20, 8),
     detail          STRING,
     update_time     TIMESTAMP(6),
     delete_time     TIMESTAMP(6),

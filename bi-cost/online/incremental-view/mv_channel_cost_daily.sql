@@ -77,26 +77,7 @@ FROM (
           + COALESCE(bb.ac_v_int_decline_count, 0) * 0.3570
           + COALESCE(bb.ac_dom_decline_count, 0) * 0.0890
           + COALESCE(bb.active_card_count, 0) * 0.1000
-          + CASE
-                WHEN COALESCE(mn.month_total_net_amount, 0::numeric) = 0
-                    THEN 0::numeric
-                WHEN mn.month_total_net_amount <= 5000000
-                    THEN COALESCE(bb.total_net_amount, 0::numeric) * 0.0055
-                WHEN mn.month_total_net_amount <= 10000000
-                    THEN COALESCE(bb.total_net_amount, 0::numeric)
-                       / mn.month_total_net_amount
-                       * (
-                            5000000::numeric * 0.0055
-                          + (mn.month_total_net_amount - 5000000::numeric) * 0.0045
-                       )
-                ELSE COALESCE(bb.total_net_amount, 0::numeric)
-                   / mn.month_total_net_amount
-                   * (
-                        5000000::numeric * 0.0055
-                      + 5000000::numeric * 0.0045
-                      + (mn.month_total_net_amount - 10000000::numeric) * 0.0040
-                   )
-            END
+          + COALESCE(bb.volume_fee_cost, 0::numeric)
           + COALESCE(bb.cost_fixed_fee, 0::numeric)
         )::numeric(20, 4) AS quantum_cost_amount,
         0::numeric(20, 4) AS crypto_cost_amount,
@@ -126,38 +107,10 @@ FROM (
           + COALESCE(bb.ac_v_int_decline_count, 0) * 0.3570
           + COALESCE(bb.ac_dom_decline_count, 0) * 0.0890
           + COALESCE(bb.active_card_count, 0) * 0.1000
-          + CASE
-                WHEN COALESCE(mn.month_total_net_amount, 0::numeric) = 0
-                    THEN 0::numeric
-                WHEN mn.month_total_net_amount <= 5000000
-                    THEN COALESCE(bb.total_net_amount, 0::numeric) * 0.0055
-                WHEN mn.month_total_net_amount <= 10000000
-                    THEN COALESCE(bb.total_net_amount, 0::numeric)
-                       / mn.month_total_net_amount
-                       * (
-                            5000000::numeric * 0.0055
-                          + (mn.month_total_net_amount - 5000000::numeric) * 0.0045
-                       )
-                ELSE COALESCE(bb.total_net_amount, 0::numeric)
-                   / mn.month_total_net_amount
-                   * (
-                        5000000::numeric * 0.0055
-                      + 5000000::numeric * 0.0045
-                      + (mn.month_total_net_amount - 10000000::numeric) * 0.0040
-                   )
-            END
+          + COALESCE(bb.volume_fee_cost, 0::numeric)
           + COALESCE(bb.cost_fixed_fee, 0::numeric)
         )::numeric(20, 4) AS total_cost_amount
     FROM "dws"."dws_bb_card_finance_daily_v2_p" bb
-    LEFT JOIN (
-        SELECT
-            DATE_TRUNC('month', report_date)::date AS report_month,
-            SUM(total_net_amount) AS month_total_net_amount
-        FROM "dws"."dws_bb_card_finance_daily_v2_p"
-        WHERE delete_time IS NULL
-        GROUP BY DATE_TRUNC('month', report_date)::date
-    ) mn
-        ON mn.report_month = DATE_TRUNC('month', bb.report_date)::date
     WHERE bb.delete_time IS NULL
 
     UNION ALL

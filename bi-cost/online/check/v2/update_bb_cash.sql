@@ -10,6 +10,7 @@
 --   3. cashback_rate 保留 8 位小数
 --   4. cashback_income = bb_channel_cashback_comm * cashback_rate
 --   5. 不再手工维护 cashback_rate，只维护 BB 实际返现
+--   6. 只处理 NORMAL 行；ACTIVE_CARD_ACCOUNT_FEE 和固定成本行不参与返现分摊
 --********************************************************************--
 
 BEGIN;
@@ -47,6 +48,7 @@ monthly_base AS (
 
     FROM dws.dws_bb_card_finance_daily_v2_p
     WHERE delete_time IS NULL
+      AND special_fee_type = 'NORMAL'
       AND report_date >= DATE '2026-01-01'
       AND report_date <  DATE '2026-08-01'
     GROUP BY
@@ -128,6 +130,7 @@ monthly_base AS (
     FROM dws.dws_bb_card_finance_daily_v2_p
 
     WHERE delete_time IS NULL
+      AND special_fee_type = 'NORMAL'
       AND report_date >= DATE '2026-01-01'
       AND report_date <  DATE '2026-08-01'
 
@@ -169,6 +172,7 @@ SET
 FROM monthly_rate m
 
 WHERE target.delete_time IS NULL
+  AND target.special_fee_type = 'NORMAL'
   AND target.report_date >= m.report_month
   AND target.report_date <
       (m.report_month + INTERVAL '1 month')::date;
@@ -189,49 +193,94 @@ WITH actual_month AS (
             (DATE '2026-06-01', CAST(332480 AS NUMERIC(20, 4))),
             (DATE '2026-07-01', CAST(359663 AS NUMERIC(20, 4)))
     ) AS t(report_month, actual_cashback_income)
+),
+
+monthly_base AS (
+    SELECT
+        DATE_TRUNC('month', report_date)::date AS report_month,
+        SUM(COALESCE(bb_channel_cashback_comm, 0))::NUMERIC AS bb_channel_cashback_base
+    FROM dws.dws_bb_card_finance_daily_v2_p
+    WHERE delete_time IS NULL
+      AND special_fee_type = 'NORMAL'
+      AND report_date >= DATE '2026-01-01'
+      AND report_date < DATE '2026-08-01'
+    GROUP BY DATE_TRUNC('month', report_date)::date
+),
+
+monthly_rate AS (
+    SELECT
+        a.report_month,
+        a.actual_cashback_income,
+        b.bb_channel_cashback_base,
+        ROUND(
+            a.actual_cashback_income
+            / NULLIF(b.bb_channel_cashback_base, 0),
+            8
+        )::NUMERIC(20, 8) AS calculated_cashback_rate
+    FROM actual_month a
+    INNER JOIN monthly_base b
+        ON b.report_month = a.report_month
 )
 
 SELECT
-    TO_CHAR(a.report_month, 'YYYY-MM') AS report_month,
+    TO_CHAR(r.report_month, 'YYYY-MM') AS report_month,
 
     CAST(
-        SUM(COALESCE(t.bb_channel_cashback_comm, 0))
-        AS NUMERIC(20, 4)
+        r.bb_channel_cashback_base
+        AS NUMERIC(20, 8)
     ) AS bb_channel_cashback_base,
 
-    MAX(t.cashback_rate) AS cashback_rate,
+    r.calculated_cashback_rate,
+    MIN(t.cashback_rate) AS min_cashback_rate,
+    MAX(t.cashback_rate) AS max_cashback_rate,
+    COUNT(DISTINCT t.cashback_rate) AS cashback_rate_count,
+
+    CAST(
+        r.bb_channel_cashback_base
+        * r.calculated_cashback_rate
+        AS NUMERIC(20, 8)
+    ) AS calculated_cashback_income,
 
     CAST(
         SUM(COALESCE(t.cashback_income, 0))
-        AS NUMERIC(20, 4)
+        AS NUMERIC(20, 8)
     ) AS updated_cashback_income,
 
-    a.actual_cashback_income,
+    r.actual_cashback_income,
+
+    CAST(
+        r.bb_channel_cashback_base
+        * r.calculated_cashback_rate
+        - r.actual_cashback_income
+        AS NUMERIC(20, 8)
+    ) AS calculated_diff_with_actual,
 
     CAST(
         SUM(COALESCE(t.cashback_income, 0))
-        - a.actual_cashback_income
-        AS NUMERIC(20, 4)
-    ) AS diff_with_actual
+        - r.actual_cashback_income
+        AS NUMERIC(20, 8)
+    ) AS stored_diff_with_actual
 
-FROM actual_month a
+FROM monthly_rate r
 
 LEFT JOIN dws.dws_bb_card_finance_daily_v2_p t
     ON t.delete_time IS NULL
-   AND t.report_date >= a.report_month
+   AND t.special_fee_type = 'NORMAL'
+   AND t.report_date >= r.report_month
    AND t.report_date <
-       (a.report_month + INTERVAL '1 month')::date
+       (r.report_month + INTERVAL '1 month')::date
 
 GROUP BY
-    a.report_month,
-    a.actual_cashback_income
+    r.report_month,
+    r.actual_cashback_income,
+    r.bb_channel_cashback_base,
+    r.calculated_cashback_rate
 
 ORDER BY
-    a.report_month;
+    r.report_month;
 
 
--- 先看最终结果
-ROLLBACK;
-
--- 确认无误后，将上面的 ROLLBACK 改成：
--- COMMIT;
+-- 注意：第 3 段必须和第 2 段在同一个事务里执行。
+-- 单独执行第 3 段只能读取数据库已经提交的旧值。
+-- 第 1、2、3 段确认无误后提交更新。
+COMMIT;
