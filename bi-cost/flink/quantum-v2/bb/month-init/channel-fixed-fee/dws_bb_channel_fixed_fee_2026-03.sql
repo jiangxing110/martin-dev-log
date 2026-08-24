@@ -202,6 +202,19 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     'batchSize' = '2000'
 );
 
+-- 本月重算前硬删除对应特殊行，再写入本月最新结果。
+CREATE TEMPORARY TABLE source_delete_bb_channel_fixed_fee_monthly_result (
+    affected_rows BIGINT
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT dws.fn_delete_bb_channel_fixed_fee_v2_cdc(CAST(''2026-03-01'' AS date), CAST(''2026-04-01'' AS date), false) AS affected_rows) AS delete_result',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1'
+);
+
 INSERT INTO sink_dws_bb_card_finance_daily_v2_p
 SELECT
     id,
@@ -220,21 +233,4 @@ SELECT
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM v_fixed_fee_rows
-UNION ALL
-SELECT
-    id,
-    report_date,
-    account_id,
-    account_type,
-    account_category,
-    system_type,
-    CAST(0 AS DECIMAL(20, 4)) AS cost_fixed_fee,
-    'CHANNEL_FIXED_FEE' AS special_fee_type,
-    COALESCE(sale_id, '') AS sale_id,
-    COALESCE(am_id, '') AS am_id,
-    1 AS version,
-    'bb_channel_fixed_fee_v2_soft_delete' AS remarks,
-    CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
-    CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
-    CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS delete_time
-FROM v_obsolete_fixed_fee_rows;
+CROSS JOIN source_delete_bb_channel_fixed_fee_monthly_result AS delete_result;

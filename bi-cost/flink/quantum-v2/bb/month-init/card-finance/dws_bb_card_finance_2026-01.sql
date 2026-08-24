@@ -43,7 +43,7 @@ CREATE TEMPORARY TABLE source_bi_month_tag (
     provider        STRING,
     tag             STRING,
     statistics_time TIMESTAMP(6),
-    amount          DECIMAL(20, 4),
+    amount          DECIMAL(20, 8),
     detail          STRING,
     update_time     TIMESTAMP(6),
     delete_time     TIMESTAMP(6),
@@ -988,6 +988,19 @@ CREATE TEMPORARY TABLE sink_dws_bb_card_finance_daily_v2_p (
     'batchSize' = '2000'
 );
 
+-- 本月重算前先删除普通行，保留 ACTIVE_CARD_ACCOUNT_FEE / CHANNEL_FIXED_FEE 特殊行。
+CREATE TEMPORARY TABLE source_delete_bb_card_finance_daily_v2_monthly_result (
+    affected_rows BIGINT
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT dws.fn_delete_bb_card_finance_daily_v2_cdc(CAST(''2026-01-01'' AS date), CAST(''2026-02-01'' AS date), false) AS affected_rows) AS delete_result',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1'
+);
+
 INSERT INTO sink_dws_bb_card_finance_daily_v2_p
 SELECT
     b.id,
@@ -1036,4 +1049,5 @@ SELECT
     b.create_time,
     b.update_time,
     b.delete_time
-FROM v_dws_bb_daily_with_cost b;
+FROM v_dws_bb_daily_with_cost b
+CROSS JOIN source_delete_bb_card_finance_daily_v2_monthly_result AS delete_result;
