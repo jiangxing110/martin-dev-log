@@ -6,7 +6,7 @@
 --   1. 基于 v1，新增结汇成本、线下退款、收入调整、返现调整、线下API收入、线下实体卡制卡费的支持。
 --   2. 结汇成本 SETTLEMENT_COST 从 dwm_finance_channel_cost_p 读取，按 usdAmount 金额均摊。
 --   3. bi_month_tag 中含 account_id 的指标（收入/调整/退款）直接读取，不需经过分摊 pipeline。
---   4. 量子卡 offline fee_cost 从 ods_payment_transaction_record 直接查询（数据量小）。
+--   4. 全球账户 offline fee_cost 从 ods_payment_transaction_record 直接查询（数据量小）。
 --   5. 收入类指标通过 UNION ALL 模拟为 revenue_base 行；成本类归入 v_cost_by_account_product。
 --   6. 调整项 sale_id 通过 dim_sale_account_relation_p 关联。
 --   7. 本物化视图承载8号前页面查询结果。
@@ -135,7 +135,7 @@ revenue_base AS (
     sdm.department_id,
     r.am_id
 
-  -- v2: 线下API客户一次性收入 / 线下实体卡制卡费 / 收入调整增加
+  -- v2: 量子卡线下收入 / 实体卡制卡费 / 收入调整增加
   UNION ALL
   SELECT
     CURRENT_DATE AS report_date,
@@ -146,7 +146,7 @@ revenue_base AS (
       WHEN 'QUANTUM_CARD' THEN 'qbit_card'
       WHEN 'CRYPTO_ASSET' THEN 'crypto'
     END AS product,
-    CAST(t.tag AS VARCHAR) AS provider,
+    CAST(t.provider AS VARCHAR) AS provider,
     NULL AS item,
     'real_time_processing_fee' AS source_type,
     'current_payout' AS commission_stage,
@@ -155,7 +155,7 @@ revenue_base AS (
     sr.am_id,
     date_trunc('month', t.statistics_time)::date AS activity_month,
     date_trunc('month', t.statistics_time)::date AS collection_month,
-    date_trunc('month', t.statistics_time + interval '1 month')::date AS payable_settlement_month,
+    date_trunc('month', t.statistics_time)::date AS payable_settlement_month,
     SUM(COALESCE(t.amount, 0))::numeric(20,4) AS effective_revenue
   FROM ods.ods_bi_month_tag t
   LEFT JOIN account_root_relation aar ON aar.account_id = t.account_id
@@ -182,11 +182,12 @@ revenue_base AS (
     COALESCE(aar.root_id, t.account_id),
     t.product_line,
     t.tag,
+    t.provider,
     sr.sale_id,
     sr.department_id,
     sr.am_id
 
-  -- v2: 收入调整减少（负数冲减收入）
+  -- v2: 收入调整减少 / API客户低消调整减少（负数冲减收入）
   UNION ALL
   SELECT
     CURRENT_DATE AS report_date,
@@ -197,7 +198,7 @@ revenue_base AS (
       WHEN 'QUANTUM_CARD' THEN 'qbit_card'
       WHEN 'CRYPTO_ASSET' THEN 'crypto'
     END AS product,
-    CAST(t.tag AS VARCHAR) AS provider,
+    CAST(t.provider AS VARCHAR) AS provider,
     NULL AS item,
     'real_time_processing_fee' AS source_type,
     'current_payout' AS commission_stage,
@@ -206,7 +207,7 @@ revenue_base AS (
     sr.am_id,
     date_trunc('month', t.statistics_time)::date AS activity_month,
     date_trunc('month', t.statistics_time)::date AS collection_month,
-    date_trunc('month', t.statistics_time + interval '1 month')::date AS payable_settlement_month,
+    date_trunc('month', t.statistics_time)::date AS payable_settlement_month,
     (-SUM(COALESCE(t.amount, 0)))::numeric(20,4) AS effective_revenue
   FROM ods.ods_bi_month_tag t
   LEFT JOIN account_root_relation aar ON aar.account_id = t.account_id
@@ -226,13 +227,17 @@ revenue_base AS (
   ) sr ON true
   WHERE t.delete_time IS NULL
     AND t.account_id IS NOT NULL
-    AND t.tag = 'INCOME_ADJUSTMENT_DECREASE'
+    AND t.tag IN (
+      'INCOME_ADJUSTMENT_DECREASE',
+      'API_MINIMUM_CONSUMPTION_ADJUSTMENT_DECREASE'
+    )
     AND date_trunc('month', t.statistics_time)::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY
     date_trunc('month', t.statistics_time)::date,
     COALESCE(aar.root_id, t.account_id),
     t.product_line,
     t.tag,
+    t.provider,
     sr.sale_id,
     sr.department_id,
     sr.am_id
@@ -248,7 +253,7 @@ revenue_base AS (
       WHEN 'QUANTUM_CARD' THEN 'qbit_card'
       WHEN 'CRYPTO_ASSET' THEN 'crypto'
     END AS product,
-    CAST(t.tag AS VARCHAR) AS provider,
+    CAST(t.provider AS VARCHAR) AS provider,
     NULL AS item,
     'real_time_processing_fee' AS source_type,
     'current_payout' AS commission_stage,
@@ -257,7 +262,7 @@ revenue_base AS (
     sr.am_id,
     date_trunc('month', t.statistics_time)::date AS activity_month,
     date_trunc('month', t.statistics_time)::date AS collection_month,
-    date_trunc('month', t.statistics_time + interval '1 month')::date AS payable_settlement_month,
+    date_trunc('month', t.statistics_time)::date AS payable_settlement_month,
     SUM(COALESCE(t.amount, 0))::numeric(20,4) AS effective_revenue
   FROM ods.ods_bi_month_tag t
   LEFT JOIN account_root_relation aar ON aar.account_id = t.account_id
@@ -284,6 +289,7 @@ revenue_base AS (
     COALESCE(aar.root_id, t.account_id),
     t.product_line,
     t.tag,
+    t.provider,
     sr.sale_id,
     sr.department_id,
     sr.am_id
@@ -299,7 +305,7 @@ revenue_base AS (
       WHEN 'QUANTUM_CARD' THEN 'qbit_card'
       WHEN 'CRYPTO_ASSET' THEN 'crypto'
     END AS product,
-    CAST(t.tag AS VARCHAR) AS provider,
+    CAST(t.provider AS VARCHAR) AS provider,
     NULL AS item,
     'real_time_processing_fee' AS source_type,
     'current_payout' AS commission_stage,
@@ -308,7 +314,7 @@ revenue_base AS (
     sr.am_id,
     date_trunc('month', t.statistics_time)::date AS activity_month,
     date_trunc('month', t.statistics_time)::date AS collection_month,
-    date_trunc('month', t.statistics_time + interval '1 month')::date AS payable_settlement_month,
+    date_trunc('month', t.statistics_time)::date AS payable_settlement_month,
     (-SUM(COALESCE(t.amount, 0)))::numeric(20,4) AS effective_revenue
   FROM ods.ods_bi_month_tag t
   LEFT JOIN account_root_relation aar ON aar.account_id = t.account_id
@@ -335,6 +341,7 @@ revenue_base AS (
     COALESCE(aar.root_id, t.account_id),
     t.product_line,
     t.tag,
+    t.provider,
     sr.sale_id,
     sr.department_id,
     sr.am_id
@@ -534,19 +541,40 @@ qbit_card_physical_cost AS (
     AND sdm.department_id IN ('1740319905791647746', '1740319923059597313')
   GROUP BY r.settlement_month, r.root_account_id, r.provider
 ),
--- v2: 量子卡离线 fee_cost（从 payment_transaction_record 直接查询）
-qbit_card_offline_fee_cost AS (
+-- v2: 全球账户离线 fee_cost（从 payment_transaction_record 直接查询）
+global_account_offline_fee_cost AS (
   SELECT
     date_trunc('month', ptr.submit_time)::date AS settlement_month,
     COALESCE(aar.root_id, ptr.account_id) AS root_account_id,
-    'qbit_card' AS product,
+    'group_account' AS product,
     'OFFLINE' AS provider,
-    SUM(COALESCE(NULLIF(ptr.extra->>'fee_cost', '')::numeric, 0))::numeric(20,4) AS cogs
+    SUM(
+      COALESCE(
+        NULLIF(
+          (regexp_match(
+            ptr.extra,
+            '"fee_cost"[[:space:]]*:[[:space:]]*"?([-+]?[0-9]+([.][0-9]+)?)"?'
+          ))[1],
+          ''
+        )::numeric,
+        0
+      )
+    )::numeric(20,4) AS cogs
   FROM ods.ods_payment_transaction_record ptr
   LEFT JOIN account_root_relation aar ON aar.account_id = ptr.account_id
   WHERE ptr.delete_time IS NULL
+    AND ptr.dt >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     AND ptr.status = 'Closed'
-    AND COALESCE(NULLIF(ptr.extra->>'fee_cost', '')::numeric, 0) > 0
+    AND COALESCE(
+      NULLIF(
+        (regexp_match(
+          ptr.extra,
+          '"fee_cost"[[:space:]]*:[[:space:]]*"?([-+]?[0-9]+([.][0-9]+)?)"?'
+        ))[1],
+        ''
+      )::numeric,
+      0
+    ) > 0
     AND date_trunc('month', ptr.submit_time)::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY date_trunc('month', ptr.submit_time)::date, COALESCE(aar.root_id, ptr.account_id)
 ),
@@ -656,15 +684,6 @@ v_cost_by_account_product AS (
     provider,
     SUM(cogs)::numeric(20,4) AS cogs
   FROM (
-    SELECT
-      settlement_month,
-      root_account_id,
-      product,
-      provider,
-      0::numeric(20,4) AS cogs
-    FROM revenue_base
-    GROUP BY settlement_month, root_account_id, product, provider
-    UNION ALL
     SELECT settlement_month, root_account_id, product, provider, cogs FROM global_account_channel_cost
     UNION ALL
     -- v2: 结汇成本
@@ -682,8 +701,8 @@ v_cost_by_account_product AS (
     UNION ALL
     SELECT settlement_month, root_account_id, product, provider, cogs FROM crypto_acceptance_cost
     UNION ALL
-    -- v2: 量子卡离线 fee_cost
-    SELECT settlement_month, root_account_id, product, provider, cogs FROM qbit_card_offline_fee_cost
+    -- v2: 全球账户离线 fee_cost
+    SELECT settlement_month, root_account_id, product, provider, cogs FROM global_account_offline_fee_cost
     UNION ALL
     -- v2: 线下退款（所有 product_line）
     SELECT settlement_month, root_account_id, product, provider, cogs FROM offline_refund_cost

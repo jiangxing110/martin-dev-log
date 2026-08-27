@@ -1,7 +1,19 @@
 # 量子卡交易大宽表设计（dwm_quantum_card_transaction_p）
 
-> **摘要**：以 `qbit_card_transaction` 为唯一主线，从 `specialSourceData` jsonb 洗出高频 key 成独立列，JOIN `qbitCard`/`account`/`api_account_relation`/`dim_sale_account_relation_p` 补齐维度，写入物理分区大宽表。用 **Flink SQL CDC 流脚本**实现分钟级更新。
-> **关键决策：** 不用物化视图 · 不用 JDBC T+1 批处理 · 不依赖 quantum_card_transaction_extend 表 · 只从主表和实时维表构建。
+> **摘要**：以 `qbit_card_transaction` 为唯一交易事实源，从 `specialSourceData` JSON 洗出高频 key 成独立列，再关联 `qbitCard`、`account`、`api_account_relation`、`dim_sale_account_relation_p` 补齐分析维度，写入物理分区大宽表。
+> **关键决策：** 一行对应一条 `qbit_card_transaction` · 不依赖 `quantum_card_transaction_extend` · 不展开 settlement 明细 · 保留原始 JSON 便于追溯。
+
+> **范围说明**：`quantum_card_transaction_extend` 是旧的交易扩展模型，本次新宽表不读取、不关联、不复用其中字段。若后续需要 settlement 一对多明细，应另建 `dwm_quantum_card_settlement_p`，不能直接展开到本表。
+
+## 0. 粒度与口径
+
+- **事实粒度**：一行 = 一条 `qbit_card_transaction` 记录。
+- **业务唯一键**：`qbit_card_transaction.id`。
+- **物理主键**：`(id, create_time)`，用于适配分区表主键要求。
+- **主分区字段**：`create_time`，直接来源于 `qbit_card_transaction.createTime`，表示交易记录进入交易表的创建时间。
+- **业务分析时间**：`transaction_time` 继续保留，用于交易发生时间、成本统计和销售归属，但不作为物理分区键。
+- **软删除**：保留源表 `delete_time`，下游默认使用 `WHERE delete_time IS NULL`。
+- **settlement 粒度**：不在本表展开；一笔交易对应多条 settlement 时，放入独立明细表。
 
 ---
 
@@ -9,21 +21,26 @@
 
 | # | 事实/维度 | 源 | JOIN 条件 | 说明 |
 |---|---|---|---|---|
-| 1 | **事实主表** | `qbit_card_transaction` | — | 唯一事实来源 |
-| 2 | **卡维度** | `qbitCard` | LEFT JOIN ON `"qbitCard".id = txn.card_id::uuid` | 通过 card_id 关联 |
-| 3 | **账户维度** | `account` | LEFT JOIN ON `"account".id = txn.account_id::uuid` | 通过 account_id 关联 |
+| 1 | **事实主表** | `qbit_card_transaction` | — | 唯一交易事实来源 |
+| 2 | **卡维度** | `qbitCard` 当前 lookup | 交易 INSERT 时按 `card_id` 查询 | INSERT 时最新卡属性，UPDATE 保留宽表原值 |
+| 3 | **账户维度** | `account` 当前 lookup | 交易 INSERT 时按 `account_id` 查询 | INSERT 时最新账户属性，UPDATE 保留宽表原值 |
+| 3a | **账户扩展维度** | `accountExtend` 当前 lookup | 交易 INSERT 时按 `account_id` 查询 | INSERT 时最新注册国家等属性，UPDATE 保留原值 |
 | 4a | **API 子户映射** | `api_account_relation` | LEFT JOIN ON `aar.account_id = txn.account_id::uuid` | 仅 API 场景：子账户→root_id |
-| 4b | **销售维度** | `dim_sale_account_relation_p` | 维表匹配 direct + root 合并 | 见 §3.5 |
+| 4b | **销售维度** | `dim_sale_account_relation_p` 当前 lookup | 交易 INSERT 时匹配 direct + root | UPDATE 保留宽表原值 |
+
+> 本表不再读取 `quantum_card_transaction_extend`。`channel_provision`、扩展表中的 `country`、`transaction_id` 等字段不得作为本表必需字段；如果分析需要，优先从主表字段或 `special_source_data` 提取。
 
 ---
 
 ## 2. 完整表结构（全量逐列）
 
-### ① 主表事实列（来自 `qbit_card_transaction`）— 全部保留
+### ① 主表事实列（来自 `qbit_card_transaction`）
+
+以下为交易事实字段。字段名统一转换为 snake_case；`special_source_data` 原始 JSON 保留，同时将高频字段展开为独立列。
 
 | # | 列名 | 类型 | 注释 |
 |---|---|---|---|
-| 1 | txn_id | varchar(128) | **主键**，交易唯一标识 |
+| 1 | id | varchar(128) | **业务主键**，直接沿用 `qbit_card_transaction.id` |
 | 2 | account_id | uuid | 所属账户 |
 | 3 | card_id | uuid | 量子卡 id |
 | 4 | provider | varchar | 平台/发卡方（PennyCard/TripLink 等） |
@@ -52,7 +69,7 @@
 | 27 | third_complete_time | timestamptz | 三方完成时间 |
 | 28 | special_source_data | jsonb | 三方源数据 JSON（低频 key 保留在此） |
 
-### ② 反规范化统计列（来自 `special_source_data->>'key'`）— 共 17 个
+### ② 反规范化统计列（来自 `special_source_data`）— 共 18 个
 
 > Flink SQL 中用 `CAST(txn.special_source_data->>'key' AS type)` 解析。商户/地理字段走 COALESCE 双重取（顶层已回填 → card_acceptor 嵌套路径兜底）。
 
@@ -81,13 +98,15 @@
 | 42 | spc_state | varchar | `state` | `card_acceptor.state` 或顶层 | 省/州 |
 | 43 | spc_zip_code | varchar | `zipCode`/`merchPostCode` | `card_acceptor.zip_code` 或顶层 | 邮编 |
 
-#### 清算/响应类
+#### 业务码/清算响应类
 
 | # | 列名 | 类型 | jsonb key | 来源路径 | 说明 |
 |---|---|---|---|---|---|
-| 44 | spc_code | varchar | `code` | 顶层 | 响应码 / 业务码 |
+| 44 | business_code_list | jsonb | `code` | 顶层数组 | 业务码列表；兼容账户验证等场景按数组包含查询 |
 | 45 | spc_system_trace_audit_no | varchar | `systemTraceAuditNumber` | 顶层 | 清算 trace no |
 | 46 | spc_fail_reason | varchar | `failReason` | 顶层 | 失败原因 |
+
+> `specialSourceData.code` 实际为业务码数组，不是单值响应码；因此不再设计 `spc_code varchar`，直接落为 `business_code_list jsonb`。
 
 > **商户/地理双重取源示例（Flink SQL）：**
 > ```sql
@@ -97,52 +116,47 @@
 > ) AS spc_mcc
 > ```
 
-### ③ 卡维度列（来自 `qbitCard`）— LEFT JOIN
+### ③ 卡维度列（来自 `qbitCard`、`qbitCardGroup`）— LEFT JOIN
 
 > 基于实际 DDL：`CREATE TABLE "public"."qbitCard" (...)`
+> 本表只保留交易分析需要的卡属性；卡号、token、持卡人身份和限额等字段继续留在卡维度/ODS 表中。卡和卡组字段必须按交易发生时间取得历史快照，不使用当前状态覆盖历史交易。
 
 | # | 列名 | 类型 | qbitCard 列名 | 说明 |
 |---|---|---|---|---|
-| 47 | card_no | varchar | `"qbitCardNo"` | 量子卡号 |
-| 48 | card_no_last_four | varchar | `"qbitCardNoLastFour"` | 后四位 |
-| 49 | card_provider | varchar | `provider` | 发卡提供方 |
-| 50 | card_type_dim | varchar | `"type"` | VISA / Master / Amex |
-| 51 | card_token | varchar | `token` | 卡在三方的唯一 id |
-| 52 | label | varchar | `label` | 卡标签 |
-| 53 | group_id | uuid | `groupId` | 卡组 id |
-| 54 | card_user_id | uuid | `userId` | 创建人 id |
-| 55 | balance_id | uuid | `balanceId` | 余额 id |
-| 56 | life_time_amount_limit | numeric(20,4) | `lifeTimeAmountLimit` | 终身消费限额 |
-| 57 | frozen_type | varchar | `frozenType` | 冻结类型 |
-| 58 | previous_status | varchar(30) | `previousStatus` | 冻结前状态 |
-| 59 | first_six | varchar | `firstSix` | BIN 前六位 |
-| 60 | card_belong | varchar | `cardBelong` | 卡归属 |
-| 61 | physical_card_status | varchar(30) | `physicalCardStatus` | 实体卡状态 |
-| 62 | card_mode | varchar(30) | `cardMode` | Virtual / Physical |
-| 63 | no_upload_reimburse | boolean | `noUploadReimburse` | 是否免上传报销单 |
-| 64 | source_type | varchar | `sourceType` | 开卡来源 |
-| 65 | cardholder_id | varchar | `cardholderId` | 持卡人 id |
-| 66 | card_first_name | varchar | `firstName` | 用户名（名） |
-| 67 | card_last_name | varchar | `lastName` | 用户姓 |
-| 68 | card_user_name | varchar | `"userName"` | 用户名（姓+名组合） |
-| 69 | qbit_card_customer_id | uuid | `qbitCardCustomerId` | 开户 id |
-| 70 | card_is_master | boolean | `isMasterCard` | 是否主卡 |
+| 47 | card_no_last_four | varchar | `"qbitCardNoLastFour"` | 卡号后四位，用于明细展示 |
+| 48 | card_provider | varchar | `provider` | 发卡提供方 |
+| 49 | card_type_dim | varchar | `"type"` | VISA / Master / Amex |
+| 50 | label | varchar | `label` | 卡标签 |
+| 51 | group_id | uuid | `groupId` | 卡组 id |
+| 52 | balance_id | uuid | `balanceId` | 余额关联 id，用于资金和交易核对 |
+| 53 | first_six | varchar | `firstSix` | BIN 前六位 |
+| 54 | card_belong | varchar | `cardBelong` | 卡归属 |
+| 55 | physical_card_status | varchar(30) | `physicalCardStatus` | 实体卡当前状态 |
+| 56 | card_mode | varchar(30) | `cardMode` | Virtual / Physical |
+| 57 | card_status | varchar(30) | `status` | 卡当前状态 |
+| 58 | group_name | varchar(255) | `qbitCardGroup.groupName` | 卡组名称 |
+| 59 | group_status | varchar(30) | `qbitCardGroup.status` | 卡组状态 |
 
-### ④ 账户维度列（来自 `account` + 可选 `api_account_relation`）— LEFT JOIN
+> `label`、`card_belong`、`physical_card_status`、`card_mode` 均按交易发生时点取值；卡维度发生变化后，不能用新值覆盖历史交易。
+> 卡组字段通过 `qbitCard.groupId = qbitCardGroup.id` 关联，并按交易发生时点获取 `group_name`、`group_status`。
 
-> 基于实际 DDL：`CREATE TABLE "public"."account" ("id", "parentAccountId", "verifiedName", "accountType", "country", "referralCodeId", "type", "displayId", "tenantId")`
+### ④ 账户维度列（来自 `account`、`accountExtend` + 可选 `api_account_relation`）— LEFT JOIN
+
+> 基于实际 DDL：`account` 提供账户基础字段，`accountExtend` 提供注册国家等扩展字段；账户字段同样必须按交易发生时点取历史值。
 
 | # | 列名 | 类型 | account 列名 | 说明 |
 |---|---|---|---|---|
-| 71 | acc_verified_name | varchar | `"verifiedName"` | 账户实名 |
-| 72 | parent_account_id | uuid | `"parentAccountId"` | 父账户 |
-| 73 | account_type | varchar(30) | `"accountType"` | 账户类型 |
-| 74 | acc_country | varchar | `"country"` | 注册国家 |
-| 75 | referral_code_id | varchar | `"referralCodeId"` | 推荐码 ID |
-| 76 | acc_type | varchar(50) | `"type"` | 账户角色（Merchant 等） |
-| 77 | acc_display_id | varchar(15) | `"displayId"` | 展示 ID |
-| 78 | tenant_id | int8 | `"tenantId"` | 租户 ID |
-| 79 | root_account_id | uuid | `api_account_relation.root_id` | **API 场景**：子账户的根账户 id（仅 API 子户有值，通过 oar.account_id = txn.account_id::uuid 关联） |
+| 60 | acc_verified_name | varchar | `"verifiedName"` | 账户实名 |
+| 61 | parent_account_id | uuid | `"parentAccountId"` | 父账户 |
+| 62 | account_type | varchar(30) | `"accountType"` | 账户类型 |
+| 63 | acc_country | varchar | `accountExtend."country"`* | 注册国家 |
+| 64 | referral_code_id | varchar | `"referralCodeId"` | 推荐码 ID |
+| 65 | acc_type | varchar(50) | `"type"` | 账户角色（Merchant 等） |
+| 66 | acc_display_id | varchar(15) | `"displayId"` | 展示 ID |
+| 67 | tenant_id | int8 | `"tenantId"` | 租户 ID |
+| 68 | root_account_id | uuid | `api_account_relation.root_id` | **API 场景**：子账户的根账户 id（仅 API 子户有值，通过 oar.account_id = txn.account_id::uuid 关联） |
+
+> * `accountExtend` 的注册国家实际字段名需以线上 DDL 为准；本文按 `country` 作为暂定映射名。
 
 > `root_account_id` 匹配逻辑：`api_account_relation WHERE account_id = txn.account_id AND delete_time IS NULL LIMIT 1`
 
@@ -152,26 +166,40 @@
 
 | # | 列名 | 类型 | 来源 | 说明 |
 |---|---|---|---|---|
-| 75 | sale_id | varchar(64) | `sale_id` | 管理人/销售 id |
-| 76 | am_id | varchar(64) | `am_id` | AM 用户 id |
+| 69 | sale_id | varchar(64) | `sale_id` | 管理人/销售 id |
+| 70 | am_id | varchar(64) | `am_id` | AM 用户 id |
+| 71 | operation_manager_id | varchar(64) | `operation_manager_id` | 运营管理人 id |
 
-**匹配口径（沿用仓库现有 `bb_sale_relation_f` 逻辑）：**
+**匹配口径（沿用仓库现有时间线关系逻辑）：**
 - **direct 模式**：`relation_account_id = txn.account_id`，在生效窗口内匹配
 - **root 模式**：经 `api_account_relation` → `root_id`，再关联 `sale_account_relation.relation_account_id = root_id`
-- 取 `COALESCE(direct.sale_id, root.sale_id)`，按 `txn.transaction_time` 落在关系生效窗口内筛选最新一条
+- **优先级**：direct 匹配成功后不再使用 root；只有 direct 匹配不到时才使用 root
+- `sale_id`、`am_id` 和 `operation_manager_id` 必须来自同一条关系记录，不能分别对两个来源字段做 `COALESCE`
+- 按 `txn.transaction_time` 落在关系生效窗口内筛选，取同一匹配模式下 `relation_start_time` 最新的一条
 
 ### ⑥ 审计列
 
 | # | 列名 | 类型 | 来源 | 说明 |
 |---|---|---|---|---|
-| 77 | create_time | timestamptz | `qct.createTime` | **分区键** |
-| 78 | update_time | timestamptz | `qct.updateTime` | CDC 变更识别依据 |
-| 79 | delete_time | timestamptz | `qct.deleteTime` | 软删标记（下游查询 WHERE ... IS NULL） |
-| 80 | version | int | 常量 1 | 版本号（重算递增） |
+| 72 | create_time | timestamptz | `qct.createTime` | **分区键**，直接来源于交易表创建时间 |
+| 73 | update_time | timestamptz | `qct.updateTime` | 增量变更识别依据 |
+| 74 | delete_time | timestamptz | `qct.deleteTime` | 软删标记（下游查询 WHERE ... IS NULL） |
+| 75 | version | int | 常量 1 | 版本号（重算递增） |
 
 ---
 
-**总计约 80 列**（28 主表 + 17 spc + 24 卡维度 + 9 账户 + 2 销售 + 4 审计）。
+**总计 75 列**（28 主表 + 18 spc + 13 卡/卡组维度 + 9 账户 + 3 销售 + 4 审计）。
+
+### 2.1 维度时点关联口径
+
+宽表中的卡、卡组、账户、账户扩展和销售关系字段，统一按 `transaction_time` 取得交易发生时的有效记录。历史维表需要提供 `valid_from`、`valid_to`（或等价的 CDC 快照版本）字段，关联条件示例：
+
+```sql
+dim.valid_from <= txn.transaction_time
+AND (dim.valid_to > txn.transaction_time OR dim.valid_to IS NULL)
+```
+
+本作业采用流式快照口径：交易 INSERT 到达时读取各维度当时最新值并固化到宽表；后续维度 CDC 不触发交易宽表更新。由于当前 `qbitCard`、`qbitCardGroup`、`account`、`accountExtend` 是当前状态表，历史交易不保证能够还原过去的维度值；如需历史修正，使用 batch 作业显式回刷指定时间范围。
 
 ---
 
@@ -180,24 +208,67 @@
 ```sql
 -- 主表 + 分区
 CREATE TABLE "dwm"."dwm_quantum_card_transaction_p" (
-  "txn_id"                varchar(128) NOT NULL,
-  "create_time"           timestamp(6) NOT NULL DEFAULT now(),
-  -- ... 全部上述 80 列 ...
-  CONSTRAINT "pk_dwm_quantum_card_txn" PRIMARY KEY ("txn_id", "create_time")
-) PARTITION BY RANGE ("create_time" "pg_catalog"."timestamp_ops");
+  "id"                    varchar(128) NOT NULL,
+  "transaction_time"      timestamptz NOT NULL,
+  "create_time"           timestamptz NOT NULL,
+  -- ... 全部上述 75 列 ...
+  CONSTRAINT "pk_dwm_quantum_card_txn" PRIMARY KEY ("id", "create_time")
+) PARTITION BY RANGE ("create_time" "pg_catalog"."timestamptz_ops");
 
 -- 月分区
 CREATE TABLE "dwm"."dwm_quantum_card_txn_2025_08"
 PARTITION OF "dwm"."dwm_quantum_card_transaction_p"
-FOR VALUES FROM ('2025-08-01') TO ('2025-09-01');
+FOR VALUES FROM ('2025-08-01 00:00:00+08') TO ('2025-09-01 00:00:00+08');
 
--- 常用索引
-CREATE INDEX idx_qct_txn_on_time_acc
-  ON "dwm"."dwm_quantum_card_transaction_p" USING btree ("transaction_time", "account_id");
-CREATE INDEX idx_qct_txn_on_sale_time
-  ON "dwm"."dwm_quantum_card_transaction_p" USING btree ("sale_id", "transaction_time");
-CREATE INDEX idx_qct_txn_on_provider_business
-  ON "dwm"."dwm_quantum_card_transaction_p" USING btree ("provider", "business_type");
+-- 交易时间 + 账户：账户交易明细、日成本统计
+CREATE INDEX idx_dwm_qct_time_account
+  ON "dwm"."dwm_quantum_card_transaction_p" USING btree (
+    "transaction_time", "account_id"
+  );
+
+-- 账户 + 交易时间：按账户查询时间范围时使用
+CREATE INDEX idx_dwm_qct_account_time
+  ON "dwm"."dwm_quantum_card_transaction_p" USING btree (
+    "account_id", "transaction_time"
+  );
+
+-- 销售/AM 归属 + 交易时间：销售成本和业绩分析
+CREATE INDEX idx_dwm_qct_sale_time
+  ON "dwm"."dwm_quantum_card_transaction_p" USING btree (
+    "sale_id", "am_id", "transaction_time"
+  );
+
+-- 运营管理人 + 交易时间：运营管理分析
+CREATE INDEX idx_dwm_qct_operation_manager_time
+  ON "dwm"."dwm_quantum_card_transaction_p" USING btree (
+    "operation_manager_id", "transaction_time"
+  );
+
+-- 卡维度查询：按卡追溯交易
+CREATE INDEX idx_dwm_qct_card_time
+  ON "dwm"."dwm_quantum_card_transaction_p" USING btree (
+    "card_id", "transaction_time"
+  );
+
+-- 渠道/业务类型/状态：交易量和成本聚合
+CREATE INDEX idx_dwm_qct_provider_business_status
+  ON "dwm"."dwm_quantum_card_transaction_p" USING btree (
+    "provider", "business_type", "status", "transaction_time"
+  );
+
+-- 卡状态 + 交易时间：卡状态交易分析
+CREATE INDEX idx_dwm_qct_card_status_time
+  ON "dwm"."dwm_quantum_card_transaction_p" USING btree (
+    "card_status", "transaction_time"
+  );
+
+-- 三方订单追溯和对账
+CREATE INDEX idx_dwm_qct_source_id
+  ON "dwm"."dwm_quantum_card_transaction_p" USING btree ("source_id");
+
+-- 源记录变更扫描/补数辅助
+CREATE INDEX idx_dwm_qct_update_time
+  ON "dwm"."dwm_quantum_card_transaction_p" USING btree ("update_time");
 ```
 
 ---
@@ -206,35 +277,93 @@ CREATE INDEX idx_qct_txn_on_provider_business
 
 **流水线：**
 ```
-postgres-cdc ── qbit_card_transaction (txn) ─────────┐
-                                                       ├──→ Stream Join → Upsert JDBC Sink → dwm_quantum_card_transaction_p
-postgres-cdc ── qbitCard (cd)                          │
-postgres-cdc ── account (acc)                          │
-postgres-cdc ── api_account_relation (oar)             │      (多维 LEFT JOIN)
-postgres-cdc ── dim_sale_account_relation_p (sr)       │
+qbit_card_transaction (txn) ──────────────────────────┐
+                                                       ├──→ 维度补齐 → 幂等 Upsert → dwm_quantum_card_transaction_p
+qbitCard (cd)                                          │
+account (acc)                                          │
+accountExtend (ae)                                     │
+api_account_relation (aar)                             │
+dim_sale_account_relation_p (sr)                       │
 ```
 
 **关键配置：**
-- **Connector**：`postgres-cdc`（WAL 流式，秒~分钟级延迟）
-- **增量同步**：全量初始化 + 增量实时（upsert/delete 都支持）
-- **jsonb 反规范化**：Flink SQL `CAST(txn.special_source_data->>'key' AS type)`
-- **商户/地理双重取源**：`COALESCE(txn.special_source_data->>'mcc', CAST(txn.special_source_data->'card_acceptor' AS json)->>'mcc')`
-- **幂等**：分区键 + upsert sink，不需要额外删除函数
+- **第一版同步方式**：以 `qbit_card_transaction` 为唯一 CDC 驱动源；INSERT 读取当前维度并固化，UPDATE 读取目标宽表已有维度值后，仅替换交易主表字段。
+- **维度变更**：`qbitCard`、`qbitCardGroup`、`account`、`accountExtend` 和销售关系不作为宽表作业驱动源，维度变化不会更新已落表交易。
+- **JSON 反规范化**：先在解析视图中提取 JSON 字段，再统一完成类型转换；不得直接假定 PostgreSQL `->>` 语法可在 Flink SQL 中执行。
+- **幂等**：使用稳定业务键 `(id, create_time)` + upsert；主表软删除时同步写入 `delete_time`。`create_time` 应视为源表不可变字段。
+- **真正 WAL CDC**：本版只消费交易主表 WAL CDC；维度表通过 lookup 读取，不注册为会传播变更的普通 CDC JOIN。
 - **参考模板**：[ods_online_qbit_card_settlement-cdc-sql.sql](bi-cost/flink/ods/ods_online_qbit_card_settlement-cdc-sql.sql)（CDC 源）+ [dwm_online_bb_card_transaction_detail_v2-cdc-sql.sql](bi-cost/flink/quantum-v2/bb/cdc/dwm_online_bb_card_transaction_detail_v2-cdc-sql.sql)（维表合并口径）
 
 **落地文件：**
 
 | 文件 | 内容 | 参考模板 |
 |---|---|---|
-| `table-scripts/dwm_quantum_card_transaction_p.sql` | 建表 DDL + 列注释 + 子分区 + 索引 | `dwm_bb_card_transaction_detail_v2_p.sql` |
-| `cdc/dwm_online_quantum_card_transaction-cdc-sql.sql` | Flink SQL 流脚本（CDC 源 + join + sink） | `dwm_online_bb_card_transaction_detail_v2-cdc-sql.sql` |
+| `design-docs/qbit-widetable-ddl.sql` | 建表 DDL + 列注释 + 月分区 + 预设索引 | `flink/quantum-v2/qi/table-scripts/dwm_qi_card_transaction_detail_v2_p.sql` |
+| `flink/quantum-v2/qbit-card-transaction-widetable/cdc/dwm_online_qbit_card_transaction_widetable-cdc-sql.sql` | 交易 CDC 驱动；INSERT 固化维度，UPDATE 保留原维度 | `quantum-v2/sl/cdc/dwm_online_sl_card_transaction_detail_v2-cdc-sql.sql` |
+| `flink/quantum-v2/qbit-card-transaction-widetable/batch/dwm_online_qbit_card_transaction_widetable-batch-sql.sql` | 按时间范围批量初始化/回刷 | `quantum-v2/sl/batch/dwm_online_sl_card_transaction_detail_v2-batch-sql.sql` |
+| `flink/quantum-v2/qbit-card-transaction-widetable/table-scripts/dwm_qbit_card_transaction_widetable_p.sql` | 宽表 DDL、分区和索引 | `quantum-v2/sl/table-scripts/dwm_sl_card_transaction_detail_p.sql` |
 
 ---
 
 ## 5. 验证
 
 1. 执行建表 DDL，确认无语法冲突和分区越界
-2. CDC 回填后 `SELECT count(*)` 与 `qbit_card_transaction WHERE delete_time IS NULL` 一致
-3. 抽查交易的 `settle_amount / spc_mcc / spc_markup_fee / sale_id / card_no` 与源表 JOIN 结果一致
-4. 验证分区裁剪：WHERE 按 `create_time` 过滤时 EXPLAIN 只扫对应月分区
-5. 跑一次日消费成本统计，对照线上 API 输出做金额一致性校验
+2. 回填后按 `id` 对账，确认目标表有效记录与 `qbit_card_transaction WHERE delete_time IS NULL` 一一对应
+3. 验证目标表不存在同一 `(id, create_time)` 多行
+4. 抽查 `settle_amount / spc_mcc / spc_markup_fee / sale_id / card_no_last_four` 与主表及维表结果一致
+5. 验证按 `create_time` 过滤时 EXPLAIN 能够裁剪到对应月分区；按 `transaction_time` 查询时使用索引但不保证分区裁剪
+6. 分别验证交易主表 INSERT/UPDATE 会更新宽表，卡/卡组/账户/销售维度变更不会更新既有交易宽表
+7. 跑一次日消费成本统计，对照线上 API 输出做金额一致性校验
+
+---
+
+## 6. 后续字段扩展规范
+
+### 6.1 总体原则
+
+- **只增不删**：已上线字段不直接删除或改名，避免下游 SQL、报表和 Flink 作业失效。
+- **新增字段默认可空**：先 `ADD COLUMN`，不要给历史数据增加强制非空约束。
+- **显式列清单**：Flink source、view、sink 和目标 DDL 均使用显式字段，不使用 `SELECT *` 作为长期接口。
+- **先扩结构，再发作业，再回填**：确保新旧作业切换期间目标表结构兼容。
+- **不滥加字段**：低频、结构不稳定的 JSON key 继续保留在 `special_source_data`，只有稳定且高频使用的字段才展开。
+
+### 6.2 不同类型字段的增加方式
+
+| 字段类型 | 处理方式 | 是否需要历史回填 |
+|---|---|---|
+| `qbit_card_transaction` 主表字段 | 目标表新增同名 snake_case 字段，更新 source/view/sink | 通常需要 |
+| `special_source_data` 高频 JSON key | 增加 `spc_` 前缀字段，在解析视图中统一转换 | 通常需要 |
+| `qbitCard` / `qbitCardGroup` 卡组维度字段 | INSERT 时读取当前 lookup 值并固化；UPDATE 时保留目标宽表原值 | 仅显式 batch 回刷时更新 |
+| `account` / `accountExtend` 字段 | INSERT 时读取当前 lookup 值并固化；UPDATE 时保留目标宽表原值 | 仅显式 batch 回刷时更新 |
+| 销售关系字段 | INSERT 时按 direct 优先、root 兜底读取并固化；UPDATE 时保留原值 | 仅显式 batch 回刷时更新 |
+| settlement 一对多字段 | 不加入本交易宽表，另建 settlement 明细表 | 不适用 |
+
+### 6.3 标准变更步骤
+
+```text
+1. 确认字段定义、来源、类型、空值口径和查询场景
+2. 在目标宽表 ADD COLUMN
+3. 更新设计文档中的字段清单和总列数
+4. 更新 Flink source / view / sink 的显式列清单
+5. 先发布兼容版本，验证新字段能写入
+6. 首次按 create_time 分区回填交易，并按当前维度值生成快照
+7. 对比源表与宽表，验证空值、类型、行数和金额不变
+8. 在 changelogs/ 记录字段变更
+```
+
+### 6.4 DDL 示例
+
+```sql
+-- 示例：新增交易主表字段
+ALTER TABLE "dwm"."dwm_quantum_card_transaction_p"
+  ADD COLUMN "new_analysis_field" varchar(100);
+```
+
+新增字段不需要修改主键和分区键。历史回填时只更新受影响的 `id/create_time` 记录，不能通过重新生成主键写入副本。
+
+### 6.5 兼容性要求
+
+- 新字段上线前，查询应允许字段为空。
+- Flink 作业发布顺序应保证“目标表先有字段，作业后写字段”。
+- 如果字段来自卡、账户或销售维度，交易 INSERT 固化 lookup 值，交易 UPDATE 保留宽表原值；只有历史数据修正任务才触发关联交易回刷。
+- `version` 继续表示记录处理版本，不用于表示表结构版本；如确实需要追踪结构版本，再单独增加 `schema_version`。

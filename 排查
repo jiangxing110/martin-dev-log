@@ -1,15 +1,71 @@
-我们开始的时间是2026-01-01  
-1.其实我看了的跑batch 一个月一个月的跑还是快的所以我现在想能不能这么弄呢,我们在cdc 的时候是先清库在全量insert 
-只不过我们/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/quantum-v2/bb/cdc/dws_online_bb_card_finance_daily_v2-cdc-v2-sql.sql 内部可以改成
-时间一个月一个月的跑,
-我们这部分cdc 跑完以后在跑active_card ,和固定成本的脚本
-2.然后返现的rate可以和qi一样写到ods_bi_month_tag
-3.有一个问题需要我们重新思考 volume_fee_cost这个成本
-是一个阶梯的数据
-比如bb这个月是1600万
-汇总：500万×0.55%+500万×0.45%+（1600万-500万-500万）×0.4%=74000
-分摊：每个客户再按照净消费分摊
-我们需要改变策略,所以这部分可能也要和活跃卡一样 只不过整理可能是统计总净消费在均摊到每个人每天
-3./Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/quantum-v2/qi/table-scripts/dws_qi_card_finance_daily_v2_p.sql
-我想加一个净消费字段
+https://circle-test.qbitnetwork.com/api/statement/customer-settle?startDate=2026-07-01%2000%3A00%3A00&endDate=2026-07-31%2023%3A59%3A59&accountId=b276d486-e8c9-4b79-b390-7bcd7d4dbacc&datetype=month
 
+
+accountId=01492282-fee4-42d0-9d85-9a08658cb89f&datetype=month
+
+statement/customer-settle?startDate=2026-07-01%2000%3A00%3A00&endDate=2026-07-31%2023%3A59%3A59&accountId=01492282-fee4-42d0-9d85-9a08658cb89f&datetype=mont
+
+
+看看销售毛利报表
+1.SaleCommissionMockServiceImpl我想这个删除
+2.非生产环境我想查询
+@DS("dw")
+public interface DwsSaleCommissionMapper {
+    现在是@DS("dw1")本质上
+    这两个是一个库 但是我不确定数据库账户是不是一个改写以后会不会有问题
+并且未来兼容测试环境所以我想建一个DwsLocalSaleCommissionMapper
+
+912095c6-1dff-4a4c-a3e0-b9432964ebbc
+9a7f0c14-3504-4535-9c88-7798c76062a0
+131bbac5-0f99-437c-b09e-509650f4f2bb
+f025cba7-8ba6-4b08-9a4a-19ea1517fcfb
+06120474-5030-4420-8cd5-28868cbbdfed
+40255e69-1dc9-46ea-a353-30f3ed48dc27
+d567b31d-e724-40d6-aa57-3a823547e445
+f9bf62f3-2d42-4f7e-ac87-2ed0405ad7e2
+547ea3e2-96fd-44e4-9284-f724f1cb90f6
+cb0fed22-20c9-4215-9a99-0eda1bbc7ca5
+cdc1e549-954d-4f03-88c1-d75d899c1a90
+d2cada3a-b56b-49a2-9c4b-e14359806d28
+1198df42-c426-4159-a6f3-ff575f9b99f3
+1bde980a-de89-44a7-8fac-69b44d75a4e1
+083e22b7-65fd-4058-9a20-59047c6d5418
+091db31f-1bd8-4f17-a857-2f0886532121
+3fca45af-39c0-49b4-aac1-99efb57f1d99
+400a4e35-3a8c-4da3-9687-9af4352636d2
+54c63b9f-261c-457c-98ea-3c2d3ba04176
+573927b6-3b6f-4ffe-b2c5-2dd8b498b5d1
+acbdc34c-5120-43fd-b36d-e28e95557807
+b1e281c3-d67b-4092-ae7c-2b36a28e9452
+441aa940-e92a-46b0-aed4-08cad62b3281
+7101f85c-8855-404b-83d7-898adf9936b0
+8340d487-ee31-45cd-bc53-5328a9426ff6
+8ce2d411-7330-4a9a-bd4e-5ed234aefb5e
+b8c8ea84-92c6-4dd5-9db1-9f121f527e37
+bf43f063-08f1-4420-b976-1f397590d861
+c4378321-f169-4d32-b9d8-c05a123bc0c7
+e22cc906-3c23-4387-a194-96b3dd8f08f1
+f220b6e0-7219-41d9-9084-a806694b1bc0
+1d3aa959-6827-4dc8-8468-186536691765
+48f19b48-2c8b-4433-af86-95aaac9a90b1
+54c63b9f-261c-457c-98ea-3c2d3ba04176
+5b03cc9a-f990-43ff-95f2-572085f157ea
+6808a41a-3b91-4d73-bc5c-948157e51ed1
+a2fb1d47-1670-4bc2-ba8e-8a387c92bb88
+ba53b4b2-e0ef-4ad8-9207-e4b80026d99b
+dc4915de-e2e6-4b11-a5e3-6d43e58dc26c
+e097c876-1867-4e89-92b9-14ea918ad008
+f4f4788f-0bfc-41d6-9096-1ddd9b96eac1
+fbece118-2c5a-459d-a759-fbe92d50d05d
+52c276a8-bd16-44e0-a6fa-86a301ab7977
+6e1087b8-ecbc-4244-9c11-beaf71935fe3
+fad941f0-7617-4a6c-9a9e-10d8599f955e
+
+我想把这些id 在 dws_sales_commission_snapshot_detail_p里修改
+
+
+
+public.qbit_card_transaction
+public.card_bin 
+public.qbitCard
+public.qbitCardSettlement

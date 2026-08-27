@@ -1,0 +1,58 @@
+dashboard
+
+/api/admin/revenue/stat-revenue-total-amount?beginDate=2026-06-01&endDate=2026-06-30
+/api/admin/revenue/stat-revenue-effective-amount?beginDate=2026-06-01&endDate=2026-06-30
+/api/admin/dashboard/core?beginDate=2026-06-01&endDate=2026-06-30
+/api/admin/bi/v2/report-profit/stat-gross-profit-summary?beginDate=2026-06-01&endDate=2026-06-30
+/api/admin/dashboard/cms?beginDate=2026-06-01&endDate=2026-06-30
+/api/admin/bi/v2/report-profit/product-income-profit-cogs?beginDate=2026-06-01&endDate=2026-06-30
+/api/admin/dashboard/tpv?beginDate=2026-06-01&endDate=2026-06-30
+/api/admin/revenue/funds-by-product?beginDate=2026-06-01&endDate=2026-06-30
+/api/admin/bi/v2/report-profit/trend-revenue-vs-profit?beginDate=2026-06-01&endDate=2026-06-30
+/api/admin/bi/v2/report-profit/product-fee-rate-margin?beginDate=2026-06-01&endDate=2026-06-30
+/api/admin/revenue/income-structure?beginDate=2026-06-01&endDate=2026-06-30
+/api/admin/revenue/effective-income-ranking?beginDate=2026-06-01&endDate=2026-06-30&limit=5
+/api/admin/bi/v2/report-profit/top-profit-accounts?beginDate=2026-06-01&endDate=2026-06-30&limit=5
+
+1.
+| 接口 | 涉及的表/视图 | 指标名称 |
+|---|---|---|
+| `/api/admin/revenue/stat-revenue-total-amount` | `dws.dws_revenue_summary_daily_mv` | 总收入 |
+| `/api/admin/revenue/stat-revenue-effective-amount` | `dws.dws_effective_revenue_daily_mv` | 有效收入 |
+| `/api/admin/dashboard/core` | `dws.dws_tpv_metrics`、`dws.dws_client_tpv_active_account_daily` | 全球账户转出、加密转出、加密承兑、卡产品交易额、收单金额、活跃 API 客户数、活跃直客客户数 |
+| `/api/admin/bi/v2/report-profit/stat-gross-profit-summary` | `dws.mv_gross_profit_daily` | 收入、COGS、毛利、毛利率 |
+| `/api/admin/dashboard/cms` | `dws.dws_tpv_metrics` | 卡产品交易额、FX Markup、费用、量子卡渠道返现、KYC 费用、API 费用、实体卡制卡费与邮寄费、客户返现 |
+| `/api/admin/bi/v2/report-profit/product-income-profit-cogs` | `dws.mv_gross_profit_daily` | 产品收入、产品毛利、产品 COGS |
+| `/api/admin/dashboard/tpv` | `dws.dws_tpv_metrics` | 全球账户转出、全球账户转入、加密转出、加密承兑、卡产品交易额、收单金额 |
+| `/api/admin/revenue/funds-by-product` | `dws.dws_client_balance_realtime` | 产品客户资金规模 |
+| `/api/admin/bi/v2/report-profit/trend-revenue-vs-profit` | `dws.mv_gross_profit_daily` | 每日收入、每日毛利 |
+| `/api/admin/bi/v2/report-profit/product-fee-rate-margin` | `dws.mv_gross_profit_daily`、`dws.dws_tpv_metrics` | 产品 TPV、产品收入、产品毛利、费率、毛利率 |
+| `/api/admin/revenue/income-structure` | `dws.dws_effective_revenue_daily_mv` | Top 1-10 客户收入、11-50 客户收入、51-200 客户收入、剩余客户收入 |
+| `/api/admin/revenue/effective-income-ranking` | `dws.dws_effective_revenue_daily_mv`、`dim.dim_account`、`"cddRiskRating"` | 客户有效收入、收入占比、较上期增长、较去年同期增长、客户名称、风险等级 |
+| `/api/admin/bi/v2/report-profit/top-profit-accounts` | `dws.mv_gross_profit_daily`、`"cddRiskRating"`、`account`、`accountExtend`、销售关系表 | 客户毛利、毛利占比、毛利增长率、客户风险等级、客户账户信息 |
+
+
+1.我们要对这些接口添加 客户类型的筛选 
+参考之前QueryFilterDTO
+/**
+ * bi 看板-客户类型 fullCustomer,apiCustomer,merchantCustomer 
+ */
+private String accountType;
+下面是涉及表关联客户类型的字段
+1.
+SELECT entity FROM dws.dws_tpv_metrics GROUP BY entity 客户类型
+merchant_customer
+API客户
+api_customer
+other
+直客
+
+dws.dws_revenue_summary_daily_mv,dws.dws_effective_revenue_daily_mv
+account_id	关联
+dws_client_tpv_active_account_daily
+account_type 
+mv_gross_profit_daily account_id 关联
+
+
+2.我们要新增一个接口记录 类似于product-income-profit-cogs
+产品线 收入 有效收入 成本 毛利 毛利率 

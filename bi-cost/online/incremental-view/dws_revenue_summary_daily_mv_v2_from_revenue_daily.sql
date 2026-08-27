@@ -1,8 +1,7 @@
 -- ==============================================================
 -- 增量物化视图：dws.dws_revenue_summary_daily_mv v2
 -- 说明    : 从 dws.dws_revenue_daily + dws.dws_channel_cashback_daily 汇总营收
---           v2 新增：从 ods_bi_month_tag 读取线下实体卡制卡费 OFFLINE_PHYSICAL_CARD_FEE
---           category = card, revenue_source = offline_physical_card_fee
+--           v2 新增：从 ods_bi_month_tag 读取月度卡类收入及调整项
 -- 刷新    : 自动增量刷新，基表写入后实时同步
 -- ==============================================================
 
@@ -100,19 +99,37 @@ FROM dws.dws_channel_cashback_daily
 
 UNION ALL
 
--- ==================== v2: 线下实体卡制卡费（从 ods_bi_month_tag 读取） ====================
+-- ==================== v2: 月度卡类收入及调整项（从 ods_bi_month_tag 读取） ====================
 SELECT
-    t.statistics_time::date                                         AS stat_date,
-    'card'                                                          AS category,
-    'offline_physical_card_fee'                                     AS revenue_source,
-    COALESCE(t.account_id, '')                                      AS account_id,
-    ''                                                              AS account_type,
-    ''                                                              AS system_type,
-    SUM(COALESCE(t.amount, 0))                                      AS amount
+    t.statistics_time::date AS stat_date,
+    'card' AS category,
+    CASE t.tag
+        WHEN 'OFFLINE_PHYSICAL_CARD_FEE' THEN 'offline_physical_card_fee'
+        WHEN 'INCOME_ADJUSTMENT_DECREASE' THEN 'income_adjustment_decrease'
+        WHEN 'INCOME_ADJUSTMENT_INCREASE' THEN 'income_adjustment_increase'
+        WHEN 'API_MINIMUM_CONSUMPTION_ADJUSTMENT_DECREASE' THEN 'api_minimum_consumption_adjustment_decrease'
+    END AS revenue_source,
+    t.account_id,
+    '' AS account_type,
+    '' AS system_type,
+    SUM(
+        CASE
+            WHEN t.tag IN (
+                'INCOME_ADJUSTMENT_DECREASE',
+                'API_MINIMUM_CONSUMPTION_ADJUSTMENT_DECREASE'
+            ) THEN -ABS(COALESCE(t.amount, 0))
+            ELSE ABS(COALESCE(t.amount, 0))
+        END
+    ) AS amount
 FROM ods.ods_bi_month_tag t
 WHERE t.delete_time IS NULL
-  AND t.tag = 'OFFLINE_PHYSICAL_CARD_FEE'
+  AND t.tag IN (
+      'OFFLINE_PHYSICAL_CARD_FEE',
+      'INCOME_ADJUSTMENT_DECREASE',
+      'INCOME_ADJUSTMENT_INCREASE',
+      'API_MINIMUM_CONSUMPTION_ADJUSTMENT_DECREASE'
+  )
   AND t.account_id IS NOT NULL
-GROUP BY t.statistics_time::date, t.account_id;
+GROUP BY t.statistics_time::date, t.tag, t.account_id;
 
-COMMENT ON MATERIALIZED VIEW dws.dws_revenue_summary_daily_mv IS '收入日维度汇总 v2（dws_revenue_daily + channel_cashback_daily + offline_physical_card_fee），增量自动刷新';
+COMMENT ON MATERIALIZED VIEW dws.dws_revenue_summary_daily_mv IS '收入日维度汇总 v2（dws_revenue_daily + channel_cashback_daily + card month tags），增量自动刷新';
