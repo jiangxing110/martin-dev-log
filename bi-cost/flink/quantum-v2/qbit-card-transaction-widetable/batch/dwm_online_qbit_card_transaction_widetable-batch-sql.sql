@@ -1,14 +1,17 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-25 00:00:00
--- Updated Time:   2026-08-25 18:00:00
+-- Updated Time:   2026-08-28 00:00:00
 -- Description:    量子卡交易大宽表批量初始化/回刷（多 JDBC source）
 --********************************************************************--
 
-SET 'parallelism.default' = '1';
+-- 固定为 4；页面 TaskManager CPU / 可用 Slot 必须不少于 4。
+SET 'parallelism.default' = '4';
 SET 'pipeline.operator-chaining' = 'true';
 SET 'table.exec.mini-batch.enabled' = 'false';
-SET 'sink.parallelism' = '1';
+SET 'sink.parallelism' = '4';
+-- direct 销售结果会同时供 root 兜底和最终输出使用，避免重复计算公共子计划。
+SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
 -- 多 source + Lookup Join 需要更多网络 buffer，避免 TaskManager 初始化阶段失败。
 SET 'taskmanager.memory.network.fraction' = '0.20';
 SET 'taskmanager.memory.network.min' = '256mb';
@@ -166,7 +169,7 @@ LEFT JOIN lookup_api_account_relation aar ON aar.account_id = qt.account_id AND 
 CREATE TEMPORARY VIEW v_direct_sale_relation AS
 SELECT txn_id, sale_id, am_id, operation_manager_id
 FROM (
-    SELECT b.id AS txn_id, sr.sale_id, sr.am_id, sr.operation_manager_id,
+    SELECT /*+ BROADCAST(sr) */ b.id AS txn_id, sr.sale_id, sr.am_id, sr.operation_manager_id,
            ROW_NUMBER() OVER (PARTITION BY b.id ORDER BY sr.relation_start_time DESC, sr.id DESC) AS rn
     FROM v_transaction_base b
     INNER JOIN source_sale_account_relation sr
@@ -177,17 +180,29 @@ FROM (
 ) ranked
 WHERE rn = 1;
 
+-- direct 优先：root 仅处理没有 direct 销售关系的交易，避免对全部交易重复时间匹配。
+CREATE TEMPORARY VIEW v_transaction_with_direct_sale AS
+SELECT
+    b.*,
+    d.txn_id AS direct_txn_id,
+    d.sale_id AS direct_sale_id,
+    d.am_id AS direct_am_id,
+    d.operation_manager_id AS direct_operation_manager_id
+FROM v_transaction_base b
+LEFT JOIN v_direct_sale_relation d ON d.txn_id = b.id;
+
 CREATE TEMPORARY VIEW v_root_sale_relation AS
 SELECT txn_id, sale_id, am_id, operation_manager_id
 FROM (
-    SELECT b.id AS txn_id, sr.sale_id, sr.am_id, sr.operation_manager_id,
+    SELECT /*+ BROADCAST(sr) */ b.id AS txn_id, sr.sale_id, sr.am_id, sr.operation_manager_id,
            ROW_NUMBER() OVER (PARTITION BY b.id ORDER BY sr.relation_start_time DESC, sr.id DESC) AS rn
-    FROM v_transaction_base b
+    FROM v_transaction_with_direct_sale b
     INNER JOIN source_sale_account_relation sr
         ON sr.relation_account_id = b.root_account_id
        AND sr.delete_time IS NULL
        AND b.transaction_time >= sr.relation_start_time
        AND (b.transaction_time < sr.relation_end_time OR sr.relation_end_time IS NULL)
+    WHERE b.direct_txn_id IS NULL
 ) ranked
 WHERE rn = 1;
 
@@ -207,12 +222,11 @@ SELECT
     b.card_no_last_four, b.card_provider, b.card_type_dim, b.label, b.group_id, b.balance_id, b.first_six, b.card_belong,
     b.physical_card_status, b.card_mode, b.card_status, b.group_name, b.group_status, b.acc_verified_name,
     b.parent_account_id, b.account_type, b.system_type, b.acc_verified_name_en, b.acc_country, b.referral_code_id, b.acc_type, b.acc_display_id, b.tenant_id,
-    b.root_account_id, COALESCE(d.sale_id, r.sale_id) AS sale_id, COALESCE(d.am_id, r.am_id) AS am_id,
-    COALESCE(d.operation_manager_id, r.operation_manager_id) AS operation_manager_id,
+    b.root_account_id, COALESCE(b.direct_sale_id, r.sale_id) AS sale_id, COALESCE(b.direct_am_id, r.am_id) AS am_id,
+    COALESCE(b.direct_operation_manager_id, r.operation_manager_id) AS operation_manager_id,
     b.create_time, b.update_time, b.delete_time, b.version
-FROM v_transaction_base b
-LEFT JOIN v_direct_sale_relation d ON d.txn_id = b.id
-LEFT JOIN v_root_sale_relation r ON r.txn_id = b.id AND d.txn_id IS NULL;
+FROM v_transaction_with_direct_sale b
+LEFT JOIN v_root_sale_relation r ON r.txn_id = b.id;
 
 CREATE TEMPORARY TABLE sink_qbit_card_transaction_widetable (
     id STRING, account_id STRING, card_id STRING, provider STRING, business_type STRING, status STRING, display_status STRING, currency STRING,
