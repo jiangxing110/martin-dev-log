@@ -67,70 +67,76 @@ CREATE TEMPORARY TABLE source_qbit_card_transaction (
     'scan.auto-commit' = 'false'
 );
 
--- 卡维度 Lookup：按交易 card_id 点查，不全量扫描卡表。
+-- 卡维度 source：只读取本次时间窗口交易涉及的卡，避免全表扫描。
 CREATE TEMPORARY TABLE lookup_qbit_card (
-    id STRING, `qbitCardNoLastFour` STRING, provider STRING, `type` STRING, label STRING,
-    `groupId` STRING, `balanceId` STRING, `firstSix` STRING, `cardBelong` STRING,
-    `physicalCardStatus` STRING, `cardMode` STRING, status STRING,
-    PRIMARY KEY (id) NOT ENFORCED
+    id STRING, card_no_last_four STRING, provider STRING, card_type STRING, label STRING,
+    group_id STRING, balance_id STRING, first_six STRING, card_belong STRING,
+    physical_card_status STRING, card_mode STRING, status STRING
 ) WITH (
     'connector' = 'jdbc', 'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = 'public."qbitCard"', 'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver', 'lookup.cache.max-rows' = '200000', 'lookup.cache.ttl' = '30 min'
+    'table-name' = '(SELECT qc."id"::text AS id, qc."qbitCardNoLastFour"::text AS card_no_last_four, qc."provider"::text AS provider, qc."type"::text AS card_type, qc."label"::text AS label, qc."groupId"::text AS group_id, qc."balanceId"::text AS balance_id, qc."firstSix"::text AS first_six, qc."cardBelong"::text AS card_belong, qc."physicalCardStatus"::text AS physical_card_status, qc."cardMode"::text AS card_mode, qc."status"::text AS status FROM public."qbitCard" qc WHERE EXISTS (SELECT 1 FROM public."qbit_card_transaction" qt WHERE qt."cardId" = qc."id" AND qt."createTime" >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND qt."createTime" < CAST(''${end_time}'' AS TIMESTAMP(6)))) AS qbit_card_dim', 'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver'
 );
 
--- 卡组维度 Lookup：按 qbitCard.group_id 点查。
+-- 卡组维度 source：只读取本次时间窗口交易卡所属的卡组。
 CREATE TEMPORARY TABLE lookup_qbit_card_group (
-    id STRING, `groupName` STRING, status STRING,
-    PRIMARY KEY (id) NOT ENFORCED
+    id STRING, group_name STRING, status STRING
 ) WITH (
     'connector' = 'jdbc', 'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = 'public."qbitCardGroup"', 'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver', 'lookup.cache.max-rows' = '100000', 'lookup.cache.ttl' = '30 min'
+    'table-name' = '(SELECT qcg."id"::text AS id, qcg."groupName"::text AS group_name, qcg."status"::text AS status FROM public."qbitCardGroup" qcg WHERE EXISTS (SELECT 1 FROM public."qbitCard" qc INNER JOIN public."qbit_card_transaction" qt ON qt."cardId" = qc."id" WHERE qc."groupId" = qcg."id" AND qt."createTime" >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND qt."createTime" < CAST(''${end_time}'' AS TIMESTAMP(6)))) AS qbit_card_group_dim', 'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver'
 );
 
--- 账户维度 Lookup；注册国家实际来自 account.country。
+-- 账户维度 source：只读取本次时间窗口交易涉及的账户。
 CREATE TEMPORARY TABLE lookup_account (
-    id STRING, `verifiedName` STRING, `parentAccountId` STRING, `accountType` STRING,
-    country STRING, `referralCodeId` STRING, `type` STRING, `displayId` STRING, `tenantId` BIGINT,
-    PRIMARY KEY (id) NOT ENFORCED
+    id STRING, verified_name STRING, parent_account_id STRING, account_type STRING,
+    verified_name_en STRING, country STRING, referral_code_id STRING, account_type_role STRING, display_id STRING, tenant_id BIGINT
 ) WITH (
     'connector' = 'jdbc', 'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = 'public."account"', 'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver', 'lookup.cache.max-rows' = '200000', 'lookup.cache.ttl' = '30 min'
+    'table-name' = '(SELECT acc."id"::text AS id, acc."verifiedName"::text AS verified_name, acc."parentAccountId"::text AS parent_account_id, acc."accountType"::text AS account_type, acc."verifiedNameEn"::text AS verified_name_en, acc."country"::text AS country, acc."referralCodeId"::text AS referral_code_id, acc."type"::text AS account_type_role, acc."displayId"::text AS display_id, acc."tenantId"::bigint AS tenant_id FROM public."account" acc WHERE EXISTS (SELECT 1 FROM public."qbit_card_transaction" qt WHERE qt."accountId"::text = acc."id"::text AND qt."createTime" >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND qt."createTime" < CAST(''${end_time}'' AS TIMESTAMP(6)))) AS account_dim', 'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver'
 );
 
--- 根账户关系 Lookup。
+-- 账户扩展 source：只读取本次时间窗口交易涉及账户的当前 systemType。
+CREATE TEMPORARY TABLE lookup_account_extend (
+    account_id STRING, system_type STRING
+) WITH (
+    'connector' = 'jdbc', 'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT ae."accountId"::text AS account_id, ae."systemType"::text AS system_type FROM public."accountExtend" ae WHERE ae."deleteTime" IS NULL AND EXISTS (SELECT 1 FROM public."qbit_card_transaction" qt WHERE qt."accountId"::text = ae."accountId"::text AND qt."createTime" >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND qt."createTime" < CAST(''${end_time}'' AS TIMESTAMP(6)))) AS account_extend_dim', 'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver'
+);
+
+-- 根账户关系 source：转换 UUID 为 STRING，并限制为本次交易涉及的账户。
 CREATE TEMPORARY TABLE lookup_api_account_relation (
-    account_id STRING, root_id STRING, delete_time TIMESTAMP(6),
-    PRIMARY KEY (account_id) NOT ENFORCED
+    account_id STRING, root_id STRING, delete_time TIMESTAMP(6)
 ) WITH (
     'connector' = 'jdbc', 'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = 'public.api_account_relation', 'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
-    'driver' = 'org.postgresql.Driver', 'lookup.cache.max-rows' = '200000', 'lookup.cache.ttl' = '30 min'
+    'table-name' = '(SELECT aar.account_id::text AS account_id, aar.root_id::text AS root_id, aar.delete_time FROM public.api_account_relation aar WHERE EXISTS (SELECT 1 FROM public."qbit_card_transaction" qt WHERE qt."accountId"::text = aar.account_id::text AND qt."createTime" >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND qt."createTime" < CAST(''${end_time}'' AS TIMESTAMP(6)))) AS api_account_relation_dim', 'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver'
 );
 
--- 销售关系 source：由 Flink 按交易发生时间计算直接关系和根账户关系。
+-- 销售关系 source：仅读取本切片交易账户及其 root 账户的关系记录。
+-- 不按 createTime 限制 relation 生效时间，避免 transactionTime 与 createTime 不一致时漏匹配。
 CREATE TEMPORARY TABLE source_sale_account_relation (
     id STRING, relation_account_id STRING, sale_id STRING, am_id STRING, operation_manager_id STRING,
     relation_start_time TIMESTAMP(6), relation_end_time TIMESTAMP(6), delete_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'jdbc', 'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id::text AS id, relation_account_id::text AS relation_account_id, sale_id::text AS sale_id, am_id::text AS am_id, operation_manager_id::text AS operation_manager_id, relation_start_time, relation_end_time, delete_time FROM dim.dim_sale_account_relation_p) AS sale_account_relation_f', 'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'table-name' = '(WITH filtered_txn AS (SELECT DISTINCT "accountId"::text AS account_id FROM public."qbit_card_transaction" WHERE "createTime" >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND "createTime" < CAST(''${end_time}'' AS TIMESTAMP(6))), related_account AS (SELECT account_id FROM filtered_txn UNION SELECT aar.root_id::text FROM filtered_txn ft INNER JOIN public.api_account_relation aar ON aar.account_id::text = ft.account_id AND aar.delete_time IS NULL) SELECT sr.id::text AS id, sr.relation_account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.operation_manager_id::text AS operation_manager_id, sr.relation_start_time, sr.relation_end_time, sr.delete_time FROM dim.dim_sale_account_relation_p sr INNER JOIN related_account ra ON ra.account_id = sr.relation_account_id::text WHERE sr.delete_time IS NULL) AS sale_account_relation_f', 'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver', 'scan.fetch-size' = '5000'
 );
 
 CREATE TEMPORARY VIEW v_transaction_base AS
 SELECT
     qt.*,
-    qc.`qbitCardNoLastFour` AS card_no_last_four, qc.provider AS card_provider, qc.`type` AS card_type_dim,
-    qc.label, qc.`groupId` AS group_id, qc.`balanceId` AS balance_id, qc.`firstSix` AS first_six,
-    qc.`cardBelong` AS card_belong, qc.`physicalCardStatus` AS physical_card_status, qc.`cardMode` AS card_mode,
-    qc.status AS card_status, qcg.`groupName` AS group_name, qcg.status AS group_status,
-    acc.`verifiedName` AS acc_verified_name, acc.`parentAccountId` AS parent_account_id,
-    acc.`accountType` AS account_type, acc.country AS acc_country, acc.`referralCodeId` AS referral_code_id,
-    acc.`type` AS acc_type, acc.`displayId` AS acc_display_id, acc.`tenantId` AS tenant_id,
+    qc.card_no_last_four, qc.provider AS card_provider, qc.card_type AS card_type_dim,
+    qc.label, qc.group_id, qc.balance_id, qc.first_six,
+    qc.card_belong, qc.physical_card_status, qc.card_mode,
+    qc.status AS card_status, qcg.group_name, qcg.status AS group_status,
+    acc.verified_name AS acc_verified_name, acc.verified_name_en AS acc_verified_name_en, acc.parent_account_id,
+    acc.account_type, ae.system_type, acc.country AS acc_country, acc.referral_code_id,
+    acc.account_type_role AS acc_type, acc.display_id AS acc_display_id, acc.tenant_id,
     COALESCE(aar.root_id, qt.account_id) AS root_account_id,
     JSON_VALUE(qt.special_source_data, '$.authorizationTime') AS spc_authorization_time_string,
     JSON_VALUE(qt.special_source_data, '$.authorizationDate') AS spc_authorization_date_string,
@@ -151,10 +157,11 @@ SELECT
     JSON_VALUE(qt.special_source_data, '$.systemTraceAuditNumber') AS spc_system_trace_audit_no,
     JSON_VALUE(qt.special_source_data, '$.failReason') AS spc_fail_reason
 FROM source_qbit_card_transaction qt
-LEFT JOIN lookup_qbit_card FOR SYSTEM_TIME AS OF qt.proc_time qc ON qc.id = qt.card_id
-LEFT JOIN lookup_qbit_card_group FOR SYSTEM_TIME AS OF qt.proc_time qcg ON qcg.id = qc.`groupId`
-LEFT JOIN lookup_account FOR SYSTEM_TIME AS OF qt.proc_time acc ON acc.id = qt.account_id
-LEFT JOIN lookup_api_account_relation FOR SYSTEM_TIME AS OF qt.proc_time aar ON aar.account_id = qt.account_id AND aar.delete_time IS NULL;
+LEFT JOIN lookup_qbit_card qc ON qc.id = qt.card_id
+LEFT JOIN lookup_qbit_card_group qcg ON qcg.id = qc.group_id
+LEFT JOIN lookup_account acc ON acc.id = qt.account_id
+LEFT JOIN lookup_account_extend ae ON ae.account_id = qt.account_id
+LEFT JOIN lookup_api_account_relation aar ON aar.account_id = qt.account_id AND aar.delete_time IS NULL;
 
 CREATE TEMPORARY VIEW v_direct_sale_relation AS
 SELECT txn_id, sale_id, am_id, operation_manager_id
@@ -199,7 +206,7 @@ SELECT
     b.spc_state, b.spc_zip_code, b.business_code_list, b.spc_system_trace_audit_no, b.spc_fail_reason,
     b.card_no_last_four, b.card_provider, b.card_type_dim, b.label, b.group_id, b.balance_id, b.first_six, b.card_belong,
     b.physical_card_status, b.card_mode, b.card_status, b.group_name, b.group_status, b.acc_verified_name,
-    b.parent_account_id, b.account_type, b.acc_country, b.referral_code_id, b.acc_type, b.acc_display_id, b.tenant_id,
+    b.parent_account_id, b.account_type, b.system_type, b.acc_verified_name_en, b.acc_country, b.referral_code_id, b.acc_type, b.acc_display_id, b.tenant_id,
     b.root_account_id, COALESCE(d.sale_id, r.sale_id) AS sale_id, COALESCE(d.am_id, r.am_id) AS am_id,
     COALESCE(d.operation_manager_id, r.operation_manager_id) AS operation_manager_id,
     b.create_time, b.update_time, b.delete_time, b.version
@@ -218,14 +225,14 @@ CREATE TEMPORARY TABLE sink_qbit_card_transaction_widetable (
     spc_country STRING, spc_state STRING, spc_zip_code STRING, business_code_list STRING, spc_system_trace_audit_no STRING, spc_fail_reason STRING,
     card_no_last_four STRING, card_provider STRING, card_type_dim STRING, label STRING, group_id STRING, balance_id STRING, first_six STRING,
     card_belong STRING, physical_card_status STRING, card_mode STRING, card_status STRING, group_name STRING, group_status STRING,
-    acc_verified_name STRING, parent_account_id STRING, account_type STRING, acc_country STRING, referral_code_id STRING, acc_type STRING,
+    acc_verified_name STRING, parent_account_id STRING, account_type STRING, system_type STRING, acc_verified_name_en STRING, acc_country STRING, referral_code_id STRING, acc_type STRING,
     acc_display_id STRING, tenant_id BIGINT, root_account_id STRING, sale_id STRING, am_id STRING, operation_manager_id STRING,
     create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT,
     PRIMARY KEY (id, create_time) NOT ENFORCED
 ) WITH (
     'connector' = 'adbpg', 'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'targetSchema' = 'dwm', 'tableName' = 'dwm_quantum_card_transaction_p', 'userName' = '${secret_values.ADB_PG_USERNAME}',
-    'password' = '${secret_values.ADB_PG_PASSWORD}', 'writeMode' = 'upsert', 'batchSize' = '500', 'retryWaitTime' = '5000'
+    'password' = '${secret_values.ADB_PG_PASSWORD}', 'writeMode' = 'upsert', 'batchSize' = '2000', 'retryWaitTime' = '5000'
 );
 
 INSERT INTO sink_qbit_card_transaction_widetable

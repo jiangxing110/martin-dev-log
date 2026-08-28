@@ -24,7 +24,7 @@
 | 1 | **事实主表** | `qbit_card_transaction` | — | 唯一交易事实来源 |
 | 2 | **卡维度** | `qbitCard` 当前 lookup | 交易 INSERT 时按 `card_id` 查询 | INSERT 时最新卡属性，UPDATE 保留宽表原值 |
 | 3 | **账户维度** | `account` 当前 lookup | 交易 INSERT 时按 `account_id` 查询 | INSERT 时最新账户属性，UPDATE 保留宽表原值 |
-| 3a | **账户扩展维度** | `accountExtend` 当前 lookup | 交易 INSERT 时按 `account_id` 查询 | INSERT 时最新注册国家等属性，UPDATE 保留原值 |
+| 3a | **账户扩展维度** | `accountExtend` 当前 lookup | 交易 INSERT 时按 `account_id` 查询 | `systemType` 来自 accountExtend，INSERT 时固化，UPDATE 保留原值 |
 | 4a | **API 子户映射** | `api_account_relation` | LEFT JOIN ON `aar.account_id = txn.account_id::uuid` | 仅 API 场景：子账户→root_id |
 | 4b | **销售维度** | `dim_sale_account_relation_p` 当前 lookup | 交易 INSERT 时匹配 direct + root | UPDATE 保留宽表原值 |
 
@@ -62,7 +62,7 @@
 | 20 | payment_label | varchar | 付款标签 |
 | 21 | platform_label | varchar | 平台标签 |
 | 22 | second_label | varchar | 二级标签 |
-| 23 | comments | varchar | 三方备注 |
+| 23 | comments | text | 三方备注，保留完整内容 |
 | 24 | authorization_code | varchar | Nium 授权码 |
 | 25 | is_show | boolean | 是否显示给用户 |
 | 26 | released | boolean | 是否释放交易 |
@@ -104,7 +104,7 @@
 |---|---|---|---|---|---|
 | 44 | business_code_list | jsonb | `code` | 顶层数组 | 业务码列表；兼容账户验证等场景按数组包含查询 |
 | 45 | spc_system_trace_audit_no | varchar | `systemTraceAuditNumber` | 顶层 | 清算 trace no |
-| 46 | spc_fail_reason | varchar | `failReason` | 顶层 | 失败原因 |
+| 46 | spc_fail_reason | text | `failReason` | 顶层 | 失败原因，保留完整内容 |
 
 > `specialSourceData.code` 实际为业务码数组，不是单值响应码；因此不再设计 `spc_code varchar`，直接落为 `business_code_list jsonb`。
 
@@ -149,14 +149,16 @@
 | 60 | acc_verified_name | varchar | `"verifiedName"` | 账户实名 |
 | 61 | parent_account_id | uuid | `"parentAccountId"` | 父账户 |
 | 62 | account_type | varchar(30) | `"accountType"` | 账户类型 |
-| 63 | acc_country | varchar | `accountExtend."country"`* | 注册国家 |
-| 64 | referral_code_id | varchar | `"referralCodeId"` | 推荐码 ID |
-| 65 | acc_type | varchar(50) | `"type"` | 账户角色（Merchant 等） |
-| 66 | acc_display_id | varchar(15) | `"displayId"` | 展示 ID |
-| 67 | tenant_id | int8 | `"tenantId"` | 租户 ID |
-| 68 | root_account_id | uuid | `api_account_relation.root_id` | **API 场景**：子账户的根账户 id（仅 API 子户有值，通过 oar.account_id = txn.account_id::uuid 关联） |
+| 63 | system_type | varchar(50) | `accountExtend."systemType"` | 系统类型 |
+| 64 | acc_verified_name_en | varchar(255) | `"verifiedNameEn"` | 账户英文名 |
+| 65 | acc_country | varchar | `account."country"` | 注册国家 |
+| 66 | referral_code_id | varchar | `"referralCodeId"` | 推荐码 ID |
+| 67 | acc_type | varchar(50) | `"type"` | 账户角色（Merchant 等） |
+| 68 | acc_display_id | varchar(15) | `"displayId"` | 展示 ID |
+| 69 | tenant_id | int8 | `"tenantId"` | 租户 ID |
+| 70 | root_account_id | uuid | `api_account_relation.root_id` | **API 场景**：子账户的根账户 id（仅 API 子户有值，通过 oar.account_id = txn.account_id::uuid 关联） |
 
-> * `accountExtend` 的注册国家实际字段名需以线上 DDL 为准；本文按 `country` 作为暂定映射名。
+> * 注册国家实际使用 `account.country`，英文名使用 `account.verifiedNameEn`，系统类型使用 `accountExtend.systemType`。
 
 > `root_account_id` 匹配逻辑：`api_account_relation WHERE account_id = txn.account_id AND delete_time IS NULL LIMIT 1`
 
@@ -166,9 +168,9 @@
 
 | # | 列名 | 类型 | 来源 | 说明 |
 |---|---|---|---|---|
-| 69 | sale_id | varchar(64) | `sale_id` | 管理人/销售 id |
-| 70 | am_id | varchar(64) | `am_id` | AM 用户 id |
-| 71 | operation_manager_id | varchar(64) | `operation_manager_id` | 运营管理人 id |
+| 71 | sale_id | varchar(64) | `sale_id` | 管理人/销售 id |
+| 72 | am_id | varchar(64) | `am_id` | AM 用户 id |
+| 73 | operation_manager_id | varchar(64) | `operation_manager_id` | 运营管理人 id |
 
 **匹配口径（沿用仓库现有时间线关系逻辑）：**
 - **direct 模式**：`relation_account_id = txn.account_id`，在生效窗口内匹配
@@ -302,6 +304,92 @@ dim_sale_account_relation_p (sr)                       │
 | `flink/quantum-v2/qbit-card-transaction-widetable/cdc/dwm_online_qbit_card_transaction_widetable-cdc-sql.sql` | 交易 CDC 驱动；INSERT 固化维度，UPDATE 保留原维度 | `quantum-v2/sl/cdc/dwm_online_sl_card_transaction_detail_v2-cdc-sql.sql` |
 | `flink/quantum-v2/qbit-card-transaction-widetable/batch/dwm_online_qbit_card_transaction_widetable-batch-sql.sql` | 按时间范围批量初始化/回刷 | `quantum-v2/sl/batch/dwm_online_sl_card_transaction_detail_v2-batch-sql.sql` |
 | `flink/quantum-v2/qbit-card-transaction-widetable/table-scripts/dwm_qbit_card_transaction_widetable_p.sql` | 宽表 DDL、分区和索引 | `quantum-v2/sl/table-scripts/dwm_sl_card_transaction_detail_p.sql` |
+
+---
+
+## 4.1 历史回填月度数据量
+
+以下为 `qbit_card_transaction` 按 `createTime` 月份统计的笔数，用于估算 batch 回填窗口。首次回填从 `2020-06-23 00:00:00` 开始；batch 参数统一使用 `[start_time, end_time)` 左闭右开区间，避免重复或遗漏边界交易。
+
+| 月份（createTime） | 交易笔数 |
+|---|---:|
+| 2020-06-01 | 35 |
+| 2020-07-01 | 30 |
+| 2020-08-01 | 238 |
+| 2020-09-01 | 7,468 |
+| 2020-10-01 | 7,009 |
+| 2020-11-01 | 20,247 |
+| 2020-12-01 | 85,204 |
+| 2021-01-01 | 96,507 |
+| 2021-02-01 | 60,968 |
+| 2021-03-01 | 175,532 |
+| 2021-04-01 | 149,379 |
+| 2021-05-01 | 199,168 |
+| 2021-06-01 | 157,050 |
+| 2021-07-01 | 144,049 |
+| 2021-08-01 | 230,172 |
+| 2021-09-01 | 143,456 |
+| 2021-10-01 | 121,067 |
+| 2021-11-01 | 121,448 |
+| 2021-12-01 | 244,128 |
+| 2022-01-01 | 227,629 |
+| 2022-02-01 | 174,184 |
+| 2022-03-01 | 314,552 |
+| 2022-04-01 | 512,114 |
+| 2022-05-01 | 492,576 |
+| 2022-06-01 | 783,315 |
+| 2022-07-01 | 1,552,187 |
+| 2022-08-01 | 1,024,484 |
+| 2022-09-01 | 962,470 |
+| 2022-10-01 | 1,277,848 |
+| 2022-11-01 | 1,436,935 |
+| 2022-12-01 | 1,241,278 |
+| 2023-01-01 | 1,391,630 |
+| 2023-02-01 | 1,976,480 |
+| 2023-03-01 | 2,580,307 |
+| 2023-04-01 | 1,443,982 |
+| 2023-05-01 | 819,900 |
+| 2023-06-01 | 662,023 |
+| 2023-07-01 | 1,521,874 |
+| 2023-08-01 | 2,209,282 |
+| 2023-09-01 | 2,279,488 |
+| 2023-10-01 | 3,591,594 |
+| 2023-11-01 | 1,620,493 |
+| 2023-12-01 | 1,517,507 |
+| 2024-01-01 | 1,390,426 |
+| 2024-02-01 | 1,181,155 |
+| 2024-03-01 | 1,933,189 |
+| 2024-04-01 | 1,965,287 |
+| 2024-05-01 | 2,214,880 |
+| 2024-06-01 | 2,016,092 |
+| 2024-07-01 | 1,936,110 |
+| 2024-08-01 | 1,894,682 |
+| 2024-09-01 | 1,682,437 |
+| 2024-10-01 | 1,683,534 |
+| 2024-11-01 | 1,909,954 |
+| 2024-12-01 | 2,298,269 |
+| 2025-01-01 | 2,199,298 |
+| 2025-02-01 | 2,052,329 |
+| 2025-03-01 | 2,627,629 |
+| 2025-04-01 | 2,730,752 |
+| 2025-05-01 | 2,956,645 |
+| 2025-06-01 | 2,877,152 |
+| 2025-07-01 | 3,567,513 |
+| 2025-08-01 | 3,974,703 |
+| 2025-09-01 | 2,653,402 |
+| 2025-10-01 | 3,384,229 |
+| 2025-11-01 | 3,847,122 |
+| 2025-12-01 | 5,127,855 |
+| 2026-01-01 | 6,065,034 |
+| 2026-02-01 | 5,139,622 |
+| 2026-03-01 | 6,274,878 |
+| 2026-04-01 | 5,952,729 |
+| 2026-05-01 | 5,348,182 |
+| 2026-06-01 | 5,567,550 |
+| 2026-07-01 | 5,799,827 |
+| 2026-08-01 | 4,336,913 |
+
+回填切分建议：2022 年及以前可按月、2023-2024 年按半月、2025 年按 7 天、2026 年按 3 天执行；每次部署只传入一个切片的 `start_time` 与 `end_time`。
 
 ---
 

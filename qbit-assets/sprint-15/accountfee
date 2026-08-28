@@ -1,0 +1,76 @@
+INSERT INTO "public"."accountFee" ( "remarks", "createTime", "updateTime", "deleteTime", "version", "accountId", "feeType", "rate", "mathType", "startTime", "endTime", "type", "low", "high", "threshold", "childFeeType", "raw", "provider", "providerField", "enable", "collectionRate") 
+VALUES ( '', now(), now(), NULL, 1, '00000000-0000-0000-0000-000000000000', 'QuantumCardVerificationFeeByInternational_Caas', '0.5', 'Count', '2026-08-15 00:00:00+08', '2099-02-01 23:59:59+08', 'Tiered', '0', NULL, NULL, 'MasterAccount', NULL, 'BlueBanc', NULL, 't', '0');
+
+INSERT INTO "public"."accountFee" ( "remarks", "createTime", "updateTime", "deleteTime", "version", "accountId", "feeType", "rate", "mathType", "startTime", "endTime", "type", "low", "high", "threshold", "childFeeType", "raw", "provider", "providerField", "enable", "collectionRate") 
+VALUES ( '', now(), now(), NULL, 1, '00000000-0000-0000-0000-000000000000', 'QuantumCardVerificationFeeByDomestic_Caas', '0.1', 'Count', '2026-08-15 00:00:00+08', '2099-02-01 23:59:59+08', 'Tiered', '0', NULL, NULL, 'MasterAccount', NULL, 'BlueBanc', NULL, 't', '0');
+
+
+INSERT INTO "public"."accountFee" (
+    "remarks",
+    "deleteTime",
+    "version",
+    "accountId",
+    "feeType",
+    "rate",
+    "mathType",
+    "startTime",
+    "endTime",
+    "type",
+    "threshold",
+    "childFeeType",
+    "raw",
+    "provider",
+    "providerField",
+    "enable",
+    "collectionRate"
+)
+SELECT
+    '',
+    NULL,
+    1,
+    '00000000-0000-0000-0000-000000000000'::uuid,
+    v.fee_type,
+    0,
+    v.math_type,
+    '2026-01-01 00:00:00+08'::timestamptz,
+    '2099-12-01 23:59:59.999+08'::timestamptz,
+    'Tiered',
+    NULL,
+    'MasterAccount',
+    NULL,
+    p.provider,
+    NULL,
+    TRUE,
+    0
+FROM (
+    VALUES
+        ('IssuerCardServiceFeesInt_Caas', 'Percent'),
+        ('IssuerTransactionFeesByAuthIntByDomestic_Caas', 'Count'),
+        ('IssuerTransactionFeesByAuthInt_Caas', 'Count'),
+        ('IssuerTransactionFeesSettlementIntByDomestic_Caas', 'Count'),
+        ('IssuerTransactionFeesSettlementInt_Caas', 'Count'),
+        ('SchemeRefundByDomestic_Caas', 'Count'),
+        ('SchemeRefundByInternational_Caas', 'Count'),
+        ('SchemeReversalByDomestic_Caas', 'Count'),
+        ('SchemeReversalByInternational_Caas', 'Count'),
+        ('SchemeSignatureFee_Caas', 'Count'),
+        ('SchemeVerificationFeeByDomestic_Caas', 'Count'),
+        ('SchemeVerificationFeeByInternational_Caas', 'Count'),
+        ('VisaRiskManagerInt_Caas', 'Count')
+) AS v (
+    fee_type,
+    math_type
+)
+CROSS JOIN (
+    VALUES
+        ('QbitIssuing'::text),
+        ('I2c'::text),
+        (NULL::text)
+) AS p(provider)
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM "public"."accountFee" af
+    WHERE af."accountId" = '00000000-0000-0000-0000-000000000000'::uuid
+      AND af."feeType" = v.fee_type
+      AND af."provider" IS NOT DISTINCT FROM p.provider
+);

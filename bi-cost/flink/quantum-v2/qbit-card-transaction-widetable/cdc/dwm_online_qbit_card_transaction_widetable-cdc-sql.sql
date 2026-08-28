@@ -127,6 +127,7 @@ CREATE TEMPORARY TABLE lookup_account (
     `verifiedName` STRING,
     `parentAccountId` STRING,
     `accountType` STRING,
+    `verifiedNameEn` STRING,
     country STRING,
     `referralCodeId` STRING,
     `type` STRING,
@@ -140,6 +141,21 @@ CREATE TEMPORARY TABLE lookup_account (
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver'
+);
+
+CREATE TEMPORARY TABLE lookup_account_extend (
+    `accountId` STRING,
+    `systemType` STRING,
+    PRIMARY KEY (`accountId`) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = 'accountExtend',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'lookup.cache.max-rows' = '100000',
+    'lookup.cache.ttl' = '10 min'
 );
 
 CREATE TEMPORARY TABLE lookup_api_account_relation (
@@ -191,6 +207,8 @@ CREATE TEMPORARY TABLE lookup_wide_snapshot (
     acc_verified_name STRING,
     parent_account_id STRING,
     account_type STRING,
+    system_type STRING,
+    acc_verified_name_en STRING,
     acc_country STRING,
     referral_code_id STRING,
     acc_type STRING,
@@ -277,6 +295,8 @@ SELECT
     CASE WHEN hist.id IS NOT NULL THEN hist.acc_verified_name ELSE acc.`verifiedName` END AS acc_verified_name,
     CASE WHEN hist.id IS NOT NULL THEN hist.parent_account_id ELSE acc.`parentAccountId` END AS parent_account_id,
     CASE WHEN hist.id IS NOT NULL THEN hist.account_type ELSE acc.`accountType` END AS account_type,
+    CASE WHEN hist.id IS NOT NULL THEN hist.system_type ELSE ae.`systemType` END AS system_type,
+    CASE WHEN hist.id IS NOT NULL THEN hist.acc_verified_name_en ELSE acc.`verifiedNameEn` END AS acc_verified_name_en,
     CASE WHEN hist.id IS NOT NULL THEN hist.acc_country ELSE acc.country END AS acc_country,
     CASE WHEN hist.id IS NOT NULL THEN hist.referral_code_id ELSE acc.`referralCodeId` END AS referral_code_id,
     CASE WHEN hist.id IS NOT NULL THEN hist.acc_type ELSE acc.`type` END AS acc_type,
@@ -297,6 +317,8 @@ LEFT JOIN lookup_qbit_card_group FOR SYSTEM_TIME AS OF qt.proc_time qcg
     ON qcg.id = qc.`groupId`
 LEFT JOIN lookup_account FOR SYSTEM_TIME AS OF qt.proc_time acc
     ON acc.id = qt.`accountId`
+LEFT JOIN lookup_account_extend FOR SYSTEM_TIME AS OF qt.proc_time ae
+    ON ae.`accountId` = qt.`accountId`
 LEFT JOIN lookup_api_account_relation FOR SYSTEM_TIME AS OF qt.proc_time aar
     ON aar.account_id = qt.`accountId`
 LEFT JOIN lookup_sale_relation FOR SYSTEM_TIME AS OF qt.proc_time sr
@@ -306,7 +328,7 @@ LEFT JOIN lookup_sale_relation FOR SYSTEM_TIME AS OF qt.proc_time root_sr
 LEFT JOIN lookup_wide_snapshot FOR SYSTEM_TIME AS OF qt.proc_time AS hist
     ON hist.id = qt.id AND hist.create_time = qt.`createTime`;
 
--- 目标 schema 需与 design-docs/qbit-widetable-ddl.sql 的 75 列保持一致。
+-- 目标 schema 需与 design-docs/qbit-widetable-ddl.sql 的 77 列保持一致。
 -- 这里使用显式列清单，避免维度列顺序变化导致误写。
 CREATE TEMPORARY TABLE sink_quantum_card_transaction_widetable (
     id STRING, account_id STRING, card_id STRING, provider STRING, business_type STRING, status STRING,
@@ -321,7 +343,7 @@ CREATE TEMPORARY TABLE sink_quantum_card_transaction_widetable (
     business_code_list STRING, spc_system_trace_audit_no STRING, spc_fail_reason STRING,
     card_no_last_four STRING, card_provider STRING, card_type_dim STRING, label STRING, group_id STRING, balance_id STRING,
     first_six STRING, card_belong STRING, physical_card_status STRING, card_mode STRING, card_status STRING, group_name STRING, group_status STRING,
-    acc_verified_name STRING, parent_account_id STRING, account_type STRING, acc_country STRING, referral_code_id STRING, acc_type STRING,
+    acc_verified_name STRING, parent_account_id STRING, account_type STRING, system_type STRING, acc_verified_name_en STRING, acc_country STRING, referral_code_id STRING, acc_type STRING,
     acc_display_id STRING, tenant_id BIGINT, root_account_id STRING, sale_id STRING, am_id STRING, operation_manager_id STRING,
     create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT,
     PRIMARY KEY (id, create_time) NOT ENFORCED

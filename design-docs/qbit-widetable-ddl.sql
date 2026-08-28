@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS "dwm"."dwm_quantum_card_transaction_p" (
   "payment_label"            varchar(100),
   "platform_label"           varchar(100),
   "second_label"             varchar(100),
-  "comments"                 varchar(500),
+  "comments"                 text,
   "authorization_code"       varchar(100),
   "is_show"                  boolean,
   "released"                 boolean,
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS "dwm"."dwm_quantum_card_transaction_p" (
   "spc_zip_code"                  varchar(30),
   "business_code_list"            jsonb,
   "spc_system_trace_audit_no"     varchar(100),
-  "spc_fail_reason"               varchar(500),
+  "spc_fail_reason"               text,
 
   -- 卡维度字段，来源 public."qbitCard"
   "card_no_last_four"         varchar(10),
@@ -78,10 +78,12 @@ CREATE TABLE IF NOT EXISTS "dwm"."dwm_quantum_card_transaction_p" (
   "group_name"                varchar(255),
   "group_status"              varchar(30),
 
-  -- 账户维度字段，country 来源 public."accountExtend"
+  -- 账户维度字段，来源 public."account" / public."accountExtend"
   "acc_verified_name"         varchar(255),
   "parent_account_id"         uuid,
   "account_type"              varchar(30),
+  "system_type"               varchar(50),
+  "acc_verified_name_en"      varchar(255),
   "acc_country"               varchar(100),
   "referral_code_id"          varchar(100),
   "acc_type"                 varchar(50),
@@ -105,6 +107,18 @@ CREATE TABLE IF NOT EXISTS "dwm"."dwm_quantum_card_transaction_p" (
 )
 PARTITION BY RANGE ("create_time" "pg_catalog"."timestamptz_ops");
 
+-- 已存在的宽表不会因 CREATE TABLE IF NOT EXISTS 自动补列，需显式执行迁移。
+ALTER TABLE "dwm"."dwm_quantum_card_transaction_p"
+  ADD COLUMN IF NOT EXISTS "acc_verified_name_en" varchar(255);
+
+ALTER TABLE "dwm"."dwm_quantum_card_transaction_p"
+  ADD COLUMN IF NOT EXISTS "system_type" varchar(50);
+
+-- 备注和三方失败原因存在超过 500 字符的历史值，使用 text 保留原始内容。
+ALTER TABLE "dwm"."dwm_quantum_card_transaction_p"
+  ALTER COLUMN "comments" TYPE text,
+  ALTER COLUMN "spc_fail_reason" TYPE text;
+
 COMMENT ON TABLE "dwm"."dwm_quantum_card_transaction_p"
   IS '量子卡交易分析大宽表；一行对应一条 qbit_card_transaction，不依赖 quantum_card_transaction_extend';
 
@@ -122,8 +136,12 @@ COMMENT ON COLUMN "dwm"."dwm_quantum_card_transaction_p"."related_qbit_tx_id"
   IS '退款来源交易 ID';
 COMMENT ON COLUMN "dwm"."dwm_quantum_card_transaction_p"."special_source_data"
   IS '三方源数据 JSON；低频或未稳定字段保留在此';
+COMMENT ON COLUMN "dwm"."dwm_quantum_card_transaction_p"."comments"
+  IS '交易备注，保留源表完整内容';
 COMMENT ON COLUMN "dwm"."dwm_quantum_card_transaction_p"."business_code_list"
   IS '业务码列表，直接来源 qbit_card_transaction.specialSourceData.code，兼容数组包含查询';
+COMMENT ON COLUMN "dwm"."dwm_quantum_card_transaction_p"."spc_fail_reason"
+  IS '三方失败原因，来源 specialSourceData.failReason，保留完整内容';
 COMMENT ON COLUMN "dwm"."dwm_quantum_card_transaction_p"."balance_id"
   IS '卡余额关联 ID，用于余额、资金和交易核对';
 COMMENT ON COLUMN "dwm"."dwm_quantum_card_transaction_p"."card_status"
@@ -133,7 +151,12 @@ COMMENT ON COLUMN "dwm"."dwm_quantum_card_transaction_p"."group_name"
 COMMENT ON COLUMN "dwm"."dwm_quantum_card_transaction_p"."group_status"
   IS '卡组状态，来源 qbitCardGroup.status';
 COMMENT ON COLUMN "dwm"."dwm_quantum_card_transaction_p"."acc_country"
-  IS '账户注册国家，来源 accountExtend.country；实际字段名以线上 DDL 为准';
+  IS '账户注册国家，来源 account.country';
+
+COMMENT ON COLUMN "dwm"."dwm_quantum_card_transaction_p"."acc_verified_name_en"
+  IS '账户英文名，来源 account.verifiedNameEn；交易 INSERT 时固化';
+COMMENT ON COLUMN "dwm"."dwm_quantum_card_transaction_p"."system_type"
+  IS '系统类型，来源 accountExtend.systemType；交易 INSERT 时固化';
 COMMENT ON COLUMN "dwm"."dwm_quantum_card_transaction_p"."operation_manager_id"
   IS '运营管理人 ID，来源 dim_sale_account_relation_p.operation_manager_id';
 COMMENT ON COLUMN "dwm"."dwm_quantum_card_transaction_p"."create_time"
