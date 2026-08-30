@@ -1,0 +1,19 @@
+/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/ods
+看看这个文件下这些脚本
+ods_online_global_sub_account-cdc-sql
+ods_online_crypto_assets_addresses-cdc-sql
+ods_online_crypto_assets_transactions-cdc-sql
+ods_online_idv_channel_request_record-cdc-sql
+ods_online_payment_transaction_record-cdc-sql
+ods_online_qbit_physical_card-cdc-sql
+我希望建一份batch和一份cdc到下面两个文件夹
+/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/online/cdc/ods-day-cdc
+/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/online/batch/ods
+这个文件夹里不过我要你参考
+/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/quantum-v2/bb/batch/dwm_online_bb_card_transaction_detail_v2-batch-sql.sql
+bi-cost/flink/quantum-v2/bb/cdc/dwm_online_bb_card_transaction_detail_v2-cdc-sql.sql
+之前bb交易的cdc batch
+
+13
+8
+5

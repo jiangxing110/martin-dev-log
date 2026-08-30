@@ -1,71 +1,115 @@
-https://circle-test.qbitnetwork.com/api/statement/customer-settle?startDate=2026-07-01%2000%3A00%3A00&endDate=2026-07-31%2023%3A59%3A59&accountId=b276d486-e8c9-4b79-b390-7bcd7d4dbacc&datetype=month
+CREATE TABLE "dws"."dws_tpv_metrics" (
+  "entity" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "state_date" date NOT NULL,
+  "product" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "business_domain" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "metric_code" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "metric_name" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "metric_label" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "metric_type" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "metric_value" numeric(20,3),
+  "source_system" varchar COLLATE "pg_catalog"."default",
+  "create_time" timestamp(6),
+  CONSTRAINT "dws_tpv_metrics_pkey" PRIMARY KEY ("entity", "state_date", "product", "business_domain", "metric_code", "metric_name", "metric_label", "metric_type")
+)
+;
+SELECT product,business_domain,metric_name,metric_code
+FROM dws_tpv_metrics 
+WHERE product not in ('acquiring','crypto','global_account','treasury','crypto_connect','open_api')
+and metric_code not in ('card_consumption_amount','interchange_revenue_amount','active_physical_card_count','card_consumption_amount','fees','fx_markup')
+and metric_code not in ('qi_interchange_income_amount','bb_interchange_income_amount','pc_interchange_income_amount','bz_interchange_income_amount','customer_cash_back_amount')
+GROUP BY product,business_domain,metric_name,metric_code
+
+量子卡收入
+card	revenue	量子账户充值手续费	qbit_account_recharge_fee_amount
+card	revenue	FX跨境交易手续费	fx_fee_amount
+card	revenue	APPLE PAY手续费	apple_pay_fee_amount
+card	revenue	活跃卡费	active_card_fee_amount
+card	revenue	授权手续费	card_authorization_fee_amount
+card	revenue	撤销手续费	card_reversal_fee_amount
+card	revenue	实体卡手续费	physical_card_service_fee_amount
+card	revenue	虚拟开卡费	virtual_card_create_fee_amount
+card	revenue	结算手续费	settle_fee_amount
+card	revenue	ATM取现手续费	atm_fee_amount
+card	revenue	拒付手续费	card_declined_fee_amount
+card	revenue	退款手续费	card_refund_fee_amount
+量子卡api 应收
+open_api	revenue	API客户账单-月度API费（应收）	api_client_bill_monthly_api_fee_receivable_amount
+open_api	revenue	API客户账单-月度FX手续费（应收）	api_client_bill_monthly_fx_fee_receivable_amount
+open_api	revenue	API客户账单-API客户低消（应收）	api_client_bill_minimum_commitment_receivable_amount
+open_api	revenue	API客户账单-加密资产（应收）	api_client_bill_monthly_crypto_fee_receivable_amount
+open_api	revenue	API客户账单-月结手续费（应收）	api_client_bill_monthly_fee_receivable_amount
+open_api	revenue	API客户账单-月度KYC手续费（应收）	api_client_bill_monthly_kyc_fee_receivable_amount
+量子卡渠道返现
+BZ	revenue	BZ渠道返现	bz_interchange_income_amount
+QI	revenue	QI渠道返现	qi_interchange_income_amount
+BB	revenue	BB渠道返现	bb_interchange_income_amount
+PC	revenue	PC渠道返现	pc_interchange_income_amount
+量卡客户返现
+card	revenue	Clients Rebate	customer_cash_back_amount
+
+全球账户
+收入
+global_account	revenue	全球账户付款手续费	global_account_payment_fee_amount
+global_account	revenue	全球账户子账户创建收入	global_account_sub_account_create_fee_amount
+global_account	revenue	全球账户入金手续费	global_account_deposit_fee_amount
+global_account	revenue	全球账户汇差收入	global_account_fx_income_amount
+客户返现金
+global_account	revenue	Clients Rebate	global_account_client_rebate_amount
+
+收单
+acquiring	revenue	收单手续费	acquiring_fee
+acquiring	cogs	收单成本	acquiring_cost
+
+加密
+收入
+crypto	revenue	加密资产出金手续费	crypto_assets_withdrawal_fee_amount
+crypto	revenue	加密资产承兑手续费	crypto_assets_acceptance_fee_amount
+crypto	revenue	加密资产入金手续费	crypto_assets_deposit_fee_amount
+客户返现
+crypto_connect	revenue	Clients Rebate	crypto_connect_client_rebate_amount
+
+粒子理财
+treasury	revenue	粒子理财技术服务手续费	treasury_service_fee_amount
+treasury	cogs	粒子理财成本	treasury_cost_amount
 
 
-accountId=01492282-fee4-42d0-9d85-9a08658cb89f&datetype=month
+/api/admin/bi/v2/report-profit/product-income-effective-profit-cogs
+看看我们这个接口
+我想要改一下收入从tpv 表区 成本想你看看我们当前
+bi-cost/online/incremental-view 这个下面
+/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/online/incremental-view/mv_channel_cost_daily.sql
+/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/online/incremental-view/mv_gross_profit_daily.sql
+这两个是成本的逻辑
 
-statement/customer-settle?startDate=2026-07-01%2000%3A00%3A00&endDate=2026-07-31%2023%3A59%3A59&accountId=01492282-fee4-42d0-9d85-9a08658cb89f&datetype=mont
+我要计算
+各个渠道的
+收入 有效收入 成本 毛利
 
+收入=（收入+ 渠道返回）+api账单应收
+有效收入=（收入+ 渠道返回-客户返现）+api账单应收
+成本:理财的成本还是从tpv 里去
 
-看看销售毛利报表
-1.SaleCommissionMockServiceImpl我想这个删除
-2.非生产环境我想查询
-@DS("dw")
-public interface DwsSaleCommissionMapper {
-    现在是@DS("dw1")本质上
-    这两个是一个库 但是我不确定数据库账户是不是一个改写以后会不会有问题
-并且未来兼容测试环境所以我想建一个DwsLocalSaleCommissionMapper
+entity 区分 api 客户还是直客
 
-912095c6-1dff-4a4c-a3e0-b9432964ebbc
-9a7f0c14-3504-4535-9c88-7798c76062a0
-131bbac5-0f99-437c-b09e-509650f4f2bb
-f025cba7-8ba6-4b08-9a4a-19ea1517fcfb
-06120474-5030-4420-8cd5-28868cbbdfed
-40255e69-1dc9-46ea-a353-30f3ed48dc27
-d567b31d-e724-40d6-aa57-3a823547e445
-f9bf62f3-2d42-4f7e-ac87-2ed0405ad7e2
-547ea3e2-96fd-44e4-9284-f724f1cb90f6
-cb0fed22-20c9-4215-9a99-0eda1bbc7ca5
-cdc1e549-954d-4f03-88c1-d75d899c1a90
-d2cada3a-b56b-49a2-9c4b-e14359806d28
-1198df42-c426-4159-a6f3-ff575f9b99f3
-1bde980a-de89-44a7-8fac-69b44d75a4e1
-083e22b7-65fd-4058-9a20-59047c6d5418
-091db31f-1bd8-4f17-a857-2f0886532121
-3fca45af-39c0-49b4-aac1-99efb57f1d99
-400a4e35-3a8c-4da3-9687-9af4352636d2
-54c63b9f-261c-457c-98ea-3c2d3ba04176
-573927b6-3b6f-4ffe-b2c5-2dd8b498b5d1
-acbdc34c-5120-43fd-b36d-e28e95557807
-b1e281c3-d67b-4092-ae7c-2b36a28e9452
-441aa940-e92a-46b0-aed4-08cad62b3281
-7101f85c-8855-404b-83d7-898adf9936b0
-8340d487-ee31-45cd-bc53-5328a9426ff6
-8ce2d411-7330-4a9a-bd4e-5ed234aefb5e
-b8c8ea84-92c6-4dd5-9db1-9f121f527e37
-bf43f063-08f1-4420-b976-1f397590d861
-c4378321-f169-4d32-b9d8-c05a123bc0c7
-e22cc906-3c23-4387-a194-96b3dd8f08f1
-f220b6e0-7219-41d9-9084-a806694b1bc0
-1d3aa959-6827-4dc8-8468-186536691765
-48f19b48-2c8b-4433-af86-95aaac9a90b1
-54c63b9f-261c-457c-98ea-3c2d3ba04176
-5b03cc9a-f990-43ff-95f2-572085f157ea
-6808a41a-3b91-4d73-bc5c-948157e51ed1
-a2fb1d47-1670-4bc2-ba8e-8a387c92bb88
-ba53b4b2-e0ef-4ad8-9207-e4b80026d99b
-dc4915de-e2e6-4b11-a5e3-6d43e58dc26c
-e097c876-1867-4e89-92b9-14ea918ad008
-f4f4788f-0bfc-41d6-9096-1ddd9b96eac1
-fbece118-2c5a-459d-a759-fbe92d50d05d
-52c276a8-bd16-44e0-a6fa-86a301ab7977
-6e1087b8-ecbc-4244-9c11-beaf71935fe3
-fad941f0-7617-4a6c-9a9e-10d8599f955e
+state_date 筛选时间
 
-我想把这些id 在 dws_sales_commission_snapshot_detail_p里修改
+https://github.com/PalmDrive/qbit-assets/pull/7375
+https://github.com/PalmDrive/qbit_admin/pull/3947
 
 
+qbit_card_transaction 在 PG Test 源库；
+而 dim_sale_account_relation_p、部分 api_account_relation 
+qbitCard、account、accountExtend、
+是通过 ADB PG 配置读取的。
+6+3+4
 
-public.qbit_card_transaction
-public.card_bin 
-public.qbitCard
-public.qbitCardSettlement
+2+
+1
+
+ods_online_global_sub_account-cdc-sql
+ods_online_crypto_assets_addresses-cdc-sql
+ods_online_crypto_assets_transactions-cdc-sql
+ods_online_idv_channel_request_record-cdc-sql
+ods_online_payment_transaction_record-cdc-sql
+ods_online_qbit_physical_card-cdc-sql

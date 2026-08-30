@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-06
--- Updated Time:   2026-08-06 16:48:08
+-- Updated Time:   2026-08-30 00:00:00
 -- Description:    销售佣金API月账单20号后补入任务
 -- 作业元信息：
 --   作业类型：月度批式CDC补入任务
@@ -12,6 +12,7 @@
 --   2. 只补 open_api 月账单 future_payout 明细，不更新 dws_sales_commission_snapshot_p 汇总。
 --   3. 当前物化视图中 open_api/month_receivable 映射为 api_monthly_billing，本任务补入时改写为 api_monthly_billing/future_payout。
 --   4. payable_settlement_month = settlement_month + 1个月，对应下下月12号发薪展示。
+--   5. 字段已对齐 dws.mv_sales_commission_recent_estimate 当前生产口径，不读取已移除的运营经理字段。
 --********************************************************************--
 
 SET 'parallelism.default' = '2';
