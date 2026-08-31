@@ -1,34 +1,32 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-25 00:00:00
--- Updated Time:   2026-08-30 23:45:00
--- Description:    量子卡交易大宽表 CDC
+-- Updated Time:   2026-08-31 00:10:00
+-- Description:    量子卡交易大宽表两小时窗口增量回刷
 --
 -- 口径：
---   1. 只有当前交易子分区 qbit_card_transaction_2026q3 是驱动 CDC 源。
+--   1. 每次执行读取当前时间前 2 小时至当前时间的 qbit_card_transaction_2026q3。
 --   2. INSERT 读取当时 lookup 到的卡/卡组/账户/销售字段并固化。
 --   3. UPDATE 读取目标宽表已有维度字段，只替换交易主表字段。
 --   4. qbitCard、account、accountExtend 使用 ODS 表做 JDBC Lookup；qbitCardGroup 直接查询物理表并将 UUID 转为 text。
 --   5. business_code_list 直接来自 specialSourceData.code。
 --   6. qbit_card_group_transaction 不加入本宽表，避免一对多展开。
---   7. CDC 使用 latest-offset，仅处理任务进入 RUNNING 后的交易变更；历史缺口由 Batch 补齐至该时刻。
+--   7. 本脚本是按两小时调度的 JDBC 增量回刷，不使用 replication slot；调度窗口为当前时间前 2 小时至当前时间。
 --
 --   8. api_account_relation、dim_sale_account_relation_p 和宽表历史快照继续使用 JDBC Lookup。
 --
--- 注意：qbitCard、account、accountExtend 的 ODS 同步任务需先正常运行；ADB PG 用户需具备 public."qbitCardGroup" 查询权限。
+-- 注意：qbitCard、account、accountExtend 的 ODS 同步任务需先正常运行；本脚本由平台每两小时调度一次。
 --********************************************************************--
 
-SET 'parallelism.default' = '2';
+SET 'parallelism.default' = '1';
 SET 'sink.parallelism' = '1';
 -- 关闭算子链，便于在 VVP 运行图中分别观察 Source / LookupJoin / Calc / Sink。
 SET 'pipeline.operator-chaining' = 'false';
 SET 'table.exec.sink.not-null-enforcer' = 'DROP';
--- CDC 逐条处理，不启用 MiniBatch，避免下游批量缓冲造成观测延迟。
+-- 两小时窗口一次性读取，使用 JDBC Source，不启用 MiniBatch。
 SET 'table.exec.mini-batch.enabled' = 'false';
--- JDBC Lookup 右表不等待完整快照，避免处理时间 Temporal Join 在启动阶段被拒绝。
--- 交易到达而维度 Lookup 尚未就绪时，对应维度字段可能为 NULL；应先确保 ODS 维表已可查询。
-SET 'table.exec.proc-time-temporal-join.no-wait' = 'true';
 SET 'table.dml-sync' = 'true';
+SET 'execution.batch-shuffle-mode' = 'ALL_EXCHANGES_BLOCKING';
 SET 'execution.checkpointing.interval' = '60s';
 SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
 SET 'execution.checkpointing.timeout' = '10min';
@@ -69,36 +67,19 @@ CREATE TEMPORARY TABLE source_qbit_card_transaction (
     `updateTime`            TIMESTAMP(6),
     `deleteTime`            TIMESTAMP(6),
     version                INT,
-    proc_time AS PROCTIME(),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
-    'connector' = 'postgres-cdc',
-    -- CDC 源恢复使用已验证具备 replication 权限的 PG_TEST 配置。
-    'hostname' = '${secret_values.PG_TEST_HOST}',
-    'port' = '${secret_values.PG_TEST_PORT1}',
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.PG_TEST_HOST}:${secret_values.PG_TEST_PORT1}/${secret_values.PG_TEST_DATABASE}',
+    'table-name' = '(SELECT "id"::text AS id, "accountId"::text AS accountid, "cardId"::text AS cardid, "provider" AS provider, "businessType" AS businesstype, status AS status, "displayStatus" AS displaystatus, currency AS currency, CAST("settleAmount" AS numeric(20,4)) AS settleamount, CAST("originalAmount" AS numeric(20,4)) AS originalamount, "transactionCurrency" AS transactioncurrency, CAST("transactionAmount" AS numeric(20,4)) AS transactionamount, CAST(fee AS numeric(20,4)) AS fee, detail AS detail, "sourceId" AS sourceid, "transactionTime" AS transactiontime, "completeTime" AS completetime, "transactionId"::text AS transactionid, "relatedQbitTxId"::text AS relatedqbittxid, "paymentLabel" AS paymentlabel, "platformLabel" AS platformlabel, "secondLabel" AS secondlabel, comments AS comments, "authorizationCode" AS authorizationcode, "isShow" AS isshow, released AS released, "thirdCompleteTime" AS thirdcompletetime, "specialSourceData"::text AS specialsourcedata, "createTime" AS createtime, "updateTime" AS updatetime, "deleteTime" AS deletetime, version AS version FROM public."qbit_card_transaction_2026q3" WHERE (("createTime" >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND "createTime" < CURRENT_TIMESTAMP) OR ("updateTime" >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND "updateTime" < CURRENT_TIMESTAMP))) AS qbit_card_transaction_2h_f',
     'username' = '${secret_values.PG_TEST_USERNAME}',
     'password' = '${secret_values.PG_TEST_PASSWORD}',
-    'database-name' = '${secret_values.PG_TEST_DATABASE}',
-    'schema-name' = 'public',
-    -- 源表为当前实际写入的 2026 Q3 子分区；无需创建专用 Publication。
-    'table-name' = 'qbit_card_transaction_2026q3',
-    -- 子分区独立 Slot；进入 RUNNING 的时刻即为 Batch 补数截止点。
-    'slot.name' = 'flink_slot_quantum_card_transaction_widetable_2026q3_v1',
-    'decoding.plugin.name' = 'pgoutput',
-    'debezium.publication.name' = 'flink_cdc_publication',
-    'debezium.connector.pgout.publication.autocreate' = 'false',
-    'debezium.slot.drop.on.stop' = 'false',
-    -- Batch 补齐交接时刻之前的历史数据；CDC 从该 Slot 建立后的最新位点接收增量。
-    'scan.startup.mode' = 'latest-offset',
-    -- 当前 Flink CDC 版本要求 latest-offset 配合增量快照开关开启。
-    'scan.incremental.snapshot.enabled' = 'true',
-    'scan.incremental.snapshot.chunk.size' = '50000',
-    'debezium.database.jdbc.max.size' = '3',
-    'debezium.database.jdbc.idle.timeout.ms' = '60000',
-    'heartbeat.interval.ms' = '30000'
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '2000',
+    'scan.auto-commit' = 'false'
 );
 
--- CDC 不按 createTime 过滤：历史交易在交接后发生 UPDATE 时也应更新宽表交易字段。
+-- 所有维度 JDBC Source 均在数据库侧限制到当前两小时窗口，避免普通 JOIN 扫描全表。
 
 -- qbitCard 已由独立 ODS CDC 作业同步为 snake_case，宽表使用 JDBC Lookup。
 CREATE TEMPORARY TABLE lookup_qbit_card (
@@ -118,7 +99,7 @@ CREATE TEMPORARY TABLE lookup_qbit_card (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = 'ods.ods_qbit_card',
+    'table-name' = '(SELECT qc.id, qc.qbit_card_no_last_four, qc.provider, qc.type, qc.label, qc.group_id, qc.balance_id, qc.first_six, qc.card_belong, qc.physical_card_status, qc.card_mode, qc.status FROM ods.ods_qbit_card qc WHERE EXISTS (SELECT 1 FROM public."qbit_card_transaction_2026q3" qt WHERE qt."cardId"::text = qc.id::text AND ((qt."createTime" >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND qt."createTime" < CURRENT_TIMESTAMP) OR (qt."updateTime" >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND qt."updateTime" < CURRENT_TIMESTAMP)))) AS qbit_card_dim_2h_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -135,7 +116,7 @@ CREATE TEMPORARY TABLE lookup_qbit_card_group (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
     -- 子查询先将 UUID 主键转为 text，避免 JDBC Lookup 生成 uuid = varchar。
-    'table-name' = '(SELECT "id"::text AS id, "groupName", status FROM public."qbitCardGroup") AS qbit_card_group_f',
+    'table-name' = '(SELECT qcg."id"::text AS id, qcg."groupName" AS groupname, qcg.status AS status FROM public."qbitCardGroup" qcg WHERE EXISTS (SELECT 1 FROM public."qbit_card_transaction_2026q3" qt INNER JOIN ods.ods_qbit_card qc ON qt."cardId"::text = qc.id::text WHERE qc.group_id::text = qcg."id"::text AND ((qt."createTime" >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND qt."createTime" < CURRENT_TIMESTAMP) OR (qt."updateTime" >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND qt."updateTime" < CURRENT_TIMESTAMP)))) AS qbit_card_group_2h_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -158,7 +139,7 @@ CREATE TEMPORARY TABLE lookup_account (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = 'ods.ods_account',
+    'table-name' = '(SELECT acc.id, acc.verified_name, acc.parent_account_id, acc.account_type, acc.verified_name_en, acc.country, acc.referral_code_id, acc.type, acc.display_id, acc.tenant_id FROM ods.ods_account acc WHERE EXISTS (SELECT 1 FROM public."qbit_card_transaction_2026q3" qt WHERE qt."accountId"::text = acc.id::text AND ((qt."createTime" >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND qt."createTime" < CURRENT_TIMESTAMP) OR (qt."updateTime" >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND qt."updateTime" < CURRENT_TIMESTAMP)))) AS account_dim_2h_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -173,7 +154,7 @@ CREATE TEMPORARY TABLE lookup_account_extend (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = 'ods.ods_account_extend',
+    'table-name' = '(SELECT ae.account_id, ae.system_type FROM ods.ods_account_extend ae WHERE EXISTS (SELECT 1 FROM public."qbit_card_transaction_2026q3" qt WHERE qt."accountId"::text = ae.account_id::text AND ((qt."createTime" >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND qt."createTime" < CURRENT_TIMESTAMP) OR (qt."updateTime" >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND qt."updateTime" < CURRENT_TIMESTAMP)))) AS account_extend_2h_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -188,7 +169,7 @@ CREATE TEMPORARY TABLE lookup_api_account_relation (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT account_id::text AS account_id, root_id::text AS root_id FROM public.api_account_relation) AS api_account_relation_f',
+    'table-name' = '(SELECT aar.account_id::text AS account_id, aar.root_id::text AS root_id FROM public.api_account_relation aar WHERE EXISTS (SELECT 1 FROM public."qbit_card_transaction_2026q3" qt WHERE qt."accountId"::text = aar.account_id::text AND ((qt."createTime" >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND qt."createTime" < CURRENT_TIMESTAMP) OR (qt."updateTime" >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND qt."updateTime" < CURRENT_TIMESTAMP)))) AS api_account_relation_2h_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver'
@@ -205,7 +186,7 @@ CREATE TEMPORARY TABLE lookup_sale_relation (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT relation_account_id::text AS relation_account_id, sale_id::text AS sale_id, am_id::text AS am_id, operation_manager_id::text AS operation_manager_id FROM dim.dim_sale_account_relation_p) AS sale_account_relation_f',
+    'table-name' = '(WITH tx_accounts AS (SELECT DISTINCT qt."accountId"::text AS account_id FROM public."qbit_card_transaction_2026q3" qt WHERE ("createTime" >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND "createTime" < CURRENT_TIMESTAMP) OR ("updateTime" >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND "updateTime" < CURRENT_TIMESTAMP)), relation_accounts AS (SELECT account_id FROM tx_accounts UNION SELECT aar.root_id::text FROM tx_accounts ta INNER JOIN public.api_account_relation aar ON aar.account_id::text = ta.account_id AND aar.delete_time IS NULL) SELECT sr.relation_account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.operation_manager_id::text AS operation_manager_id FROM dim.dim_sale_account_relation_p sr INNER JOIN relation_accounts ra ON ra.account_id = sr.relation_account_id::text) AS sale_account_relation_2h_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver'
@@ -247,7 +228,7 @@ CREATE TEMPORARY TABLE lookup_wide_snapshot (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
     -- 直接读取目标宽表已有记录，用于 UPDATE 时保留已固化维度。
-    'table-name' = '(SELECT id::text AS id, create_time, card_no_last_four, card_provider, card_type_dim, label, group_id::text AS group_id, balance_id::text AS balance_id, first_six, card_belong, physical_card_status, card_status, card_mode, group_name, group_status, acc_verified_name, parent_account_id::text AS parent_account_id, account_type, system_type, acc_verified_name_en, acc_country, referral_code_id, acc_type, acc_display_id, tenant_id, root_account_id::text AS root_account_id, sale_id, am_id, operation_manager_id FROM dwm.dwm_quantum_card_transaction_p) AS dwm_qbit_card_transaction_snapshot_f',
+    'table-name' = '(SELECT id::text AS id, create_time, card_no_last_four, card_provider, card_type_dim, label, group_id::text AS group_id, balance_id::text AS balance_id, first_six, card_belong, physical_card_status, card_mode, card_status, group_name, group_status, acc_verified_name, parent_account_id::text AS parent_account_id, account_type, system_type, acc_verified_name_en, acc_country, referral_code_id, acc_type, acc_display_id, tenant_id, root_account_id::text AS root_account_id, sale_id, am_id, operation_manager_id FROM dwm.dwm_quantum_card_transaction_p WHERE (create_time >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND create_time < CURRENT_TIMESTAMP) OR (update_time >= CURRENT_TIMESTAMP - INTERVAL ''2 hours'' AND update_time < CURRENT_TIMESTAMP)) AS dwm_qbit_card_transaction_snapshot_2h_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -336,21 +317,21 @@ SELECT
     qt.`deleteTime` AS delete_time,
     COALESCE(qt.version, 1) AS version
 FROM source_qbit_card_transaction qt
-LEFT JOIN lookup_qbit_card FOR SYSTEM_TIME AS OF qt.proc_time qc
+LEFT JOIN lookup_qbit_card qc
     ON qc.id = qt.`cardId`
-LEFT JOIN lookup_qbit_card_group FOR SYSTEM_TIME AS OF qt.proc_time qcg
+LEFT JOIN lookup_qbit_card_group qcg
     ON qcg.id = qc.group_id
-LEFT JOIN lookup_account FOR SYSTEM_TIME AS OF qt.proc_time acc
+LEFT JOIN lookup_account acc
     ON acc.id = qt.`accountId`
-LEFT JOIN lookup_account_extend FOR SYSTEM_TIME AS OF qt.proc_time ae
+LEFT JOIN lookup_account_extend ae
     ON ae.account_id = qt.`accountId`
-LEFT JOIN lookup_api_account_relation FOR SYSTEM_TIME AS OF qt.proc_time aar
+LEFT JOIN lookup_api_account_relation aar
     ON aar.account_id = qt.`accountId`
-LEFT JOIN lookup_sale_relation FOR SYSTEM_TIME AS OF qt.proc_time sr
+LEFT JOIN lookup_sale_relation sr
     ON sr.relation_account_id = qt.`accountId`
-LEFT JOIN lookup_sale_relation FOR SYSTEM_TIME AS OF qt.proc_time root_sr
+LEFT JOIN lookup_sale_relation root_sr
     ON root_sr.relation_account_id = COALESCE(aar.root_id, qt.`accountId`)
-LEFT JOIN lookup_wide_snapshot FOR SYSTEM_TIME AS OF qt.proc_time AS hist
+LEFT JOIN lookup_wide_snapshot AS hist
     ON hist.id = qt.id AND hist.create_time = qt.`createTime`;
 
 -- 目标 schema 需与 design-docs/qbit-widetable-ddl.sql 的 77 列保持一致。

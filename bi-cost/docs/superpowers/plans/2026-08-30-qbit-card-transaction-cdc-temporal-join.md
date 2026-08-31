@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Keep the transaction table as the only wide-table CDC driver, and use JDBC Lookup for `qbitCardGroup` so the wide table does not create a second PG replication slot.
+**Goal:** Keep the transaction table as the only wide-table CDC driver, and use a JDBC subquery Lookup for `qbitCardGroup` so the wide table does not create a second PG replication slot or encounter UUID/VARCHAR lookup mismatches.
 
-**Architecture:** `qbit_card_transaction` remains the only business-event CDC source in the wide-table job. `qbitCard`, account, and accountExtend are read from ADB ODS; `qbitCardGroup` is read directly from ADB PG `public."qbitCardGroup"` through JDBC Lookup. The existing wide-table snapshot lookup retains frozen dimension fields when a transaction is updated.
+**Architecture:** `qbit_card_transaction` remains the only business-event CDC source in the wide-table job. `qbitCard`, account, and accountExtend are read from ODS; `qbitCardGroup` is read directly from ADB PG `public."qbitCardGroup"` through a JDBC subquery that casts `id` to text. The existing wide-table snapshot lookup retains frozen dimension fields when a transaction is updated.
 
 **Tech Stack:** Flink SQL, PostgreSQL CDC, JDBC Lookup, ADBPG sink.
 
@@ -24,7 +24,7 @@
 - Modify: `flink/quantum-v2/qbit-card-transaction-widetable/cdc/dwm_online_qbit_card_transaction_widetable-cdc-sql.sql`
 
 - [ ] Use JDBC Lookup against `ods.ods_qbit_card`, `ods.ods_account`, and `ods.ods_account_extend`.
-- [x] Replace the wide-table `qbitCardGroup` PostgreSQL CDC source with JDBC Lookup against `public."qbitCardGroup"`.
+- [x] Replace the wide-table `qbitCardGroup` PostgreSQL CDC source with a JDBC subquery Lookup against `public."qbitCardGroup"`, casting UUID `id` to text.
 - [ ] Keep `api_account_relation` and `dim_sale_account_relation_p` as JDBC lookups because their fields are already snake_case and the sales relation is a one-to-many time-line keyed by relation record id.
 - [ ] Keep `lookup_wide_snapshot` as JDBC Lookup against `dwm.dwm_quantum_card_transaction_p`.
 
@@ -45,3 +45,13 @@
 - [ ] Validate table aliases, temporal join syntax, primary keys, and source/sink column counts locally.
 - [ ] Search the final script for mirror table names and unintended JDBC Lookup definitions.
 - [ ] Document that PG Test replication privilege/publication is required only by the ODS group job; the wide-table job now requires one transaction CDC slot and ADB JDBC access.
+
+### Task 4: Add a rolling two-hour incremental backfill job
+
+**Files:**
+- Add: `flink/quantum-v2/qbit-card-transaction-widetable/cdc/dwm_online_qbit_card_transaction_widetable-2h-window-batch-cdc-sql.sql`
+
+- [x] Read `qbit_card_transaction_2026q3` with a JDBC source for `CURRENT_TIMESTAMP - INTERVAL '2 hours'` through `CURRENT_TIMESTAMP`.
+- [x] Include both newly created and updated transactions in the window.
+- [x] Preserve existing wide-table dimension columns through the target snapshot lookup; only transaction columns come from the source row.
+- [x] Keep the job bounded so the platform can schedule it every two hours; it does not create a replication slot.
