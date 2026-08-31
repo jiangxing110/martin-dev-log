@@ -1,0 +1,41 @@
+/Users/martinjiang/IdeaProjects/qbit-assets
+/Users/martinjiang/IdeaProjects/white-label-server（Infinity Launch）
+我现在要从qbit-assets 去拿Infinity Launch 的客户配置
+因为Infinity Launch 是本质是qbit-assets的一个api 客户
+assets这边也是只查询 
+- 账户ID （assets）
+- 主体名称（assets）
+下面都是存白标
+- Admin域名
+- C端域名
+- 品牌名称
+- 登陆邮箱
+- 品牌Logo
+- Favicon
+我们看看这种这么解决white-label-server这个可能会是客户单独部署的未来
+
+可以参考 /**
+     * 查询账户USDC/USDT钱包余额。
+     *
+     * @param outAccountIds 三方账户ID列表
+     * @return 账户钱包余额映射
+     */
+    public Map<String, AccountWalletBalanceResponse> getAccountWalletBalanceMap(List<String> outAccountIds) {
+        if (CollectionUtils.isEmpty(outAccountIds)) {
+            return Collections.emptyMap();
+        }
+        String accountId = CurrentUserContext.getOuterAccountId();
+        AccountBalanceDataRequest request = new AccountBalanceDataRequest();
+        request.setAccountIds(outAccountIds);
+        HttpHeaders httpHeaders = HeaderUtils.buildNodeHeaders(accountId, secret);
+        AccountWalletBalanceDataResponse response = httpClientWrapper.post(
+                gatewayUrl + "/qbit-assets/account/white-lable-wallet-balances",
+                request,
+                httpHeaders,
+                AccountWalletBalanceDataResponse.class
+        );
+        if (response == null || response.getData() == null) {
+            return Collections.emptyMap();
+        }
+        return response.getData();
+    }

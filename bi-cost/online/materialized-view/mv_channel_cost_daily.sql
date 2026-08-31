@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-05 16:30:00
+-- Updated Time:   2026-08-31 19:08:03
 -- Description:    总渠道成本日汇总普通物化视图
 -- Notes:
 --   1. 计算口径对齐 dws_online_total_channel_cost_daily-batch-sql.sql。
@@ -63,9 +64,7 @@ WITH channel_cost_source AS (
         bz.update_time AS source_update_time,
         'QUANTUM_CARD'::text AS product_line,
         (
-            COALESCE(bz.clearing_base_amt, 0::numeric)
-                * COALESCE(bz.reimbursement_rate, 0::numeric)
-          + COALESCE(bz.refund_base_amt, 0::numeric)
+            COALESCE(bz.refund_base_amt, 0::numeric)
                 * COALESCE(bz.reimbursement_rate, 0::numeric)
           + COALESCE(bz.visa_charges_base_amt, 0::numeric)
                 * COALESCE(bz.visa_charges_rate, 0::numeric)
