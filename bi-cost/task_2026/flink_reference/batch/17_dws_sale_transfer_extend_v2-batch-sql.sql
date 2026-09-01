@@ -119,7 +119,7 @@ AND tr."createTime" < CURRENT_DATE
 ) as tt
     JOIN affected a ON (DATE(tt.create_date)) = a.scope_date AND (tt."accountId") = a.scope_account
     WHERE TRUE
-    GROUP BY "accountId",create_date, status,"sale_or_am_id") AS src',
+    GROUP BY "accountId", create_date, status, "sale_or_am_id") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

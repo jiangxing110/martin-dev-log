@@ -77,7 +77,7 @@ CREATE TEMPORARY TABLE source_dws_crypto_assets_transfers (
     FROM "crypto_assets_transfers" AS tr
     JOIN affected a ON ("account_id") IS NOT DISTINCT FROM a.k0 AND ("status") IS NOT DISTINCT FROM a.k1 AND ("sender_type") IS NOT DISTINCT FROM a.k2 AND ("recipient_type") IS NOT DISTINCT FROM a.k3 AND ("hidden") IS NOT DISTINCT FROM a.k4 AND (tr."create_time"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k5 AND ("currency") IS NOT DISTINCT FROM a.k6 AND ("action") IS NOT DISTINCT FROM a.k7
     WHERE tr."delete_time" IS NULL
-    GROUP BY "account_id","status","sender_type","recipient_type","hidden",create_date,"currency","action") AS src',
+    GROUP BY "account_id", "status", "sender_type", "recipient_type", "hidden", create_date, "currency", "action") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

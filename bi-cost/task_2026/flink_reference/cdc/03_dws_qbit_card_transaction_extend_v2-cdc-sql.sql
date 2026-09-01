@@ -79,8 +79,7 @@ LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
     JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."provider") IS NOT DISTINCT FROM a.k1 AND (qc."firstSix") IS NOT DISTINCT FROM a.k2 AND (tr."businessType") IS NOT DISTINCT FROM a.k3 AND (tr."status") IS NOT DISTINCT FROM a.k4 AND (tr."transactionCurrency") IS NOT DISTINCT FROM a.k5 AND (tr."specialSourceData"->>''country'') IS NOT DISTINCT FROM a.k6 AND (tr."createTime"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k7
     WHERE tr."deleteTime" IS NULL
-    GROUP BY tr."accountId", tr."provider", qc."firstSix", tr."businessType", tr."status",
-  tr."transactionCurrency", tr."specialSourceData"->>''country'',TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE) AS src',
+    GROUP BY tr."accountId", tr."provider", qc."firstSix", tr."businessType", tr."status", tr."transactionCurrency", tr."specialSourceData"->>''country'', tr."createTime"::DATE::TIMESTAMP) AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

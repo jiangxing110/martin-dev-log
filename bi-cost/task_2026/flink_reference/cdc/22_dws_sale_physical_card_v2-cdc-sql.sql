@@ -118,7 +118,7 @@ CROSS JOIN LATERAL (
     JOIN affected a ON (DATE(tr."createTime")) = a.scope_date AND (tr."accountId") = a.scope_account
     WHERE tr."deleteTime" IS NULL
   AND tr."businessType" = ''TransferOut'' AND tr."remarks" IN (''邮寄费'', ''制卡费'', ''批量邮寄运费'')
-    GROUP BY tr."accountId", ids."sale_or_am_id", qc."provider", qc."firstSix", tr."status",TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE) AS src',
+    GROUP BY tr."accountId", ids."sale_or_am_id", qc."provider", qc."firstSix", tr."status", tr."createTime"::DATE::TIMESTAMP) AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

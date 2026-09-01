@@ -806,6 +806,19 @@ def main():
         change_win = change_window(time_cols)
         where_no_window = remove_create_window(p["where"])
         create_expr = create_date_expr(time_cols)
+        # PostgreSQL 不会把 tr."createTime"::DATE::TIMESTAMP 与原 SQL 中的
+        # TO_CHAR(tr."createTime", ...)::DATE 视为同一个 GROUP BY 表达式；
+        # 统一分组表达式，避免聚合查询报“必须出现在 GROUP BY”错误。
+        if p["group_by"] and "create_date" in p["cols"]:
+            gb_tokens = split_args(p["group_by"])
+            normalized_gb = []
+            for token in gb_tokens:
+                token_upper = token.upper()
+                if "TO_CHAR" in token_upper and ("CREATETIME" in token_upper or "CREATE_TIME" in token_upper):
+                    normalized_gb.append(create_expr)
+                else:
+                    normalized_gb.append(token)
+            p["group_by"] = ", ".join(normalized_gb)
         dws_keys, pg_key_exprs = dws_key_exprs(base, keys, p, time_cols)
 
         # 主 SELECT 的 create_date 表达式覆盖为 TIMESTAMP(6) 版（与 Flink 声明/物理表一致），

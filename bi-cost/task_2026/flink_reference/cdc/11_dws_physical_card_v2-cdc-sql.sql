@@ -72,7 +72,7 @@ LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
     JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (qc."provider") IS NOT DISTINCT FROM a.k1 AND (qc."firstSix") IS NOT DISTINCT FROM a.k2 AND (tr."status") IS NOT DISTINCT FROM a.k3 AND (tr."createTime"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k4
     WHERE tr."deleteTime" IS NULL AND tr."businessType" = ''TransferOut'' AND tr."remarks" IN (''邮寄费'', ''制卡费'', ''批量邮寄运费'')
-    GROUP BY tr."accountId", qc."provider", qc."firstSix", tr."status", TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE) AS src',
+    GROUP BY tr."accountId", qc."provider", qc."firstSix", tr."status", tr."createTime"::DATE::TIMESTAMP) AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

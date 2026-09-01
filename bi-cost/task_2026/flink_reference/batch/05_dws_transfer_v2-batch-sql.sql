@@ -68,7 +68,7 @@ CREATE TEMPORARY TABLE source_dws_transfer (
     FROM "transfer" AS tr
     JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessTypeDetail") IS NOT DISTINCT FROM a.k1 AND (tr."businessCode") IS NOT DISTINCT FROM a.k2 AND (tr."settlementCurrency") IS NOT DISTINCT FROM a.k3 AND (tr."createTime"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k4 AND (tr."status") IS NOT DISTINCT FROM a.k5 AND ("currency") IS NOT DISTINCT FROM a.k6
     WHERE tr."deleteTime" IS NULL
-    GROUP BY tr."accountId", tr."businessTypeDetail",tr."businessCode", tr."settlementCurrency", create_date, status, "currency") AS src',
+    GROUP BY tr."accountId", tr."businessTypeDetail", tr."businessCode", tr."settlementCurrency", create_date, status, "currency") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

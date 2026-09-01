@@ -119,7 +119,7 @@ CROSS JOIN LATERAL (
 ) AS ids
     JOIN affected a ON (DATE(tr."createTime")) = a.scope_date AND (tr."accountId") = a.scope_account
     WHERE tr."delete_time" IS NULL
-    GROUP BY "account_id", "status", "sender_type", "recipient_type","hidden", create_date, "currency", "action", ids."sale_or_am_id") AS src',
+    GROUP BY "account_id", "status", "sender_type", "recipient_type", "hidden", create_date, "currency", "action", ids."sale_or_am_id") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
