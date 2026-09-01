@@ -171,5 +171,3 @@ ORDER BY
     sort_order,
     cost_amount DESC;
 		
-		431785.0985
-		751941.5350
