@@ -63,30 +63,8 @@ CREATE TEMPORARY TABLE source_dws_sale_card_wallet_transaction (
           AND DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE)
           AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE)
     ), affected AS (
-        SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account FROM tx AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
+        SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
+        FROM tx AS tr
     )
     SELECT CAST(tr."accountId" AS text) AS "account_id", CAST(ids."sale_or_am_id" AS text) AS "sale_or_am_id", CAST(tr."businessType" AS text) AS "business_type", CAST(tr."status" AS text) AS "status", CAST(COALESCE(SUM(tr."originAmount"), 0) AS numeric(18,2)) AS "origin_amount", CAST(COUNT(*) AS integer) AS "transaction_count", CAST(COALESCE(SUM(tr."fee"), 0) AS numeric(18,2)) AS "fee", tr."createTime"::DATE::TIMESTAMP AS "create_date", CAST(1 AS integer) AS "version", NOW() AS "create_time", NOW() AS "update_time"
     FROM tx AS tr
@@ -122,6 +100,79 @@ CROSS JOIN LATERAL (
     'scan.fetch-size' = '2000'
 );
 
+-- source1：先按补数日期读取交易明细
+CREATE TEMPORARY TABLE source1_transaction (
+    transaction_id STRING,
+    account_id STRING,
+    business_type STRING,
+    status STRING,
+    origin_amount DECIMAL(18,2),
+    fee DECIMAL(18,2),
+    create_time TIMESTAMP(6),
+    delete_time TIMESTAMP(6)
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT CAST(tr.id AS text) AS transaction_id, CAST(tr."accountId" AS text) AS account_id, CAST(tr."businessType" AS text) AS business_type, CAST(tr."status" AS text) AS status, CAST(tr."originAmount" AS numeric(18,2)) AS origin_amount, CAST(tr."fee" AS numeric(18,2)) AS fee, tr."createTime" AS create_time, tr."deleteTime" AS delete_time FROM "qbitCardWalletTransaction" tr WHERE tr."createTime" >= CAST(''${start_date}'' AS DATE) AND tr."createTime" < CAST(''${end_date}'' AS DATE) + INTERVAL ''1 day'') AS tx',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '2000'
+);
+
+-- source2：销售/AM关系源，由 Flink Join 根据 account_id + create_time 匹配
+CREATE TEMPORARY TABLE source2_sale_relation (
+    relation_account_id STRING,
+    sale_id STRING,
+    am_id STRING,
+    relation_start_time TIMESTAMP(6),
+    relation_end_time TIMESTAMP(6),
+    priority INT
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT sr.relation_account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time, sr.relation_end_time, 1 AS priority FROM dim.dim_sale_account_relation_p sr WHERE sr.delete_time IS NULL UNION ALL SELECT aar.account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time, sr.relation_end_time, 2 AS priority FROM public.api_account_relation aar JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text WHERE aar.delete_time IS NULL AND sr.delete_time IS NULL) AS rel',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '2000'
+);
+
+CREATE TEMPORARY VIEW v_sale_wallet_matched AS
+    SELECT tr.*, sr.sale_id, sr.am_id,
+           ROW_NUMBER() OVER (PARTITION BY tr.transaction_id ORDER BY sr.priority, sr.relation_start_time DESC) AS rn
+    FROM source1_transaction tr
+    JOIN source2_sale_relation sr
+      ON tr.account_id = sr.relation_account_id
+     AND tr.create_time >= sr.relation_start_time
+     AND (tr.create_time < sr.relation_end_time OR sr.relation_end_time IS NULL)
+;
+CREATE TEMPORARY VIEW v_sale_wallet_expanded AS
+    SELECT transaction_id, account_id, business_type, status, origin_amount, fee, create_time, sale_id AS sale_or_am_id
+    FROM v_sale_wallet_matched WHERE rn = 1 AND sale_id IS NOT NULL
+    UNION ALL
+    SELECT transaction_id, account_id, business_type, status, origin_amount, fee, create_time, am_id AS sale_or_am_id
+    FROM v_sale_wallet_matched WHERE rn = 1 AND am_id IS NOT NULL
+;
+CREATE TEMPORARY VIEW v_sale_wallet_expanded_daily AS
+    SELECT transaction_id, account_id, business_type, status, origin_amount, fee, sale_or_am_id,
+           CAST(create_time AS DATE) AS create_date
+    FROM v_sale_wallet_expanded
+;
+CREATE TEMPORARY VIEW v_dws_sale_card_wallet_transaction_operator AS
+SELECT
+    CAST(ABS(HASH_CODE(CONCAT(COALESCE(account_id, ''), ': ', COALESCE(business_type, ''), ': ', COALESCE(status, ''), ': ', DATE_FORMAT(CAST(create_date AS TIMESTAMP), 'yyyy-MM-dd'), ': ', COALESCE(sale_or_am_id, '')))) AS BIGINT) AS id,
+    account_id, sale_or_am_id, business_type, status,
+    CAST(SUM(origin_amount) AS DECIMAL(18,2)) AS origin_amount,
+    CAST(COUNT(*) AS INT) AS transaction_count,
+    CAST(SUM(fee) AS DECIMAL(18,2)) AS fee,
+    CAST(create_date AS TIMESTAMP) AS create_date,
+    1 AS version,
+    CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS create_time,
+    CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time
+FROM v_sale_wallet_expanded_daily
+GROUP BY account_id, sale_or_am_id, business_type, status, create_date;
+
 CREATE TEMPORARY VIEW v_dws_sale_card_wallet_transaction_base AS
 SELECT
     CAST(ABS(HASH_CODE(CONCAT(COALESCE(account_id, ''), ': ', COALESCE(business_type, ''), ': ', COALESCE(status, ''), ': ', DATE_FORMAT(create_date, 'yyyy-MM-dd'), ': ', COALESCE(sale_or_am_id, '')))) AS BIGINT) AS id,
@@ -135,7 +186,7 @@ CREATE TEMPORARY TABLE sink_dws_sale_card_wallet_transaction_2026 (
 
 INSERT INTO sink_dws_sale_card_wallet_transaction_2026
 SELECT id, account_id, sale_or_am_id, business_type, status, origin_amount, transaction_count, fee, create_date, version, create_time, update_time
-FROM v_dws_sale_card_wallet_transaction_base
+FROM v_dws_sale_card_wallet_transaction_operator
 CROSS JOIN source_delete_dws_sale_card_wallet_transaction_result AS del
 WHERE del.affected_rows >= 0
   AND create_date >= DATE '2026-01-01' AND create_date < DATE '2027-01-01';

@@ -20,3 +20,6 @@ bi-cost/flink/quantum-v2/bb/cdc/dwm_online_bb_card_transaction_detail_v2-cdc-sql
 
 
 
+我想要的是先查询出交易数据 source1
+然后在拿交易的accountId 取查询对应的销售关系 source2
+算子计算
