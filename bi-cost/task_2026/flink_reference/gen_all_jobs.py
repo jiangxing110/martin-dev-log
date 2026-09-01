@@ -62,7 +62,7 @@ SALE_SET = {
 SALE_TIMECOLS = {
     "qbitCardWalletTransaction": ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
     "qbit_card_transaction":     ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
-    "qbitCardGroupTransaction":  ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
+    "qbit_card_group_transaction": ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
     "transfer":                  ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
     "crypto_assets_transfers":   ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
     "qbitCard":                  ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
@@ -195,6 +195,10 @@ def alias_to_cols(exprs, cols, cast_string_to_text=False):
             alias_part = f'AS "{c}"'
         if cast_string_to_text and flink_type(c) == "STRING":
             expr_part = f"CAST({expr_part} AS text)"
+        elif c.lower() == "date":
+            # PostgreSQL DATE 通过 JDBC 返回 java.sql.Date；Flink TIMESTAMP
+            # 转换器要求 java.sql.Timestamp，必须在源查询内显式转型。
+            expr_part = f"CAST({expr_part} AS timestamp(6))"
         elif cast_string_to_text and flink_type(c) == "DECIMAL(18,2)":
             expr_part = f"CAST({expr_part} AS numeric(18,2))"
         elif cast_string_to_text and flink_type(c) == "INT":

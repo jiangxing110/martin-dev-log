@@ -100,7 +100,7 @@ SELECT
   1 AS version,
   NOW() AS create_time,
   NOW() AS update_time
-FROM "qbitCardGroupTransaction" AS tr
+FROM qbit_card_group_transaction AS tr
 WHERE tr."deleteTime" IS NULL
   AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
 GROUP BY tr."accountId", tr."businessType", create_date, tr."status"
@@ -205,7 +205,7 @@ SELECT
   tr."remarks",
   tr."account_id",
   tr."product_id",
-  tr."date",
+  tr."date"::TIMESTAMP,
   tr."currency",
   tr."profit",
   (CASE WHEN fee->>'type' = 'SERVICE' THEN (fee->>'amount')::numeric ELSE 0 END) AS "service_fee",
@@ -453,7 +453,7 @@ SELECT
   1 AS version,
   NOW() AS create_time,
   NOW() AS update_time
-FROM "qbitCardGroupTransaction" AS tr
+FROM qbit_card_group_transaction AS tr
 LEFT JOIN LATERAL (
   SELECT sale_id, am_id
   FROM (
@@ -849,7 +849,5 @@ WHERE tr."deleteTime" IS NULL
   AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
 GROUP BY tr."accountId", ids."sale_or_am_id", qc."provider", qc."firstSix", tr."status",TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE
 ON CONFLICT (id) DO NOTHING;
-
-
 
 

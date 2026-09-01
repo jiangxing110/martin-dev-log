@@ -58,11 +58,11 @@ CREATE TEMPORARY TABLE source_dws_qbit_card_group_transaction (
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
         SELECT DISTINCT tr."accountId" AS k0, tr."businessType" AS k1, tr."createTime"::DATE::TIMESTAMP AS k2, tr."status" AS k3
-        FROM "qbitCardGroupTransaction" AS tr
+        FROM qbit_card_group_transaction AS tr
         WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
     SELECT CAST(tr."accountId" AS text) AS "account_id", CAST(tr."businessType" AS text) AS "business_type", CAST(tr."status" AS text) AS "status", CAST(COALESCE(SUM(tr."originalAmount"), 0) AS numeric(18,2)) AS "origin_amount", CAST(COUNT(*) AS integer) AS "transaction_count", CAST(COALESCE(SUM(tr."fee"), 0) AS numeric(18,2)) AS "fee", tr."createTime"::DATE::TIMESTAMP AS "create_date", CAST(1 AS integer) AS "version", NOW() AS "create_time", NOW() AS "update_time"
-    FROM "qbitCardGroupTransaction" AS tr
+    FROM qbit_card_group_transaction AS tr
     JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessType") IS NOT DISTINCT FROM a.k1 AND (tr."createTime"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k2 AND (tr."status") IS NOT DISTINCT FROM a.k3
     WHERE tr."deleteTime" IS NULL
     GROUP BY tr."accountId", tr."businessType", create_date, tr."status") AS src',

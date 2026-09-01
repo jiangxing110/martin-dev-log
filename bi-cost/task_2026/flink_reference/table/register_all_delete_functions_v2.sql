@@ -177,13 +177,13 @@ BEGIN
         -- ===== CDC 模式：按唯一业务键精准删（受影响 key 集合，不再按整天删）=====
         FOR v_year IN
             SELECT DISTINCT EXTRACT(YEAR FROM tr."createTime"::DATE::TIMESTAMP)::INT
-            FROM "qbitCardGroupTransaction" AS tr
+            FROM qbit_card_group_transaction AS tr
             WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_group_transaction_%s WHERE (account_id, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId", tr."businessType", tr."createTime"::DATE::TIMESTAMP, tr."status" FROM "qbitCardGroupTransaction" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_group_transaction_%s WHERE (account_id, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId", tr."businessType", tr."createTime"::DATE::TIMESTAMP, tr."status" FROM qbit_card_group_transaction AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_group_transaction_%s WHERE (account_id, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId", tr."businessType", tr."createTime"::DATE::TIMESTAMP, tr."status" FROM "qbitCardGroupTransaction" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_group_transaction_%s WHERE (account_id, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId", tr."businessType", tr."createTime"::DATE::TIMESTAMP, tr."status" FROM qbit_card_group_transaction AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -991,7 +991,7 @@ BEGIN
         FOR v_year IN
             SELECT DISTINCT EXTRACT(YEAR FROM a.scope_date)::INT
             FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbitCardGroupTransaction" AS tr
+        FROM qbit_card_group_transaction AS tr
 LEFT JOIN LATERAL (
   SELECT sale_id, am_id
   FROM (
@@ -1020,7 +1020,7 @@ CROSS JOIN LATERAL (
             IF p_dry_run THEN
                 EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_card_group_transaction_%s t
                     WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbitCardGroupTransaction" AS tr
+        FROM qbit_card_group_transaction AS tr
 LEFT JOIN LATERAL (
   SELECT sale_id, am_id
   FROM (
@@ -1049,7 +1049,7 @@ CROSS JOIN LATERAL (
             ELSE
                 EXECUTE format($fmt$DELETE FROM public.dws_sale_card_group_transaction_%s t
                     WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbitCardGroupTransaction" AS tr
+        FROM qbit_card_group_transaction AS tr
 LEFT JOIN LATERAL (
   SELECT sale_id, am_id
   FROM (
