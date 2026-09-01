@@ -70,7 +70,7 @@ CREATE TEMPORARY TABLE source_dws_qbit_card_group_transaction (
     FROM qbit_card_group_transaction AS tr
     JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."businessType") IS NOT DISTINCT FROM a.k1 AND (tr."createTime"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k2 AND (tr."status") IS NOT DISTINCT FROM a.k3
     WHERE tr."deleteTime" IS NULL
-    GROUP BY tr."accountId", tr."businessType", create_date, tr."status") AS src',
+    GROUP BY tr."accountId", tr."businessType", 7, tr."status") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

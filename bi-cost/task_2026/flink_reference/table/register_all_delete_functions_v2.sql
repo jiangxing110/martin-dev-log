@@ -30,15 +30,15 @@ BEGIN
             affected := affected + v_n;
         END LOOP;
     ELSE
-        -- ===== 补数/修复模式：按 create_date 区间跨分表清理 =====
+        -- ===== 补数/修复模式：按 create_date 日期区间跨分表清理 =====
         FOR v_year IN
             SELECT DISTINCT gs.y
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_wallet_transaction_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_wallet_transaction_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_wallet_transaction_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_wallet_transaction_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -84,15 +84,15 @@ LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" WHERE (tr."createTime" >= CU
             affected := affected + v_n;
         END LOOP;
     ELSE
-        -- ===== 补数/修复模式：按 create_date 区间跨分表清理 =====
+        -- ===== 补数/修复模式：按 create_date 日期区间跨分表清理 =====
         FOR v_year IN
             SELECT DISTINCT gs.y
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_transaction_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_transaction_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_transaction_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_transaction_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -138,15 +138,15 @@ LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" WHERE (tr."createTime" >= CU
             affected := affected + v_n;
         END LOOP;
     ELSE
-        -- ===== 补数/修复模式：按 create_date 区间跨分表清理 =====
+        -- ===== 补数/修复模式：按 create_date 日期区间跨分表清理 =====
         FOR v_year IN
             SELECT DISTINCT gs.y
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_transaction_extend_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_transaction_extend_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_transaction_extend_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_transaction_extend_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -189,15 +189,15 @@ BEGIN
             affected := affected + v_n;
         END LOOP;
     ELSE
-        -- ===== 补数/修复模式：按 create_date 区间跨分表清理 =====
+        -- ===== 补数/修复模式：按 create_date 日期区间跨分表清理 =====
         FOR v_year IN
             SELECT DISTINCT gs.y
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_group_transaction_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_group_transaction_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_group_transaction_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_group_transaction_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -240,15 +240,15 @@ BEGIN
             affected := affected + v_n;
         END LOOP;
     ELSE
-        -- ===== 补数/修复模式：按 create_date 区间跨分表清理 =====
+        -- ===== 补数/修复模式：按 create_date 日期区间跨分表清理 =====
         FOR v_year IN
             SELECT DISTINCT gs.y
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_transfer_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_transfer_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_transfer_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.dws_transfer_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -294,15 +294,15 @@ LEFT JOIN "globalConversion" AS ta ON ta."recordId"::UUID = tr.id WHERE (tr."cre
             affected := affected + v_n;
         END LOOP;
     ELSE
-        -- ===== 补数/修复模式：按 create_date 区间跨分表清理 =====
+        -- ===== 补数/修复模式：按 create_date 日期区间跨分表清理 =====
         FOR v_year IN
             SELECT DISTINCT gs.y
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_transfer_extend_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_transfer_extend_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_transfer_extend_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.dws_transfer_extend_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -345,15 +345,15 @@ BEGIN
             affected := affected + v_n;
         END LOOP;
     ELSE
-        -- ===== 补数/修复模式：按 create_date 区间跨分表清理 =====
+        -- ===== 补数/修复模式：按 create_date 日期区间跨分表清理 =====
         FOR v_year IN
             SELECT DISTINCT gs.y
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_crypto_assets_transfers_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_crypto_assets_transfers_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_crypto_assets_transfers_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.dws_crypto_assets_transfers_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -399,15 +399,15 @@ CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee WHERE (tr."create_time" >= 
             affected := affected + v_n;
         END LOOP;
     ELSE
-        -- ===== 补数/修复模式：按 create_date 区间跨分表清理 =====
+        -- ===== 补数/修复模式：按 create_time 日期区间跨分表清理 =====
         FOR v_year IN
             SELECT DISTINCT gs.y
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.ods_fund_profits_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.ods_fund_profits_%s WHERE create_time >= $1 AND create_time < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.ods_fund_profits_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.ods_fund_profits_%s WHERE create_time >= $1 AND create_time < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -450,15 +450,15 @@ BEGIN
             affected := affected + v_n;
         END LOOP;
     ELSE
-        -- ===== 补数/修复模式：按 create_date 区间跨分表清理 =====
+        -- ===== 补数/修复模式：按 create_time 日期区间跨分表清理 =====
         FOR v_year IN
             SELECT DISTINCT gs.y
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.ods_qbit_card_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.ods_qbit_card_%s WHERE create_time >= $1 AND create_time < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.ods_qbit_card_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.ods_qbit_card_%s WHERE create_time >= $1 AND create_time < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -504,15 +504,15 @@ LEFT JOIN "qbitCard" AS qc ON qc."id"::VARCHAR = tr."sourceId" WHERE (tr."create
             affected := affected + v_n;
         END LOOP;
     ELSE
-        -- ===== 补数/修复模式：按 create_date 区间跨分表清理 =====
+        -- ===== 补数/修复模式：按 create_date 日期区间跨分表清理 =====
         FOR v_year IN
             SELECT DISTINCT gs.y
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_open_card_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_open_card_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_open_card_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.dws_open_card_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -558,15 +558,15 @@ LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" WHERE (tr."createTime" >= CU
             affected := affected + v_n;
         END LOOP;
     ELSE
-        -- ===== 补数/修复模式：按 create_date 区间跨分表清理 =====
+        -- ===== 补数/修复模式：按 create_date 日期区间跨分表清理 =====
         FOR v_year IN
             SELECT DISTINCT gs.y
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_physical_card_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_physical_card_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_physical_card_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.dws_physical_card_%s WHERE create_date >= $1 AND create_date < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;

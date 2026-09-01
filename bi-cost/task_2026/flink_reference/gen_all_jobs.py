@@ -448,7 +448,7 @@ def jdbc_src_block(base, cols, pg_subquery):
     'scan.fetch-size' = '2000'
 );"""
 
-def delete_fn_block(base, keys, pg_key_exprs, from_join, change_win, create_expr):
+def delete_fn_block(base, keys, pg_key_exprs, from_join, change_win, create_expr, route_col):
     keycols = keys
     n = len(keycols)
     # IN 子查询：左侧 DWS 列，右侧源表达式，顺序一致
@@ -483,15 +483,15 @@ BEGIN
             affected := affected + v_n;
         END LOOP;
     ELSE
-        -- ===== 补数/修复模式：按 create_date 区间跨分表清理 =====
+        -- ===== 补数/修复模式：按 {route_col} 日期区间跨分表清理 =====
         FOR v_year IN
             SELECT DISTINCT gs.y
             FROM generate_series(EXTRACT(YEAR FROM p_start)::INT, EXTRACT(YEAR FROM p_end)::INT) gs(y)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.{base}_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.{base}_%s WHERE {route_col} >= $1 AND {route_col} < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.{base}_%s WHERE create_date >= $1 AND create_date <= $2$fmt$, v_year) USING p_start, p_end;
+                EXECUTE format($fmt$DELETE FROM public.{base}_%s WHERE {route_col} >= $1 AND {route_col} < ($2 + INTERVAL '1 day')$fmt$, v_year) USING p_start, p_end;
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -816,10 +816,16 @@ def main():
         if p["group_by"] and "create_date" in p["cols"]:
             gb_tokens = split_args(p["group_by"])
             normalized_gb = []
+            # 使用 SELECT 输出列序号引用日期列，彻底避免 PostgreSQL 对
+            # TO_CHAR/DATE/CAST 等等价表达式做 GROUP BY 结构匹配失败。
+            create_date_pos = p["cols"][1:].index("create_date") + 1
             for token in gb_tokens:
                 token_upper = token.upper()
-                if "TO_CHAR" in token_upper and ("CREATETIME" in token_upper or "CREATE_TIME" in token_upper):
-                    normalized_gb.append(create_expr)
+                token_norm = _norm(token)
+                if (token_norm == "create_date" or
+                        ("TO_CHAR" in token_upper and ("CREATETIME" in token_upper or "CREATE_TIME" in token_upper)) or
+                        ("CREATETIME" in token_upper or "CREATE_TIME" in token_upper)):
+                    normalized_gb.append(str(create_date_pos))
                 else:
                     normalized_gb.append(token)
             p["group_by"] = ", ".join(normalized_gb)
@@ -929,7 +935,8 @@ def main():
     JOIN affected a ON {key_join}
     WHERE {'TRUE' if not where_no_window else where_no_window}
     GROUP BY {p['group_by']}"""
-            fn_text = delete_fn_block(base, keys, pg_key_exprs, p["from_join"], change_win, create_expr)
+            route_col = "create_date" if "create_date" in p["cols"] else "create_time"
+            fn_text = delete_fn_block(base, keys, pg_key_exprs, p["from_join"], change_win, create_expr, route_col)
 
         # 嵌套子查询 / 非标准 FROM 的表：原 SELECT 的 FROM 含子查询，
         # 通用解析对“变更窗口引用源别名”可能失效，打上 TODO 标记由人工复核。
