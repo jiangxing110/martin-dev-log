@@ -69,8 +69,7 @@ CREATE TEMPORARY TABLE ods_bi_month_tag (
 );
 
 -- =============================================
--- 3. 数据写入（同步未删除数据）
+-- 3. 数据写入（同步全量数据，包含 delete_time，用于传播软删除状态）
 -- =============================================
 INSERT INTO ods_bi_month_tag
-SELECT * FROM pg_bi_month_tag
-WHERE delete_time IS NULL;
+SELECT * FROM pg_bi_month_tag;
