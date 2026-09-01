@@ -1,10 +1,10 @@
 -- 01. INSERT_DATA dws_qbit_card_wallet_transaction_2026
 -- =========================================
 INSERT INTO "public"."dws_qbit_card_wallet_transaction_2026" (
-  "id", "account_id", "business_type","status", "origin_amount", "transaction_count", 
+  "id", "account_id", "business_type","status", "origin_amount", "transaction_count",
   "fee", "create_date","version", "create_time", "update_time"
 )
-SELECT 
+SELECT
   generate_snowflake_id(),
   tr."accountId",
   tr."businessType",
@@ -25,9 +25,9 @@ ON CONFLICT (id) DO NOTHING;
 -- 02. INSERT_DATA dws_qbit_card_transaction_2026
 -- =========================================
 INSERT INTO "public"."dws_qbit_card_transaction_2026" (
-  "id", "account_id", "business_type", "status", "provider", "bin", "origin_amount", "settle_amount", 
+  "id", "account_id", "business_type", "status", "provider", "bin", "origin_amount", "settle_amount",
   "transaction_count", "fee", "create_date", "version", "create_time","update_time")
-SELECT 
+SELECT
   generate_snowflake_id(),
   tr."accountId",
   tr."businessType",
@@ -44,7 +44,7 @@ SELECT
   NOW() AS update_time
 FROM "qbit_card_transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
-WHERE tr."deleteTime" IS NULL 
+WHERE tr."deleteTime" IS NULL
   AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
 GROUP BY tr."accountId", tr."provider", qc."firstSix", tr."businessType", create_date, tr."status"
 ON CONFLICT (id) DO NOTHING;
@@ -52,15 +52,15 @@ ON CONFLICT (id) DO NOTHING;
 -- 03. INSERT_DATA dws_qbit_card_transaction_extend_2026
 -- =========================================
 INSERT INTO "public"."dws_qbit_card_transaction_extend_2026" (
-  "id", "account_id", "provider", "bin", "business_type", "status", "settle_amount", "transaction_currency", "country", 
+  "id", "account_id", "provider", "bin", "business_type", "status", "settle_amount", "transaction_currency", "country",
   "transaction_count","fx_fee", "atm_fee", "apple_pay_fee","settle_fee", "create_date", "version", "create_time", "update_time")
-SELECT 
+SELECT
   generate_snowflake_id() AS "id",
   tr."accountId" AS "account_id",
   tr."provider" AS "provider",
   qc."firstSix" AS "bin",
   tr."businessType",
-  tr."status" AS "status", 
+  tr."status" AS "status",
   COALESCE(SUM(tr."settleAmount"), 0) AS "settle_amount",
   tr."transactionCurrency" AS "transaction_currency",
   tr."specialSourceData"->>'country' AS "country",
@@ -75,10 +75,10 @@ SELECT
   NOW() AS "update_time"
 FROM "qbit_card_transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
-WHERE 
+WHERE
   tr."deleteTime" IS NULL
   AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
-GROUP BY 
+GROUP BY
   tr."accountId", tr."provider", qc."firstSix", tr."businessType", tr."status",
   tr."transactionCurrency", tr."specialSourceData"->>'country',TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE
 ON CONFLICT (id) DO NOTHING;
@@ -86,9 +86,9 @@ ON CONFLICT (id) DO NOTHING;
 -- 04. INSERT_DATA dws_qbit_card_group_transaction_2026
 -- =========================================
 INSERT INTO "public"."dws_qbit_card_group_transaction_2026" (
-  "id", "account_id", "business_type", "status", "origin_amount", "transaction_count", 
+  "id", "account_id", "business_type", "status", "origin_amount", "transaction_count",
   "fee","create_date", "version", "create_time", "update_time")
-SELECT 
+SELECT
   generate_snowflake_id(),
   tr."accountId",
   tr."businessType",
@@ -97,11 +97,11 @@ SELECT
   COUNT(*) AS transaction_count,
   COALESCE(SUM(tr."fee"), 0) AS fee,
   TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date,
-  1 AS version, 
+  1 AS version,
   NOW() AS create_time,
   NOW() AS update_time
 FROM "qbitCardGroupTransaction" AS tr
-WHERE tr."deleteTime" IS NULL 
+WHERE tr."deleteTime" IS NULL
   AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
 GROUP BY tr."accountId", tr."businessType", create_date, tr."status"
 ON CONFLICT (id) DO NOTHING;
@@ -109,9 +109,9 @@ ON CONFLICT (id) DO NOTHING;
 -- 05. INSERT_DATA dws_transfer_2026
 -- =========================================
 INSERT INTO "public"."dws_transfer_2026" (
-  "id", "account_id", "business_type_detail","business_type_code", "settlement_currency", "status", "usd_amount", 
+  "id", "account_id", "business_type_detail","business_type_code", "settlement_currency", "status", "usd_amount",
   "transaction_count", "fee", "currency","create_date", "version", "create_time", "update_time")
-SELECT 
+SELECT
   generate_snowflake_id(),
   tr."accountId",
   tr."businessTypeDetail",
@@ -135,9 +135,9 @@ ON CONFLICT (id) DO NOTHING;
 -- 06. INSERT_DATA dws_transfer_extend_2026
 -- =========================================
 INSERT INTO "public"."dws_transfer_extend_2026" (
-  "id", "account_id", "status","dbs_receive", "cl_receive", "ep_receive", "rd_receive", "settle_fx_fee", 
+  "id", "account_id", "status","dbs_receive", "cl_receive", "ep_receive", "rd_receive", "settle_fx_fee",
   "conversion_fx_amount", "conversion_fx_fee", "create_date", "version", "create_time", "update_time")
-SELECT 
+SELECT
   generate_snowflake_id(),
   tr."accountId",
   tr."status",
@@ -162,9 +162,9 @@ ON CONFLICT (id) DO NOTHING;
 -- 07. INSERT_DATA dws_crypto_assets_transfers_2026
 -- =========================================
 INSERT INTO "public"."dws_crypto_assets_transfers_2026" (
-  "id", "account_id", "status", "sender_type", "recipient_type", "transaction_count", "origin_amount", "settlement_amount", "fee", 
+  "id", "account_id", "status", "sender_type", "recipient_type", "transaction_count", "origin_amount", "settlement_amount", "fee",
   "fee2", "cross_chain_fee","hidden", "create_date", "currency", "action", "version", "create_time", "update_time")
-SELECT 
+SELECT
   generate_snowflake_id(),
   "account_id",
   "status",
@@ -185,7 +185,7 @@ SELECT
   NOW() AS update_time
 FROM "crypto_assets_transfers" AS tr
 WHERE
-  tr."delete_time" IS NULL 
+  tr."delete_time" IS NULL
   AND tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE
 GROUP BY "account_id","status","sender_type","recipient_type","hidden",create_date,"currency","action"
 ON CONFLICT (id) DO NOTHING;
@@ -195,7 +195,7 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO ods_fund_profits_2026 (
   "id", "fund_id", "create_time", "update_time", "delete_time", "version", "remarks", "account_id",
   "product_id", "date", "currency", "profit", "service_fee", "status", "apr", "share", "net_value")
-SELECT 
+SELECT
   generate_snowflake_id(),
   tr."id",
   tr."create_time",
@@ -215,7 +215,7 @@ SELECT
   tr."net_value"
 FROM "fund_profits" AS tr
 CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee
-WHERE tr."delete_time" IS NULL 
+WHERE tr."delete_time" IS NULL
   AND tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE
 ON CONFLICT (id) DO NOTHING;
 
@@ -224,7 +224,7 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO "ods_qbit_card_2026" (
   "id", "create_time", "update_time", "delete_time", "version", "remarks","card_id", "account_id", "currency", "status",
   "provider", "type", "token", "user_delete_time", "delete_card_time","first_six", "card_belong", "physical_card_status", "card_mode")
-SELECT 
+SELECT
   generate_snowflake_id(),
   tr."createTime", tr."updateTime", tr."deleteTime", tr."version", tr."remarks",
   tr."id", tr."accountId", tr."currency", tr."status",
@@ -232,7 +232,7 @@ SELECT
   tr."deleteCardTime", tr."firstSix", tr."cardBelong",
   tr."physicalCardStatus", tr."cardMode"
 FROM "qbitCard" AS tr
-WHERE 
+WHERE
   tr."deleteTime" IS NULL
   AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
 ON CONFLICT (id) DO NOTHING;
@@ -263,12 +263,12 @@ ON CONFLICT (id) DO NOTHING;
 -- 11. INSERT_DATA dws_physical_card_2026
 -- =========================================
 INSERT INTO "public"."dws_physical_card_2026" ("id", "account_id", "provider", "bin", "status","transaction_count", "physical_card_fee","create_date", "version", "create_time", "update_time")
-SELECT 
+SELECT
   generate_snowflake_id() AS "id",
   tr."accountId" AS "account_id",
   qc."provider" AS "provider",
   qc."firstSix" AS "bin",
-  tr."status" AS "status", 
+  tr."status" AS "status",
   COUNT(*) AS "transaction_count",
   SUM(tr."originAmount"::numeric) AS "physical_card_fee",
   TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS "create_date",
@@ -277,7 +277,7 @@ SELECT
   NOW() AS "update_time"
 FROM "qbitCardWalletTransaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
-WHERE 
+WHERE
   tr."deleteTime" IS NULL AND tr."businessType" = 'TransferOut' AND tr."remarks" IN ('邮寄费', '制卡费', '批量邮寄运费')
   AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
 GROUP BY tr."accountId", qc."provider", qc."firstSix", tr."status", TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE
@@ -286,7 +286,7 @@ ON CONFLICT (id) DO NOTHING;
 -- 12. INSERT_DATA dws_sale_card_wallet_transaction_2026
 -- =========================================
 INSERT INTO "public"."dws_sale_card_wallet_transaction_2026" ("id", "account_id", "sale_or_am_id", "business_type", "status","origin_amount", "transaction_count", "fee", "create_date", "version", "create_time", "update_time")
-SELECT 
+SELECT
   generate_snowflake_id(),
   tr."accountId",
   ids."sale_or_am_id",
@@ -323,7 +323,7 @@ CROSS JOIN LATERAL (
   FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
   WHERE sale_or_am_id IS NOT NULL
 ) AS ids
-WHERE 
+WHERE
   tr."deleteTime" IS NULL AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
 GROUP BY   tr."accountId", tr."businessType", tr."status", create_date, ids."sale_or_am_id"
 ON CONFLICT (id) DO NOTHING;
@@ -332,7 +332,7 @@ ON CONFLICT (id) DO NOTHING;
 -- =========================================
 INSERT INTO "public"."dws_sale_card_transaction_2026" ("id", "account_id", "sale_or_am_id", "business_type", "status",
   "provider", "bin", "origin_amount", "settle_amount", "transaction_count", "fee", "create_date","version", "create_time", "update_time")
-SELECT 
+SELECT
   generate_snowflake_id(),
   tr."accountId",
   ids."sale_or_am_id",
@@ -381,9 +381,9 @@ ON CONFLICT (id) DO NOTHING;
 -- 14. INSERT_DATA dws_sale_card_transaction_extend_2026
 -- =========================================
 INSERT INTO "public"."dws_sale_card_transaction_extend_2026" (
-  "id", "account_id", "sale_or_am_id", "business_type", "provider", "bin", "status", "settle_amount", "transaction_currency", "country", 
+  "id", "account_id", "sale_or_am_id", "business_type", "provider", "bin", "status", "settle_amount", "transaction_currency", "country",
   "transaction_count", "fx_fee", "atm_fee", "apple_pay_fee","settle_fee", "create_date", "version", "create_time", "update_time")
-SELECT 
+SELECT
   generate_snowflake_id() AS id,
   tr."accountId" AS account_id,
   ids."sale_or_am_id",
@@ -428,19 +428,19 @@ CROSS JOIN LATERAL (
   FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
   WHERE sale_or_am_id IS NOT NULL
 ) AS ids
-WHERE 
+WHERE
   tr."deleteTime" IS NULL
   AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
-GROUP BY 
+GROUP BY
   tr."accountId", tr."provider", qc."firstSix", tr."businessType", tr."status",tr."transactionCurrency", tr."specialSourceData"->>'country',
   TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE, ids."sale_or_am_id"
-ON CONFLICT (id) DO NOTHING;  
+ON CONFLICT (id) DO NOTHING;
 
 -- 15. INSERT_DATA dws_sale_card_group_transaction_2026
 -- =========================================
 INSERT INTO "public"."dws_sale_card_group_transaction_2026" (
   "id", "account_id", "sale_or_am_id", "business_type", "status","origin_amount", "transaction_count", "fee","create_date", "version", "create_time", "update_time")
-SELECT 
+SELECT
   generate_snowflake_id(),
   tr."accountId",
   ids."sale_or_am_id",
@@ -480,14 +480,14 @@ CROSS JOIN LATERAL (
 WHERE tr."deleteTime" IS NULL
   AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
 GROUP BY tr."accountId", tr."businessType", tr."status",TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE,ids."sale_or_am_id"
-ON CONFLICT (id) DO NOTHING;    
+ON CONFLICT (id) DO NOTHING;
 
 -- 16. INSERT_DATA dws_sale_transfer_2026
 -- =========================================
 INSERT INTO "public"."dws_sale_transfer_2026" (
-  "id", "account_id", "sale_or_am_id", "business_type_detail", "business_type_code", "settlement_currency", "status", "usd_amount", 
+  "id", "account_id", "sale_or_am_id", "business_type_detail", "business_type_code", "settlement_currency", "status", "usd_amount",
   "transaction_count", "fee", "currency", "create_date", "version", "create_time", "update_time")
-SELECT 
+SELECT
   generate_snowflake_id(),
   tr."accountId",
   ids."sale_or_am_id",
@@ -530,7 +530,7 @@ CROSS JOIN LATERAL (
 WHERE tr."deleteTime" IS NULL
   AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
 GROUP BY tr."accountId", tr."businessTypeDetail",tr."businessCode", tr."settlementCurrency", tr."status", tr."currency", TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE, ids."sale_or_am_id"
-ON CONFLICT (id) DO NOTHING;    
+ON CONFLICT (id) DO NOTHING;
 
 -- 17. INSERT_DATA dws_sale_transfer_extend_2026
 -- =========================================
@@ -547,15 +547,15 @@ COALESCE(SUM("rdReceive"),0) AS "rdReceive",
 COALESCE(SUM("settleFxFee"),0) AS "settleFxFee" ,
 COALESCE(SUM("conversionFxAmount"),0) AS "conversionFxAmount" ,
 COALESCE(SUM("conversionFxFee"),0) AS "conversionFxFee",
-COALESCE(SUM(CASE WHEN "businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and (fee - "clReceive"*0.0005 - "epReceive"*0.0005 - "rdReceive"*0.0005) > 0 THEN 
+COALESCE(SUM(CASE WHEN "businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and (fee - "clReceive"*0.0005 - "epReceive"*0.0005 - "rdReceive"*0.0005) > 0 THEN
                (fee - "clReceive"*0.0005 - "epReceive"*0.0005 - "rdReceive"*0.0005)  ELSE 0 END),0) AS "inboundProfit",
 COALESCE(SUM (CASE WHEN ("conversionFxFee"-"conversionFxAmount"*0.001)>0 THEN ("conversionFxFee"-"conversionFxAmount"*0.001) ELSE 0 END ),0) AS "conversionFxProfit",
 create_date,
 1 AS version, -- 初始版本号
 NOW() AS create_time,
 NOW() AS update_time
-from (  
-SELECT 
+from (
+SELECT
 tr."accountId",
 ids."sale_or_am_id",
 tr."status",
@@ -600,7 +600,7 @@ CROSS JOIN LATERAL (
 ) AS ids
 WHERE
 tr."deleteTime" IS NULL and ta."deleteTime" IS NULL
-AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' 
+AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day'
 AND tr."createTime" < CURRENT_DATE
 ) as tt
 GROUP BY "accountId",create_date, status,"sale_or_am_id";
@@ -608,9 +608,9 @@ GROUP BY "accountId",create_date, status,"sale_or_am_id";
 -- 18. INSERT_DATA dws_sale_crypto_assets_transfers_2026
 -- =========================================
 INSERT INTO "public"."dws_sale_crypto_assets_transfers_2026" (
-  "id", "account_id", "sale_or_am_id", "status", "sender_type", "recipient_type","transaction_count", "origin_amount", "settlement_amount", 
+  "id", "account_id", "sale_or_am_id", "status", "sender_type", "recipient_type","transaction_count", "origin_amount", "settlement_amount",
   "fee", "fee2", "cross_chain_fee", "exchange_profit", "payment_profit", "hidden","create_date", "currency", "action", "version", "create_time", "update_time")
-SELECT 
+SELECT
   generate_snowflake_id(),
   "account_id",
   ids."sale_or_am_id",
@@ -629,7 +629,7 @@ SELECT
   TO_CHAR(tr."create_time", 'YYYY-MM-DD')::DATE AS create_date,
   "currency",
   "action",
-  1 AS version, 
+  1 AS version,
   NOW() AS create_time,
   NOW() AS update_time
 FROM "crypto_assets_transfers" AS tr
@@ -656,17 +656,17 @@ CROSS JOIN LATERAL (
   FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
   WHERE sale_or_am_id IS NOT NULL
 ) AS ids
-WHERE tr."delete_time" IS NULL 
+WHERE tr."delete_time" IS NULL
   AND tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE
 GROUP BY "account_id", "status", "sender_type", "recipient_type","hidden", create_date, "currency", "action", ids."sale_or_am_id"
-ON CONFLICT (id) DO NOTHING;             
+ON CONFLICT (id) DO NOTHING;
 
 -- 19. INSERT_DATA ods_sale_fund_profits_2026
 -- =========================================
 INSERT INTO ods_sale_fund_profits_2026 (
-    "id", "fund_id", "create_time", "update_time", "delete_time", "version", "remarks", "account_id", "sale_or_am_id", 
+    "id", "fund_id", "create_time", "update_time", "delete_time", "version", "remarks", "account_id", "sale_or_am_id",
     "product_id", "date", "currency", "profit", "service_fee", "status", "apr", "share", "net_value")
-SELECT 
+SELECT
     generate_snowflake_id(),
     tr."id",
     "create_time",
@@ -712,17 +712,17 @@ CROSS JOIN LATERAL (
 ) AS ids
 WHERE tr."delete_time" IS NULL
     AND tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE
-ON CONFLICT (id) DO NOTHING;             
+ON CONFLICT (id) DO NOTHING;
 
 -- 20. INSERT_DATA ods_sale_qbit_card_2026
 -- =========================================
 INSERT INTO ods_sale_qbit_card_2026 (
   "id", "create_time", "update_time", "delete_time", "version", "remarks", "sale_or_am_id", "card_id", "account_id", "currency", "status",
   "provider", "type", "token", "user_delete_time", "delete_card_time", "first_six", "card_belong", "physical_card_status", "card_mode")
-SELECT 
+SELECT
   generate_snowflake_id(),
   tr."createTime", tr."updateTime", tr."deleteTime", tr."version", tr."remarks",
-  ids."sale_or_am_id", 
+  ids."sale_or_am_id",
   tr."id", tr."accountId", tr."currency", tr."status",
   tr."provider", tr."type", tr."token", tr."userDeleteTime",
   tr."deleteCardTime", tr."firstSix", tr."cardBelong",
@@ -753,7 +753,7 @@ CROSS JOIN LATERAL (
 ) AS ids
 WHERE tr."deleteTime" IS NULL
   AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
-ON CONFLICT (id) DO NOTHING;             
+ON CONFLICT (id) DO NOTHING;
 
 -- 21. INSERT_DATA dws_sale_open_card_2026
 -- =========================================
@@ -797,22 +797,22 @@ CROSS JOIN LATERAL (
   WHERE sale_or_am_id IS NOT NULL
 ) AS ids
 where
-tr."deleteTime" is NULL and tr."type" IN ('CreateCard', 'QbitCardFee') 
+tr."deleteTime" is NULL and tr."type" IN ('CreateCard', 'QbitCardFee')
 AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
 GROUP BY tr."status",tr."accountId",qc.provider,qc."firstSix",ids."sale_or_am_id", TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE
-ON CONFLICT (id) DO NOTHING;             
+ON CONFLICT (id) DO NOTHING;
 
 -- 22. INSERT_DATA dws_sale_physical_card_2026
 -- =========================================
 INSERT INTO "public"."dws_sale_physical_card_2026" ("id", "account_id", "sale_or_am_id", "provider", "bin", "status",
     "transaction_count", "physical_card_fee", "create_date", "version", "create_time", "update_time")
-SELECT 
+SELECT
     generate_snowflake_id() AS "id",
     tr."accountId" AS "account_id",
     ids."sale_or_am_id",
     qc."provider" AS "provider",
     qc."firstSix" AS "bin",
-    tr."status" AS "status", 
+    tr."status" AS "status",
     COUNT(*) AS "transaction_count",
     SUM("originAmount"::numeric) AS "physical_card_fee",
     TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS "create_date",
@@ -848,7 +848,7 @@ WHERE tr."deleteTime" IS NULL
   AND tr."businessType" = 'TransferOut' AND tr."remarks" IN ('邮寄费', '制卡费', '批量邮寄运费')
   AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE
 GROUP BY tr."accountId", ids."sale_or_am_id", qc."provider", qc."firstSix", tr."status",TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE
-ON CONFLICT (id) DO NOTHING;             
+ON CONFLICT (id) DO NOTHING;
 
 
 

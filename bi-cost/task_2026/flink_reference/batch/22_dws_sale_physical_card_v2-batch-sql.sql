@@ -127,7 +127,7 @@ FROM source_dws_sale_physical_card;
 CREATE TEMPORARY TABLE sink_dws_sale_physical_card_2026 (
     id BIGINT, account_id STRING, sale_or_am_id STRING, provider STRING, bin STRING, status STRING, transaction_count INT, physical_card_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_physical_card_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
+) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='dws_sale_physical_card_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
 INSERT INTO sink_dws_sale_physical_card_2026
 SELECT id, account_id, sale_or_am_id, provider, bin, status, transaction_count, physical_card_fee, create_date, version, create_time, update_time

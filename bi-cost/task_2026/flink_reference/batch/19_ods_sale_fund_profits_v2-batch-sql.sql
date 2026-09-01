@@ -50,7 +50,7 @@ CREATE TEMPORARY TABLE source_ods_sale_fund_profits (
     account_id STRING,
     sale_or_am_id STRING,
     product_id STRING,
-    date TIMESTAMP(6),
+    `date` TIMESTAMP(6),
     currency STRING,
     profit DECIMAL(18,2),
     service_fee DECIMAL(18,2),
@@ -129,12 +129,12 @@ SELECT
 FROM source_ods_sale_fund_profits;
 
 CREATE TEMPORARY TABLE sink_ods_sale_fund_profits_2026 (
-    id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, date TIMESTAMP(6), currency STRING, profit DECIMAL(18,2), service_fee DECIMAL(18,2), status STRING, apr DECIMAL(18,2), share DECIMAL(18,2), net_value DECIMAL(18,2),
+    id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, `date` TIMESTAMP(6), currency STRING, profit DECIMAL(18,2), service_fee DECIMAL(18,2), status STRING, apr DECIMAL(18,2), share DECIMAL(18,2), net_value DECIMAL(18,2),
     PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.ods_sale_fund_profits_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
+) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='ods_sale_fund_profits_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
 INSERT INTO sink_ods_sale_fund_profits_2026
-SELECT id, fund_id, create_time, update_time, delete_time, version, remarks, account_id, sale_or_am_id, product_id, date, currency, profit, service_fee, status, apr, share, net_value
+SELECT id, fund_id, create_time, update_time, delete_time, version, remarks, account_id, sale_or_am_id, product_id, `date`, currency, profit, service_fee, status, apr, share, net_value
 FROM v_ods_sale_fund_profits_base
 CROSS JOIN source_delete_ods_sale_fund_profits_result AS del
 WHERE del.affected_rows >= 0

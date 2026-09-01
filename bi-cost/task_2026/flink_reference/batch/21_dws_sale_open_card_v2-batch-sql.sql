@@ -47,7 +47,7 @@ CREATE TEMPORARY TABLE source_dws_sale_open_card (
     status STRING,
     sale_or_am_id STRING,
     fee DECIMAL(18,2),
-    count INT,
+    `count` INT,
     create_date TIMESTAMP(6),
     version INT,
     create_time TIMESTAMP(6),
@@ -125,12 +125,12 @@ SELECT
 FROM source_dws_sale_open_card;
 
 CREATE TEMPORARY TABLE sink_dws_sale_open_card_2026 (
-    id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, sale_or_am_id STRING, fee DECIMAL(18,2), count INT, create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, sale_or_am_id STRING, fee DECIMAL(18,2), `count` INT, create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_sale_open_card_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
+) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='dws_sale_open_card_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
 INSERT INTO sink_dws_sale_open_card_2026
-SELECT id, account_id, provider, bin, status, sale_or_am_id, fee, count, create_date, version, create_time, update_time
+SELECT id, account_id, provider, bin, status, sale_or_am_id, fee, `count`, create_date, version, create_time, update_time
 FROM v_dws_sale_open_card_base
 CROSS JOIN source_delete_dws_sale_open_card_result AS del
 WHERE del.affected_rows >= 0

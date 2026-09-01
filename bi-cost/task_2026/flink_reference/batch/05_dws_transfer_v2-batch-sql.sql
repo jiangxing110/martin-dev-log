@@ -82,7 +82,7 @@ FROM source_dws_transfer;
 CREATE TEMPORARY TABLE sink_dws_transfer_2026 (
     id BIGINT, account_id STRING, business_type_detail STRING, business_type_code STRING, settlement_currency STRING, status STRING, usd_amount DECIMAL(18,2), transaction_count INT, fee DECIMAL(18,2), currency STRING, create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_transfer_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
+) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='dws_transfer_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
 INSERT INTO sink_dws_transfer_2026
 SELECT id, account_id, business_type_detail, business_type_code, settlement_currency, status, usd_amount, transaction_count, fee, currency, create_date, version, create_time, update_time

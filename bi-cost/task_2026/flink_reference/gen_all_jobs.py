@@ -402,6 +402,10 @@ def flink_type(col):
         return "BIGINT"
     return "STRING"
 
+def flink_identifier(col):
+    """返回 Flink SQL 标识符；date/count 是 Flink 保留字，必须使用反引号。"""
+    return f"`{col}`" if col.lower() in {"date", "count"} else col
+
 # ---------------------------------------------------------------------------
 # 文件内容生成
 # ---------------------------------------------------------------------------
@@ -422,7 +426,7 @@ SET 'restart-strategy.fixed-delay.delay' = '60s';
 
 def src_cols_decl(cols):
     """JDBC source 输出列声明（聚合结果列，不含 id）。"""
-    return ",\n    ".join(f"{c} {flink_type(c)}" for c in cols[1:])
+    return ",\n    ".join(f"{flink_identifier(c)} {flink_type(c)}" for c in cols[1:])
 
 def jdbc_src_block(base, cols, pg_subquery):
     pgq = pg_subquery.replace("'", "''")  # Flink table-name 属性值内单引号需转义为 ''
@@ -568,16 +572,16 @@ def cdc_block(base, cols, keys, pg_subquery):
             flink_keys.append(f"COALESCE({k}, '')")
     id_expr = "CAST(ABS(HASH_CODE(CONCAT(" + ", ': ', ".join(flink_keys) + "))) AS BIGINT)"
     out_cols = ["id"] + cols[1:]
-    sink_cols = ", ".join(out_cols)
+    sink_cols = ", ".join(flink_identifier(c) for c in out_cols)
     # sinks
     sinks = []
     inserts = []
     for y in YEARS:
-        ycols = ", ".join(f"{c} {flink_type(c)}" for c in out_cols)
+        ycols = ", ".join(f"{flink_identifier(c)} {flink_type(c)}" for c in out_cols)
         sinks.append(f"""CREATE TEMPORARY TABLE sink_{base}_{y} (
     {ycols},
     PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${{secret_values.ADB_PG_VPC_HOSTNAME}}:${{secret_values.ADB_PG_VPC_PORT}}/${{secret_values.ADB_PG_DATABASE}}','tableName'='public.{base}_{y}','userName'='${{secret_values.ADB_PG_USERNAME}}','password'='${{secret_values.ADB_PG_PASSWORD}}','writeMode'='upsert','batchSize'='2000');""")
+) WITH ('connector'='adbpg','url'='jdbc:postgresql://${{secret_values.ADB_PG_VPC_HOSTNAME}}:${{secret_values.ADB_PG_VPC_PORT}}/${{secret_values.ADB_PG_DATABASE}}','tableName'='{base}_{y}','userName'='${{secret_values.ADB_PG_USERNAME}}','password'='${{secret_values.ADB_PG_PASSWORD}}','writeMode'='upsert','batchSize'='2000');""")
         inserts.append(f"""INSERT INTO sink_{base}_{y}
 SELECT {sink_cols}
 FROM v_{base}_base
@@ -639,7 +643,7 @@ FROM source_{base};
 def batch_block(base, cols, keys, from_join, where_no_window, pg_key_exprs, create_expr, pg_subquery):
     pgq = pg_subquery.replace("'", "''")  # Flink table-name 属性值内单引号需转义为 ''
     out_cols = ["id"] + cols[1:]
-    sink_cols = ", ".join(out_cols)
+    sink_cols = ", ".join(flink_identifier(c) for c in out_cols)
     flink_keys = []
     for k in keys:
         if k == "create_date":
@@ -650,11 +654,11 @@ def batch_block(base, cols, keys, from_join, where_no_window, pg_key_exprs, crea
     sinks = []
     inserts = []
     for y in BATCH_YEARS:
-        ycols = ", ".join(f"{c} {flink_type(c)}" for c in out_cols)
+        ycols = ", ".join(f"{flink_identifier(c)} {flink_type(c)}" for c in out_cols)
         sinks.append(f"""CREATE TEMPORARY TABLE sink_{base}_{y} (
     {ycols},
     PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${{secret_values.ADB_PG_VPC_HOSTNAME}}:${{secret_values.ADB_PG_VPC_PORT}}/${{secret_values.ADB_PG_DATABASE}}','tableName'='public.{base}_{y}','userName'='${{secret_values.ADB_PG_USERNAME}}','password'='${{secret_values.ADB_PG_PASSWORD}}','writeMode'='upsert','batchSize'='2000');""")
+) WITH ('connector'='adbpg','url'='jdbc:postgresql://${{secret_values.ADB_PG_VPC_HOSTNAME}}:${{secret_values.ADB_PG_VPC_PORT}}/${{secret_values.ADB_PG_DATABASE}}','tableName'='{base}_{y}','userName'='${{secret_values.ADB_PG_USERNAME}}','password'='${{secret_values.ADB_PG_PASSWORD}}','writeMode'='upsert','batchSize'='2000');""")
         inserts.append(f"""INSERT INTO sink_{base}_{y}
 SELECT {sink_cols}
 FROM v_{base}_base
