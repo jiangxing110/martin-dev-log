@@ -32,11 +32,42 @@ BEGIN
 END;
 $$;
 
--- 执行后核对：card_id 应为 character varying / varchar
+-- 08 / 19 作业兼容迁移：fund_profits 的 account_id 也需要接收 Flink STRING。
+DO $$
+DECLARE
+    v_table_name TEXT;
+    v_tables TEXT[] := ARRAY[
+        'ods_fund_profits_2024',
+        'ods_fund_profits_2025',
+        'ods_fund_profits_2026',
+        'ods_sale_fund_profits_2024',
+        'ods_sale_fund_profits_2025',
+        'ods_sale_fund_profits_2026'
+    ];
+BEGIN
+    FOREACH v_table_name IN ARRAY v_tables LOOP
+        IF EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = v_table_name
+              AND column_name = 'account_id'
+              AND udt_name = 'uuid'
+        ) THEN
+            EXECUTE format(
+                'ALTER TABLE public.%I ALTER COLUMN account_id TYPE VARCHAR(36) USING account_id::text',
+                v_table_name
+            );
+        END IF;
+    END LOOP;
+END;
+$$;
+
+-- 执行后核对：card_id/account_id 应为 character varying / varchar
 SELECT table_name, column_name, data_type, udt_name
 FROM information_schema.columns
 WHERE table_schema = 'public'
-  AND column_name = 'card_id'
+  AND column_name IN ('card_id', 'account_id')
   AND table_name IN (
       'ods_qbit_card_2024', 'ods_qbit_card_2025', 'ods_qbit_card_2026',
       'ods_sale_qbit_card_2024', 'ods_sale_qbit_card_2025', 'ods_sale_qbit_card_2026'

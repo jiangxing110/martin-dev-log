@@ -391,6 +391,8 @@ def flink_type(col):
         return "TIMESTAMP(6)"
     if c in ("transaction_count", "count", "version"):
         return "INT"
+    if c == "fund_id":
+        return "BIGINT"
     if c in ("hidden",):
         return "BOOLEAN"
     if any(t in c for t in ("amount", "fee", "profit", "share", "net_value", "apr",

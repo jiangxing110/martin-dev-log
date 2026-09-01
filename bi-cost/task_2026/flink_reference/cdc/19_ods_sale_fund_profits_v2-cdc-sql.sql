@@ -48,7 +48,7 @@ CREATE TEMPORARY TABLE source_delete_ods_sale_fund_profits_result (
 -- 1. 源聚合（留在 PostgreSQL 内执行，复用原版聚合逻辑；只回传受影响 key 的聚合结果）
 -- ==============================================
 CREATE TEMPORARY TABLE source_ods_sale_fund_profits (
-    fund_id STRING,
+    fund_id BIGINT,
     create_time TIMESTAMP(6),
     update_time TIMESTAMP(6),
     delete_time TIMESTAMP(6),
@@ -95,7 +95,7 @@ CROSS JOIN LATERAL (
   WHERE sale_or_am_id IS NOT NULL
 ) AS ids WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."delete_time" < CURRENT_DATE)
     )
-    SELECT CAST(tr."id" AS text) AS "fund_id", "create_time" AS "create_time", "update_time" AS "update_time", "delete_time" AS "delete_time", CAST(tr."version" AS integer) AS "version", CAST(tr."remarks" AS text) AS "remarks", CAST("account_id" AS text) AS "account_id", CAST(ids."sale_or_am_id" AS text) AS "sale_or_am_id", CAST("product_id" AS text) AS "product_id", CAST("date" AS timestamp(6)) AS "date", CAST("currency" AS text) AS "currency", CAST("profit" AS numeric(18,2)) AS "profit", CAST((CASE WHEN fee->>''type'' = ''SERVICE'' THEN (fee->>''amount'')::numeric ELSE 0 END) AS numeric(18,2)) AS "service_fee", CAST(tr."status" AS text) AS "status", CAST("apr" AS numeric(18,2)) AS "apr", CAST("share" AS numeric(18,2)) AS "share", CAST("net_value" AS numeric(18,2)) AS "net_value"
+    SELECT tr."id" AS "fund_id", "create_time" AS "create_time", "update_time" AS "update_time", "delete_time" AS "delete_time", CAST(tr."version" AS integer) AS "version", CAST(tr."remarks" AS text) AS "remarks", CAST("account_id" AS text) AS "account_id", CAST(ids."sale_or_am_id" AS text) AS "sale_or_am_id", CAST("product_id" AS text) AS "product_id", CAST("date" AS timestamp(6)) AS "date", CAST("currency" AS text) AS "currency", CAST("profit" AS numeric(18,2)) AS "profit", CAST((CASE WHEN fee->>''type'' = ''SERVICE'' THEN (fee->>''amount'')::numeric ELSE 0 END) AS numeric(18,2)) AS "service_fee", CAST(tr."status" AS text) AS "status", CAST("apr" AS numeric(18,2)) AS "apr", CAST("share" AS numeric(18,2)) AS "share", CAST("net_value" AS numeric(18,2)) AS "net_value"
     FROM fund_profits AS tr
 CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee
 LEFT JOIN LATERAL (
@@ -143,15 +143,15 @@ FROM source_ods_sale_fund_profits;
 -- 3. 分表 SINK（每个 _YYYY 一个，upsert 按 key 幂等）
 -- ==============================================
 CREATE TEMPORARY TABLE sink_ods_sale_fund_profits_2024 (
-    id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, `date` TIMESTAMP(6), currency STRING, profit DECIMAL(18,2), service_fee DECIMAL(18,2), status STRING, apr DECIMAL(18,2), share DECIMAL(18,2), net_value DECIMAL(18,2),
+    id BIGINT, fund_id BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, `date` TIMESTAMP(6), currency STRING, profit DECIMAL(18,2), service_fee DECIMAL(18,2), status STRING, apr DECIMAL(18,2), share DECIMAL(18,2), net_value DECIMAL(18,2),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='ods_sale_fund_profits_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_ods_sale_fund_profits_2025 (
-    id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, `date` TIMESTAMP(6), currency STRING, profit DECIMAL(18,2), service_fee DECIMAL(18,2), status STRING, apr DECIMAL(18,2), share DECIMAL(18,2), net_value DECIMAL(18,2),
+    id BIGINT, fund_id BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, `date` TIMESTAMP(6), currency STRING, profit DECIMAL(18,2), service_fee DECIMAL(18,2), status STRING, apr DECIMAL(18,2), share DECIMAL(18,2), net_value DECIMAL(18,2),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='ods_sale_fund_profits_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_ods_sale_fund_profits_2026 (
-    id BIGINT, fund_id STRING, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, `date` TIMESTAMP(6), currency STRING, profit DECIMAL(18,2), service_fee DECIMAL(18,2), status STRING, apr DECIMAL(18,2), share DECIMAL(18,2), net_value DECIMAL(18,2),
+    id BIGINT, fund_id BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, account_id STRING, sale_or_am_id STRING, product_id STRING, `date` TIMESTAMP(6), currency STRING, profit DECIMAL(18,2), service_fee DECIMAL(18,2), status STRING, apr DECIMAL(18,2), share DECIMAL(18,2), net_value DECIMAL(18,2),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='ods_sale_fund_profits_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
