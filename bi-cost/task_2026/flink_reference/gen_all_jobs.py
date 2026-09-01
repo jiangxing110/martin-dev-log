@@ -126,7 +126,7 @@ def parse_block(block):
     sel_body = after.split("ON CONFLICT")[0].strip()
     # FROM..JOIN：定位主查询 FROM（首个 FROM），截至主层级(括号深度0)的 WHERE/GROUP BY。
     # 非贪婪到“第一个 WHERE”会误停在嵌套子查询(如 UNION ALL 内)的 WHERE，导致 from_join 被截断。
-    from_kw = sel_body.find("FROM")
+    from_kw = _top_level_kw(sel_body, "FROM")
     from_join = ""
     if from_kw != -1:
         wpos = _top_level_kw(sel_body, "WHERE")
@@ -150,7 +150,7 @@ def parse_block(block):
         gend = gpos + gm.start() if gm else len(sel_body)
         group_by = sel_body[gpos+8:gend].strip() or None
     # SELECT 列表（FROM 之前）；sel_body 保持原大小写，FROM 关键字全大写
-    sel_list = sel_body[len("SELECT"):sel_body.index("FROM")].strip()
+    sel_list = sel_body[len("SELECT"):from_kw].strip()
     exprs = split_args(sel_list)
     return {
         "cols": cols,
@@ -185,8 +185,9 @@ def alias_to_cols(exprs, cols, cast_string_to_text=False):
     for i, c in enumerate(cols):
         e = exprs[i] if i < len(exprs) else c
         m = alias_re.search(e)
-        if m and m.group(1).strip().strip('"') == c:
-            # 表达式已自带 AS "col"：取别名前部分作为 expr，避免重复别名
+        if m:
+            # 表达式已自带别名（即使是驼峰源列名），取别名前部分作为 expr，
+            # 再统一改成目标列名，避免 CAST(... AS "sourceName" AS numeric) 这种非法 SQL。
             expr_part = e[:m.start()]
             alias_part = f'AS "{c}"'
         else:
@@ -338,12 +339,26 @@ def sale_scope_info(base, block, cols):
         if c:
             conds.append(f'({c} >= CURRENT_DATE - INTERVAL \'1 day\' AND {c} < CURRENT_DATE)')
     change_win = " OR ".join(conds) if conds else "FALSE"
+    # transfer_extend 原始 INSERT 是“外层聚合 + 内层 transfer 明细”的嵌套结构。
+    # 删除函数的作用域查询必须直接使用明细表别名，不能在外层引用已不存在的 tr/ta。
+    if base == "dws_sale_transfer_extend":
+        scope_from_join = '"transfer" AS tr LEFT JOIN "globalConversion" AS ta ON ta."recordId"::UUID = tr.id'
+        change_win = f'(tr."deleteTime" IS NULL AND ta."deleteTime" IS NULL) AND ({change_win})'
+        aggregate_scope_date_src = 'DATE(tt.create_date)'
+        aggregate_account_src = 'tt."accountId"'
+    else:
+        scope_from_join = None
+        aggregate_scope_date_src = scope_date_src
+        aggregate_account_src = account_src
     return {
         "source_table": source_table,
         "account_src": account_src,
         "scope_date_src": scope_date_src,
         "scope_date_target": scope_date_target,
         "change_win": change_win,
+        "scope_from_join": scope_from_join,
+        "aggregate_scope_date_src": aggregate_scope_date_src,
+        "aggregate_account_src": aggregate_account_src,
     }
 
 def dws_key_exprs(base, keys, p, time_cols):
@@ -792,7 +807,9 @@ def main():
         if "create_date" in p["cols"]:
             _ci = p["cols"].index("create_date")
             if 0 <= _ci < len(p["exprs"]):
-                p["exprs"][_ci] = create_date_expr(time_cols)
+                # transfer_extend 的原始 SQL 是内层明细 + 外层聚合，外层只能引用
+                # 内层已经产出的 create_date，不能再引用内层 tr 别名。
+                p["exprs"][_ci] = "create_date" if base == "dws_sale_transfer_extend" else create_date_expr(time_cols)
 
         # 聚合 SELECT（去掉 id 列），并让输出列名对齐 DWS 列名；
         # cast_string_to_text=True：STRING 列在子查询内 CAST(... AS text)，规避 PG uuid→UUID 对象转换炸裂
@@ -801,23 +818,26 @@ def main():
         if base in SALE_SET:
             # ---- qi 式作用域(scope)删除：受影响 (scope_date, account_id) 先清后重算 ----
             si = sale_scope_info(base, block, p["cols"])
-            scope_cte = f"SELECT DISTINCT {si['scope_date_src']} AS scope_date, {si['account_src']} AS scope_account FROM {p['from_join']} WHERE {si['change_win']}"
+            scope_from_join = si.get("scope_from_join") or p['from_join']
+            scope_cte = f"SELECT DISTINCT {si['scope_date_src']} AS scope_date, {si['account_src']} AS scope_account FROM {scope_from_join} WHERE {si['change_win']}"
             # batch：作用域窗口改走 start_date/end_date 参数（与删除函数修复模式对齐）
-            scope_cte_batch = f"SELECT DISTINCT {si['scope_date_src']} AS scope_date, {si['account_src']} AS scope_account FROM {p['from_join']} WHERE {batch_window(scope_date_src=si['scope_date_src'])}"
+            scope_cte_batch = f"SELECT DISTINCT {si['scope_date_src']} AS scope_date, {si['account_src']} AS scope_account FROM {scope_from_join} WHERE {batch_window(scope_date_src=si['scope_date_src'])}"
+            aggregate_scope_date_src = si["aggregate_scope_date_src"]
+            aggregate_account_src = si["aggregate_account_src"]
             if is_ods:
                 pg_subquery = f"""WITH affected AS (
         {scope_cte}
     )
     SELECT {agg_select}
     FROM {p['from_join']}
-    JOIN affected a ON ({si['scope_date_src']}) = a.scope_date AND ({si['account_src']}) = a.scope_account
+    JOIN affected a ON ({aggregate_scope_date_src}) = a.scope_date AND ({aggregate_account_src}) = a.scope_account
     WHERE {'TRUE' if not where_no_window else where_no_window}"""
                 pg_subquery_batch = f"""WITH affected AS (
         {scope_cte_batch}
     )
     SELECT {agg_select}
     FROM {p['from_join']}
-    JOIN affected a ON ({si['scope_date_src']}) = a.scope_date AND ({si['account_src']}) = a.scope_account
+    JOIN affected a ON ({aggregate_scope_date_src}) = a.scope_date AND ({aggregate_account_src}) = a.scope_account
     WHERE {'TRUE' if not where_no_window else where_no_window}"""
             else:
                 pg_subquery = f"""WITH affected AS (
@@ -825,7 +845,7 @@ def main():
     )
     SELECT {agg_select}
     FROM {p['from_join']}
-    JOIN affected a ON ({si['scope_date_src']}) = a.scope_date AND ({si['account_src']}) = a.scope_account
+    JOIN affected a ON ({aggregate_scope_date_src}) = a.scope_date AND ({aggregate_account_src}) = a.scope_account
     WHERE {'TRUE' if not where_no_window else where_no_window}
     GROUP BY {p['group_by']}"""
                 pg_subquery_batch = f"""WITH affected AS (
@@ -833,7 +853,7 @@ def main():
     )
     SELECT {agg_select}
     FROM {p['from_join']}
-    JOIN affected a ON ({si['scope_date_src']}) = a.scope_date AND ({si['account_src']}) = a.scope_account
+    JOIN affected a ON ({aggregate_scope_date_src}) = a.scope_date AND ({aggregate_account_src}) = a.scope_account
     WHERE {'TRUE' if not where_no_window else where_no_window}
     GROUP BY {p['group_by']}"""
             fn_text = delete_fn_block_scope(base, si['scope_date_src'], si['scope_date_target'], si['account_src'], "account_id", p['from_join'], si['change_win'])

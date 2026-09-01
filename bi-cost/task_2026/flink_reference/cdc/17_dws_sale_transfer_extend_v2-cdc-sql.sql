@@ -66,42 +66,13 @@ CREATE TEMPORARY TABLE source_dws_sale_transfer_extend (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account FROM "transfer" as tr
-LEFT JOIN "globalConversion" as ta on ta."recordId"::UUID = tr.id
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-WHERE
-tr."deleteTime" IS NULL and ta."deleteTime" IS NULL
-AND tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' 
-AND tr."createTime" < CURRENT_DATE
-) as tt WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."deleteTime" < CURRENT_DATE)
+        SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account FROM "transfer" AS tr LEFT JOIN "globalConversion" AS ta ON ta."recordId"::UUID = tr.id WHERE (tr."deleteTime" IS NULL AND ta."deleteTime" IS NULL) AND ((tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."deleteTime" < CURRENT_DATE))
     )
-    SELECT CAST("accountId" AS text) AS "account_id", CAST("sale_or_am_id" AS text) AS "sale_or_am_id", CAST("status" AS text) AS "status", CAST(COALESCE(SUM("dbsReceive"),0) AS "dbsReceive" AS numeric(18,2)) AS "dbs_receive", CAST(COALESCE(SUM("clReceive"),0) AS "clReceive" AS numeric(18,2)) AS "cl_receive", CAST(COALESCE(SUM("epReceive"),0) AS "epReceive" AS numeric(18,2)) AS "ep_receive", CAST(COALESCE(SUM("rdReceive"),0) AS "rdReceive" AS numeric(18,2)) AS "rd_receive", CAST(COALESCE(SUM("settleFxFee"),0) AS "settleFxFee" AS numeric(18,2)) AS "settle_fx_fee", CAST(COALESCE(SUM("conversionFxAmount"),0) AS "conversionFxAmount" AS numeric(18,2)) AS "conversion_fx_amount", CAST(COALESCE(SUM("conversionFxFee"),0) AS "conversionFxFee" AS numeric(18,2)) AS "conversion_fx_fee", CAST(COALESCE(SUM(CASE WHEN "businessTypeDetail" in (''OtherChannelInbound'', ''CCInbound'') and (fee - "clReceive"*0.0005 - "epReceive"*0.0005 - "rdReceive"*0.0005) > 0 THEN 
-               (fee - "clReceive"*0.0005 - "epReceive"*0.0005 - "rdReceive"*0.0005)  ELSE 0 END),0) AS "inboundProfit" AS numeric(18,2)) AS "inbound_profit", CAST(COALESCE(SUM (CASE WHEN ("conversionFxFee"-"conversionFxAmount"*0.001)>0 THEN ("conversionFxFee"-"conversionFxAmount"*0.001) ELSE 0 END ),0) AS "conversionFxProfit" AS numeric(18,2)) AS "conversion_fx_profit", tr."createTime"::DATE::TIMESTAMP AS "create_date", CAST(1 AS integer) AS "version", -- 初始版本号
-NOW() AS "create_time", NOW() AS update_time
-from (  
-SELECT 
+    SELECT CAST("accountId" AS text) AS "account_id", CAST("sale_or_am_id" AS text) AS "sale_or_am_id", CAST("status" AS text) AS "status", CAST(COALESCE(SUM("dbsReceive"),0) AS numeric(18,2)) AS "dbs_receive", CAST(COALESCE(SUM("clReceive"),0) AS numeric(18,2)) AS "cl_receive", CAST(COALESCE(SUM("epReceive"),0) AS numeric(18,2)) AS "ep_receive", CAST(COALESCE(SUM("rdReceive"),0) AS numeric(18,2)) AS "rd_receive", CAST(COALESCE(SUM("settleFxFee"),0) AS numeric(18,2)) AS "settle_fx_fee", CAST(COALESCE(SUM("conversionFxAmount"),0) AS numeric(18,2)) AS "conversion_fx_amount", CAST(COALESCE(SUM("conversionFxFee"),0) AS numeric(18,2)) AS "conversion_fx_fee", CAST(COALESCE(SUM(CASE WHEN "businessTypeDetail" in (''OtherChannelInbound'', ''CCInbound'') and (fee - "clReceive"*0.0005 - "epReceive"*0.0005 - "rdReceive"*0.0005) > 0 THEN
+               (fee - "clReceive"*0.0005 - "epReceive"*0.0005 - "rdReceive"*0.0005)  ELSE 0 END),0) AS numeric(18,2)) AS "inbound_profit", CAST(COALESCE(SUM (CASE WHEN ("conversionFxFee"-"conversionFxAmount"*0.001)>0 THEN ("conversionFxFee"-"conversionFxAmount"*0.001) ELSE 0 END ),0) AS numeric(18,2)) AS "conversion_fx_profit", create_date AS "create_date", CAST(1 AS integer) AS "version", -- 初始版本号
+NOW() AS "create_time", NOW() AS "update_time"
+    FROM (
+SELECT
 tr."accountId",
 ids."sale_or_am_id",
 tr."status",
@@ -118,8 +89,8 @@ ta."rateDiffIncomeFromUsdAmount",
 (CASE WHEN ta."toCurrency" = ''CNY'' and tr."status" = ''Closed'' and ta.status=''Closed'' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "settleFxFee" ,
 (CASE WHEN tr."settlementCurrency" != ''CNY'' and tr."status" = ''Closed'' and ta.status=''Closed''and tr."businessTypeDetail" in (''Payment'',''ConversionOut'',''InnerTransferOut'') THEN tr."usdAmount" ELSE 0 END ) AS "conversionFxAmount" ,
 (CASE WHEN ta."toCurrency" != ''CNY'' and tr."status" = ''Closed'' and ta.status=''Closed'' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "conversionFxFee",
-TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS create_date AS "update_time"
-    FROM "transfer" as tr
+TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS create_date
+FROM "transfer" as tr
 LEFT JOIN "globalConversion" as ta on ta."recordId"::UUID = tr.id
 LEFT JOIN LATERAL (
   SELECT sale_id, am_id
@@ -146,10 +117,10 @@ CROSS JOIN LATERAL (
 ) AS ids
 WHERE
 tr."deleteTime" IS NULL and ta."deleteTime" IS NULL
-AND tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' 
+AND tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day''
 AND tr."createTime" < CURRENT_DATE
 ) as tt
-    JOIN affected a ON (DATE(tr."createTime")) = a.scope_date AND (tr."accountId") = a.scope_account
+    JOIN affected a ON (DATE(tt.create_date)) = a.scope_date AND (tt."accountId") = a.scope_account
     WHERE TRUE
     GROUP BY "accountId",create_date, status,"sale_or_am_id") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',

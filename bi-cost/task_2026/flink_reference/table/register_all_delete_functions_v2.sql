@@ -1249,7 +1249,26 @@ BEGIN
         FOR v_year IN
             SELECT DISTINCT EXTRACT(YEAR FROM a.scope_date)::INT
             FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "transfer" as tr
+        FROM (
+SELECT
+tr."accountId",
+ids."sale_or_am_id",
+tr."status",
+tr."businessTypeDetail",
+tr."settlementCurrency",
+tr."fee"*"usdRate" AS "fee",
+ta."fromAmount",
+"usdAmount",
+ta."rateDiffIncomeFromUsdAmount",
+(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound') and UPPER((tr."rawData"::jsonb->> 0)::jsonb->>'source') IN ('OTT','寻汇','BEEPAY') THEN "usdAmount" ELSE 0 END ) AS "dbsReceive",
+(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider" = 'Column' THEN "usdAmount" ELSE 0 END) AS "clReceive",
+(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider"  = 'EP' THEN "usdAmount" ELSE 0 END) AS "epReceive",
+(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider"  = 'RD' THEN "usdAmount" ELSE 0 END) AS "rdReceive",
+(CASE WHEN ta."toCurrency" = 'CNY' and tr."status" = 'Closed' and ta.status='Closed' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "settleFxFee" ,
+(CASE WHEN tr."settlementCurrency" != 'CNY' and tr."status" = 'Closed' and ta.status='Closed'and tr."businessTypeDetail" in ('Payment','ConversionOut','InnerTransferOut') THEN tr."usdAmount" ELSE 0 END ) AS "conversionFxAmount" ,
+(CASE WHEN ta."toCurrency" != 'CNY' and tr."status" = 'Closed' and ta.status='Closed' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "conversionFxFee",
+TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date
+FROM "transfer" as tr
 LEFT JOIN "globalConversion" as ta on ta."recordId"::UUID = tr.id
 LEFT JOIN LATERAL (
   SELECT sale_id, am_id
@@ -1276,15 +1295,34 @@ CROSS JOIN LATERAL (
 ) AS ids
 WHERE
 tr."deleteTime" IS NULL and ta."deleteTime" IS NULL
-AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' 
+AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day'
 AND tr."createTime" < CURRENT_DATE
 ) as tt
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) a
+        WHERE (tr."deleteTime" IS NULL AND ta."deleteTime" IS NULL) AND ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) a
         LOOP
             IF p_dry_run THEN
                 EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_transfer_extend_%s t
                     WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "transfer" as tr
+        FROM (
+SELECT
+tr."accountId",
+ids."sale_or_am_id",
+tr."status",
+tr."businessTypeDetail",
+tr."settlementCurrency",
+tr."fee"*"usdRate" AS "fee",
+ta."fromAmount",
+"usdAmount",
+ta."rateDiffIncomeFromUsdAmount",
+(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound') and UPPER((tr."rawData"::jsonb->> 0)::jsonb->>'source') IN ('OTT','寻汇','BEEPAY') THEN "usdAmount" ELSE 0 END ) AS "dbsReceive",
+(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider" = 'Column' THEN "usdAmount" ELSE 0 END) AS "clReceive",
+(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider"  = 'EP' THEN "usdAmount" ELSE 0 END) AS "epReceive",
+(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider"  = 'RD' THEN "usdAmount" ELSE 0 END) AS "rdReceive",
+(CASE WHEN ta."toCurrency" = 'CNY' and tr."status" = 'Closed' and ta.status='Closed' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "settleFxFee" ,
+(CASE WHEN tr."settlementCurrency" != 'CNY' and tr."status" = 'Closed' and ta.status='Closed'and tr."businessTypeDetail" in ('Payment','ConversionOut','InnerTransferOut') THEN tr."usdAmount" ELSE 0 END ) AS "conversionFxAmount" ,
+(CASE WHEN ta."toCurrency" != 'CNY' and tr."status" = 'Closed' and ta.status='Closed' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "conversionFxFee",
+TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date
+FROM "transfer" as tr
 LEFT JOIN "globalConversion" as ta on ta."recordId"::UUID = tr.id
 LEFT JOIN LATERAL (
   SELECT sale_id, am_id
@@ -1311,15 +1349,34 @@ CROSS JOIN LATERAL (
 ) AS ids
 WHERE
 tr."deleteTime" IS NULL and ta."deleteTime" IS NULL
-AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' 
+AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day'
 AND tr."createTime" < CURRENT_DATE
 ) as tt
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
+        WHERE (tr."deleteTime" IS NULL AND ta."deleteTime" IS NULL) AND ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope
                         WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
             ELSE
                 EXECUTE format($fmt$DELETE FROM public.dws_sale_transfer_extend_%s t
                     WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "transfer" as tr
+        FROM (
+SELECT
+tr."accountId",
+ids."sale_or_am_id",
+tr."status",
+tr."businessTypeDetail",
+tr."settlementCurrency",
+tr."fee"*"usdRate" AS "fee",
+ta."fromAmount",
+"usdAmount",
+ta."rateDiffIncomeFromUsdAmount",
+(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound') and UPPER((tr."rawData"::jsonb->> 0)::jsonb->>'source') IN ('OTT','寻汇','BEEPAY') THEN "usdAmount" ELSE 0 END ) AS "dbsReceive",
+(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider" = 'Column' THEN "usdAmount" ELSE 0 END) AS "clReceive",
+(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider"  = 'EP' THEN "usdAmount" ELSE 0 END) AS "epReceive",
+(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider"  = 'RD' THEN "usdAmount" ELSE 0 END) AS "rdReceive",
+(CASE WHEN ta."toCurrency" = 'CNY' and tr."status" = 'Closed' and ta.status='Closed' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "settleFxFee" ,
+(CASE WHEN tr."settlementCurrency" != 'CNY' and tr."status" = 'Closed' and ta.status='Closed'and tr."businessTypeDetail" in ('Payment','ConversionOut','InnerTransferOut') THEN tr."usdAmount" ELSE 0 END ) AS "conversionFxAmount" ,
+(CASE WHEN ta."toCurrency" != 'CNY' and tr."status" = 'Closed' and ta.status='Closed' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "conversionFxFee",
+TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date
+FROM "transfer" as tr
 LEFT JOIN "globalConversion" as ta on ta."recordId"::UUID = tr.id
 LEFT JOIN LATERAL (
   SELECT sale_id, am_id
@@ -1346,10 +1403,10 @@ CROSS JOIN LATERAL (
 ) AS ids
 WHERE
 tr."deleteTime" IS NULL and ta."deleteTime" IS NULL
-AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' 
+AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day'
 AND tr."createTime" < CURRENT_DATE
 ) as tt
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
+        WHERE (tr."deleteTime" IS NULL AND ta."deleteTime" IS NULL) AND ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope
                         WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
