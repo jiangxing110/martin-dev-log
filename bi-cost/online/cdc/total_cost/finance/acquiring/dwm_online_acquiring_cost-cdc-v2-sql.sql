@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-23
--- Updated Time:   2026-08-06 01:45:00
+-- Updated Time:   2026-09-01 11:40:00
 -- 历史名称：sp_init_acquiring_cost.sql
 -- Description:    金融渠道成本 DWM CDC 初始化 - ACQUIRING v2
 -- 作业元信息：
@@ -103,6 +103,8 @@ FROM (
     FROM source_bi_month_tag t
     CROSS JOIN v_runtime r
     WHERE t.delete_time IS NULL
+      AND t.product_line = 'ACQUIRING'
+      AND t.provider IN ('OD', 'WP')
       AND t.update_time >= r.start_time
       AND t.update_time < r.end_time
 ) p;

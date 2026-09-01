@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-20
--- Updated Time:   2026-08-20
+-- Updated Time:   2026-09-01 13:10:00
 -- Description:    金融渠道成本 DWM CDC 初始化 - GLOBAL_ACCOUNT / SETTLEMENT (结汇成本) v2
 -- 作业元信息：
 --   作业类型：CDC
@@ -103,6 +103,8 @@ FROM (
     FROM source_bi_month_tag t
     CROSS JOIN v_runtime r
     WHERE t.delete_time IS NULL
+      AND t.product_line = 'GLOBAL_ACCOUNT'
+      AND t.tag = 'SETTLEMENT_COST'
       AND t.update_time >= r.start_time
       AND t.update_time < r.end_time
 ) p;
@@ -138,7 +140,7 @@ CREATE TEMPORARY TABLE source_transfer (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT account_id, usd_amount, settlement_currency, transfer_type, status, transaction_time, delete_time FROM transfer WHERE delete_time IS NULL) AS transfer_f',
+    'table-name' = '(SELECT "accountId"::text AS account_id, CAST("usdAmount" AS NUMERIC(20, 4)) AS usd_amount, "settlementCurrency" AS settlement_currency, "transferType" AS transfer_type, status, "transactionTime" AS transaction_time, "deleteTime" AS delete_time FROM public.transfer WHERE "deleteTime" IS NULL) AS transfer_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -283,8 +285,10 @@ FROM v_param p
 CROSS JOIN source_bi_month_tag t
 INNER JOIN (SELECT DISTINCT product_line, provider, cost_type FROM v_cost_basis) cb
     ON cb.product_line = t.product_line
-   AND cb.provider = t.provider
+   AND cb.provider IS NOT DISTINCT FROM t.provider
 WHERE t.delete_time IS NULL
+  AND t.product_line = 'GLOBAL_ACCOUNT'
+  AND t.tag = 'SETTLEMENT_COST'
   AND CAST(t.statistics_time AS DATE) >= p.source_month
   AND CAST(t.statistics_time AS DATE) < p.next_month
 GROUP BY t.product_line, t.provider, t.tag, cb.cost_type, p.source_month, p.next_month, p.month_day_count;
@@ -336,7 +340,7 @@ FROM v_cost_basis b
 INNER JOIN v_bi_month_tag_cost mt
     ON mt.source_month = b.source_month
    AND mt.product_line = b.product_line
-   AND mt.provider = b.provider
+   AND mt.provider IS NOT DISTINCT FROM b.provider
    AND mt.cost_type = b.cost_type
 WHERE mt.source_amount <> CAST(0 AS DECIMAL(20, 4));
 

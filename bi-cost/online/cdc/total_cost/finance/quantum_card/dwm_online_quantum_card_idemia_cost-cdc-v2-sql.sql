@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-23
--- Updated Time:   2026-08-06 01:45:00
+-- Updated Time:   2026-09-01 11:50:00
 -- 历史名称：sp_init_quantum_card_idemia_cost.sql
 -- Description:    金融渠道成本 DWM CDC 初始化 - QUANTUM_CARD / IDEMIA v2
 -- 作业元信息：
@@ -83,7 +83,7 @@ CREATE TEMPORARY TABLE source_bi_month_tag (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT t.id, t.product_line, t.provider, t.tag, t.statistics_time, t.amount, t.detail, t.update_time, t.delete_time, p.source_month, p.next_month, p.month_day_count FROM ods.ods_bi_month_tag t INNER JOIN (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month, ((DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date - DATE_TRUNC(''month'', statistics_time)::date) AS month_day_count FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p ON t.statistics_time >= p.source_month::timestamp AND t.statistics_time < p.next_month::timestamp WHERE t.delete_time IS NULL) AS bi_month_tag_f',
+    'table-name' = '(SELECT t.id, t.product_line, t.provider, t.tag, t.statistics_time, t.amount, t.detail, t.update_time, t.delete_time, p.source_month, p.next_month, p.month_day_count FROM ods.ods_bi_month_tag t INNER JOIN (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month, ((DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date - DATE_TRUNC(''month'', statistics_time)::date) AS month_day_count FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND product_line = ''QUANTUM_CARD'' AND provider = ''IDEMIA'' AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p ON t.statistics_time >= p.source_month::timestamp AND t.statistics_time < p.next_month::timestamp WHERE t.delete_time IS NULL) AS bi_month_tag_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -149,7 +149,7 @@ CREATE TEMPORARY TABLE source_qbit_physical_card (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT pc.id, pc.account_id, pc.create_time, pc.delete_time FROM ods.ods_qbit_physical_card pc WHERE pc.delete_time IS NULL AND EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p WHERE pc.create_time >= p.source_month::timestamp AND pc.create_time < p.next_month::timestamp)) AS qbit_physical_card_f',
+    'table-name' = '(SELECT pc.id, pc.account_id, pc.create_time, pc.delete_time FROM ods.ods_qbit_physical_card pc WHERE pc.delete_time IS NULL AND EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND product_line = ''QUANTUM_CARD'' AND provider = ''IDEMIA'' AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p WHERE pc.create_time >= p.source_month::timestamp AND pc.create_time < p.next_month::timestamp)) AS qbit_physical_card_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -164,7 +164,7 @@ CREATE TEMPORARY TABLE source_cost_month_days (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT p.source_month, gs.report_date::date AS report_date, p.month_day_count FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month, ((DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date - DATE_TRUNC(''month'', statistics_time)::date) AS month_day_count FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p CROSS JOIN LATERAL generate_series(p.source_month, p.next_month - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(report_date)) AS cost_month_days_f',
+    'table-name' = '(SELECT p.source_month, gs.report_date::date AS report_date, p.month_day_count FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month, ((DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date - DATE_TRUNC(''month'', statistics_time)::date) AS month_day_count FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND product_line = ''QUANTUM_CARD'' AND provider = ''IDEMIA'' AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p CROSS JOIN LATERAL generate_series(p.source_month, p.next_month - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(report_date)) AS cost_month_days_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

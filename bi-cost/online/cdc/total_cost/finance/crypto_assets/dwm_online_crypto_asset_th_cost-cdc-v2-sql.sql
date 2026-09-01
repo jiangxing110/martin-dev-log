@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-23
--- Updated Time:   2026-08-06 01:45:00
+-- Updated Time:   2026-09-01 11:50:00
 -- 历史名称：sp_init_crypto_asset_th_cost.sql
 -- Description:    金融渠道成本 DWM CDC 初始化 - CRYPTO_ASSET / TH (Thunes) v2
 -- 作业元信息：
@@ -87,7 +87,7 @@ CREATE TEMPORARY TABLE source_bi_month_tag (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT t.id, t.product_line, t.provider, t.tag, t.statistics_time, t.amount, t.detail, t.update_time, t.delete_time, p.source_month, p.next_month, p.month_day_count FROM ods.ods_bi_month_tag t INNER JOIN (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month, ((DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date - DATE_TRUNC(''month'', statistics_time)::date) AS month_day_count FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p ON t.statistics_time >= p.source_month::timestamp AND t.statistics_time < p.next_month::timestamp WHERE t.delete_time IS NULL) AS bi_month_tag_f',
+    'table-name' = '(SELECT t.id, t.product_line, t.provider, t.tag, t.statistics_time, t.amount, t.detail, t.update_time, t.delete_time, p.source_month, p.next_month, p.month_day_count FROM ods.ods_bi_month_tag t INNER JOIN (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month, ((DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date - DATE_TRUNC(''month'', statistics_time)::date) AS month_day_count FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND product_line = ''CRYPTO_ASSET'' AND provider = ''TH'' AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p ON t.statistics_time >= p.source_month::timestamp AND t.statistics_time < p.next_month::timestamp WHERE t.delete_time IS NULL) AS bi_month_tag_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -160,7 +160,7 @@ CREATE TEMPORARY TABLE source_crypto_assets_transfers (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT t.id, t.account_id, t.recipient_type, t.status, t.action, t.currency, t.origin_amount, t.usd_rate, t.extend_field, t.create_time, t.delete_time FROM ods.ods_crypto_assets_transfers t WHERE t.delete_time IS NULL AND EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p WHERE t.create_time >= p.source_month::timestamp AND t.create_time < p.next_month::timestamp)) AS crypto_assets_transfers_f',
+    'table-name' = '(SELECT t.id, t.account_id, t.recipient_type, t.status, t.action, t.currency, t.origin_amount, t.usd_rate, t.extend_field, t.create_time, t.delete_time FROM ods.ods_crypto_assets_transfers t WHERE t.delete_time IS NULL AND EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND product_line = ''CRYPTO_ASSET'' AND provider = ''TH'' AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p WHERE t.create_time >= p.source_month::timestamp AND t.create_time < p.next_month::timestamp)) AS crypto_assets_transfers_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -175,7 +175,7 @@ CREATE TEMPORARY TABLE source_cost_month_days (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT p.source_month, gs.report_date::date AS report_date, p.month_day_count FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month, ((DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date - DATE_TRUNC(''month'', statistics_time)::date) AS month_day_count FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p CROSS JOIN LATERAL generate_series(p.source_month, p.next_month - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(report_date)) AS cost_month_days_f',
+    'table-name' = '(SELECT p.source_month, gs.report_date::date AS report_date, p.month_day_count FROM (SELECT DISTINCT DATE_TRUNC(''month'', statistics_time)::date AS source_month, (DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date AS next_month, ((DATE_TRUNC(''month'', statistics_time)::date + INTERVAL ''1 month'')::date - DATE_TRUNC(''month'', statistics_time)::date) AS month_day_count FROM ods.ods_bi_month_tag WHERE delete_time IS NULL AND product_line = ''CRYPTO_ASSET'' AND provider = ''TH'' AND update_time >= (CURRENT_DATE - INTERVAL ''1 day'')::timestamp AND update_time < CURRENT_DATE::timestamp) p CROSS JOIN LATERAL generate_series(p.source_month, p.next_month - INTERVAL ''1 day'', INTERVAL ''1 day'') AS gs(report_date)) AS cost_month_days_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
