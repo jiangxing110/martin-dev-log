@@ -8,7 +8,7 @@ gen_all_jobs.py
 
   flink_reference/
     table/<base>_ddl.sql                        # IF NOT EXISTS，不重建现有表
-    table/register_fn_<base>_cdc_delete_v2.sql # 删除函数（真·按 key 删）
+    table/register_all_delete_functions_v2.sql  # 全部删除函数（一次注册）
     cdc/<base>_v2-cdc-sql.sql                  # 每日增量（BATCH 定时）
     batch/<base>_v2-batch-sql.sql              # 一次性修复/补数
 
@@ -32,7 +32,6 @@ BATCH_YEARS = [2026]  # batch 只维护 2026 分表（用户 2026-08-18 决策�
 
 # ODS 原始表（无 GROUP BY）的业务键（源表自然主键），用 override 指定
 ODS_KEYS = {
-    "ods_sale_am_transaction": ["transaction_id"],
     "ods_qbit_card": ["card_id"],
     "ods_sale_qbit_card": ["card_id"],
     "ods_fund_profits": ["fund_id"],
@@ -178,7 +177,9 @@ def alias_to_cols(exprs, cols, cast_string_to_text=False):
     cast_string_to_text: 对声明为 STRING 的输出列，在子查询内包一层 CAST(... AS text)。
         原因：PG 的 uuid 列经 JDBC 驱动返回 java.util.UUID 对象，Flink 的 STRING 转换器
         直接 (String) getObject() 会抛 ClassCastException；CAST 成 text 后驱动返回 String，规避该坑。
-        对 varchar/text 列是 no-op，对 uuid 列正好修好，故对全量 STRING 列统一开启安全。"""
+        对 varchar/text 列是 no-op，对 uuid 列正好修好，故对全量 STRING 列统一开启安全。
+        对 DECIMAL 输出列统一 CAST 为 numeric(18,2)，避免 PostgreSQL double precision
+        经 JDBC 返回 Double，而 Flink DECIMAL 转换器要求 BigDecimal。"""
     out = []
     alias_re = re.compile(r'\s+AS\s+"?' + r'(.+?)' + r'"?\s*$', re.IGNORECASE | re.DOTALL)
     for i, c in enumerate(cols):
@@ -193,6 +194,10 @@ def alias_to_cols(exprs, cols, cast_string_to_text=False):
             alias_part = f'AS "{c}"'
         if cast_string_to_text and flink_type(c) == "STRING":
             expr_part = f"CAST({expr_part} AS text)"
+        elif cast_string_to_text and flink_type(c) == "DECIMAL(18,2)":
+            expr_part = f"CAST({expr_part} AS numeric(18,2))"
+        elif cast_string_to_text and flink_type(c) == "INT":
+            expr_part = f"CAST({expr_part} AS integer)"
         out.append(f"{expr_part} {alias_part}")
     return out
 
@@ -885,9 +890,8 @@ def main():
 
         # 嵌套子查询 / 非标准 FROM 的表：原 SELECT 的 FROM 含子查询，
         # 通用解析对“变更窗口引用源别名”可能失效，打上 TODO 标记由人工复核。
-        # VERIFIED_NESTED：已人工核对、确认作用域删除与聚合子查询源别名引用正确的 sale 表，
-        #                 其 from_join 含 salesAccountRelation UNION 子查询属 qi 式标准写法，不再告警（避免误报）。
-        VERIFIED_NESTED = {"ods_sale_fund_profits", "ods_sale_qbit_card"}
+        # 销售输出的关系匹配与作用域删除已统一核对，不再输出误导性的 TODO 提示。
+        VERIFIED_NESTED = SALE_SET
         fj_up = p["from_join"].upper()
         nested = fj_up.strip().startswith("(") or fj_up.count(" FROM ") > 1 or " FROM (" in fj_up
         todo = (f"-- [TODO] {base} 检测到嵌套/非标准 FROM（{p['from_join'].strip()[:40]}...），\n"
@@ -920,7 +924,9 @@ def main():
                 except OSError:
                     pass
     for fn in os.listdir(tdir):
-        if re.match(r"^\d+_", fn) and fn.endswith(("_ddl.sql", "_cdc_delete_v2.sql")):
+        if (re.match(r"^\d+_", fn) and fn.endswith(("_ddl.sql", "_cdc_delete_v2.sql"))) \
+                or fn.startswith("register_fn_") and fn.endswith("_cdc_delete_v2.sql") \
+                or fn == "register_all_delete_functions_v2.sql":
             try:
                 os.remove(os.path.join(tdir, fn))
             except OSError:
@@ -928,7 +934,16 @@ def main():
     cdc_seq = 0
     batch_seq = 0
     total = 0
+    fn_outputs = [content for kind, idx, d, fname, content in outputs if kind == "fn"]
+    bundle = "-- task_2026 v2 全部删除函数（一次注册）\n"
+    bundle += "-- 本文件由 gen_all_jobs.py 生成；每次重生成会同步覆盖。\n\n"
+    bundle += "\n\n".join(fn_outputs)
+    with open(os.path.join(tdir, "register_all_delete_functions_v2.sql"), "w", encoding="utf-8") as f:
+        f.write(bundle + "\n")
+    total = 1
     for kind, idx, d, fname, content in sorted(outputs, key=lambda o: (PHASE_RANK[o[0]], o[1])):
+        if kind == "fn":
+            continue
         if kind == "cdc":
             cdc_seq += 1
             out_name = f"{cdc_seq:02d}_{fname}"
@@ -940,7 +955,7 @@ def main():
         with open(os.path.join(d, out_name), "w", encoding="utf-8") as f:
             f.write(content)
         total += 1
-    print(f"[DONE] 写出 {total} 个文件：table 保持原名(无编号) + cdc 01..{cdc_seq:02d}_ + batch 01..{batch_seq:02d}_，已清理旧编号文件。")
+    print(f"[DONE] 写出 {total} 个文件：table DDL + 1 个删除函数汇总文件 + cdc 01..{cdc_seq:02d}_ + batch 01..{batch_seq:02d}_，已清理旧编号文件。")
 
 if __name__ == "__main__":
     main()

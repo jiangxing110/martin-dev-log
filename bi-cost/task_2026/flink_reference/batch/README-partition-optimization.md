@@ -1,5 +1,7 @@
 # 分区表查询优化指南
 
+> 归档说明：季度分表优化版 batch SQL 已删除。当前统一使用同目录下的标准 batch 脚本，本文仅保留分区查询方案记录。
+
 ## 背景
 
 `qbit_card_transaction` 是按季度分区的大表，直接查询主表会扫描所有分区，性能较差。
@@ -46,7 +48,7 @@ SELECT generate_flink_partition_union('2026-01-15', '2026-06-20');
 --             SELECT * FROM "qbit_card_transaction_2026q2"
 ```
 
-### 2. 优化版 Flink SQL（03_dws_qbit_card_transaction_v2-batch-sql-optimized.sql）
+### 2. 优化版 Flink SQL（已归档）
 
 直接查询分区表，避免主表扫描：
 
@@ -87,7 +89,7 @@ psql -h <host> -U <user> -d <database> -f partition_helper_functions.sql
 SELECT generate_flink_partition_union('2026-01-01', '2026-06-30');
 ```
 
-复制输出结果，粘贴到 `03_dws_qbit_card_transaction_v2-batch-sql-optimized.sql` 的两处位置：
+如需重新制作季度分表版本，可将输出结果粘贴到新的临时 SQL 文件中的两处位置：
 - `WITH affected AS (...)` 子查询中的 `FROM (...) AS tr`
 - 主查询中的 `FROM (...) AS tr`
 
@@ -98,7 +100,7 @@ flink run -c org.apache.flink.streaming.api.environment.StreamExecutionEnvironme
   -d \
   --start_date 2026-01-01 \
   --end_date 2026-06-30 \
-  03_dws_qbit_card_transaction_v2-batch-sql-optimized.sql
+  02_dws_qbit_card_transaction_v2-batch-sql.sql
 ```
 
 ## 性能对比
@@ -148,6 +150,6 @@ SELECT tablename FROM pg_tables WHERE tablename LIKE 'qbit_card_transaction_%';
 
 ## 相关文件
 
-- [03_dws_qbit_card_transaction_v2-batch-sql-optimized.sql](./03_dws_qbit_card_transaction_v2-batch-sql-optimized.sql) - 优化版 Flink SQL
+- 优化版 Flink SQL 已删除，当前使用标准 batch 脚本
 - [partition_helper_functions.sql](./partition_helper_functions.sql) - 辅助函数
 - [README-partition-optimization.md](./README-partition-optimization.md) - 本文档

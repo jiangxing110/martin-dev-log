@@ -1,0 +1,94 @@
+--********************************************************************
+-- Author:         martinJiang
+-- Created Time:   2026-09-01
+-- Updated Time:   2026-09-01
+-- Description:    dws_transfer_extend 批处理 作业（quantum-v2 范式：确定性哈希主键 + 先清后写）
+-- 作业元信息：
+--   作业类型：批处理
+--   运行方式：一次性修复/补数：VVR 作业参数 start_date/end_date 指定回刷区间（含两端，YYYY-MM-DD）；删除函数走修复模式按 create_date 跨分表清理，再由重算 upsert 覆盖（幂等）。
+--   运行参数：start_date, end_date（YYYY-MM-DD，含两端）
+-- Notes:
+--   1. 一次性修复/补数作业：通过 VVR 作业参数 start_date/end_date 指定回刷区间（YYYY-MM-DD，含两端）。
+--   2. 删除函数走“修复模式”，按 create_date 区间跨分表整段清理。
+--   3. 源聚合仅重算该区间内受影响 key 的当前有效行，upsert 覆盖（幂等）。
+--   4. 删除与重算必须严格共用同一 start_date/end_date，否则出现区间缺口或越界残留。
+--   5. 上线前需对照线上 Flink catalog 校准列类型（UUID / JSON / boolean 等）。
+--********************************************************************
+SET 'parallelism.default' = '1';
+SET 'pipeline.operator-chaining' = 'true';
+SET 'table.exec.mini-batch.enabled' = 'false';
+SET 'sink.parallelism' = '1';
+SET 'table.dml-sync' = 'true';
+SET 'execution.checkpointing.interval' = '5min';
+SET 'execution.checkpointing.max-concurrent-checkpoints' = '1';
+SET 'execution.checkpointing.timeout' = '30min';
+SET 'table.optimizer.reuse-source-enabled' = 'true';
+SET 'table.optimizer.reuse-sub-plan-enabled' = 'true';
+SET 'restart-strategy.type' = 'fixed-delay';
+SET 'restart-strategy.fixed-delay.attempts' = '3';
+SET 'restart-strategy.fixed-delay.delay' = '60s';
+
+CREATE TEMPORARY TABLE source_delete_dws_transfer_extend_result (
+    affected_rows BIGINT
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT public.fn_delete_dws_transfer_extend_cdc(false, CAST(''${start_date}'' AS DATE), CAST(''${end_date}'' AS DATE)) AS affected_rows) AS delete_result',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1'
+);
+
+CREATE TEMPORARY TABLE source_dws_transfer_extend (
+    account_id STRING,
+    status STRING,
+    dbs_receive DECIMAL(18,2),
+    cl_receive DECIMAL(18,2),
+    ep_receive DECIMAL(18,2),
+    rd_receive DECIMAL(18,2),
+    settle_fx_fee DECIMAL(18,2),
+    conversion_fx_amount DECIMAL(18,2),
+    conversion_fx_fee DECIMAL(18,2),
+    create_date TIMESTAMP(6),
+    version INT,
+    create_time TIMESTAMP(6),
+    update_time TIMESTAMP(6)
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(WITH affected AS (
+        SELECT DISTINCT tr."accountId" AS k0, tr."createTime"::DATE::TIMESTAMP AS k1, tr."status" AS k2
+        FROM "transfer" AS tr
+LEFT JOIN "globalConversion" AS ta ON ta."recordId"::UUID = tr.id
+        WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
+    )
+    SELECT CAST(tr."accountId" AS text) AS "account_id", CAST(tr."status" AS text) AS "status", CAST(COALESCE(SUM(CASE WHEN tr."businessTypeDetail" IN (''OtherChannelInbound'') AND UPPER((tr."rawData"::jsonb->> 0)::jsonb->>''source'') IN (''OTT'',''寻汇'',''BEEPAY'') THEN "usdAmount" ELSE 0 END), 0) AS numeric(18,2)) AS "dbs_receive", CAST(COALESCE(SUM(CASE WHEN tr."businessTypeDetail" IN (''OtherChannelInbound'',''CCInbound'') AND tr."provider" = ''Column'' THEN "usdAmount" ELSE 0 END), 0) AS numeric(18,2)) AS "cl_receive", CAST(COALESCE(SUM(CASE WHEN tr."businessTypeDetail" IN (''OtherChannelInbound'',''CCInbound'') AND tr."provider" = ''EP''THEN "usdAmount" ELSE 0 END), 0) AS numeric(18,2)) AS "ep_receive", CAST(COALESCE(SUM(CASE WHEN tr."businessTypeDetail" IN (''OtherChannelInbound'',''CCInbound'') AND tr."provider" = ''RD'' THEN "usdAmount" ELSE 0 END), 0) AS numeric(18,2)) AS "rd_receive", CAST(COALESCE(SUM(CASE WHEN ta."toCurrency" = ''CNY'' AND tr."status" = ''Closed'' AND ta.status = ''Closed'' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END), 0) AS numeric(18,2)) AS "settle_fx_fee", CAST(COALESCE(SUM(CASE WHEN tr."settlementCurrency" != ''CNY'' AND tr."status" = ''Closed'' AND ta.status = ''Closed''  AND tr."businessTypeDetail" IN (''Payment'',''ConversionOut'',''InnerTransferOut'') THEN tr."usdAmount" ELSE 0 END), 0) AS numeric(18,2)) AS "conversion_fx_amount", CAST(COALESCE(SUM(CASE WHEN ta."toCurrency" != ''CNY'' AND tr."status" = ''Closed'' AND ta.status = ''Closed'' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END), 0) AS numeric(18,2)) AS "conversion_fx_fee", tr."createTime"::DATE::TIMESTAMP AS "create_date", CAST(1 AS integer) AS "version", NOW() AS "create_time", NOW() AS "update_time"
+    FROM "transfer" AS tr
+LEFT JOIN "globalConversion" AS ta ON ta."recordId"::UUID = tr.id
+    JOIN affected a ON (tr."accountId") IS NOT DISTINCT FROM a.k0 AND (tr."createTime"::DATE::TIMESTAMP) IS NOT DISTINCT FROM a.k1 AND (tr."status") IS NOT DISTINCT FROM a.k2
+    WHERE tr."deleteTime" IS NULL AND ta."deleteTime" IS NULL
+    GROUP BY tr."accountId", create_date, tr.status) AS src',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '2000'
+);
+
+CREATE TEMPORARY VIEW v_dws_transfer_extend_base AS
+SELECT
+    CAST(ABS(HASH_CODE(CONCAT(COALESCE(account_id, ''), ': ', DATE_FORMAT(create_date, 'yyyy-MM-dd'), ': ', COALESCE(status, '')))) AS BIGINT) AS id,
+    *
+FROM source_dws_transfer_extend;
+
+CREATE TEMPORARY TABLE sink_dws_transfer_extend_2026 (
+    id BIGINT, account_id STRING, status STRING, dbs_receive DECIMAL(18,2), cl_receive DECIMAL(18,2), ep_receive DECIMAL(18,2), rd_receive DECIMAL(18,2), settle_fx_fee DECIMAL(18,2), conversion_fx_amount DECIMAL(18,2), conversion_fx_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='public.dws_transfer_extend_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
+
+INSERT INTO sink_dws_transfer_extend_2026
+SELECT id, account_id, status, dbs_receive, cl_receive, ep_receive, rd_receive, settle_fx_fee, conversion_fx_amount, conversion_fx_fee, create_date, version, create_time, update_time
+FROM v_dws_transfer_extend_base
+CROSS JOIN source_delete_dws_transfer_extend_result AS del
+WHERE del.affected_rows >= 0
+  AND create_date >= DATE '2026-01-01' AND create_date < DATE '2027-01-01';
