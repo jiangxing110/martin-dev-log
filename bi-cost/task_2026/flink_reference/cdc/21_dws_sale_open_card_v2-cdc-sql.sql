@@ -135,6 +135,13 @@ SELECT
     *
 FROM source_dws_sale_open_card;
 
+-- 多 Source：昨日开卡交易 source1，销售/AM关系 source2，匹配和聚合在 Flink 算子层完成
+CREATE TEMPORARY TABLE source1_transaction (transaction_id STRING,account_id STRING,provider STRING,bin STRING,status STRING,sender_fee DECIMAL(18,2),create_time TIMESTAMP(6),delete_time TIMESTAMP(6)) WITH ('connector'='jdbc','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified','table-name'='(SELECT CAST(tr.id AS text),CAST(tr."accountId" AS text),CAST(qc.provider AS text),CAST(qc."firstSix" AS text),CAST(tr.status AS text),CAST(tr."senderFee" AS numeric(18,2)),tr."createTime",tr."deleteTime" FROM "Transaction" tr LEFT JOIN "qbitCard" qc ON qc."id"::varchar=tr."sourceId" WHERE ((tr."createTime">=CURRENT_DATE-INTERVAL ''1 day'' AND tr."createTime"<CURRENT_DATE) OR (tr."updateTime">=CURRENT_DATE-INTERVAL ''1 day'' AND tr."updateTime"<CURRENT_DATE) OR (tr."deleteTime">=CURRENT_DATE-INTERVAL ''1 day'' AND tr."deleteTime"<CURRENT_DATE)) AND tr."type" IN (''CreateCard'',''QbitCardFee'')) tx','username'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','driver'='org.postgresql.Driver','scan.fetch-size'='2000');
+CREATE TEMPORARY TABLE source2_sale_relation (relation_account_id STRING,sale_id STRING,am_id STRING,relation_start_time TIMESTAMP(6),relation_end_time TIMESTAMP(6),priority INT) WITH ('connector'='jdbc','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified','table-name'='(SELECT relation_account_id::text,sale_id::text,am_id::text,relation_start_time,relation_end_time,1 FROM dim.dim_sale_account_relation_p WHERE delete_time IS NULL UNION ALL SELECT aar.account_id::text,sr.sale_id::text,sr.am_id::text,sr.relation_start_time,sr.relation_end_time,2 FROM public.api_account_relation aar JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text=aar.root_id::text WHERE aar.delete_time IS NULL AND sr.delete_time IS NULL) rel','username'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','driver'='org.postgresql.Driver','scan.fetch-size'='2000');
+CREATE TEMPORARY VIEW v_sale_open_card_matched AS SELECT tr.*,sr.sale_id,sr.am_id,ROW_NUMBER() OVER (PARTITION BY tr.transaction_id ORDER BY sr.priority,sr.relation_start_time DESC) rn FROM source1_transaction tr JOIN source2_sale_relation sr ON tr.account_id=sr.relation_account_id AND tr.create_time>=sr.relation_start_time AND (tr.create_time<sr.relation_end_time OR sr.relation_end_time IS NULL) WHERE tr.delete_time IS NULL;
+CREATE TEMPORARY VIEW v_sale_open_card_expanded AS SELECT transaction_id,account_id,provider,bin,status,sender_fee,create_time,sale_id sale_or_am_id FROM v_sale_open_card_matched WHERE rn=1 AND sale_id IS NOT NULL UNION ALL SELECT transaction_id,account_id,provider,bin,status,sender_fee,create_time,am_id FROM v_sale_open_card_matched WHERE rn=1 AND am_id IS NOT NULL;
+CREATE TEMPORARY VIEW v_dws_sale_open_card_operator AS SELECT CAST(ABS(HASH_CODE(CONCAT(COALESCE(account_id,''),': ',COALESCE(provider,''),': ',COALESCE(bin,''),': ',COALESCE(status,''),': ',COALESCE(sale_or_am_id,''),': ',DATE_FORMAT(CAST(CAST(create_time AS DATE) AS TIMESTAMP),'yyyy-MM-dd'))) AS BIGINT) id,account_id,provider,bin,status,sale_or_am_id,CAST(SUM(sender_fee) AS DECIMAL(18,2)) fee,CAST(COUNT(*) AS INT) `count`,CAST(CAST(create_time AS DATE) AS TIMESTAMP) create_date,CAST(1 AS INT) version,CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) create_time,CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) update_time FROM v_sale_open_card_expanded GROUP BY account_id,provider,bin,status,sale_or_am_id,CAST(create_time AS DATE);
+
 -- ==============================================
 -- 3. 分表 SINK（每个 _YYYY 一个，upsert 按 key 幂等）
 -- ==============================================
@@ -156,19 +163,19 @@ CREATE TEMPORARY TABLE sink_dws_sale_open_card_2026 (
 -- ==============================================
 INSERT INTO sink_dws_sale_open_card_2024
 SELECT id, account_id, provider, bin, status, sale_or_am_id, fee, `count`, create_date, version, create_time, update_time
-FROM v_dws_sale_open_card_base
+FROM v_dws_sale_open_card_operator
 CROSS JOIN source_delete_dws_sale_open_card_result AS del
 WHERE del.affected_rows >= 0
   AND create_date >= DATE '2024-01-01' AND create_date < DATE '2025-01-01';
 INSERT INTO sink_dws_sale_open_card_2025
 SELECT id, account_id, provider, bin, status, sale_or_am_id, fee, `count`, create_date, version, create_time, update_time
-FROM v_dws_sale_open_card_base
+FROM v_dws_sale_open_card_operator
 CROSS JOIN source_delete_dws_sale_open_card_result AS del
 WHERE del.affected_rows >= 0
   AND create_date >= DATE '2025-01-01' AND create_date < DATE '2026-01-01';
 INSERT INTO sink_dws_sale_open_card_2026
 SELECT id, account_id, provider, bin, status, sale_or_am_id, fee, `count`, create_date, version, create_time, update_time
-FROM v_dws_sale_open_card_base
+FROM v_dws_sale_open_card_operator
 CROSS JOIN source_delete_dws_sale_open_card_result AS del
 WHERE del.affected_rows >= 0
   AND create_date >= DATE '2026-01-01' AND create_date < DATE '2027-01-01';
