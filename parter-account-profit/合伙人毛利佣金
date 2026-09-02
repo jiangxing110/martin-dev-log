@@ -97,3 +97,109 @@ INSERT INTO "public"."partner_gross_margin_config_detail" ("id", "create_time", 
 
 1.我现在要 量子账户/加密资产的费率配置sql
 2.我还想建一张要毛利返佣金表记录合伙人 每个客户的 每个业务线的返佣金
+
+
+
+
+
+/Users/martinjiang/IdeaProjects/qbit-assets
+/Users/martinjiang/IdeaProjects/interlace_partner_service
+
+合伙人费率加点交易
+CREATE TABLE "public"."partner_commission_fee_transaction" (
+  "id" int8 NOT NULL,
+  "remarks" varchar COLLATE "pg_catalog"."default" DEFAULT ''::character varying,
+  "create_time" timestamptz(6) NOT NULL DEFAULT now(),
+  "update_time" timestamptz(6) NOT NULL DEFAULT now(),
+  "delete_time" timestamptz(6),
+  "version" int4 NOT NULL DEFAULT 1,
+  "account_id" uuid NOT NULL,
+  "business_id" varchar COLLATE "pg_catalog"."default",
+  "transaction_id" uuid,
+  "source_id" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "fee_id" varchar COLLATE "pg_catalog"."default",
+  "fee_name" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "deduction_node" varchar COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'monthly'::character varying,
+  "rate_type" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "transaction_country" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "direction" varchar COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'debit'::character varying,
+  "amount" numeric(20,12) NOT NULL DEFAULT '0'::numeric,
+  "rate" numeric(20,12) NOT NULL DEFAULT '0'::numeric,
+  "fee" numeric(20,12) NOT NULL DEFAULT '0'::numeric,
+  "add_fee" numeric(20,12) NOT NULL DEFAULT '0'::numeric,
+  "add_rate" numeric(20,12) NOT NULL DEFAULT '0'::numeric,
+  "status" varchar COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'Pending'::character varying,
+  "total_fee" numeric(20,12) NOT NULL DEFAULT 0,
+  "total_rate" numeric(20,12) NOT NULL DEFAULT 0,
+  "commission_mode" varchar(255) COLLATE "pg_catalog"."default",
+  CONSTRAINT "PK_56d6f8e7b048c20d05a9effa051" PRIMARY KEY ("id")
+)
+;
+
+ALTER TABLE "public"."partner_commission_fee_transaction" 
+  OWNER TO "qbit_admin";
+
+CREATE INDEX "IDX_d6cde5c755f2178cf0246f5c4e" ON "public"."partner_commission_fee_transaction" USING btree (
+  "create_time" "pg_catalog"."timestamptz_ops" ASC NULLS LAST
+);
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."remarks" IS '备注';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."account_id" IS '账户id';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."business_id" IS '业务id-卡id';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."transaction_id" IS '我方交易id';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."source_id" IS '业务sourceId';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."fee_id" IS '费率id';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."fee_name" IS '费用名称';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."deduction_node" IS '扣费节点';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."rate_type" IS '费率类型';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."transaction_country" IS '交易国家';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."direction" IS '扣款方向';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."amount" IS '计费基数金额';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."rate" IS '费率';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."fee" IS '费用';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."add_fee" IS '加价费率值/弹性费率值';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."add_rate" IS '加价费率值/弹性费率值';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."status" IS '状态';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."total_fee" IS '总费用';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."total_rate" IS '总费率';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."commission_mode" IS '分佣模式';
+
+
+
+
+
+
+/Users/martinjiang/IdeaProjects/qbit-assets
+/Users/martinjiang/IdeaProjects/interlace_partner_service
+
+
+1.我想要你扫描两个项目
+2.合伙人毛利返佣这个我希望见一个定时任务计算参考
+/Users/martinjiang/IdeaProjects/qbit-assets/qbit-core/src/main/java/com/qbit/job/partner
+这个是之前的计算job 我们可以加一个新的
+3.我需要你看看这两个项目之前已经存在的跨项目接口调用我们要写几个接口
+  1.我们需要提供一个接口给interlace_partner_service项目返回当前客户每个月的各个业务线的毛利
+   accountIds statrtTime endTime partnerAccountId
+  2./Users/martinjiang/VsCodeProjects/martin-dev-log/parter-account-profit/partner-monthly-commission-sync.md
+  然后看看这个文档我们需要把 合伙人毛利返佣的数据 和 其他加点的佣金数据写入到 合伙人项目的partner_monthly_commission
+ partner_monthly_commission_detail 因为跨项目跨库所以那边可能也要一个查询接口 加定时任务落这部分数据
+
