@@ -122,7 +122,10 @@ CROSS JOIN LATERAL (
   WHERE sale_or_am_id IS NOT NULL
 ) AS ids
     JOIN affected a ON (DATE(tr."createTime")) = a.scope_date AND (tr."accountId") = a.scope_account
-    WHERE tr."deleteTime" IS NULL) AS src',
+    WHERE tr."deleteTime" IS NULL
+      AND ((tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
+        OR (tr."updateTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."updateTime" < CURRENT_DATE)
+        OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."deleteTime" < CURRENT_DATE))) AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -143,7 +146,7 @@ CREATE TEMPORARY TABLE source2_sale_relation (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT sr.relation_account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time, sr.relation_end_time, 1 AS priority FROM dim.dim_sale_account_relation_p sr WHERE sr.delete_time IS NULL UNION ALL SELECT aar.account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time, sr.relation_end_time, 2 AS priority FROM public.api_account_relation aar JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text WHERE aar.delete_time IS NULL AND sr.delete_time IS NULL) AS rel',
+    'table-name' = '(SELECT sr.relation_account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time, sr.relation_end_time, 1 AS priority FROM dim.dim_sale_account_relation_p sr WHERE sr.delete_time IS NULL AND sr.relation_start_time < CURRENT_DATE AND (sr.relation_end_time IS NULL OR sr.relation_end_time > CURRENT_DATE - INTERVAL ''1 day'') UNION ALL SELECT aar.account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time, sr.relation_end_time, 2 AS priority FROM public.api_account_relation aar JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text WHERE aar.delete_time IS NULL AND sr.delete_time IS NULL AND sr.relation_start_time < CURRENT_DATE AND (sr.relation_end_time IS NULL OR sr.relation_end_time > CURRENT_DATE - INTERVAL ''1 day'')) AS rel',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
