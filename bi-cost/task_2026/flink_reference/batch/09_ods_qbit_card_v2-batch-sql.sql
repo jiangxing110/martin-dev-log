@@ -55,8 +55,8 @@ CREATE TEMPORARY TABLE source_ods_qbit_card (
     provider STRING,
     type STRING,
     token STRING,
-    user_delete_time STRING,
-    delete_card_time STRING,
+    user_delete_time DATE,
+    delete_card_time DATE,
     first_six STRING,
     card_belong STRING,
     physical_card_status STRING,
@@ -69,7 +69,7 @@ CREATE TEMPORARY TABLE source_ods_qbit_card (
         FROM "qbitCard" AS tr
         WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT tr."createTime" AS "create_time", tr."updateTime" AS "update_time", tr."deleteTime" AS "delete_time", CAST(tr."version" AS integer) AS "version", CAST(tr."remarks" AS text) AS "remarks", CAST(tr."id" AS text) AS "card_id", CAST(tr."accountId" AS text) AS "account_id", CAST(tr."currency" AS text) AS "currency", CAST(tr."status" AS text) AS "status", CAST(tr."provider" AS text) AS "provider", CAST(tr."type" AS text) AS "type", CAST(tr."token" AS text) AS "token", CAST(tr."userDeleteTime" AS text) AS "user_delete_time", CAST(tr."deleteCardTime" AS text) AS "delete_card_time", CAST(tr."firstSix" AS text) AS "first_six", CAST(tr."cardBelong" AS text) AS "card_belong", CAST(tr."physicalCardStatus" AS text) AS "physical_card_status", CAST(tr."cardMode" AS text) AS "card_mode"
+    SELECT tr."createTime" AS "create_time", tr."updateTime" AS "update_time", tr."deleteTime" AS "delete_time", CAST(tr."version" AS integer) AS "version", CAST(tr."remarks" AS text) AS "remarks", CAST(tr."id" AS text) AS "card_id", CAST(tr."accountId" AS text) AS "account_id", CAST(tr."currency" AS text) AS "currency", CAST(tr."status" AS text) AS "status", CAST(tr."provider" AS text) AS "provider", CAST(tr."type" AS text) AS "type", CAST(tr."token" AS text) AS "token", CAST(tr."userDeleteTime" AS date) AS "user_delete_time", CAST(tr."deleteCardTime" AS date) AS "delete_card_time", CAST(tr."firstSix" AS text) AS "first_six", CAST(tr."cardBelong" AS text) AS "card_belong", CAST(tr."physicalCardStatus" AS text) AS "physical_card_status", CAST(tr."cardMode" AS text) AS "card_mode"
     FROM "qbitCard" AS tr
     JOIN affected a ON (tr."id") IS NOT DISTINCT FROM a.k0
     WHERE tr."deleteTime" IS NULL) AS src',
@@ -86,7 +86,7 @@ SELECT
 FROM source_ods_qbit_card;
 
 CREATE TEMPORARY TABLE sink_ods_qbit_card_2026 (
-    id BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, card_id STRING, account_id STRING, currency STRING, status STRING, provider STRING, type STRING, token STRING, user_delete_time STRING, delete_card_time STRING, first_six STRING, card_belong STRING, physical_card_status STRING, card_mode STRING,
+    id BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, card_id STRING, account_id STRING, currency STRING, status STRING, provider STRING, type STRING, token STRING, user_delete_time DATE, delete_card_time DATE, first_six STRING, card_belong STRING, physical_card_status STRING, card_mode STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='ods_qbit_card_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
