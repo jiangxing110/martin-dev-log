@@ -1,7 +1,7 @@
 --********************************************************************
 -- Author:         martinJiang
 -- Created Time:   2026-09-01
--- Updated Time:   2026-09-01
+-- Updated Time:   2026-09-02 19:00:00
 -- Description:    dws_sale_card_transaction_extend 流处理(CDC) 作业（quantum-v2 范式：确定性哈希主键 + 先清后写）
 -- 作业元信息：
 --   作业类型：流处理(CDC)
@@ -13,7 +13,8 @@
 --   3. 按 create_date 年份动态路由分表（_YYYY），跨年安全。
 --   4. 上线前需对照线上 Flink catalog 校准列类型（UUID / JSON / boolean 等）。
 --********************************************************************
-SET 'parallelism.default' = '1';
+SET 'parallelism.default' = '2';
+SET 'table.exec.resource.default-parallelism' = '2';
 SET 'pipeline.operator-chaining' = 'true';
 SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'sink.parallelism' = '1';
@@ -145,7 +146,7 @@ CREATE TEMPORARY TABLE source2_sale_relation (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT sr.relation_account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time AS relation_start_time, sr.relation_end_time AS relation_end_time, 1 AS priority FROM dim.dim_sale_account_relation_p sr WHERE sr.delete_time IS NULL AND sr.relation_start_time < CURRENT_DATE AND (sr.relation_end_time IS NULL OR sr.relation_end_time > CURRENT_DATE - INTERVAL ''1 day'') UNION ALL SELECT aar.account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time AS relation_start_time, sr.relation_end_time AS relation_end_time, 2 AS priority FROM public.api_account_relation aar JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text WHERE aar.delete_time IS NULL AND sr.delete_time IS NULL AND sr.relation_start_time < CURRENT_DATE AND (sr.relation_end_time IS NULL OR sr.relation_end_time > CURRENT_DATE - INTERVAL ''1 day'')) AS rel',
+    'table-name' = '(WITH filtered_txn AS (SELECT DISTINCT "accountId"::text AS account_id FROM public."qbit_card_transaction" WHERE ("createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND "createTime" < CURRENT_DATE) OR ("updateTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND "updateTime" < CURRENT_DATE) OR ("deleteTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND "deleteTime" < CURRENT_DATE)), related_account AS (SELECT account_id FROM filtered_txn UNION SELECT aar.root_id::text FROM public.api_account_relation aar JOIN filtered_txn ft ON ft.account_id = aar.account_id::text WHERE aar.delete_time IS NULL) SELECT sr.relation_account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time AS relation_start_time, sr.relation_end_time AS relation_end_time, 1 AS priority FROM dim.dim_sale_account_relation_p sr JOIN related_account ra ON ra.account_id = sr.relation_account_id::text WHERE sr.delete_time IS NULL AND sr.relation_start_time < CURRENT_DATE AND (sr.relation_end_time IS NULL OR sr.relation_end_time > CURRENT_DATE - INTERVAL ''1 day'') UNION ALL SELECT aar.account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time AS relation_start_time, sr.relation_end_time AS relation_end_time, 2 AS priority FROM public.api_account_relation aar JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text JOIN filtered_txn ft ON ft.account_id = aar.account_id::text WHERE aar.delete_time IS NULL AND sr.delete_time IS NULL AND sr.relation_start_time < CURRENT_DATE AND (sr.relation_end_time IS NULL OR sr.relation_end_time > CURRENT_DATE - INTERVAL ''1 day'')) AS rel',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

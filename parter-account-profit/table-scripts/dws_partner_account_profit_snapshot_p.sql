@@ -23,7 +23,6 @@ CREATE TABLE "dws"."dws_partner_account_profit_snapshot_p" (
   CONSTRAINT "dws_partner_account_profit_snapshot_pkey" PRIMARY KEY ("id", "snapshot_date")
 ) PARTITION BY RANGE ("snapshot_date");
 
-ALTER TABLE "dws"."dws_partner_account_profit_snapshot_p" OWNER TO "flink_cdc_user";
 
 COMMENT ON TABLE "dws"."dws_partner_account_profit_snapshot_p" IS '合伙人客户毛利月度快照主表，按合伙人、root客户、产品汇总';
 COMMENT ON COLUMN "dws"."dws_partner_account_profit_snapshot_p"."total_gp" IS '客户产品月度毛利，可为负，不做下限处理';

@@ -28,7 +28,6 @@ CREATE TABLE "dws"."dws_partner_account_profit_snapshot_detail_p" (
   CONSTRAINT "dws_partner_account_profit_snapshot_detail_pkey" PRIMARY KEY ("id", "snapshot_date")
 ) PARTITION BY RANGE ("snapshot_date");
 
-ALTER TABLE "dws"."dws_partner_account_profit_snapshot_detail_p" OWNER TO "flink_cdc_user";
 
 COMMENT ON TABLE "dws"."dws_partner_account_profit_snapshot_detail_p" IS '合伙人客户毛利月度快照详情，保存渠道/费用项粒度的收入、成本和毛利';
 COMMENT ON COLUMN "dws"."dws_partner_account_profit_snapshot_detail_p"."root_account_referral_id" IS '快照时客户邀请码归属的合伙人用户ID';
