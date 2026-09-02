@@ -14,7 +14,7 @@
 --   4. 删除与重算必须严格共用同一 start_date/end_date，否则出现区间缺口或越界残留。
 --   5. 上线前需对照线上 Flink catalog 校准列类型（UUID / JSON / boolean 等）。
 --********************************************************************
-SET 'parallelism.default' = '1';
+SET 'parallelism.default' = '2';
 SET 'pipeline.operator-chaining' = 'true';
 SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'sink.parallelism' = '1';
@@ -162,7 +162,7 @@ CREATE TEMPORARY TABLE source2_sale_relation (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT sr.relation_account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time, sr.relation_end_time, 1 AS priority FROM dim.dim_sale_account_relation_p sr WHERE sr.delete_time IS NULL UNION ALL SELECT aar.account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time, sr.relation_end_time, 2 AS priority FROM public.api_account_relation aar JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text WHERE aar.delete_time IS NULL AND sr.delete_time IS NULL) AS rel',
+    'table-name' = '(SELECT sr.relation_account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time, sr.relation_end_time, 1 AS priority FROM dim.dim_sale_account_relation_p sr WHERE sr.delete_time IS NULL AND sr.relation_start_time < CAST(''${end_date}'' AS DATE) + INTERVAL ''1 day'' AND (sr.relation_end_time IS NULL OR sr.relation_end_time > CAST(''${start_date}'' AS DATE)) UNION ALL SELECT aar.account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time, sr.relation_end_time, 2 AS priority FROM public.api_account_relation aar JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text WHERE aar.delete_time IS NULL AND sr.delete_time IS NULL AND sr.relation_start_time < CAST(''${end_date}'' AS DATE) + INTERVAL ''1 day'' AND (sr.relation_end_time IS NULL OR sr.relation_end_time > CAST(''${start_date}'' AS DATE))) AS rel',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -170,8 +170,7 @@ CREATE TEMPORARY TABLE source2_sale_relation (
 );
 
 CREATE TEMPORARY VIEW v_sale_card_transaction_matched AS
-SELECT tr.*, sr.sale_id, sr.am_id,
-       ROW_NUMBER() OVER (PARTITION BY tr.transaction_id ORDER BY sr.priority, sr.relation_start_time DESC) AS rn
+SELECT tr.*, sr.sale_id, sr.am_id
 FROM source1_transaction tr
 JOIN source2_sale_relation sr
   ON tr.account_id = sr.relation_account_id
@@ -180,10 +179,10 @@ JOIN source2_sale_relation sr
 
 CREATE TEMPORARY VIEW v_sale_card_transaction_expanded AS
 SELECT transaction_id, account_id, business_type, status, provider, bin, origin_amount, settle_amount, fee, create_time, sale_id AS sale_or_am_id
-FROM v_sale_card_transaction_matched WHERE rn = 1 AND sale_id IS NOT NULL
+FROM v_sale_card_transaction_matched WHERE sale_id IS NOT NULL
 UNION ALL
 SELECT transaction_id, account_id, business_type, status, provider, bin, origin_amount, settle_amount, fee, create_time, am_id AS sale_or_am_id
-FROM v_sale_card_transaction_matched WHERE rn = 1 AND am_id IS NOT NULL;
+FROM v_sale_card_transaction_matched WHERE am_id IS NOT NULL;
 
 CREATE TEMPORARY VIEW v_sale_card_transaction_expanded_daily AS
 SELECT transaction_id, account_id, business_type, status, provider, bin, origin_amount, settle_amount, fee, sale_or_am_id,
