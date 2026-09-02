@@ -4,7 +4,7 @@
 
 基于现有销售毛利返佣物化视图，新增一套面向合伙人渠道的客户毛利数据链路：先按账户根客户归集各产品、渠道和费用项的收入与成本，形成可查询的近期毛利物化视图；每月 21 号从该视图固化上个月的客户毛利快照，并同时写入合伙人客户毛利汇总和可追溯的快照详情。
 
-本期只计算和固化客户经营毛利，不处理任何返佣费率、阶梯配置、应发佣金或应付佣金。
+本期同时落地量子账户和加密资产的毛利返佣配置，以及按合伙人、客户、业务线、结算月记录返佣结果的结果表。客户毛利数据层仍不提前截断负数。
 
 ## 1. 背景与目标
 
@@ -33,9 +33,15 @@
 
 ### 2.2 非目标
 
-- 本期不落地任何返佣金额、费率、发放状态或支付流水。
+- 本期不处理返佣发放状态或支付流水。
 - 本期不纳入 `month_revenue` API 实收；不改变现有销售返佣视图的口径。
 - 本期不改变现有销售佣金表、销售佣金规则或销售看板接口。
+
+## 3.3 合伙人毛利返佣配置
+
+沿用 `public.partner_gross_margin_config` 和 `public.partner_gross_margin_config_detail`：配置主表按合伙人、客户、业务线和生效时间管理，详情表保存阶梯区间和比例。本期为 `QUANTUM_ACCOUNT`、`CRYPTO_ASSETS` 增加相同的默认配置：`0–20,000` 为 10%，`20,000` 以上为 20%。
+
+返佣结果按超额累进计算，负毛利不产生返佣，最终金额按 0 做下限；具体计算由独立的返佣批任务写入结果表。
 
 ## 3. 业务口径
 
@@ -127,9 +133,15 @@ root_account_referral_id + root_account_id + product + settlement_month
 
 主表不提前执行毛利下限，不把负毛利客户过滤掉；没有收入但有成本的客户也必须保留。
 
+### 4.4 合伙人客户业务线返佣表
+
+建议名称：`public.partner_gross_margin_commission_p`，属于业务库，不属于数仓；粒度为 `partner_id + account_id + product_line_type + settlement_month + snapshot_date`。
+
+该表记录 `gross_profit`、`commission_before_floor`、`commission_amount` 和实际命中的 `config_id`。其中 `commission_before_floor` 是阶梯计算结果，`commission_amount` 是最终不小于 0 的返佣金额。
+
 ## 5. 数据处理流程
 
-1. 从现有销售返佣视图的收入和成本 CTE 复用业务口径，抽出不含销售佣金计算的客户毛利基础层。
+1. 从现有销售返佣视图的收入和成本 CTE 复用业务口径，抽出客户毛利基础层。
 2. 将账户关系归一到 root account；通过 `dim.dim_account_analysis` 获取 root account 的 `referral_user_id`。
 3. 标准化产品：保留 `source_product`，将 `open_api` 和 `qbit_card` 的输出 `product` 统一为 `qbit_card`。
 4. 过滤 `item = 'month_revenue'`。由于现有视图可能将该来源转换为 `source_type = past_due_invoice/billing_decline_fee`，实现时应以原始 `metric_code` 或明确的来源标记过滤，不能只依赖转换后的 item。
@@ -137,6 +149,7 @@ root_account_referral_id + root_account_id + product + settlement_month
 6. 物化视图按近 6 个月刷新，提供当前月和历史未固化月份查询。
 7. 每月 21 号读取 `settlement_month = 当前月月初 - 1 个月` 的物化视图，先写详情，再由详情/同一输入聚合写主表。
 8. 主表与详情在同一 Flink batch 作业中使用 statement set/upsert 写入，避免两张表出现不同批次版本。
+9. 返佣批任务读取快照主表，将 `qbit_card` 映射为 `QUANTUM_ACCOUNT`、`crypto` 映射为 `CRYPTO_ASSETS`，关联配置详情后按阶梯计算并写入返佣结果表。
 
 ## 6. 快照调度、幂等与补跑
 
@@ -167,13 +180,16 @@ root_account_referral_id + root_account_id + product + settlement_month
 - `table-scripts/dws_partner_account_profit_snapshot_detail_p.sql`：快照详情表和年度分区。
 - `batch/dws_partner_account_profit_snapshot-batch-sql.sql`：参数化快照任务，支持 `snapshot_date`、`settlement_month`。
 - `cdc/dws_partner_account_profit_snapshot-month-cdc-sql.sql`：每月 21 号自动计算目标月份的调度任务。
+- `table-scripts/partner_gross_margin_config_quantum_crypto.sql`：业务库量子账户/加密资产默认费率配置。
+- `table-scripts/partner_gross_margin_commission_p.sql`：业务库合伙人客户业务线返佣结果表。
+- `batch/partner_gross_margin_commission-batch-sql.sql`：返佣结果计算批任务。
 - `plans/2026-09-02-partner-account-profit-plan.md`：实现步骤、验证项和进度。
 
 ## 9. 风险与待确认事项
 
 1. `dim.dim_account_analysis.referral_user_id` 当前是账户分析维表的当前值；如果业务要求严格按历史生效时间还原合伙人归属，需要补充账户邀请码历史表或有效期字段。
 2. 同一 root account 若存在多个产品来源，合并为 `qbit_card` 后必须依赖 `source_product` 进行审计，不能再假设产品编码唯一代表来源。
-3. 本期不设计返佣费率及配置表；后续返佣计算需单独设计费率配置、优先级和结算结果表。
+3. 当前默认费率为两档配置；后续若不同合伙人或业务线使用不同阶梯，可继续通过配置表按生效时间覆盖。
 
 ## 10. 验收标准
 
@@ -182,4 +198,5 @@ root_account_referral_id + root_account_id + product + settlement_month
 - `open_api` 和 `qbit_card` 对外统一输出 `qbit_card`，且来源可追溯。
 - 客户层的正负渠道结果值可相抵，合伙人客户汇总保留正负毛利，不在本数据层截断。
 - 每月 21 号可幂等固化上个月数据，主表与详情表金额一致。
+- 量子账户和加密资产配置可幂等写入，返佣结果按合伙人、客户、业务线和月份唯一固化。
 - 设计不修改现有销售返佣表和现有销售返佣视图的对外口径。
