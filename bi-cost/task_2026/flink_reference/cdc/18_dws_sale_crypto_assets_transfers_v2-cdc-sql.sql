@@ -72,7 +72,7 @@ CREATE TEMPORARY TABLE source_dws_sale_crypto_assets_transfers (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT DATE(tr."create_time") AS scope_date, tr."account_id" AS scope_account FROM "crypto_assets_transfers" AS tr
+        SELECT DISTINCT DATE(tr."create_time") AS scope_date, tr."account_id" AS scope_account FROM (SELECT * FROM "crypto_assets_transfers" WHERE ("create_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND "create_time" < CURRENT_DATE) OR ("update_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND "update_time" < CURRENT_DATE) OR ("delete_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND "delete_time" < CURRENT_DATE)) AS tr
 LEFT JOIN LATERAL (
   SELECT sale_id, am_id
   FROM (
@@ -98,7 +98,7 @@ CROSS JOIN LATERAL (
 ) AS ids WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."delete_time" < CURRENT_DATE)
     )
     SELECT CAST("account_id" AS text) AS "account_id", CAST(ids."sale_or_am_id" AS text) AS "sale_or_am_id", CAST("status" AS text) AS "status", CAST("sender_type" AS text) AS "sender_type", CAST("recipient_type" AS text) AS "recipient_type", CAST(COUNT(*) AS integer) AS "transaction_count", CAST(SUM("origin_amount" * "usd_rate") AS numeric(18,2)) AS "origin_amount", CAST(SUM("settlement_amount" * "usd_rate") AS numeric(18,2)) AS "settlement_amount", CAST(SUM("fee" * "usd_rate") AS numeric(18,2)) AS "fee", CAST(SUM("fee2" * "usd_rate") AS numeric(18,2)) AS "fee2", CAST(SUM("cross_chain_fee" * "usd_rate") AS numeric(18,2)) AS "cross_chain_fee", CAST(SUM(CASE WHEN tr."status" = ''Closed'' AND tr."action" = ''sell'' AND tr.hidden = FALSE AND (tr."fee" - tr."origin_amount" * 0.0009) > 0 THEN (tr."fee" - tr."origin_amount" * 0.0009) ELSE 0 END) AS numeric(18,2)) AS "exchange_profit", CAST(SUM(CASE WHEN tr."recipient_type" IN (''wire'',''outside_bank'') AND tr."status" IN (''Processing'',''Closed'') AND (tr."fee" - 25) > 0 THEN (tr."fee" - 25) ELSE 0 END) AS numeric(18,2)) AS "payment_profit", "hidden" AS "hidden", tr."create_time"::DATE::TIMESTAMP AS "create_date", CAST("currency" AS text) AS "currency", CAST("action" AS text) AS "action", CAST(1 AS integer) AS "version", NOW() AS "create_time", NOW() AS "update_time"
-    FROM "crypto_assets_transfers" AS tr
+    FROM (SELECT * FROM "crypto_assets_transfers" WHERE ("create_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND "create_time" < CURRENT_DATE) OR ("update_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND "update_time" < CURRENT_DATE) OR ("delete_time" >= CURRENT_DATE - INTERVAL ''1 day'' AND "delete_time" < CURRENT_DATE)) AS tr
 LEFT JOIN LATERAL (
   SELECT sale_id, am_id
   FROM (

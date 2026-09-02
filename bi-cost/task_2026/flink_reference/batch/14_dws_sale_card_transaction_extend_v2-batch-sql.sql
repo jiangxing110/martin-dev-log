@@ -65,7 +65,7 @@ CREATE TEMPORARY TABLE source_dws_sale_card_transaction_extend (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account FROM "qbit_card_transaction" AS tr
+        SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account FROM (SELECT * FROM "qbit_card_transaction" WHERE "createTime" >= CAST(''${start_date}'' AS DATE) AND "createTime" < CAST(''${end_date}'' AS DATE) + INTERVAL ''1 day'') AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc.id
 LEFT JOIN LATERAL (
   SELECT sale_id, am_id
@@ -92,7 +92,7 @@ CROSS JOIN LATERAL (
 ) AS ids WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
     SELECT CAST(tr."accountId" AS text) AS "account_id", CAST(ids."sale_or_am_id" AS text) AS "sale_or_am_id", CAST(tr."businessType" AS text) AS "business_type", CAST(tr."provider" AS text) AS "provider", CAST(qc."firstSix" AS text) AS "bin", CAST(tr."status" AS text) AS "status", CAST(COALESCE(SUM(tr."settleAmount"), 0) AS numeric(18,2)) AS "settle_amount", CAST(tr."transactionCurrency" AS text) AS "transaction_currency", CAST(tr."specialSourceData"->>''country'' AS text) AS "country", CAST(COUNT(*) AS integer) AS "transaction_count", CAST(COALESCE(SUM((tr."specialSourceData"->>''markupFee'')::numeric), 0) AS numeric(18,2)) AS "fx_fee", CAST(COALESCE(SUM(CASE WHEN tr.remarks LIKE ''%ATM取现费'' THEN fee::numeric ELSE 0 END), 0) AS numeric(18,2)) AS "atm_fee", CAST(COALESCE(SUM((tr."specialSourceData"->>''applePayFee'')::numeric), 0) AS numeric(18,2)) AS "apple_pay_fee", CAST(COALESCE(SUM((tr."specialSourceData"->>''settleFee'')::numeric), 0) AS numeric(18,2)) AS "settle_fee", tr."createTime"::DATE::TIMESTAMP AS "create_date", CAST(1 AS integer) AS "version", NOW() AS "create_time", NOW() AS "update_time"
-    FROM "qbit_card_transaction" AS tr
+    FROM (SELECT * FROM "qbit_card_transaction" WHERE "createTime" >= CAST(''${start_date}'' AS DATE) AND "createTime" < CAST(''${end_date}'' AS DATE) + INTERVAL ''1 day'') AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc.id
 LEFT JOIN LATERAL (
   SELECT sale_id, am_id
