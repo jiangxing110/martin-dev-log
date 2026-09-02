@@ -1,3 +1,30 @@
 参考/Users/martinjiang/VsCodeProjects/martin-dev-log/sale-repoet
 之前销售毛利返佣的逻辑我要算账户层面的毛利 物化视图
-和 21还 客户毛利快照记录 上个月的毛利
+和 21号 固定这份客户毛利 快照记录上个月的毛利记录
+我看了现在的销售返佣视图
+SELECT provider,product,item 
+FROM dws.mv_sales_commission_recent_estimate 
+GROUP BY provider,product,item 
+1.我们想要保留的字段
+id	
+report_date	
+settlement_month	
+root_account_id	
+product
+provider	
+item	
+source_type	
+effective_revenue	
+cogs	
+gp	
+2.我们想要过滤
+item :month_revenue 这个api实收我们暂时不需要后期要再加
+3.product: open_api 和 qbit_card 合并 统一qbit_card 但是
+可以加一个字段在底层做区分
+4.加一个root_account_referral_id 便于后期处理对应合伙人
+
+设计新的
+合伙人客户毛利物化视图
+合伙人客户毛利快照+合伙人客户快照详情
+
+

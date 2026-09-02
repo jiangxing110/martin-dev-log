@@ -1,7 +1,7 @@
 --********************************************************************
 -- Author:         martinJiang
 -- Created Time:   2026-09-01
--- Updated Time:   2026-09-02 10:47:50
+-- Updated Time:   2026-09-02 14:20:00
 -- Description:    dws_sale_crypto_assets_transfers 流处理(CDC) 作业（quantum-v2 范式：确定性哈希主键 + 先清后写）
 -- 作业元信息：
 --   作业类型：流处理(CDC)
@@ -13,7 +13,7 @@
 --   3. 按 create_date 年份动态路由分表（_YYYY），跨年安全。
 --   4. 上线前需对照线上 Flink catalog 校准列类型（UUID / JSON / boolean 等）。
 --********************************************************************
-SET 'parallelism.default' = '1';
+SET 'parallelism.default' = '2';
 SET 'pipeline.operator-chaining' = 'true';
 SET 'table.exec.mini-batch.enabled' = 'false';
 SET 'sink.parallelism' = '1';
@@ -155,6 +155,58 @@ CREATE TEMPORARY TABLE source2_sale_relation (
     'driver' = 'org.postgresql.Driver',
     'scan.fetch-size' = '2000'
 );
+
+-- source1：只读取最近变更的交易明细，关系匹配和聚合放到 Flink 执行
+CREATE TEMPORARY TABLE source1_transaction (
+    transaction_id STRING, account_id STRING, status STRING, sender_type STRING,
+    recipient_type STRING, origin_amount DECIMAL(18,2), settlement_amount DECIMAL(18,2),
+    fee DECIMAL(18,2), fee2 DECIMAL(18,2), cross_chain_fee DECIMAL(18,2),
+    usd_rate DECIMAL(18,8), hidden BOOLEAN, currency STRING, action STRING,
+    create_time TIMESTAMP(6), delete_time TIMESTAMP(6)
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT id::text AS transaction_id, account_id::text AS account_id, status::text AS status, sender_type::text AS sender_type, recipient_type::text AS recipient_type, origin_amount::numeric(18,2) AS origin_amount, settlement_amount::numeric(18,2) AS settlement_amount, fee::numeric(18,2) AS fee, fee2::numeric(18,2) AS fee2, cross_chain_fee::numeric(18,2) AS cross_chain_fee, usd_rate::numeric(18,8) AS usd_rate, hidden, currency::text AS currency, action::text AS action, create_time, delete_time FROM public.crypto_assets_transfers WHERE delete_time IS NULL AND ((create_time >= CURRENT_DATE - INTERVAL ''1 day'' AND create_time < CURRENT_DATE) OR (update_time >= CURRENT_DATE - INTERVAL ''1 day'' AND update_time < CURRENT_DATE))) AS tx',
+    'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver', 'scan.fetch-size' = '2000'
+);
+
+CREATE TEMPORARY VIEW v_sale_transaction_matched AS
+SELECT tr.*, sr.sale_id, sr.am_id,
+       ROW_NUMBER() OVER (PARTITION BY tr.transaction_id ORDER BY sr.priority, sr.relation_start_time DESC) AS rn
+FROM source1_transaction tr
+JOIN source2_sale_relation sr
+  ON tr.account_id = sr.relation_account_id
+ AND tr.create_time >= sr.relation_start_time
+ AND (tr.create_time < sr.relation_end_time OR sr.relation_end_time IS NULL);
+
+CREATE TEMPORARY VIEW v_sale_transaction_expanded AS
+SELECT DISTINCT transaction_id, account_id, status, sender_type, recipient_type,
+       origin_amount, settlement_amount, fee, fee2, cross_chain_fee, usd_rate,
+       hidden, currency, action, create_time, sale_id AS sale_or_am_id
+FROM v_sale_transaction_matched WHERE rn = 1 AND sale_id IS NOT NULL
+UNION
+SELECT DISTINCT transaction_id, account_id, status, sender_type, recipient_type,
+       origin_amount, settlement_amount, fee, fee2, cross_chain_fee, usd_rate,
+       hidden, currency, action, create_time, am_id AS sale_or_am_id
+FROM v_sale_transaction_matched WHERE rn = 1 AND am_id IS NOT NULL;
+
+CREATE TEMPORARY VIEW v_dws_sale_crypto_assets_transfers_operator AS
+SELECT CAST(ABS(HASH_CODE(CONCAT(COALESCE(account_id,''),':',COALESCE(sale_or_am_id,''),':',COALESCE(status,''),':',COALESCE(sender_type,''),':',COALESCE(recipient_type,''),':',COALESCE(hidden,''),':',DATE_FORMAT(CAST(create_date AS TIMESTAMP),'yyyy-MM-dd'),':',COALESCE(currency,''),':',COALESCE(action,'')))) AS BIGINT) AS id,
+       account_id, sale_or_am_id, status, sender_type, recipient_type,
+       CAST(COUNT(*) AS INT) AS transaction_count,
+       CAST(SUM(origin_amount * usd_rate) AS DECIMAL(18,2)) AS origin_amount,
+       CAST(SUM(settlement_amount * usd_rate) AS DECIMAL(18,2)) AS settlement_amount,
+       CAST(SUM(fee * usd_rate) AS DECIMAL(18,2)) AS fee,
+       CAST(SUM(fee2 * usd_rate) AS DECIMAL(18,2)) AS fee2,
+       CAST(SUM(cross_chain_fee * usd_rate) AS DECIMAL(18,2)) AS cross_chain_fee,
+       CAST(SUM(CASE WHEN status = 'Closed' AND action = 'sell' AND hidden = FALSE AND (fee - origin_amount * 0.0009) > 0 THEN (fee - origin_amount * 0.0009) * usd_rate ELSE 0 END) AS DECIMAL(18,2)) AS exchange_profit,
+       CAST(SUM(CASE WHEN recipient_type IN ('wire','outside_bank') AND status IN ('Processing','Closed') AND (fee - 25) > 0 THEN (fee - 25) * usd_rate ELSE 0 END) AS DECIMAL(18,2)) AS payment_profit,
+       hidden, CAST(create_date AS TIMESTAMP(6)) AS create_date, currency, action,
+       CAST(1 AS INT) AS version, CURRENT_TIMESTAMP AS create_time, CURRENT_TIMESTAMP AS update_time
+FROM (SELECT *, CAST(create_time AS DATE) AS create_date FROM v_sale_transaction_expanded) x
+GROUP BY account_id, sale_or_am_id, status, sender_type, recipient_type, hidden, create_date, currency, action;
+
 CREATE TEMPORARY VIEW v_dws_sale_crypto_assets_transfers_source AS
 SELECT DISTINCT d.*
 FROM source_dws_sale_crypto_assets_transfers d
@@ -190,19 +242,19 @@ CREATE TEMPORARY TABLE sink_dws_sale_crypto_assets_transfers_2026 (
 -- ==============================================
 INSERT INTO sink_dws_sale_crypto_assets_transfers_2024
 SELECT id, account_id, sale_or_am_id, status, sender_type, recipient_type, transaction_count, origin_amount, settlement_amount, fee, fee2, cross_chain_fee, exchange_profit, payment_profit, hidden, create_date, currency, action, version, create_time, update_time
-FROM v_dws_sale_crypto_assets_transfers_base
+FROM v_dws_sale_crypto_assets_transfers_operator
 CROSS JOIN source_delete_dws_sale_crypto_assets_transfers_result AS del
 WHERE del.affected_rows >= 0
   AND create_date >= DATE '2024-01-01' AND create_date < DATE '2025-01-01';
 INSERT INTO sink_dws_sale_crypto_assets_transfers_2025
 SELECT id, account_id, sale_or_am_id, status, sender_type, recipient_type, transaction_count, origin_amount, settlement_amount, fee, fee2, cross_chain_fee, exchange_profit, payment_profit, hidden, create_date, currency, action, version, create_time, update_time
-FROM v_dws_sale_crypto_assets_transfers_base
+FROM v_dws_sale_crypto_assets_transfers_operator
 CROSS JOIN source_delete_dws_sale_crypto_assets_transfers_result AS del
 WHERE del.affected_rows >= 0
   AND create_date >= DATE '2025-01-01' AND create_date < DATE '2026-01-01';
 INSERT INTO sink_dws_sale_crypto_assets_transfers_2026
 SELECT id, account_id, sale_or_am_id, status, sender_type, recipient_type, transaction_count, origin_amount, settlement_amount, fee, fee2, cross_chain_fee, exchange_profit, payment_profit, hidden, create_date, currency, action, version, create_time, update_time
-FROM v_dws_sale_crypto_assets_transfers_base
+FROM v_dws_sale_crypto_assets_transfers_operator
 CROSS JOIN source_delete_dws_sale_crypto_assets_transfers_result AS del
 WHERE del.affected_rows >= 0
   AND create_date >= DATE '2026-01-01' AND create_date < DATE '2027-01-01';
