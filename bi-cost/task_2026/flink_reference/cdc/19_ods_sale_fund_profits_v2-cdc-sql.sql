@@ -1,7 +1,7 @@
 --********************************************************************
 -- Author:         martinJiang
 -- Created Time:   2026-09-01
--- Updated Time:   2026-09-01
+-- Updated Time:   2026-09-02 10:47:50
 -- Description:    ods_sale_fund_profits 流处理(CDC) 作业（quantum-v2 范式：确定性哈希主键 + 先清后写）
 -- 作业元信息：
 --   作业类型：流处理(CDC)

@@ -1,7 +1,7 @@
 --********************************************************************
 -- Author:         martinJiang
 -- Created Time:   2026-09-01
--- Updated Time:   2026-09-01
+-- Updated Time:   2026-09-02 10:47:50
 -- Description:    dws_sale_transfer_extend 流处理(CDC) 作业（quantum-v2 范式：确定性哈希主键 + 先清后写）
 -- 作业元信息：
 --   作业类型：流处理(CDC)
@@ -119,8 +119,9 @@ CROSS JOIN LATERAL (
 ) AS ids
 WHERE
 tr."deleteTime" IS NULL and ta."deleteTime" IS NULL
-AND tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day''
-AND tr."createTime" < CURRENT_DATE
+AND ((tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE)
+  OR (tr."updateTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."updateTime" < CURRENT_DATE)
+  OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."deleteTime" < CURRENT_DATE))
 ) as tt
     JOIN affected a ON (DATE(tt.create_date)) = a.scope_date AND (tt."accountId") = a.scope_account
     WHERE TRUE
