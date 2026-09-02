@@ -22,9 +22,9 @@ BEGIN
             WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_wallet_transaction_%s WHERE (account_id, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId", tr."businessType", tr."createTime"::DATE::TIMESTAMP, tr."status" FROM "qbitCardWalletTransaction" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_wallet_transaction_%s WHERE (account_id, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId"::text, tr."businessType"::text, tr."createTime"::DATE::TIMESTAMP, tr."status"::text FROM "qbitCardWalletTransaction" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_wallet_transaction_%s WHERE (account_id, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId", tr."businessType", tr."createTime"::DATE::TIMESTAMP, tr."status" FROM "qbitCardWalletTransaction" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_wallet_transaction_%s WHERE (account_id, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId"::text, tr."businessType"::text, tr."createTime"::DATE::TIMESTAMP, tr."status"::text FROM "qbitCardWalletTransaction" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -74,10 +74,10 @@ LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
             WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_transaction_%s WHERE (account_id, provider, bin, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId", tr."provider", qc."firstSix", tr."businessType", tr."createTime"::DATE::TIMESTAMP, tr."status" FROM "qbit_card_transaction" AS tr
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_transaction_%s WHERE (account_id, provider, bin, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId"::text, tr."provider"::text, qc."firstSix"::text, tr."businessType"::text, tr."createTime"::DATE::TIMESTAMP, tr."status"::text FROM "qbit_card_transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_transaction_%s WHERE (account_id, provider, bin, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId", tr."provider", qc."firstSix", tr."businessType", tr."createTime"::DATE::TIMESTAMP, tr."status" FROM "qbit_card_transaction" AS tr
+                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_transaction_%s WHERE (account_id, provider, bin, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId"::text, tr."provider"::text, qc."firstSix"::text, tr."businessType"::text, tr."createTime"::DATE::TIMESTAMP, tr."status"::text FROM "qbit_card_transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
@@ -128,10 +128,10 @@ LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
             WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_transaction_extend_%s WHERE (account_id, provider, bin, business_type, status, transaction_currency, country, create_date) IN (SELECT DISTINCT tr."accountId", tr."provider", qc."firstSix", tr."businessType", tr."status", tr."transactionCurrency", tr."specialSourceData"->>'country', tr."createTime"::DATE::TIMESTAMP FROM "qbit_card_transaction" AS tr
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_transaction_extend_%s WHERE (account_id, provider, bin, business_type, status, transaction_currency, country, create_date) IN (SELECT DISTINCT tr."accountId"::text, tr."provider"::text, qc."firstSix"::text, tr."businessType"::text, tr."status"::text, tr."transactionCurrency"::text, (tr."specialSourceData"->>'country')::text, tr."createTime"::DATE::TIMESTAMP FROM "qbit_card_transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_transaction_extend_%s WHERE (account_id, provider, bin, business_type, status, transaction_currency, country, create_date) IN (SELECT DISTINCT tr."accountId", tr."provider", qc."firstSix", tr."businessType", tr."status", tr."transactionCurrency", tr."specialSourceData"->>'country', tr."createTime"::DATE::TIMESTAMP FROM "qbit_card_transaction" AS tr
+                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_transaction_extend_%s WHERE (account_id, provider, bin, business_type, status, transaction_currency, country, create_date) IN (SELECT DISTINCT tr."accountId"::text, tr."provider"::text, qc."firstSix"::text, tr."businessType"::text, tr."status"::text, tr."transactionCurrency"::text, (tr."specialSourceData"->>'country')::text, tr."createTime"::DATE::TIMESTAMP FROM "qbit_card_transaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
@@ -181,9 +181,9 @@ BEGIN
             WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_group_transaction_%s WHERE (account_id, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId", tr."businessType", tr."createTime"::DATE::TIMESTAMP, tr."status" FROM qbit_card_group_transaction AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_qbit_card_group_transaction_%s WHERE (account_id, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId"::text, tr."businessType"::text, tr."createTime"::DATE::TIMESTAMP, tr."status"::text FROM qbit_card_group_transaction AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_group_transaction_%s WHERE (account_id, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId", tr."businessType", tr."createTime"::DATE::TIMESTAMP, tr."status" FROM qbit_card_group_transaction AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.dws_qbit_card_group_transaction_%s WHERE (account_id, business_type, create_date, status) IN (SELECT DISTINCT tr."accountId"::text, tr."businessType"::text, tr."createTime"::DATE::TIMESTAMP, tr."status"::text FROM qbit_card_group_transaction AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -337,9 +337,9 @@ BEGIN
             WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_crypto_assets_transfers_%s WHERE (account_id, status, sender_type, recipient_type, hidden, create_date, currency, action) IN (SELECT DISTINCT "account_id", "status", "sender_type", "recipient_type", "hidden", tr."create_time"::DATE::TIMESTAMP, "currency", "action" FROM "crypto_assets_transfers" AS tr WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_crypto_assets_transfers_%s WHERE (account_id, status, sender_type, recipient_type, hidden, create_date, currency, action) IN (SELECT DISTINCT tr."account_id"::text, tr."status"::text, tr."sender_type"::text, tr."recipient_type"::text, tr."hidden", tr."create_time"::DATE::TIMESTAMP, tr."currency"::text, tr."action"::text FROM "crypto_assets_transfers" AS tr WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_crypto_assets_transfers_%s WHERE (account_id, status, sender_type, recipient_type, hidden, create_date, currency, action) IN (SELECT DISTINCT "account_id", "status", "sender_type", "recipient_type", "hidden", tr."create_time"::DATE::TIMESTAMP, "currency", "action" FROM "crypto_assets_transfers" AS tr WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE))$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.dws_crypto_assets_transfers_%s WHERE (account_id, status, sender_type, recipient_type, hidden, create_date, currency, action) IN (SELECT DISTINCT tr."account_id"::text, tr."status"::text, tr."sender_type"::text, tr."recipient_type"::text, tr."hidden", tr."create_time"::DATE::TIMESTAMP, tr."currency"::text, tr."action"::text FROM "crypto_assets_transfers" AS tr WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -442,9 +442,9 @@ BEGIN
             WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.ods_qbit_card_%s WHERE (card_id) IN (SELECT DISTINCT tr."id" FROM "qbitCard" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.ods_qbit_card_%s WHERE (card_id) IN (SELECT DISTINCT tr."id"::text FROM "qbitCard" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.ods_qbit_card_%s WHERE (card_id) IN (SELECT DISTINCT tr."id" FROM "qbitCard" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.ods_qbit_card_%s WHERE (card_id) IN (SELECT DISTINCT tr."id"::text FROM "qbitCard" AS tr WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -548,10 +548,10 @@ LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
             WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE)
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_physical_card_%s WHERE (account_id, provider, bin, status, create_date) IN (SELECT DISTINCT tr."accountId", qc."provider", qc."firstSix", tr."status", tr."createTime"::DATE::TIMESTAMP FROM "qbitCardWalletTransaction" AS tr
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_physical_card_%s WHERE (account_id, provider, bin, status, create_date) IN (SELECT DISTINCT tr."accountId"::text, qc."provider"::text, qc."firstSix"::text, tr."status"::text, tr."createTime"::DATE::TIMESTAMP FROM "qbitCardWalletTransaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_physical_card_%s WHERE (account_id, provider, bin, status, create_date) IN (SELECT DISTINCT tr."accountId", qc."provider", qc."firstSix", tr."status", tr."createTime"::DATE::TIMESTAMP FROM "qbitCardWalletTransaction" AS tr
+                EXECUTE format($fmt$DELETE FROM public.dws_physical_card_%s WHERE (account_id, provider, bin, status, create_date) IN (SELECT DISTINCT tr."accountId"::text, qc."provider"::text, qc."firstSix"::text, tr."status"::text, tr."createTime"::DATE::TIMESTAMP FROM "qbitCardWalletTransaction" AS tr
 LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id" WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE))$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
@@ -594,94 +594,16 @@ DECLARE
     v_n      BIGINT;
 BEGIN
     IF p_start IS NULL THEN
-        -- ===== CDC 模式：qi 式按作用域(scope)精准删（受影响 (日期,账户) 集合，先清后重算）=====
+        -- CDC 删除只按变更日期 + account_id 作用域清理，不在删除阶段执行销售关系 LATERAL 展开。
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM a.scope_date)::INT
-            FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbitCardWalletTransaction" AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) a
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."createTime"))::INT
+            FROM "qbitCardWalletTransaction" AS tr
+            WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_card_wallet_transaction_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbitCardWalletTransaction" AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_card_wallet_transaction_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "qbitCardWalletTransaction" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_sale_card_wallet_transaction_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbitCardWalletTransaction" AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.dws_sale_card_wallet_transaction_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "qbitCardWalletTransaction" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -723,97 +645,16 @@ DECLARE
     v_n      BIGINT;
 BEGIN
     IF p_start IS NULL THEN
-        -- ===== CDC 模式：qi 式按作用域(scope)精准删（受影响 (日期,账户) 集合，先清后重算）=====
+        -- CDC 删除只按变更日期 + account_id 作用域清理，不在删除阶段执行销售关系 LATERAL 展开。
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM a.scope_date)::INT
-            FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbit_card_transaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) a
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."createTime"))::INT
+            FROM "qbit_card_transaction" AS tr
+            WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_card_transaction_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbit_card_transaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_card_transaction_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "qbit_card_transaction" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_sale_card_transaction_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbit_card_transaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.dws_sale_card_transaction_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "qbit_card_transaction" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -855,97 +696,16 @@ DECLARE
     v_n      BIGINT;
 BEGIN
     IF p_start IS NULL THEN
-        -- ===== CDC 模式：qi 式按作用域(scope)精准删（受影响 (日期,账户) 集合，先清后重算）=====
+        -- CDC 删除只按变更日期 + account_id 作用域清理，不在删除阶段执行销售关系 LATERAL 展开。
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM a.scope_date)::INT
-            FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbit_card_transaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc.id
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) a
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."createTime"))::INT
+            FROM "qbit_card_transaction" AS tr
+            WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_card_transaction_extend_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbit_card_transaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc.id
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_card_transaction_extend_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "qbit_card_transaction" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_sale_card_transaction_extend_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbit_card_transaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc.id
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.dws_sale_card_transaction_extend_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "qbit_card_transaction" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -987,94 +747,16 @@ DECLARE
     v_n      BIGINT;
 BEGIN
     IF p_start IS NULL THEN
-        -- ===== CDC 模式：qi 式按作用域(scope)精准删（受影响 (日期,账户) 集合，先清后重算）=====
+        -- CDC 删除只按变更日期 + account_id 作用域清理，不在删除阶段执行销售关系 LATERAL 展开。
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM a.scope_date)::INT
-            FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM qbit_card_group_transaction AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) a
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."createTime"))::INT
+            FROM "qbit_card_group_transaction" AS tr
+            WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_card_group_transaction_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM qbit_card_group_transaction AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_card_group_transaction_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "qbit_card_group_transaction" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_sale_card_group_transaction_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM qbit_card_group_transaction AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.dws_sale_card_group_transaction_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "qbit_card_group_transaction" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -1116,94 +798,16 @@ DECLARE
     v_n      BIGINT;
 BEGIN
     IF p_start IS NULL THEN
-        -- ===== CDC 模式：qi 式按作用域(scope)精准删（受影响 (日期,账户) 集合，先清后重算）=====
+        -- CDC 删除只按变更日期 + account_id 作用域清理，不在删除阶段执行销售关系 LATERAL 展开。
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM a.scope_date)::INT
-            FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "transfer" AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) a
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."createTime"))::INT
+            FROM "transfer" AS tr
+            WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_transfer_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "transfer" AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_transfer_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "transfer" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_sale_transfer_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "transfer" AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.dws_sale_transfer_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "transfer" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -1245,169 +849,16 @@ DECLARE
     v_n      BIGINT;
 BEGIN
     IF p_start IS NULL THEN
-        -- ===== CDC 模式：qi 式按作用域(scope)精准删（受影响 (日期,账户) 集合，先清后重算）=====
+        -- CDC 删除只按变更日期 + account_id 作用域清理，不在删除阶段执行销售关系 LATERAL 展开。
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM a.scope_date)::INT
-            FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM (
-SELECT
-tr."accountId",
-ids."sale_or_am_id",
-tr."status",
-tr."businessTypeDetail",
-tr."settlementCurrency",
-tr."fee"*"usdRate" AS "fee",
-ta."fromAmount",
-"usdAmount",
-ta."rateDiffIncomeFromUsdAmount",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound') and UPPER((tr."rawData"::jsonb->> 0)::jsonb->>'source') IN ('OTT','寻汇','BEEPAY') THEN "usdAmount" ELSE 0 END ) AS "dbsReceive",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider" = 'Column' THEN "usdAmount" ELSE 0 END) AS "clReceive",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider"  = 'EP' THEN "usdAmount" ELSE 0 END) AS "epReceive",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider"  = 'RD' THEN "usdAmount" ELSE 0 END) AS "rdReceive",
-(CASE WHEN ta."toCurrency" = 'CNY' and tr."status" = 'Closed' and ta.status='Closed' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "settleFxFee" ,
-(CASE WHEN tr."settlementCurrency" != 'CNY' and tr."status" = 'Closed' and ta.status='Closed'and tr."businessTypeDetail" in ('Payment','ConversionOut','InnerTransferOut') THEN tr."usdAmount" ELSE 0 END ) AS "conversionFxAmount" ,
-(CASE WHEN ta."toCurrency" != 'CNY' and tr."status" = 'Closed' and ta.status='Closed' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "conversionFxFee",
-TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date
-FROM "transfer" as tr
-LEFT JOIN "globalConversion" as ta on ta."recordId"::UUID = tr.id
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-WHERE
-tr."deleteTime" IS NULL and ta."deleteTime" IS NULL
-AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day'
-AND tr."createTime" < CURRENT_DATE
-) as tt
-        WHERE (tr."deleteTime" IS NULL AND ta."deleteTime" IS NULL) AND ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) a
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."createTime"))::INT
+            FROM "transfer" AS tr
+            WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_transfer_extend_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM (
-SELECT
-tr."accountId",
-ids."sale_or_am_id",
-tr."status",
-tr."businessTypeDetail",
-tr."settlementCurrency",
-tr."fee"*"usdRate" AS "fee",
-ta."fromAmount",
-"usdAmount",
-ta."rateDiffIncomeFromUsdAmount",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound') and UPPER((tr."rawData"::jsonb->> 0)::jsonb->>'source') IN ('OTT','寻汇','BEEPAY') THEN "usdAmount" ELSE 0 END ) AS "dbsReceive",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider" = 'Column' THEN "usdAmount" ELSE 0 END) AS "clReceive",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider"  = 'EP' THEN "usdAmount" ELSE 0 END) AS "epReceive",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider"  = 'RD' THEN "usdAmount" ELSE 0 END) AS "rdReceive",
-(CASE WHEN ta."toCurrency" = 'CNY' and tr."status" = 'Closed' and ta.status='Closed' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "settleFxFee" ,
-(CASE WHEN tr."settlementCurrency" != 'CNY' and tr."status" = 'Closed' and ta.status='Closed'and tr."businessTypeDetail" in ('Payment','ConversionOut','InnerTransferOut') THEN tr."usdAmount" ELSE 0 END ) AS "conversionFxAmount" ,
-(CASE WHEN ta."toCurrency" != 'CNY' and tr."status" = 'Closed' and ta.status='Closed' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "conversionFxFee",
-TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date
-FROM "transfer" as tr
-LEFT JOIN "globalConversion" as ta on ta."recordId"::UUID = tr.id
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-WHERE
-tr."deleteTime" IS NULL and ta."deleteTime" IS NULL
-AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day'
-AND tr."createTime" < CURRENT_DATE
-) as tt
-        WHERE (tr."deleteTime" IS NULL AND ta."deleteTime" IS NULL) AND ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_transfer_extend_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "transfer" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_sale_transfer_extend_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM (
-SELECT
-tr."accountId",
-ids."sale_or_am_id",
-tr."status",
-tr."businessTypeDetail",
-tr."settlementCurrency",
-tr."fee"*"usdRate" AS "fee",
-ta."fromAmount",
-"usdAmount",
-ta."rateDiffIncomeFromUsdAmount",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound') and UPPER((tr."rawData"::jsonb->> 0)::jsonb->>'source') IN ('OTT','寻汇','BEEPAY') THEN "usdAmount" ELSE 0 END ) AS "dbsReceive",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider" = 'Column' THEN "usdAmount" ELSE 0 END) AS "clReceive",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider"  = 'EP' THEN "usdAmount" ELSE 0 END) AS "epReceive",
-(CASE WHEN tr."businessTypeDetail" in ('OtherChannelInbound', 'CCInbound') and tr."provider"  = 'RD' THEN "usdAmount" ELSE 0 END) AS "rdReceive",
-(CASE WHEN ta."toCurrency" = 'CNY' and tr."status" = 'Closed' and ta.status='Closed' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "settleFxFee" ,
-(CASE WHEN tr."settlementCurrency" != 'CNY' and tr."status" = 'Closed' and ta.status='Closed'and tr."businessTypeDetail" in ('Payment','ConversionOut','InnerTransferOut') THEN tr."usdAmount" ELSE 0 END ) AS "conversionFxAmount" ,
-(CASE WHEN ta."toCurrency" != 'CNY' and tr."status" = 'Closed' and ta.status='Closed' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "conversionFxFee",
-TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date
-FROM "transfer" as tr
-LEFT JOIN "globalConversion" as ta on ta."recordId"::UUID = tr.id
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-WHERE
-tr."deleteTime" IS NULL and ta."deleteTime" IS NULL
-AND tr."createTime" >= CURRENT_DATE - INTERVAL '1 day'
-AND tr."createTime" < CURRENT_DATE
-) as tt
-        WHERE (tr."deleteTime" IS NULL AND ta."deleteTime" IS NULL) AND ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.dws_sale_transfer_extend_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "transfer" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -1449,94 +900,16 @@ DECLARE
     v_n      BIGINT;
 BEGIN
     IF p_start IS NULL THEN
-        -- ===== CDC 模式：qi 式按作用域(scope)精准删（受影响 (日期,账户) 集合，先清后重算）=====
+        -- CDC 删除只按变更日期 + account_id 作用域清理，不在删除阶段执行销售关系 LATERAL 展开。
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM a.scope_date)::INT
-            FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "crypto_assets_transfers" AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."account_id"::text
-      AND tr."create_time" >= sr.relation_start_time AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."account_id"::text
-      AND sr.delete_time IS NULL AND tr."create_time" >= sr.relation_start_time
-      AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) a
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."create_time"))::INT
+            FROM "crypto_assets_transfers" AS tr
+            WHERE ((tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE))
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_crypto_assets_transfers_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "crypto_assets_transfers" AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."account_id"::text
-      AND tr."create_time" >= sr.relation_start_time AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."account_id"::text
-      AND sr.delete_time IS NULL AND tr."create_time" >= sr.relation_start_time
-      AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_crypto_assets_transfers_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."create_time") AS scope_date, tr."account_id"::text AS scope_account FROM "crypto_assets_transfers" AS tr WHERE ((tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_sale_crypto_assets_transfers_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "crypto_assets_transfers" AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."account_id"::text
-      AND tr."create_time" >= sr.relation_start_time AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."account_id"::text
-      AND sr.delete_time IS NULL AND tr."create_time" >= sr.relation_start_time
-      AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.dws_sale_crypto_assets_transfers_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."create_time") AS scope_date, tr."account_id"::text AS scope_account FROM "crypto_assets_transfers" AS tr WHERE ((tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -1578,97 +951,16 @@ DECLARE
     v_n      BIGINT;
 BEGIN
     IF p_start IS NULL THEN
-        -- ===== CDC 模式：qi 式按作用域(scope)精准删（受影响 (日期,账户) 集合，先清后重算）=====
+        -- CDC 删除只按变更日期 + account_id 作用域清理，不在删除阶段执行销售关系 LATERAL 展开。
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM a.scope_date)::INT
-            FROM (SELECT DISTINCT DATE(tr."create_time") AS scope_date, tr."account_id" AS scope_account
-        FROM fund_profits AS tr
-CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."account_id"::text
-      AND tr."create_time" >= sr.relation_start_time AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."account_id"::text
-      AND sr.delete_time IS NULL AND tr."create_time" >= sr.relation_start_time
-      AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE)) a
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."create_time"))::INT
+            FROM "fund_profits" AS tr
+            WHERE ((tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE))
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.ods_sale_fund_profits_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."create_time") AS scope_date, tr."account_id" AS scope_account
-        FROM fund_profits AS tr
-CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."account_id"::text
-      AND tr."create_time" >= sr.relation_start_time AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."account_id"::text
-      AND sr.delete_time IS NULL AND tr."create_time" >= sr.relation_start_time
-      AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_time) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.ods_sale_fund_profits_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."create_time") AS scope_date, tr."account_id"::text AS scope_account FROM "fund_profits" AS tr WHERE ((tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE))) scope WHERE DATE(t.create_time) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.ods_sale_fund_profits_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."create_time") AS scope_date, tr."account_id" AS scope_account
-        FROM fund_profits AS tr
-CROSS JOIN LATERAL jsonb_array_elements(fees) AS fee
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."account_id"::text
-      AND tr."create_time" >= sr.relation_start_time AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."account_id"::text
-      AND sr.delete_time IS NULL AND tr."create_time" >= sr.relation_start_time
-      AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_time) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.ods_sale_fund_profits_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."create_time") AS scope_date, tr."account_id"::text AS scope_account FROM "fund_profits" AS tr WHERE ((tr."create_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."create_time" < CURRENT_DATE) OR (tr."update_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."update_time" < CURRENT_DATE) OR (tr."delete_time" >= CURRENT_DATE - INTERVAL '1 day' AND tr."delete_time" < CURRENT_DATE))) scope WHERE DATE(t.create_time) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -1710,94 +1002,14 @@ DECLARE
     v_n      BIGINT;
 BEGIN
     IF p_start IS NULL THEN
-        -- ===== CDC 模式：qi 式按作用域(scope)精准删（受影响 (日期,账户) 集合，先清后重算）=====
+        -- CDC 删除只按变更日期 + account_id 作用域清理，不在删除阶段执行销售关系 LATERAL 展开。
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM a.scope_date)::INT
-            FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbitCard" AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."account_id"::text
-      AND tr."create_time" >= sr.relation_start_time AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."account_id"::text
-      AND sr.delete_time IS NULL AND tr."create_time" >= sr.relation_start_time
-      AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) a
+            SELECT 2026
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.ods_sale_qbit_card_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbitCard" AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."account_id"::text
-      AND tr."create_time" >= sr.relation_start_time AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."account_id"::text
-      AND sr.delete_time IS NULL AND tr."create_time" >= sr.relation_start_time
-      AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_time) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.ods_sale_qbit_card_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "qbitCard" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_time) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.ods_sale_qbit_card_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbitCard" AS tr
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."account_id"::text
-      AND tr."create_time" >= sr.relation_start_time AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."account_id"::text
-      AND sr.delete_time IS NULL AND tr."create_time" >= sr.relation_start_time
-      AND (tr."create_time" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_time) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.ods_sale_qbit_card_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "qbitCard" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_time) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -1839,97 +1051,16 @@ DECLARE
     v_n      BIGINT;
 BEGIN
     IF p_start IS NULL THEN
-        -- ===== CDC 模式：qi 式按作用域(scope)精准删（受影响 (日期,账户) 集合，先清后重算）=====
+        -- CDC 删除只按变更日期 + account_id 作用域清理，不在删除阶段执行销售关系 LATERAL 展开。
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM a.scope_date)::INT
-            FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "Transaction" as "tr"
-LEFT JOIN "qbitCard" qc ON qc."id" :: VARCHAR = "tr"."sourceId"
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) a
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."createTime"))::INT
+            FROM "Transaction" AS tr
+            WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_open_card_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "Transaction" as "tr"
-LEFT JOIN "qbitCard" qc ON qc."id" :: VARCHAR = "tr"."sourceId"
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_open_card_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "Transaction" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_sale_open_card_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "Transaction" as "tr"
-LEFT JOIN "qbitCard" qc ON qc."id" :: VARCHAR = "tr"."sourceId"
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.dws_sale_open_card_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "Transaction" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -1971,97 +1102,16 @@ DECLARE
     v_n      BIGINT;
 BEGIN
     IF p_start IS NULL THEN
-        -- ===== CDC 模式：qi 式按作用域(scope)精准删（受影响 (日期,账户) 集合，先清后重算）=====
+        -- CDC 删除只按变更日期 + account_id 作用域清理，不在删除阶段执行销售关系 LATERAL 展开。
         FOR v_year IN
-            SELECT DISTINCT EXTRACT(YEAR FROM a.scope_date)::INT
-            FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbitCardWalletTransaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) a
+            SELECT DISTINCT EXTRACT(YEAR FROM DATE(tr."createTime"))::INT
+            FROM "qbitCardWalletTransaction" AS tr
+            WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))
         LOOP
             IF p_dry_run THEN
-                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_physical_card_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbitCardWalletTransaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
+                EXECUTE format($fmt$SELECT COUNT(*) FROM public.dws_sale_physical_card_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "qbitCardWalletTransaction" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year) INTO v_n;
             ELSE
-                EXECUTE format($fmt$DELETE FROM public.dws_sale_physical_card_%s t
-                    WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account
-        FROM "qbitCardWalletTransaction" AS tr
-LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
-LEFT JOIN LATERAL (
-  SELECT sale_id, am_id
-  FROM (
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 1 AS priority, sr.relation_start_time
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.delete_time IS NULL AND sr.relation_account_id::text = tr."accountId"::text
-      AND tr."createTime" >= sr.relation_start_time AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-    UNION ALL
-    SELECT sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, 2 AS priority, sr.relation_start_time
-    FROM public.api_account_relation aar
-    JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text
-    WHERE aar.delete_time IS NULL AND aar.account_id::text = tr."accountId"::text
-      AND sr.delete_time IS NULL AND tr."createTime" >= sr.relation_start_time
-      AND (tr."createTime" < sr.relation_end_time OR sr.relation_end_time IS NULL)
-  ) candidates
-  ORDER BY priority, relation_start_time DESC
-  LIMIT 1
-) AS rel ON TRUE
-CROSS JOIN LATERAL (
-  SELECT DISTINCT sale_or_am_id
-  FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
-  WHERE sale_or_am_id IS NOT NULL
-) AS ids
-        WHERE (tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE)) scope
-                        WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
+                EXECUTE format($fmt$DELETE FROM public.dws_sale_physical_card_%s t WHERE EXISTS (SELECT 1 FROM (SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId"::text AS scope_account FROM "qbitCardWalletTransaction" AS tr WHERE ((tr."createTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."updateTime" < CURRENT_DATE) OR (tr."deleteTime" >= CURRENT_DATE - INTERVAL '1 day' AND tr."deleteTime" < CURRENT_DATE))) scope WHERE DATE(t.create_date) = scope.scope_date AND t.account_id = scope.scope_account)$fmt$, v_year);
                 GET DIAGNOSTICS v_n = ROW_COUNT;
             END IF;
             affected := affected + v_n;
@@ -2087,4 +1137,3 @@ $function$;
 
 -- 首次部署请先 dry-run 核对影响行数：
 -- SELECT public.fn_delete_dws_sale_physical_card_cdc(true);
-
