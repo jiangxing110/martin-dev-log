@@ -64,7 +64,7 @@ SALE_TIMECOLS = {
     "qbit_card_transaction":     ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
     "qbit_card_group_transaction": ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
     "transfer":                  ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
-    "crypto_assets_transfers":   ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
+    "crypto_assets_transfers":   ('tr."create_time"', 'tr."update_time"', 'tr."delete_time"'),
     "qbitCard":                  ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
     "Transaction":               ('tr."createTime"', 'tr."updateTime"', 'tr."deleteTime"'),
     "fund_profits":              ('tr."create_time"', 'tr."update_time"', 'tr."delete_time"'),

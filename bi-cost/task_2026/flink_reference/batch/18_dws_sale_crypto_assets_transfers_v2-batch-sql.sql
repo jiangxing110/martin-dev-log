@@ -1,7 +1,7 @@
 --********************************************************************
 -- Author:         martinJiang
 -- Created Time:   2026-09-01
--- Updated Time:   2026-09-01
+-- Updated Time:   2026-09-02 10:47:50
 -- Description:    dws_sale_crypto_assets_transfers 批处理 作业（quantum-v2 范式：确定性哈希主键 + 先清后写）
 -- 作业元信息：
 --   作业类型：批处理
@@ -67,7 +67,7 @@ CREATE TEMPORARY TABLE source_dws_sale_crypto_assets_transfers (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(WITH affected AS (
-        SELECT DISTINCT DATE(tr."createTime") AS scope_date, tr."accountId" AS scope_account FROM "crypto_assets_transfers" AS tr
+        SELECT DISTINCT DATE(tr."create_time") AS scope_date, tr."account_id" AS scope_account FROM "crypto_assets_transfers" AS tr
 LEFT JOIN LATERAL (
   SELECT sale_id, am_id
   FROM (
@@ -90,7 +90,7 @@ CROSS JOIN LATERAL (
   SELECT DISTINCT sale_or_am_id
   FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
   WHERE sale_or_am_id IS NOT NULL
-) AS ids WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
+) AS ids WHERE (DATE(tr."create_time") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."create_time") <= CAST(''${end_date}'' AS DATE))
     )
     SELECT CAST("account_id" AS text) AS "account_id", CAST(ids."sale_or_am_id" AS text) AS "sale_or_am_id", CAST("status" AS text) AS "status", CAST("sender_type" AS text) AS "sender_type", CAST("recipient_type" AS text) AS "recipient_type", CAST(COUNT(*) AS integer) AS "transaction_count", CAST(SUM("origin_amount" * "usd_rate") AS numeric(18,2)) AS "origin_amount", CAST(SUM("settlement_amount" * "usd_rate") AS numeric(18,2)) AS "settlement_amount", CAST(SUM("fee" * "usd_rate") AS numeric(18,2)) AS "fee", CAST(SUM("fee2" * "usd_rate") AS numeric(18,2)) AS "fee2", CAST(SUM("cross_chain_fee" * "usd_rate") AS numeric(18,2)) AS "cross_chain_fee", CAST(SUM(CASE WHEN tr."status" = ''Closed'' AND tr."action" = ''sell'' AND tr.hidden = FALSE AND (tr."fee" - tr."origin_amount" * 0.0009) > 0 THEN (tr."fee" - tr."origin_amount" * 0.0009) ELSE 0 END) AS numeric(18,2)) AS "exchange_profit", CAST(SUM(CASE WHEN tr."recipient_type" IN (''wire'',''outside_bank'') AND tr."status" IN (''Processing'',''Closed'') AND (tr."fee" - 25) > 0 THEN (tr."fee" - 25) ELSE 0 END) AS numeric(18,2)) AS "payment_profit", "hidden" AS "hidden", tr."create_time"::DATE::TIMESTAMP AS "create_date", CAST("currency" AS text) AS "currency", CAST("action" AS text) AS "action", CAST(1 AS integer) AS "version", NOW() AS "create_time", NOW() AS "update_time"
     FROM "crypto_assets_transfers" AS tr
@@ -117,7 +117,7 @@ CROSS JOIN LATERAL (
   FROM (VALUES (rel.sale_id), (rel.am_id)) AS v(sale_or_am_id)
   WHERE sale_or_am_id IS NOT NULL
 ) AS ids
-    JOIN affected a ON (DATE(tr."createTime")) = a.scope_date AND (tr."accountId") = a.scope_account
+    JOIN affected a ON (DATE(tr."create_time")) = a.scope_date AND (tr."account_id") = a.scope_account
     WHERE tr."delete_time" IS NULL
     GROUP BY "account_id", "status", "sender_type", "recipient_type", "hidden", create_date, "currency", "action", ids."sale_or_am_id") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
