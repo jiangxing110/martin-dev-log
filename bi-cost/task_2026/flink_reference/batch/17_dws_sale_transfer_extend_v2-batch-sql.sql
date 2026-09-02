@@ -126,11 +126,37 @@ AND tr."createTime" < CURRENT_DATE
     'scan.fetch-size' = '2000'
 );
 
+-- source2：独立销售/AM关系源，由 Flink Join 按 account_id + create_time 匹配
+CREATE TEMPORARY TABLE source2_sale_relation (
+    relation_account_id STRING,
+    sale_id STRING,
+    am_id STRING,
+    relation_start_time TIMESTAMP(6),
+    relation_end_time TIMESTAMP(6),
+    priority INT
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT sr.relation_account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time, sr.relation_end_time, 1 AS priority FROM dim.dim_sale_account_relation_p sr WHERE sr.delete_time IS NULL UNION ALL SELECT aar.account_id::text AS relation_account_id, sr.sale_id::text AS sale_id, sr.am_id::text AS am_id, sr.relation_start_time, sr.relation_end_time, 2 AS priority FROM public.api_account_relation aar JOIN dim.dim_sale_account_relation_p sr ON sr.relation_account_id::text = aar.root_id::text WHERE aar.delete_time IS NULL AND sr.delete_time IS NULL) AS rel',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '2000'
+);
+CREATE TEMPORARY VIEW v_dws_sale_transfer_extend_source AS
+SELECT DISTINCT d.*
+FROM source_dws_sale_transfer_extend d
+JOIN source2_sale_relation r
+  ON d.account_id = r.relation_account_id
+ AND (d.sale_or_am_id = r.sale_id OR d.sale_or_am_id = r.am_id)
+ AND CAST(d.create_date AS TIMESTAMP) >= r.relation_start_time
+ AND (CAST(d.create_date AS TIMESTAMP) < r.relation_end_time OR r.relation_end_time IS NULL);
+
 CREATE TEMPORARY VIEW v_dws_sale_transfer_extend_base AS
 SELECT
     CAST(ABS(HASH_CODE(CONCAT(COALESCE(account_id, ''), ': ', DATE_FORMAT(create_date, 'yyyy-MM-dd'), ': ', COALESCE(status, ''), ': ', COALESCE(sale_or_am_id, '')))) AS BIGINT) AS id,
     *
-FROM source_dws_sale_transfer_extend;
+FROM v_dws_sale_transfer_extend_source;
 
 CREATE TEMPORARY TABLE sink_dws_sale_transfer_extend_2026 (
     id BIGINT, account_id STRING, sale_or_am_id STRING, status STRING, dbs_receive DECIMAL(18,2), cl_receive DECIMAL(18,2), ep_receive DECIMAL(18,2), rd_receive DECIMAL(18,2), settle_fx_fee DECIMAL(18,2), conversion_fx_amount DECIMAL(18,2), conversion_fx_fee DECIMAL(18,2), inbound_profit DECIMAL(18,2), conversion_fx_profit DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
