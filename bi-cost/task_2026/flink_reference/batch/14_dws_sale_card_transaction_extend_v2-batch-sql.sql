@@ -1,7 +1,7 @@
 --********************************************************************
 -- Author:         martinJiang
 -- Created Time:   2026-09-01
--- Updated Time:   2026-09-01
+-- Updated Time:   2026-09-02 16:10:00
 -- Description:    dws_sale_card_transaction_extend 批处理 作业（quantum-v2 范式：确定性哈希主键 + 先清后写）
 -- 作业元信息：
 --   作业类型：批处理
@@ -163,27 +163,41 @@ FROM v_dws_sale_card_transaction_extend_source;
 
 CREATE TEMPORARY TABLE source1_transaction (
     transaction_id STRING, account_id STRING, business_type STRING, provider STRING,
-    bin STRING, status STRING, settle_amount DECIMAL(18,2), transaction_currency STRING,
+    card_id STRING, status STRING, settle_amount DECIMAL(18,2), transaction_currency STRING,
     country STRING, fx_fee DECIMAL(18,2), atm_fee DECIMAL(18,2),
     apple_pay_fee DECIMAL(18,2), settle_fee DECIMAL(18,2),
     create_time TIMESTAMP(6), delete_time TIMESTAMP(6)
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT tr.id::text AS transaction_id, tr."accountId"::text AS account_id, tr."businessType"::text AS business_type, tr."provider"::text AS provider, qc."firstSix"::text AS bin, tr."status"::text AS status, tr."settleAmount"::numeric(18,2) AS settle_amount, tr."transactionCurrency"::text AS transaction_currency, tr."specialSourceData"->>''country'' AS country, COALESCE((tr."specialSourceData"->>''markupFee'')::numeric,0)::numeric(18,2) AS fx_fee, CASE WHEN tr.remarks LIKE ''%ATM取现费'' THEN tr.fee::numeric ELSE 0 END::numeric(18,2) AS atm_fee, COALESCE((tr."specialSourceData"->>''applePayFee'')::numeric,0)::numeric(18,2) AS apple_pay_fee, COALESCE((tr."specialSourceData"->>''settleFee'')::numeric,0)::numeric(18,2) AS settle_fee, tr."createTime" AS create_time, tr."deleteTime" AS delete_time FROM public."qbit_card_transaction" tr LEFT JOIN public."qbitCard" qc ON qc."id"=tr."cardId" WHERE (tr."createTime" >= CAST(''${start_date}'' AS DATE) AND tr."createTime" < CAST(''${end_date}'' AS DATE)+INTERVAL ''1 day'') OR (tr."updateTime" >= CAST(''${start_date}'' AS DATE) AND tr."updateTime" < CAST(''${end_date}'' AS DATE)+INTERVAL ''1 day'') OR (tr."deleteTime" >= CAST(''${start_date}'' AS DATE) AND tr."deleteTime" < CAST(''${end_date}'' AS DATE)+INTERVAL ''1 day'')) AS tx',
+    'table-name' = '(SELECT tr.id::text AS transaction_id, tr."accountId"::text AS account_id, tr."businessType"::text AS business_type, tr."provider"::text AS provider, tr."cardId"::text AS card_id, tr."status"::text AS status, tr."settleAmount"::numeric(18,2) AS settle_amount, tr."transactionCurrency"::text AS transaction_currency, tr."specialSourceData"->>''country'' AS country, COALESCE((tr."specialSourceData"->>''markupFee'')::numeric,0)::numeric(18,2) AS fx_fee, CASE WHEN tr.remarks LIKE ''%ATM取现费'' THEN tr.fee::numeric ELSE 0 END::numeric(18,2) AS atm_fee, COALESCE((tr."specialSourceData"->>''applePayFee'')::numeric,0)::numeric(18,2) AS apple_pay_fee, COALESCE((tr."specialSourceData"->>''settleFee'')::numeric,0)::numeric(18,2) AS settle_fee, tr."createTime" AS create_time, tr."deleteTime" AS delete_time FROM "qbit_card_transaction" tr WHERE tr."deleteTime" IS NULL AND tr."createTime" >= CAST(''${start_date}'' AS DATE) AND tr."createTime" < CAST(''${end_date}'' AS DATE)+INTERVAL ''1 day'') AS tx',
+    'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver', 'scan.fetch-size' = '2000'
+);
+
+CREATE TEMPORARY TABLE source_card (
+    card_id STRING,
+    bin STRING
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT qc."id"::text AS card_id, qc."firstSix"::text AS bin FROM "qbitCard" qc WHERE qc."id" IN (SELECT DISTINCT tr."cardId" FROM "qbit_card_transaction" tr WHERE tr."deleteTime" IS NULL AND tr."createTime" >= CAST(''${start_date}'' AS DATE) AND tr."createTime" < CAST(''${end_date}'' AS DATE)+INTERVAL ''1 day'')) AS cards',
     'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver', 'scan.fetch-size' = '2000'
 );
 
 CREATE TEMPORARY VIEW v_sale_transaction_matched AS
-SELECT tr.*, sr.sale_id, sr.am_id,
+SELECT tr.transaction_id, tr.account_id, tr.business_type, tr.provider, c.bin, tr.status,
+       tr.settle_amount, tr.transaction_currency, tr.country, tr.fx_fee, tr.atm_fee,
+       tr.apple_pay_fee, tr.settle_fee, tr.create_time, tr.delete_time, sr.sale_id, sr.am_id,
        ROW_NUMBER() OVER (PARTITION BY tr.transaction_id ORDER BY sr.priority, sr.relation_start_time DESC) AS rn
 FROM source1_transaction tr
+JOIN source_card c ON tr.card_id = c.card_id
 JOIN source2_sale_relation sr
   ON tr.account_id = sr.relation_account_id
  AND tr.create_time >= sr.relation_start_time
  AND (tr.create_time < sr.relation_end_time OR sr.relation_end_time IS NULL)
-WHERE tr.delete_time IS NULL;
+;
 
 CREATE TEMPORARY VIEW v_sale_transaction_expanded AS
 SELECT DISTINCT transaction_id, account_id, business_type, provider, bin, status,
