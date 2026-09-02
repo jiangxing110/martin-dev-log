@@ -179,7 +179,8 @@ CREATE TEMPORARY TABLE source2_sale_relation (
 );
 
 CREATE TEMPORARY VIEW v_sale_card_transaction_matched AS
-SELECT tr.*, sr.sale_id, sr.am_id
+SELECT tr.*, sr.sale_id, sr.am_id,
+       ROW_NUMBER() OVER (PARTITION BY tr.transaction_id ORDER BY sr.priority, sr.relation_start_time DESC) AS rn
 FROM source1_transaction tr
 JOIN source2_sale_relation sr
   ON tr.account_id = sr.relation_account_id
@@ -189,10 +190,10 @@ WHERE tr.delete_time IS NULL;
 
 CREATE TEMPORARY VIEW v_sale_card_transaction_expanded AS
 SELECT transaction_id, account_id, business_type, status, provider, bin, origin_amount, settle_amount, fee, create_time, sale_id AS sale_or_am_id
-FROM v_sale_card_transaction_matched WHERE sale_id IS NOT NULL
+FROM v_sale_card_transaction_matched WHERE rn = 1 AND sale_id IS NOT NULL
 UNION ALL
 SELECT transaction_id, account_id, business_type, status, provider, bin, origin_amount, settle_amount, fee, create_time, am_id AS sale_or_am_id
-FROM v_sale_card_transaction_matched WHERE am_id IS NOT NULL;
+FROM v_sale_card_transaction_matched WHERE rn = 1 AND am_id IS NOT NULL;
 
 CREATE TEMPORARY VIEW v_sale_card_transaction_expanded_daily AS
 SELECT transaction_id, account_id, business_type, status, provider, bin, origin_amount, settle_amount, fee, sale_or_am_id,
