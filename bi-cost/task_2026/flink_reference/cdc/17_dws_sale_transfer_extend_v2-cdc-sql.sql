@@ -91,7 +91,7 @@ ta."rateDiffIncomeFromUsdAmount",
 (CASE WHEN ta."toCurrency" = ''CNY'' and tr."status" = ''Closed'' and ta.status=''Closed'' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "settleFxFee" ,
 (CASE WHEN tr."settlementCurrency" != ''CNY'' and tr."status" = ''Closed'' and ta.status=''Closed''and tr."businessTypeDetail" in (''Payment'',''ConversionOut'',''InnerTransferOut'') THEN tr."usdAmount" ELSE 0 END ) AS "conversionFxAmount" ,
 (CASE WHEN ta."toCurrency" != ''CNY'' and tr."status" = ''Closed'' and ta.status=''Closed'' THEN ta."rateDiffIncomeFromUsdAmount" ELSE 0 END ) AS "conversionFxFee",
-TO_CHAR(tr."createTime", ''YYYY-MM-DD'')::DATE AS create_date
+CAST(DATE(tr."createTime") AS TIMESTAMP) AS create_date
 FROM "transfer" as tr
 LEFT JOIN "globalConversion" as ta on ta."recordId"::UUID = tr.id
 LEFT JOIN LATERAL (
