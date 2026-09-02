@@ -119,6 +119,8 @@ CROSS JOIN LATERAL (
 ) AS ids
     JOIN affected a ON (DATE(tr."create_time")) = a.scope_date AND (tr."account_id") = a.scope_account
     WHERE tr."delete_time" IS NULL
+      AND DATE(tr."create_time") >= CAST(''${start_date}'' AS DATE)
+      AND DATE(tr."create_time") <= CAST(''${end_date}'' AS DATE)
     GROUP BY "account_id", "status", "sender_type", "recipient_type", "hidden", create_date, "currency", "action", ids."sale_or_am_id") AS src',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
