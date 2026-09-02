@@ -1,7 +1,7 @@
 --********************************************************************
 -- Author:         martinJiang
 -- Created Time:   2026-09-01
--- Updated Time:   2026-09-01
+-- Updated Time:   2026-09-02 16:00:00
 -- Description:    ods_sale_qbit_card 批处理 作业（quantum-v2 范式：确定性哈希主键 + 先清后写）
 -- 作业元信息：
 --   作业类型：批处理
@@ -56,8 +56,8 @@ CREATE TEMPORARY TABLE source_ods_sale_qbit_card (
     provider STRING,
     type STRING,
     token STRING,
-    user_delete_time STRING,
-    delete_card_time STRING,
+    user_delete_time DATE,
+    delete_card_time DATE,
     first_six STRING,
     card_belong STRING,
     physical_card_status STRING,
@@ -91,7 +91,7 @@ CROSS JOIN LATERAL (
   WHERE sale_or_am_id IS NOT NULL
 ) AS ids WHERE (DATE(tr."createTime") >= CAST(''${start_date}'' AS DATE) AND DATE(tr."createTime") <= CAST(''${end_date}'' AS DATE))
     )
-    SELECT tr."createTime" AS "create_time", tr."updateTime" AS "update_time", tr."deleteTime" AS "delete_time", CAST(tr."version" AS integer) AS "version", CAST(tr."remarks" AS text) AS "remarks", CAST(ids."sale_or_am_id" AS text) AS "sale_or_am_id", CAST(tr."id" AS text) AS "card_id", CAST(tr."accountId" AS text) AS "account_id", CAST(tr."currency" AS text) AS "currency", CAST(tr."status" AS text) AS "status", CAST(tr."provider" AS text) AS "provider", CAST(tr."type" AS text) AS "type", CAST(tr."token" AS text) AS "token", CAST(tr."userDeleteTime" AS text) AS "user_delete_time", CAST(tr."deleteCardTime" AS text) AS "delete_card_time", CAST(tr."firstSix" AS text) AS "first_six", CAST(tr."cardBelong" AS text) AS "card_belong", CAST(tr."physicalCardStatus" AS text) AS "physical_card_status", CAST(tr."cardMode" AS text) AS "card_mode"
+    SELECT tr."createTime" AS "create_time", tr."updateTime" AS "update_time", tr."deleteTime" AS "delete_time", CAST(tr."version" AS integer) AS "version", CAST(tr."remarks" AS text) AS "remarks", CAST(ids."sale_or_am_id" AS text) AS "sale_or_am_id", CAST(tr."id" AS text) AS "card_id", CAST(tr."accountId" AS text) AS "account_id", CAST(tr."currency" AS text) AS "currency", CAST(tr."status" AS text) AS "status", CAST(tr."provider" AS text) AS "provider", CAST(tr."type" AS text) AS "type", CAST(tr."token" AS text) AS "token", CAST(tr."userDeleteTime" AS date) AS "user_delete_time", CAST(tr."deleteCardTime" AS date) AS "delete_card_time", CAST(tr."firstSix" AS text) AS "first_six", CAST(tr."cardBelong" AS text) AS "card_belong", CAST(tr."physicalCardStatus" AS text) AS "physical_card_status", CAST(tr."cardMode" AS text) AS "card_mode"
     FROM "qbitCard" AS tr
 LEFT JOIN LATERAL (
   SELECT sale_id, am_id
@@ -143,14 +143,60 @@ CREATE TEMPORARY TABLE source2_sale_relation (
     'scan.fetch-size' = '2000'
 );
 
+-- source1：只读取卡片明细；销售/AM 关系在 Flink 算子层匹配，按传入区间查询新增、更新、删除变更
+CREATE TEMPORARY TABLE source1_card (
+    create_time TIMESTAMP(6),
+    update_time TIMESTAMP(6),
+    delete_time TIMESTAMP(6),
+    version INT,
+    remarks STRING,
+    card_id STRING,
+    account_id STRING,
+    currency STRING,
+    status STRING,
+    provider STRING,
+    type STRING,
+    token STRING,
+    user_delete_time DATE,
+    delete_card_time DATE,
+    first_six STRING,
+    card_belong STRING,
+    physical_card_status STRING,
+    card_mode STRING
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT tr."createTime" AS create_time, tr."updateTime" AS update_time, tr."deleteTime" AS delete_time, CAST(tr."version" AS integer) AS version, CAST(tr."remarks" AS text) AS remarks, CAST(tr."id" AS text) AS card_id, CAST(tr."accountId" AS text) AS account_id, CAST(tr."currency" AS text) AS currency, CAST(tr."status" AS text) AS status, CAST(tr."provider" AS text) AS provider, CAST(tr."type" AS text) AS type, CAST(tr."token" AS text) AS token, CAST(tr."userDeleteTime" AS date) AS user_delete_time, CAST(tr."deleteCardTime" AS date) AS delete_card_time, CAST(tr."firstSix" AS text) AS first_six, CAST(tr."cardBelong" AS text) AS card_belong, CAST(tr."physicalCardStatus" AS text) AS physical_card_status, CAST(tr."cardMode" AS text) AS card_mode FROM public."qbitCard" tr WHERE (tr."createTime" >= CAST(''${start_date}'' AS DATE) AND tr."createTime" < CAST(''${end_date}'' AS DATE) + INTERVAL ''1 day'') OR (tr."updateTime" >= CAST(''${start_date}'' AS DATE) AND tr."updateTime" < CAST(''${end_date}'' AS DATE) + INTERVAL ''1 day'') OR (tr."deleteTime" >= CAST(''${start_date}'' AS DATE) AND tr."deleteTime" < CAST(''${end_date}'' AS DATE) + INTERVAL ''1 day'')) AS cards',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '2000'
+);
+
 CREATE TEMPORARY VIEW v_ods_sale_qbit_card_source AS
-SELECT DISTINCT d.*
-FROM source_ods_sale_qbit_card d
+SELECT DISTINCT c.create_time, c.update_time, c.delete_time, c.version, c.remarks,
+       r.sale_id AS sale_or_am_id, c.card_id, c.account_id, c.currency, c.status,
+       c.provider, c.type, c.token, c.user_delete_time, c.delete_card_time,
+       c.first_six, c.card_belong, c.physical_card_status, c.card_mode
+FROM source1_card c
 JOIN source2_sale_relation r
-  ON d.account_id = r.relation_account_id
- AND (d.sale_or_am_id = r.sale_id OR d.sale_or_am_id = r.am_id)
- AND d.create_time >= r.relation_start_time
- AND (d.create_time < r.relation_end_time OR r.relation_end_time IS NULL);
+  ON c.account_id = r.relation_account_id
+ AND c.create_time >= r.relation_start_time
+ AND (c.create_time < r.relation_end_time OR r.relation_end_time IS NULL)
+WHERE c.delete_time IS NULL
+  AND r.sale_id IS NOT NULL
+UNION ALL
+SELECT DISTINCT c.create_time, c.update_time, c.delete_time, c.version, c.remarks,
+       r.am_id AS sale_or_am_id, c.card_id, c.account_id, c.currency, c.status,
+       c.provider, c.type, c.token, c.user_delete_time, c.delete_card_time,
+       c.first_six, c.card_belong, c.physical_card_status, c.card_mode
+FROM source1_card c
+JOIN source2_sale_relation r
+  ON c.account_id = r.relation_account_id
+ AND c.create_time >= r.relation_start_time
+ AND (c.create_time < r.relation_end_time OR r.relation_end_time IS NULL)
+WHERE c.delete_time IS NULL
+  AND r.am_id IS NOT NULL;
 
 CREATE TEMPORARY VIEW v_ods_sale_qbit_card_base AS
 SELECT
@@ -159,7 +205,7 @@ SELECT
 FROM v_ods_sale_qbit_card_source;
 
 CREATE TEMPORARY TABLE sink_ods_sale_qbit_card_2026 (
-    id BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, sale_or_am_id STRING, card_id STRING, account_id STRING, currency STRING, status STRING, provider STRING, type STRING, token STRING, user_delete_time STRING, delete_card_time STRING, first_six STRING, card_belong STRING, physical_card_status STRING, card_mode STRING,
+    id BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, sale_or_am_id STRING, card_id STRING, account_id STRING, currency STRING, status STRING, provider STRING, type STRING, token STRING, user_delete_time DATE, delete_card_time DATE, first_six STRING, card_belong STRING, physical_card_status STRING, card_mode STRING,
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='ods_sale_qbit_card_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
