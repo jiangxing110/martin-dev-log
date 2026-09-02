@@ -92,14 +92,6 @@ FROM source_dws_physical_card;
 -- ==============================================
 -- 3. 分表 SINK（每个 _YYYY 一个，upsert 按 key 幂等）
 -- ==============================================
-CREATE TEMPORARY TABLE sink_dws_physical_card_2024 (
-    id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, transaction_count INT, physical_card_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='dws_physical_card_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_dws_physical_card_2025 (
-    id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, transaction_count INT, physical_card_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='dws_physical_card_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_physical_card_2026 (
     id BIGINT, account_id STRING, provider STRING, bin STRING, status STRING, transaction_count INT, physical_card_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
@@ -108,18 +100,6 @@ CREATE TEMPORARY TABLE sink_dws_physical_card_2026 (
 -- ==============================================
 -- 4. 写入（CROSS JOIN 确保删除函数先执行；upsert 覆盖同 key / 新增异 key）
 -- ==============================================
-INSERT INTO sink_dws_physical_card_2024
-SELECT id, account_id, provider, bin, status, transaction_count, physical_card_fee, create_date, version, create_time, update_time
-FROM v_dws_physical_card_base
-CROSS JOIN source_delete_dws_physical_card_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2024-01-01' AND create_date < DATE '2025-01-01';
-INSERT INTO sink_dws_physical_card_2025
-SELECT id, account_id, provider, bin, status, transaction_count, physical_card_fee, create_date, version, create_time, update_time
-FROM v_dws_physical_card_base
-CROSS JOIN source_delete_dws_physical_card_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2025-01-01' AND create_date < DATE '2026-01-01';
 INSERT INTO sink_dws_physical_card_2026
 SELECT id, account_id, provider, bin, status, transaction_count, physical_card_fee, create_date, version, create_time, update_time
 FROM v_dws_physical_card_base

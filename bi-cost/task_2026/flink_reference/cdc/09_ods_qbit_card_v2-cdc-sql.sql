@@ -97,14 +97,6 @@ FROM source_ods_qbit_card;
 -- ==============================================
 -- 3. 分表 SINK（每个 _YYYY 一个，upsert 按 key 幂等）
 -- ==============================================
-CREATE TEMPORARY TABLE sink_ods_qbit_card_2024 (
-    id BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, card_id STRING, account_id STRING, currency STRING, status STRING, provider STRING, type STRING, token STRING, user_delete_time DATE, delete_card_time DATE, first_six STRING, card_belong STRING, physical_card_status STRING, card_mode STRING,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='ods_qbit_card_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_ods_qbit_card_2025 (
-    id BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, card_id STRING, account_id STRING, currency STRING, status STRING, provider STRING, type STRING, token STRING, user_delete_time DATE, delete_card_time DATE, first_six STRING, card_belong STRING, physical_card_status STRING, card_mode STRING,
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='ods_qbit_card_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_ods_qbit_card_2026 (
     id BIGINT, create_time TIMESTAMP(6), update_time TIMESTAMP(6), delete_time TIMESTAMP(6), version INT, remarks STRING, card_id STRING, account_id STRING, currency STRING, status STRING, provider STRING, type STRING, token STRING, user_delete_time DATE, delete_card_time DATE, first_six STRING, card_belong STRING, physical_card_status STRING, card_mode STRING,
     PRIMARY KEY (id) NOT ENFORCED
@@ -113,18 +105,6 @@ CREATE TEMPORARY TABLE sink_ods_qbit_card_2026 (
 -- ==============================================
 -- 4. 写入（CROSS JOIN 确保删除函数先执行；upsert 覆盖同 key / 新增异 key）
 -- ==============================================
-INSERT INTO sink_ods_qbit_card_2024
-SELECT id, create_time, update_time, delete_time, version, remarks, card_id, account_id, currency, status, provider, type, token, user_delete_time, delete_card_time, first_six, card_belong, physical_card_status, card_mode
-FROM v_ods_qbit_card_base
-CROSS JOIN source_delete_ods_qbit_card_result AS del
-WHERE del.affected_rows >= 0
-  AND create_time >= TIMESTAMP '2024-01-01 00:00:00' AND create_time < TIMESTAMP '2025-01-01 00:00:00';
-INSERT INTO sink_ods_qbit_card_2025
-SELECT id, create_time, update_time, delete_time, version, remarks, card_id, account_id, currency, status, provider, type, token, user_delete_time, delete_card_time, first_six, card_belong, physical_card_status, card_mode
-FROM v_ods_qbit_card_base
-CROSS JOIN source_delete_ods_qbit_card_result AS del
-WHERE del.affected_rows >= 0
-  AND create_time >= TIMESTAMP '2025-01-01 00:00:00' AND create_time < TIMESTAMP '2026-01-01 00:00:00';
 INSERT INTO sink_ods_qbit_card_2026
 SELECT id, create_time, update_time, delete_time, version, remarks, card_id, account_id, currency, status, provider, type, token, user_delete_time, delete_card_time, first_six, card_belong, physical_card_status, card_mode
 FROM v_ods_qbit_card_base

@@ -1,8 +1,9 @@
 --********************************************************************
 -- Author:         martinJiang
 -- Created Time:   2026-09-01
--- Updated Time:   2026-09-01
+-- Updated Time:   2026-09-02 20:35:00
 -- Description:    dws_qbit_card_wallet_transaction 流处理(CDC) 作业（quantum-v2 范式：确定性哈希主键 + 先清后写）
+-- 本脚本只写入 2026 年分表，因此只包含一个 INSERT 作业。
 -- 作业元信息：
 --   作业类型：流处理(CDC)
 --   运行方式：每日增量（BATCH 定时触发）：自动按昨天变更窗口(CDC 模式)精准删受影响 key 后 upsert 覆盖。
@@ -88,36 +89,16 @@ SELECT
 FROM source_dws_qbit_card_wallet_transaction;
 
 -- ==============================================
--- 3. 分表 SINK（每个 _YYYY 一个，upsert 按 key 幂等）
+-- 3. 2026 分表 SINK（upsert 按 key 幂等）
 -- ==============================================
-CREATE TEMPORARY TABLE sink_dws_qbit_card_wallet_transaction_2024 (
-    id BIGINT, account_id STRING, business_type STRING, status STRING, origin_amount DECIMAL(18,2), transaction_count INT, fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='dws_qbit_card_wallet_transaction_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_dws_qbit_card_wallet_transaction_2025 (
-    id BIGINT, account_id STRING, business_type STRING, status STRING, origin_amount DECIMAL(18,2), transaction_count INT, fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='dws_qbit_card_wallet_transaction_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_qbit_card_wallet_transaction_2026 (
     id BIGINT, account_id STRING, business_type STRING, status STRING, origin_amount DECIMAL(18,2), transaction_count INT, fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='dws_qbit_card_wallet_transaction_2026','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 
 -- ==============================================
--- 4. 写入（CROSS JOIN 确保删除函数先执行；upsert 覆盖同 key / 新增异 key）
+-- 4. 写入 2026（CROSS JOIN 确保删除函数先执行；upsert 覆盖同 key / 新增异 key）
 -- ==============================================
-INSERT INTO sink_dws_qbit_card_wallet_transaction_2024
-SELECT id, account_id, business_type, status, origin_amount, transaction_count, fee, create_date, version, create_time, update_time
-FROM v_dws_qbit_card_wallet_transaction_base
-CROSS JOIN source_delete_dws_qbit_card_wallet_transaction_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2024-01-01' AND create_date < DATE '2025-01-01';
-INSERT INTO sink_dws_qbit_card_wallet_transaction_2025
-SELECT id, account_id, business_type, status, origin_amount, transaction_count, fee, create_date, version, create_time, update_time
-FROM v_dws_qbit_card_wallet_transaction_base
-CROSS JOIN source_delete_dws_qbit_card_wallet_transaction_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2025-01-01' AND create_date < DATE '2026-01-01';
 INSERT INTO sink_dws_qbit_card_wallet_transaction_2026
 SELECT id, account_id, business_type, status, origin_amount, transaction_count, fee, create_date, version, create_time, update_time
 FROM v_dws_qbit_card_wallet_transaction_base

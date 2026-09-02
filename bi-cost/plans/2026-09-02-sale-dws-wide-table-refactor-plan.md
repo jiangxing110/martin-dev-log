@@ -4,6 +4,8 @@
 
 **Goal:** 将 13、14、18 的 CDC/Batch 改为窗口化明细 source、Flink 关系匹配和 Flink 聚合。
 
+> 2026-09-02 补充：CDC 目录 01–22 按当前运行策略统一只保留 2026 年 Sink；2024/2025 历史数据通过 Batch 回刷。
+
 **Architecture:** 交易 source 按窗口读取，关系 source 仅读取相关账户；直接关系和 root 关系分别匹配后以 `ROW_NUMBER()` 选优，再按原有 DWS 业务键聚合并写入年度分表。
 
 **Tech Stack:** Flink SQL、PostgreSQL JDBC/ADBPG connector、Markdown。

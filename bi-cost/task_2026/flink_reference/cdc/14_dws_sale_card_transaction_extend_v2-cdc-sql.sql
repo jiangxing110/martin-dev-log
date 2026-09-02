@@ -153,6 +153,67 @@ CREATE TEMPORARY TABLE source2_sale_relation (
     'scan.fetch-size' = '2000'
 );
 
+-- source1：只读取最近一天的交易明细，关系匹配和聚合放到 Flink 执行
+CREATE TEMPORARY TABLE source1_transaction (
+    transaction_id STRING, account_id STRING, business_type STRING, provider STRING,
+    card_id STRING, status STRING, settle_amount DECIMAL(18,2), transaction_currency STRING,
+    country STRING, fx_fee DECIMAL(18,2), atm_fee DECIMAL(18,2),
+    apple_pay_fee DECIMAL(18,2), settle_fee DECIMAL(18,2),
+    create_time TIMESTAMP(6), delete_time TIMESTAMP(6)
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT tr.id::text AS transaction_id, tr."accountId"::text AS account_id, tr."businessType"::text AS business_type, tr."provider"::text AS provider, tr."cardId"::text AS card_id, tr."status"::text AS status, tr."settleAmount"::numeric(18,2) AS settle_amount, tr."transactionCurrency"::text AS transaction_currency, tr."specialSourceData"->>''country'' AS country, COALESCE((tr."specialSourceData"->>''markupFee'')::numeric,0)::numeric(18,2) AS fx_fee, CASE WHEN tr.remarks LIKE ''%ATM取现费'' THEN tr.fee::numeric ELSE 0 END::numeric(18,2) AS atm_fee, COALESCE((tr."specialSourceData"->>''applePayFee'')::numeric,0)::numeric(18,2) AS apple_pay_fee, COALESCE((tr."specialSourceData"->>''settleFee'')::numeric,0)::numeric(18,2) AS settle_fee, tr."createTime" AS create_time, tr."deleteTime" AS delete_time FROM public."qbit_card_transaction" tr WHERE tr."deleteTime" IS NULL AND ((tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."updateTime" < CURRENT_DATE))) AS tx',
+    'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver', 'scan.fetch-size' = '2000'
+);
+
+CREATE TEMPORARY TABLE source_card (
+    card_id STRING, bin STRING
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT qc."id"::text AS card_id, qc."firstSix"::text AS bin FROM public."qbitCard" qc WHERE qc."id" IN (SELECT DISTINCT tr."cardId" FROM public."qbit_card_transaction" tr WHERE tr."deleteTime" IS NULL AND ((tr."createTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."createTime" < CURRENT_DATE) OR (tr."updateTime" >= CURRENT_DATE - INTERVAL ''1 day'' AND tr."updateTime" < CURRENT_DATE)))) AS cards',
+    'username' = '${secret_values.ADB_PG_USERNAME}', 'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver', 'scan.fetch-size' = '2000'
+);
+
+CREATE TEMPORARY VIEW v_sale_transaction_matched AS
+SELECT tr.transaction_id, tr.account_id, tr.business_type, tr.provider, c.bin, tr.status,
+       tr.settle_amount, tr.transaction_currency, tr.country, tr.fx_fee, tr.atm_fee,
+       tr.apple_pay_fee, tr.settle_fee, tr.create_time, sr.sale_id, sr.am_id,
+       ROW_NUMBER() OVER (PARTITION BY tr.transaction_id ORDER BY sr.priority, sr.relation_start_time DESC) AS rn
+FROM source1_transaction tr
+JOIN source_card c ON tr.card_id = c.card_id
+JOIN source2_sale_relation sr
+  ON tr.account_id = sr.relation_account_id
+ AND tr.create_time >= sr.relation_start_time
+ AND (tr.create_time < sr.relation_end_time OR sr.relation_end_time IS NULL);
+
+CREATE TEMPORARY VIEW v_sale_transaction_expanded AS
+SELECT DISTINCT transaction_id, account_id, business_type, provider, bin, status,
+       settle_amount, transaction_currency, country, fx_fee, atm_fee, apple_pay_fee, settle_fee,
+       create_time, sale_id AS sale_or_am_id
+FROM v_sale_transaction_matched WHERE rn = 1 AND sale_id IS NOT NULL
+UNION
+SELECT DISTINCT transaction_id, account_id, business_type, provider, bin, status,
+       settle_amount, transaction_currency, country, fx_fee, atm_fee, apple_pay_fee, settle_fee,
+       create_time, am_id AS sale_or_am_id
+FROM v_sale_transaction_matched WHERE rn = 1 AND am_id IS NOT NULL;
+
+CREATE TEMPORARY VIEW v_dws_sale_card_transaction_extend_operator AS
+SELECT CAST(ABS(HASH_CODE(CONCAT(COALESCE(account_id,''),':',COALESCE(sale_or_am_id,''),':',COALESCE(business_type,''),':',COALESCE(provider,''),':',COALESCE(bin,''),':',COALESCE(status,''),':',COALESCE(transaction_currency,''),':',COALESCE(country,''),':',DATE_FORMAT(CAST(create_date AS TIMESTAMP),'yyyy-MM-dd')))) AS BIGINT) AS id,
+       account_id, sale_or_am_id, business_type, provider, bin, status,
+       CAST(SUM(settle_amount) AS DECIMAL(18,2)) AS settle_amount,
+       transaction_currency, country, CAST(COUNT(*) AS INT) AS transaction_count,
+       CAST(SUM(fx_fee) AS DECIMAL(18,2)) AS fx_fee, CAST(SUM(atm_fee) AS DECIMAL(18,2)) AS atm_fee,
+       CAST(SUM(apple_pay_fee) AS DECIMAL(18,2)) AS apple_pay_fee, CAST(SUM(settle_fee) AS DECIMAL(18,2)) AS settle_fee,
+       CAST(create_date AS TIMESTAMP(6)) AS create_date, CAST(1 AS INT) AS version,
+       CURRENT_TIMESTAMP AS create_time, CURRENT_TIMESTAMP AS update_time
+FROM (SELECT *, CAST(create_time AS DATE) AS create_date FROM v_sale_transaction_expanded) x
+GROUP BY account_id, sale_or_am_id, business_type, provider, bin, status,
+         transaction_currency, country, create_date;
+
 CREATE TEMPORARY VIEW v_dws_sale_card_transaction_extend_source AS
 SELECT DISTINCT d.*
 FROM source_dws_sale_card_transaction_extend d
@@ -175,14 +236,6 @@ FROM v_dws_sale_card_transaction_extend_source;
 -- ==============================================
 -- 3. 分表 SINK（每个 _YYYY 一个，upsert 按 key 幂等）
 -- ==============================================
-CREATE TEMPORARY TABLE sink_dws_sale_card_transaction_extend_2024 (
-    id BIGINT, account_id STRING, sale_or_am_id STRING, business_type STRING, provider STRING, bin STRING, status STRING, settle_amount DECIMAL(18,2), transaction_currency STRING, country STRING, transaction_count INT, fx_fee DECIMAL(18,2), atm_fee DECIMAL(18,2), apple_pay_fee DECIMAL(18,2), settle_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='dws_sale_card_transaction_extend_2024','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
-CREATE TEMPORARY TABLE sink_dws_sale_card_transaction_extend_2025 (
-    id BIGINT, account_id STRING, sale_or_am_id STRING, business_type STRING, provider STRING, bin STRING, status STRING, settle_amount DECIMAL(18,2), transaction_currency STRING, country STRING, transaction_count INT, fx_fee DECIMAL(18,2), atm_fee DECIMAL(18,2), apple_pay_fee DECIMAL(18,2), settle_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
-    PRIMARY KEY (id) NOT ENFORCED
-) WITH ('connector'='adbpg','url'='jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}','tableName'='dws_sale_card_transaction_extend_2025','userName'='${secret_values.ADB_PG_USERNAME}','password'='${secret_values.ADB_PG_PASSWORD}','writeMode'='upsert','batchSize'='2000');
 CREATE TEMPORARY TABLE sink_dws_sale_card_transaction_extend_2026 (
     id BIGINT, account_id STRING, sale_or_am_id STRING, business_type STRING, provider STRING, bin STRING, status STRING, settle_amount DECIMAL(18,2), transaction_currency STRING, country STRING, transaction_count INT, fx_fee DECIMAL(18,2), atm_fee DECIMAL(18,2), apple_pay_fee DECIMAL(18,2), settle_fee DECIMAL(18,2), create_date TIMESTAMP(6), version INT, create_time TIMESTAMP(6), update_time TIMESTAMP(6),
     PRIMARY KEY (id) NOT ENFORCED
@@ -191,21 +244,9 @@ CREATE TEMPORARY TABLE sink_dws_sale_card_transaction_extend_2026 (
 -- ==============================================
 -- 4. 写入（CROSS JOIN 确保删除函数先执行；upsert 覆盖同 key / 新增异 key）
 -- ==============================================
-INSERT INTO sink_dws_sale_card_transaction_extend_2024
-SELECT id, account_id, sale_or_am_id, business_type, provider, bin, status, settle_amount, transaction_currency, country, transaction_count, fx_fee, atm_fee, apple_pay_fee, settle_fee, create_date, version, create_time, update_time
-FROM v_dws_sale_card_transaction_extend_base
-CROSS JOIN source_delete_dws_sale_card_transaction_extend_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2024-01-01' AND create_date < DATE '2025-01-01';
-INSERT INTO sink_dws_sale_card_transaction_extend_2025
-SELECT id, account_id, sale_or_am_id, business_type, provider, bin, status, settle_amount, transaction_currency, country, transaction_count, fx_fee, atm_fee, apple_pay_fee, settle_fee, create_date, version, create_time, update_time
-FROM v_dws_sale_card_transaction_extend_base
-CROSS JOIN source_delete_dws_sale_card_transaction_extend_result AS del
-WHERE del.affected_rows >= 0
-  AND create_date >= DATE '2025-01-01' AND create_date < DATE '2026-01-01';
 INSERT INTO sink_dws_sale_card_transaction_extend_2026
 SELECT id, account_id, sale_or_am_id, business_type, provider, bin, status, settle_amount, transaction_currency, country, transaction_count, fx_fee, atm_fee, apple_pay_fee, settle_fee, create_date, version, create_time, update_time
-FROM v_dws_sale_card_transaction_extend_base
+FROM v_dws_sale_card_transaction_extend_operator
 CROSS JOIN source_delete_dws_sale_card_transaction_extend_result AS del
 WHERE del.affected_rows >= 0
   AND create_date >= DATE '2026-01-01' AND create_date < DATE '2027-01-01';
