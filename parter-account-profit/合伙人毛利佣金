@@ -203,3 +203,222 @@ COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."commission_mode
   然后看看这个文档我们需要把 合伙人毛利返佣的数据 和 其他加点的佣金数据写入到 合伙人项目的partner_monthly_commission
  partner_monthly_commission_detail 因为跨项目跨库所以那边可能也要一个查询接口 加定时任务落这部分数据
 
+
+
+
+SELECT c.id,
+               c."displayId"    AS "displayId",
+               c."verifiedName" AS "verifiedName",
+							 c."referralCodeId",
+               c.type,
+               c."accountType"  AS "accountType",
+               c.status,
+               CAST(EXTRACT(EPOCH FROM c."createTime") * 1000 AS BIGINT) AS "createTime",
+               c.remarks,
+               p.id              AS "partnerAccountId",
+               p."verifiedName" AS "partnerName",
+               p."displayId"    AS "partnerDisplayId",
+               k.status          AS "kycStatus"
+        FROM account c
+        JOIN "referralCode" r ON r.id::varchar = c."referralCodeId"
+        JOIN account p ON p.id = r."accountId"
+        LEFT JOIN LATERAL (
+            SELECT status
+            FROM "cddKyc"
+            WHERE "accountId"::uuid = c.id
+              AND "isLatest" = true
+            LIMIT 1
+        ) k ON TRUE
+        WHERE p.type IN ('InterlacePartnerReferral', 'InterlacePartnerSalesAgent', 'InterlacePartnerWhiteLabel')
+是根据邀请码id 关联合伙人的
+我们的表只记录新版合伙人毛利返佣的客户数据
+
+
+
+
+
+
+CREATE TABLE "public"."partner_commission_fee_item" (
+  "id" int8 NOT NULL,
+  "remarks" varchar COLLATE "pg_catalog"."default" DEFAULT ''::character varying,
+  "create_time" timestamptz(6) NOT NULL DEFAULT now(),
+  "update_time" timestamptz(6) NOT NULL DEFAULT now(),
+  "delete_time" timestamptz(6),
+  "version" int4 NOT NULL DEFAULT 1,
+  "template_id" int8,
+  "fee_name" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "channel" varchar COLLATE "pg_catalog"."default",
+  "channel_field" varchar COLLATE "pg_catalog"."default",
+  "transaction_country" varchar COLLATE "pg_catalog"."default",
+  "deduction_node" varchar COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'realtime'::character varying,
+  "rate_type" varchar COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'fixed'::character varying,
+  "max_amount" numeric(20,12),
+  "min_amount" numeric(20,12),
+  "rate_value" numeric(20,12) NOT NULL,
+  "effective_time" timestamptz(6) NOT NULL,
+  "expiration_time" timestamptz(6) NOT NULL,
+  "ladder_min_amount" numeric(20,12) NOT NULL DEFAULT '0'::numeric,
+  "related_id" uuid NOT NULL,
+  "account_id" uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'::uuid,
+  "partner_id" uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'::uuid,
+  "markup_rate_value" numeric(20,12) NOT NULL DEFAULT '0'::numeric,
+  "commission_mode" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "partner_commission_fee_id" int8,
+  CONSTRAINT "PK_82b00e7b9c0d4d29c50676cf49d" PRIMARY KEY ("id")
+)
+;
+
+ALTER TABLE "public"."partner_commission_fee_item" 
+  OWNER TO "qbit_admin";
+
+CREATE INDEX "IDX_4b28619a00654da964585c2a52" ON "public"."partner_commission_fee_item" USING btree (
+  "create_time" "pg_catalog"."timestamptz_ops" ASC NULLS LAST
+);
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."remarks" IS '备注';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."template_id" IS '模板id';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."fee_name" IS '费用名称';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."channel" IS '渠道';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."channel_field" IS '渠道字段 (如何是量子卡可以用 bin 、 如果是全球账户或其他业务可以用usd 之类的)';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."transaction_country" IS '交易国家';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."deduction_node" IS '扣费节点';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."rate_type" IS '费率类型';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."max_amount" IS '最大金额';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."min_amount" IS '最小金额';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."rate_value" IS '费率值';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."effective_time" IS '生效时间';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."expiration_time" IS '失效时间';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."ladder_min_amount" IS '阶梯最小金额';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."related_id" IS '关联ID';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."account_id" IS '账户id';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."partner_id" IS '合伙人账户id';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."markup_rate_value" IS '加价费率值（底价加点/弹性加点）';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."commission_mode" IS '分佣模式';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_item"."partner_commission_fee_id" IS '合伙人费率ID';
+
+
+
+CREATE TABLE "public"."partner_commission_fee_transaction" (
+  "id" int8 NOT NULL,
+  "remarks" varchar COLLATE "pg_catalog"."default" DEFAULT ''::character varying,
+  "create_time" timestamptz(6) NOT NULL DEFAULT now(),
+  "update_time" timestamptz(6) NOT NULL DEFAULT now(),
+  "delete_time" timestamptz(6),
+  "version" int4 NOT NULL DEFAULT 1,
+  "account_id" uuid NOT NULL,
+  "business_id" varchar COLLATE "pg_catalog"."default",
+  "transaction_id" uuid,
+  "source_id" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "fee_id" varchar COLLATE "pg_catalog"."default",
+  "fee_name" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "deduction_node" varchar COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'monthly'::character varying,
+  "rate_type" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "transaction_country" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "direction" varchar COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'debit'::character varying,
+  "amount" numeric(20,12) NOT NULL DEFAULT '0'::numeric,
+  "rate" numeric(20,12) NOT NULL DEFAULT '0'::numeric,
+  "fee" numeric(20,12) NOT NULL DEFAULT '0'::numeric,
+  "status" varchar COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'Pending'::character varying,
+  "is_settled" bool NOT NULL DEFAULT false,
+  "markup_fee" numeric(20,12) NOT NULL DEFAULT '0'::numeric,
+  "markup_rate" numeric(20,12) NOT NULL DEFAULT '0'::numeric,
+  "partner_id" uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'::uuid,
+  "total_fee" numeric(20,12) NOT NULL DEFAULT 0,
+  "total_rate" numeric(20,12) NOT NULL DEFAULT 0,
+  "commission_mode" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  CONSTRAINT "PK_56d6f8e7b048c20d05a9effa051" PRIMARY KEY ("id")
+)
+;
+
+ALTER TABLE "public"."partner_commission_fee_transaction" 
+  OWNER TO "qbit_admin";
+
+CREATE INDEX "IDX_d6cde5c755f2178cf0246f5c4e" ON "public"."partner_commission_fee_transaction" USING btree (
+  "create_time" "pg_catalog"."timestamptz_ops" ASC NULLS LAST
+);
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."remarks" IS '备注';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."account_id" IS '账户id';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."business_id" IS '业务id-卡id';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."transaction_id" IS '我方交易id';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."source_id" IS '业务sourceId';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."fee_id" IS '费率id';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."fee_name" IS '费用名称';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."deduction_node" IS '扣费节点';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."rate_type" IS '费率类型';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."transaction_country" IS '交易国家';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."direction" IS '扣款方向';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."amount" IS '计费基数金额';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."rate" IS '费率';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."fee" IS '费用';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."status" IS '状态';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."is_settled" IS '是否已结算';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."markup_fee" IS '加价费率值/弹性费率值';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."markup_rate" IS '加价费率值（底价加点/弹性加点）';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."partner_id" IS '合伙人账户id';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."total_fee" IS '总费用';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."total_rate" IS '总费率';
+
+COMMENT ON COLUMN "public"."partner_commission_fee_transaction"."commission_mode" IS '分佣模式';
+
+
+
+1.我们有一个合伙人接口说查询当前月预估的 毛利返佣 和 其他两种模式 还有一个是提现带结算的金额
+ 但是我们要第二个月21号才会正式落库这部分逻辑
+ 我们还需要提供一个接口查询这部分逻辑
+2.在合伙人落返佣数据的时候三个一起查 
+
+参考这个页面我们需要
+asstes 提供一个预估接口
+还有一个是合伙人推荐客户的饼图根据合伙人kyc 状态来判断 
+• 已开通 
+• 申请中
+• 已拒绝
+
+佣金趋势
+这个我们之间在合伙人项目实现 查询partner_monthly_commission
+
+PartnerCommissionClient
+你现在写的有点乱
+1.我要一个是三种返佣结果一起给 合伙人项目 返佣落库的
+2.预估接口 也是三种返佣结果
+3.我们需要一个合伙人推荐客户统计根据kyc状态统计
