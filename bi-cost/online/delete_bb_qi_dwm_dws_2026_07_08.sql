@@ -17,7 +17,7 @@ DROP VIEW IF EXISTS params;
 
 CREATE TEMPORARY VIEW params AS
 SELECT
-    DATE '2026-07-01' AS start_date,
+    DATE '2026-08-01' AS start_date,
     DATE '2026-09-01' AS end_date;
 
 -- =========================

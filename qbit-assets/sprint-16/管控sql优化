@@ -1,0 +1,685 @@
+-- 从 pasted-text.txt 提取的 auto_control_job MyBatis 实际 SQL
+-- 共提取 176 次执行，去重后 13 种 SQL 模板；账号列表已从 17 个收敛为 5 个
+-- 参数已按日志中的 Parameters 替换为 SQL 字面量
+
+## SQL 1
+
+> 代码位置：`ControlWarningRuleServiceImpl.execute()` 调用 `controlWarningRuleMapper.selectList()`。用途：查询所有启用且未设置规则类型的自动管控预警规则，作为整个定时任务的入口数据。
+
+```sql
+SELECT
+    id,
+    remarks,
+    rule_type,
+    rule_name,
+    rule_account_types,
+    list_types,
+    run_time_type,
+    raw_data,
+    status,
+    data_range,
+    rule_kind,
+    result_types,
+    create_time,
+    update_time,
+    delete_time,
+    version
+FROM control_warning_rule
+WHERE delete_time IS NULL
+  AND (rule_kind IS NULL AND status = 'Active');
+```
+
+## SQL 2
+
+> 代码位置：`ControlWarningRuleServiceImpl.execute()` 调用 `getComplianceList()` 中的合规名单查询。用途：查询 VirtualCard 模式下的有效合规引擎账户，并标记其名单类型。
+
+```sql
+SELECT
+    "account"."id" "accountId",
+    COALESCE("complianceEngine"."type",'NormalList') "type"
+FROM "complianceEngine"
+    LEFT JOIN "account" On "complianceEngine"."accountId"::UUID=account."id"
+WHERE "complianceEngine"."deleteTime" IS NULL
+  AND "account"."deleteTime" IS NULL
+  AND "complianceEngine"."isClear"='false'
+  AND "complianceEngine"."status"='Active'
+  AND "account"."status"='Active'
+  AND "complianceEngine"."model"='VirtualCard'
+  AND ("referralCodeId" !='32778105-f4a6-463d-a5f0-2a35b6a07c6c' or "referralCodeId" is null)
+  AND "parentAccountId" !='71d089f9-87df-4de3-8e19-b8a6dc81d224'
+limit 10;
+```
+
+## SQL 3
+
+> 代码位置：`ControlWarningRuleServiceImpl.execute()` 调用 `getComplianceList()` 中的普通账户查询。用途：查询通过 KYC、但尚未配置有效合规引擎的普通账户。
+
+```sql
+SELECT
+    "account"."id" "accountId",
+    'NormalList' as "type"
+FROM "account"
+    LEFT JOIN "accountExtend" ON "account".id="accountExtend"."accountId"::UUID
+WHERE "account"."deleteTime" IS NULL
+  AND "account"."status"='Active'
+  AND "accountExtend"."kycStatus"='Passed'
+  AND ("referralCodeId" !='32778105-f4a6-463d-a5f0-2a35b6a07c6c' or "referralCodeId" is null)
+  AND "parentAccountId" !='71d089f9-87df-4de3-8e19-b8a6dc81d224'
+  AND "account"."id" not in( select "accountId" from "complianceEngine" where "deleteTime" IS NULL and "isClear"='false' and "status"='Active' and "model"='VirtualCard')
+limit 10;
+```
+
+## SQL 4
+
+> 代码位置：标签/管控批处理中的账户批量查询。用途：根据本批次 accountId 获取账户基础资料，供后续规则计算和账户管控使用。
+
+```sql
+SELECT
+    "id",
+    "parentAccountId",
+    "verifiedName",
+    "verifiedNameEn",
+    "accountType",
+    "displayId",
+    status,
+    country,
+    "referralCodeId",
+    "prevUserId",
+    "metaData",
+    type,
+    "tenantId",
+    "createTime",
+    "updateTime",
+    "deleteTime",
+    remarks,
+    version
+FROM account
+WHERE "id" IN ('a9cda2aa-92c6-4f98-ae58-a2e01ecae10b', '4d0a940c-48c8-4571-8869-8a9a5ab0b13f', '09837659-6b48-4de5-9368-97686d747564', '4119aa0f-c4db-40f6-8dc0-af0f4ba66d23', '5044e827-f811-4611-8403-38cd1fe74120')
+  AND "deleteTime" IS NULL;
+```
+
+## SQL 5
+
+> 代码位置：`OdsLabelTransactionMapper` 的消费场景统计 SQL。用途：按账户和二级标签统计消费数量，排除指定业务码后用于自动管控规则判断。
+
+> 性能备注：当前 SQL 主要按 `transaction_time` 过滤，实测约 15 秒；该表按 `create_time` 分区，增加对应的 `create_time` 范围后约 2 秒。若业务允许，建议使用 `create_time` 做分区裁剪；若必须保持交易时间口径，则增加 `create_time` 粗过滤，同时保留 `transaction_time` 精确过滤。
+ 执行 15s 
+```sql
+SELECT
+    qcte."account_id",
+    qcte.level_two_label,
+    COALESCE(sum(case when qcte."type" = 'Consumption' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb and not qcte.business_code_list @> '1103'::jsonb then 1 else 0 end),0) as "consumptionCount"
+FROM quantum_card_transaction_extend_p qcte
+WHERE qcte.delete_time IS NULL
+  AND qcte."type" IN ('Consumption', 'Credit')
+  AND qcte.account_id IN ('a9cda2aa-92c6-4f98-ae58-a2e01ecae10b', '4d0a940c-48c8-4571-8869-8a9a5ab0b13f', '09837659-6b48-4de5-9368-97686d747564', '4119aa0f-c4db-40f6-8dc0-af0f4ba66d23', '5044e827-f811-4611-8403-38cd1fe74120')
+  AND qcte."transaction_time" BETWEEN '2026-07-08 00:00:00.0' AND '2026-09-07 00:00:00.0'
+  AND qcte.level_two_label != ''
+  AND qcte."account_id" IN ('a9cda2aa-92c6-4f98-ae58-a2e01ecae10b', '4d0a940c-48c8-4571-8869-8a9a5ab0b13f', '09837659-6b48-4de5-9368-97686d747564', '4119aa0f-c4db-40f6-8dc0-af0f4ba66d23', '5044e827-f811-4611-8403-38cd1fe74120')
+GROUP BY qcte."account_id",qcte.level_two_label;
+```
+
+## SQL 6
+
+> 代码位置：卡片统计 Mapper 的开卡统计查询。用途：按账户统计时间范围内创建的有效卡数量。
+
+```sql
+SELECT
+    "accountId",
+    count(*) "openCardCount"
+FROM "qbitCard" as q
+WHERE q."deleteTime" is null
+  AND "accountId"::UUID IN ('a9cda2aa-92c6-4f98-ae58-a2e01ecae10b', '4d0a940c-48c8-4571-8869-8a9a5ab0b13f', '09837659-6b48-4de5-9368-97686d747564', '4119aa0f-c4db-40f6-8dc0-af0f4ba66d23', '5044e827-f811-4611-8403-38cd1fe74120')
+  AND "createTime" >= '2026-07-08 00:00:00'
+  AND "createTime" <= '2026-09-07 00:00:00'
+group by "accountId";
+```
+
+## SQL 7
+
+> 代码位置：消费统计 Mapper 的综合交易统计查询。用途：按账户汇总消费、拒付、授信、未验证、关闭、撤销、盗刷等数量和金额指标。
+
+> 性能备注：当前 SQL 按 `transaction_time` 查询，实测约 17 秒；增加 `create_time` 分区范围后约 5 秒。建议保留 `transaction_time` 作为业务时间精确条件，同时补充 `create_time` 范围以触发分区裁剪。
+
+```sql
+SELECT
+    COALESCE(sum(case when qcte."type" = 'Consumption' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb and not qcte.business_code_list @> '1103'::jsonb then 1 else 0 end),0) as "allConsumeCount",
+    COALESCE(sum ( case when qcte."type" = 'Consumption' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb then qcte.usd_amount else 0 end) - sum (case when qcte.business_code_list @> '1105'::jsonb then qcte.usd_amount else 0 end),0) as "allConsumeAmount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Fail' and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb then 1 else 0 end),0) as "rejectCount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Fail' and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb then qcte.usd_amount else 0 end),0) as "rejectAmount",
+    COALESCE(sum(case when qcte."type" = 'Credit' and not qcte.business_code_list @>'1105'::jsonb then 1 else 0 end ),0) as "creditCount",
+    COALESCE(sum(case when qcte."type" = 'Credit' and not qcte.business_code_list @>'1105'::jsonb then qcte.usd_amount else 0 end),0) as "creditAmount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1103'::jsonb and not qcte.business_code_list @> '1010'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb then 1 else 0 end),0) as "unVerifyCount",
+    COALESCE(sum ( case when qcte."type" = 'Consumption' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb then qcte.usd_amount else 0 end ) - sum (case when qcte.business_code_list @>'1105'::jsonb then qcte.usd_amount else 0 end ),0) as "unVerifyAmount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Closed' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1103'::jsonb and not qcte.business_code_list @> '1010'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb then 1 else 0 end),0) as "closeCount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Closed' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1013'::jsonb then qcte.usd_amount else 0 end ) - sum(case when qcte.business_code_list @> '1105'::jsonb then qcte.usd_amount else 0 end ),0) as "closeAmount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Closed' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1103'::jsonb and not qcte.business_code_list @> '1010'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb then 1 else 0 end ) - sum(case when qcte."type" = 'Credit' and not qcte.business_code_list @> '1105'::jsonb then 1 else 0 end ),0) as "effectiveCount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Closed' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1013'::jsonb then qcte.usd_amount else 0 end) - sum(case when qcte."type" = 'Credit' then qcte.usd_amount else 0 end ),0) as "effectiveAmount",
+    COALESCE(sum(case when qcte."type" = 'Reversal' then 1 else 0 end ),0) as "reversalCount",
+    COALESCE(sum(case when qcte."type" = 'Reversal' then qcte.usd_amount else 0 end),0) as "reversalAmount",
+    COALESCE(sum(case when qcte.business_code_list @> '1001'::jsonb then 1 else 0 end ),0) as "mandatoryCount",
+    COALESCE(sum(case when qcte.business_code_list @>'1001'::jsonb then qcte.usd_amount else 0 end ),0) as "mandatoryAmount",
+    COALESCE(sum(case when qcte.business_code_list @> '1013'::jsonb then 1 else 0 end ),0) as "theftbrushCount",
+    COALESCE(sum(case when qcte.business_code_list @> '1013'::jsonb then qcte.usd_amount else 0 end ),0) as "theftbrushAmount",
+    COALESCE(sum(case when qcte.business_code_list @> '1010'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb then 1 else 0 end),0) as "zeroAuthCount",
+    a."id" AS "accountId"
+FROM "quantum_card_transaction_extend_p" AS qcte
+    LEFT JOIN "qbitCard" AS q ON qcte."card_id" = q.id
+    LEFT JOIN account a ON qcte."account_id" = a."id"
+WHERE qcte."delete_time" is null
+  AND "accountId"::UUID IN ('a9cda2aa-92c6-4f98-ae58-a2e01ecae10b', '4d0a940c-48c8-4571-8869-8a9a5ab0b13f', '09837659-6b48-4de5-9368-97686d747564', '4119aa0f-c4db-40f6-8dc0-af0f4ba66d23', '5044e827-f811-4611-8403-38cd1fe74120')
+  AND "transaction_time" >= '2026-07-08 00:00:00.0'
+  AND "transaction_time" <= '2026-09-07 00:00:00.0'
+GROUP BY a."id";
+```
+
+## SQL 8
+
+> 代码位置：`OdsLabelTransactionMapper.getLabelConsumptionDepositSum()`，对应 `fetchConsumptionDepositSum()`。用途：按账户汇总充值/转入类钱包交易金额。
+
+```sql
+SELECT
+    "accountId",
+    COALESCE(sum("originAmount"), 0) as "depositSum"
+FROM "qbitCardWalletTransaction"
+    LEFT JOIN account a ON "qbitCardWalletTransaction"."accountId" = a."id"
+WHERE "qbitCardWalletTransaction"."deleteTime" IS NULL
+  AND "businessType" IN ('TransferInFromFinancing', 'TransferInFromQbitGlobal', 'Deposit', 'AccountDepositCNY', 'TransferInFromCryptoAssets', 'TransferInFromIPeakoin','QbitCryptoToQbitCardWallet')
+  AND "accountId"::UUID IN ('a9cda2aa-92c6-4f98-ae58-a2e01ecae10b', '4d0a940c-48c8-4571-8869-8a9a5ab0b13f', '09837659-6b48-4de5-9368-97686d747564', '4119aa0f-c4db-40f6-8dc0-af0f4ba66d23', '5044e827-f811-4611-8403-38cd1fe74120')
+  AND "transactionTime" >= '2026-07-08 00:00:00'
+  AND "transactionTime" <= '2026-09-07 00:00:00'
+group by "accountId";
+```
+
+## SQL 9
+
+> 代码位置：标签规则批处理中的账户批量查询。用途：按当前规则计算得到的账户集合重新读取账户信息，供标签规则数据组装。
+
+```sql
+SELECT
+    "id",
+    "parentAccountId",
+    "verifiedName",
+    "verifiedNameEn",
+    "accountType",
+    "displayId",
+    status,
+    country,
+    "referralCodeId",
+    "prevUserId",
+    "metaData",
+    type,
+    "tenantId",
+    "createTime",
+    "updateTime",
+    "deleteTime",
+    remarks,
+    version
+FROM account
+WHERE "deleteTime" IS NULL
+  AND ("id" IN ('11189e43-03a5-4dd3-98f4-e853cab0cedb', '4d47bcc5-c8f3-4c74-ad14-f0390e83618e', '18cce9f3-7ce7-4449-b9ac-979b875371b5', '4d0a940c-48c8-4571-8869-8a9a5ab0b13f', '87320d36-a579-49de-8352-ada6f7b04f05'));
+```
+
+## SQL 10
+
+> 代码位置：单账户标签规则计算中的账户查询。用途：读取单个账户的完整账户资料，用于构造管控规则上下文。
+
+```sql
+SELECT
+    "id",
+    "parentAccountId",
+    "verifiedName",
+    "verifiedNameEn",
+    "accountType",
+    "displayId",
+    status,
+    country,
+    "referralCodeId",
+    "prevUserId",
+    "metaData",
+    type,
+    "tenantId",
+    "createTime",
+    "updateTime",
+    "deleteTime",
+    remarks,
+    version
+FROM account
+WHERE "id"='1236a60b-4914-445b-8b54-c546e16e15a0'
+  AND "deleteTime" IS NULL;
+```
+
+## SQL 11
+
+> 代码位置：单账户标签规则计算中的 `accountExtend` 查询。用途：读取账户扩展资料，补充 KYC 等账户属性。
+
+```sql
+SELECT
+    *
+FROM "accountExtend"
+WHERE "deleteTime" IS NULL
+  AND "accountId" IN ( '1236a60b-4914-445b-8b54-c546e16e15a0' );
+```
+
+## SQL 12
+
+> 代码位置：消费统计 Mapper 的标签筛选查询。用途：按二级标签和账户统计综合交易指标，服务于指定标签规则的判断。
+
+> 性能备注：当前 SQL 按 `transaction_time` 查询，实测约 45 秒；增加 `create_time` 分区范围后约 7 秒。建议保留 `transaction_time` 作为业务时间精确条件，同时补充 `create_time` 范围以触发分区裁剪。
+
+```sql
+SELECT
+    COALESCE(sum(case when qcte."type" = 'Consumption' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb and not qcte.business_code_list @> '1103'::jsonb then 1 else 0 end),0) as "allConsumeCount",
+    COALESCE(sum ( case when qcte."type" = 'Consumption' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb then qcte.usd_amount else 0 end) - sum (case when qcte.business_code_list @> '1105'::jsonb then qcte.usd_amount else 0 end),0) as "allConsumeAmount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Fail' and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb then 1 else 0 end),0) as "rejectCount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Fail' and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb then qcte.usd_amount else 0 end),0) as "rejectAmount",
+    COALESCE(sum(case when qcte."type" = 'Credit' and not qcte.business_code_list @>'1105'::jsonb then 1 else 0 end ),0) as "creditCount",
+    COALESCE(sum(case when qcte."type" = 'Credit' and not qcte.business_code_list @>'1105'::jsonb then qcte.usd_amount else 0 end),0) as "creditAmount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1103'::jsonb and not qcte.business_code_list @> '1010'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb then 1 else 0 end),0) as "unVerifyCount",
+    COALESCE(sum ( case when qcte."type" = 'Consumption' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb then qcte.usd_amount else 0 end ) - sum (case when qcte.business_code_list @>'1105'::jsonb then qcte.usd_amount else 0 end ),0) as "unVerifyAmount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Closed' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1103'::jsonb and not qcte.business_code_list @> '1010'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb then 1 else 0 end),0) as "closeCount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Closed' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1013'::jsonb then qcte.usd_amount else 0 end ) - sum(case when qcte.business_code_list @> '1105'::jsonb then qcte.usd_amount else 0 end ),0) as "closeAmount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Closed' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1103'::jsonb and not qcte.business_code_list @> '1010'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb then 1 else 0 end ) - sum(case when qcte."type" = 'Credit' and not qcte.business_code_list @> '1105'::jsonb then 1 else 0 end ),0) as "effectiveCount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Closed' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1013'::jsonb then qcte.usd_amount else 0 end) - sum(case when qcte."type" = 'Credit' then qcte.usd_amount else 0 end ),0) as "effectiveAmount",
+    COALESCE(sum(case when qcte."type" = 'Reversal' then 1 else 0 end ),0) as "reversalCount",
+    COALESCE(sum(case when qcte."type" = 'Reversal' then qcte.usd_amount else 0 end),0) as "reversalAmount",
+    COALESCE(sum(case when qcte.business_code_list @> '1001'::jsonb then 1 else 0 end ),0) as "mandatoryCount",
+    COALESCE(sum(case when qcte.business_code_list @>'1001'::jsonb then qcte.usd_amount else 0 end ),0) as "mandatoryAmount",
+    COALESCE(sum(case when qcte.business_code_list @> '1013'::jsonb then 1 else 0 end ),0) as "theftbrushCount",
+    COALESCE(sum(case when qcte.business_code_list @> '1013'::jsonb then qcte.usd_amount else 0 end ),0) as "theftbrushAmount",
+    COALESCE(sum(case when qcte.business_code_list @> '1010'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb then 1 else 0 end),0) as "zeroAuthCount",
+    a."id" AS "accountId"
+FROM "quantum_card_transaction_extend_p" AS qcte
+    LEFT JOIN "qbitCard" AS q ON qcte."card_id" = q.id
+    LEFT JOIN account a ON qcte."account_id" = a."id"
+WHERE qcte."delete_time" is null
+  AND qcte.level_two_label in ( '广告服务' )
+  AND "accountId"::UUID IN ('1236a60b-4914-445b-8b54-c546e16e15a0', '18445cc5-294f-4e0d-aaf1-5c8f4c071d2b', '18cce9f3-7ce7-4449-b9ac-979b875371b5', '4869df81-26a3-4799-9666-2621866c5c08', '7659a5f4-b45b-4b9f-b12e-cce88470aeb3')
+  AND "transaction_time" >= '2026-03-10 00:00:00'
+  AND "transaction_time" <= '2026-09-07 00:00:00'
+GROUP BY a."id";
+```
+
+## SQL 13
+
+> 代码位置：消费统计 Mapper 的多标签筛选查询。用途：按一组二级标签和账户统计交易指标，属于标签规则批处理中的动态条件 SQL。
+
+> 性能备注：当前 SQL 按 `transaction_time` 查询，实测约 20 秒；增加 `create_time` 分区范围后约 8 秒。建议保留 `transaction_time` 作为业务时间精确条件，同时补充 `create_time` 范围以触发分区裁剪。
+
+```sql
+SELECT
+    COALESCE(sum(case when qcte."type" = 'Consumption' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb and not qcte.business_code_list @> '1103'::jsonb then 1 else 0 end),0) as "allConsumeCount",
+    COALESCE(sum ( case when qcte."type" = 'Consumption' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb then qcte.usd_amount else 0 end) - sum (case when qcte.business_code_list @> '1105'::jsonb then qcte.usd_amount else 0 end),0) as "allConsumeAmount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Fail' and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb then 1 else 0 end),0) as "rejectCount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Fail' and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb then qcte.usd_amount else 0 end),0) as "rejectAmount",
+    COALESCE(sum(case when qcte."type" = 'Credit' and not qcte.business_code_list @>'1105'::jsonb then 1 else 0 end ),0) as "creditCount",
+    COALESCE(sum(case when qcte."type" = 'Credit' and not qcte.business_code_list @>'1105'::jsonb then qcte.usd_amount else 0 end),0) as "creditAmount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1103'::jsonb and not qcte.business_code_list @> '1010'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb then 1 else 0 end),0) as "unVerifyCount",
+    COALESCE(sum ( case when qcte."type" = 'Consumption' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1008'::jsonb and not qcte.business_code_list @> '1009'::jsonb and not qcte.business_code_list @> '1013'::jsonb and not qcte.business_code_list @> '1015'::jsonb then qcte.usd_amount else 0 end ) - sum (case when qcte.business_code_list @>'1105'::jsonb then qcte.usd_amount else 0 end ),0) as "unVerifyAmount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Closed' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1103'::jsonb and not qcte.business_code_list @> '1010'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb then 1 else 0 end),0) as "closeCount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Closed' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1013'::jsonb then qcte.usd_amount else 0 end ) - sum(case when qcte.business_code_list @> '1105'::jsonb then qcte.usd_amount else 0 end ),0) as "closeAmount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Closed' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1103'::jsonb and not qcte.business_code_list @> '1010'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb then 1 else 0 end ) - sum(case when qcte."type" = 'Credit' and not qcte.business_code_list @> '1105'::jsonb then 1 else 0 end ),0) as "effectiveCount",
+    COALESCE(sum(case when qcte."type" = 'Consumption' and qcte.status = 'Closed' and not qcte.business_code_list @> '1001'::jsonb and not qcte.business_code_list @> '1006'::jsonb and not qcte.business_code_list @> '1013'::jsonb then qcte.usd_amount else 0 end) - sum(case when qcte."type" = 'Credit' then qcte.usd_amount else 0 end ),0) as "effectiveAmount",
+    COALESCE(sum(case when qcte."type" = 'Reversal' then 1 else 0 end ),0) as "reversalCount",
+    COALESCE(sum(case when qcte."type" = 'Reversal' then qcte.usd_amount else 0 end),0) as "reversalAmount",
+    COALESCE(sum(case when qcte.business_code_list @> '1001'::jsonb then 1 else 0 end ),0) as "mandatoryCount",
+    COALESCE(sum(case when qcte.business_code_list @>'1001'::jsonb then qcte.usd_amount else 0 end ),0) as "mandatoryAmount",
+    COALESCE(sum(case when qcte.business_code_list @> '1013'::jsonb then 1 else 0 end ),0) as "theftbrushCount",
+    COALESCE(sum(case when qcte.business_code_list @> '1013'::jsonb then qcte.usd_amount else 0 end ),0) as "theftbrushAmount",
+    COALESCE(sum(case when qcte.business_code_list @> '1010'::jsonb and not qcte.business_code_list @> '1011'::jsonb and not qcte.business_code_list @> '1013'::jsonb then 1 else 0 end),0) as "zeroAuthCount",
+    a."id" AS "accountId"
+FROM "quantum_card_transaction_extend_p" AS qcte
+    LEFT JOIN "qbitCard" AS q ON qcte."card_id" = q.id
+    LEFT JOIN account a ON qcte."account_id" = a."id"
+WHERE qcte."delete_time" is null
+  AND qcte.level_two_label in ( '数字商品媒体' , '数字商品 – 游戏' , '大型数字商品商家' , '付费电视/广播/流媒体服务' , '计算机软件商店' , '数字产品-应用程序' , '直接营销——连续性/订阅商家' , '计算机编程、数据处理和集成系统设计服务' )
+  AND "accountId"::UUID IN ('1236a60b-4914-445b-8b54-c546e16e15a0', '18445cc5-294f-4e0d-aaf1-5c8f4c071d2b', '18cce9f3-7ce7-4449-b9ac-979b875371b5', '4869df81-26a3-4799-9666-2621866c5c08', '7659a5f4-b45b-4b9f-b12e-cce88470aeb3')
+  AND "transaction_time" >= '2026-03-10 00:00:00'
+  AND "transaction_time" <= '2026-09-07 00:00:00'
+GROUP BY a."id";
+```
+
+## SQL 14：daysSinceLastTransaction（根据 Mapper 重建）
+
+> 代码位置：`QbitCardLabelServiceImpl.fetchDaysSinceLastTransaction()` 调用 `OdsLabelTransactionMapper.getDaysSinceLastTransaction()`。用途：计算每个账户距离最近一笔交易的天数，查询结果映射到 `daysSinceLastTransaction`，无结果时 Java 默认值为 181。
+
+> 性能备注：当前 SQL 查询约 2 秒；增加 `"createTime"` 分区范围后约 0.3 秒。建议保留最近交易时间计算逻辑，同时补充 `"createTime"` 范围以触发分区裁剪。
+
+```sql
+SELECT
+    "accountId",
+    COALESCE(
+        EXTRACT(
+            DAY FROM AGE(
+                CURRENT_DATE,
+                MAX(GREATEST("completeTime", "transactionTime"))
+            )
+        ),
+        0
+    ) AS "daysSinceLastTransaction"
+FROM "qbit_card_transaction" AS q
+WHERE "deleteTime" IS NULL
+  AND "accountId"::UUID IN (
+      'a9cda2aa-92c6-4f98-ae58-a2e01ecae10b',
+      '4d0a940c-48c8-4571-8869-8a9a5ab0b13f',
+      '09837659-6b48-4de5-9368-97686d747564',
+      '4119aa0f-c4db-40f6-8dc0-af0f4ba66d23',
+      '5044e827-f811-4611-8403-38cd1fe74120'
+  )
+  AND "completeTime" >= '2026-03-10 00:00:00'
+  AND "completeTime" <= '2026-09-07 00:00:00'
+GROUP BY "accountId";
+```
+
+> 说明：该 SQL 在附件日志中没有对应的 `Preparing` 记录，是根据 `OdsLabelTransactionMapper.xml` 中的 `getDaysSinceLastTransaction` 还原的。`defaultLableSearch` 的可选标签条件因日志缺失，未额外拼接。
+
+## SQL 15：getLabelConsumption（非撤销交易）
+
+> 代码位置：`QbitCardLabelServiceImpl.fetchConsumptionStatistics()` 调用 `OdsLabelTransactionMapper.getLabelConsumption()`，参数 `reversal = false`。用途：统计消费关闭、失败、待处理和退款等标签指标。
+
+> 性能备注：当前 SQL 查询约 7 秒；增加 `"createTime"` 分区范围后约 0.2 秒。建议保留交易完成时间的业务过滤，同时补充 `"createTime"` 范围以触发分区裁剪。
+
+```sql
+SELECT
+    "accountId",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Closed' THEN "settleAmount" ELSE 0 END), 0) AS "closedSum",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Closed' THEN 1 ELSE 0 END), 0) AS "closedCount",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Fail' THEN "settleAmount" ELSE 0 END), 0) AS "failedSum",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Fail' THEN 1 ELSE 0 END), 0) AS "failedCount",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Pending' THEN "settleAmount" ELSE 0 END), 0) AS "pendingSum",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Pending' THEN 1 ELSE 0 END), 0) AS "pendingCount",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Credit' AND status = 'Closed' THEN "settleAmount" ELSE 0 END), 0) AS "refundSum",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Credit' AND status = 'Closed' THEN 1 ELSE 0 END), 0) AS "refundCount"
+FROM "qbit_card_transaction" AS q
+WHERE "deleteTime" IS NULL
+  AND "accountId"::UUID IN (
+      'a9cda2aa-92c6-4f98-ae58-a2e01ecae10b',
+      '4d0a940c-48c8-4571-8869-8a9a5ab0b13f',
+      '09837659-6b48-4de5-9368-97686d747564',
+      '4119aa0f-c4db-40f6-8dc0-af0f4ba66d23',
+      '5044e827-f811-4611-8403-38cd1fe74120'
+  )
+  AND "completeTime" >= '2026-03-10 00:00:00'
+  AND "completeTime" <= '2026-09-07 00:00:00'
+GROUP BY "accountId";
+```
+
+## SQL 16：getLabelConsumption（撤销交易）
+
+> 代码位置：`AccountLabelServiceImpl.labelRulesData()` 第二次调用 `getLabelConsumptions()`，参数 `reversal = true`。用途：在排除撤销/退款无效记录后，统计可用于规则判断的交易指标。
+
+> 性能备注：当前 SQL 查询约 4.5 秒；增加 `"createTime"` 分区范围后约 0.21 秒。建议保留交易完成时间的业务过滤，同时补充 `"createTime"` 范围以触发分区裁剪。
+
+```sql
+SELECT
+    "accountId",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Closed' THEN "settleAmount" ELSE 0 END), 0) AS "closedSum",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Closed' THEN 1 ELSE 0 END), 0) AS "closedCount",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Fail' THEN "settleAmount" ELSE 0 END), 0) AS "failedSum",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Fail' THEN 1 ELSE 0 END), 0) AS "failedCount",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Pending' THEN "settleAmount" ELSE 0 END), 0) AS "pendingSum",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Pending' THEN 1 ELSE 0 END), 0) AS "pendingCount",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Credit' AND status = 'Closed' THEN "settleAmount" ELSE 0 END), 0) AS "refundSum",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Credit' AND status = 'Closed' THEN 1 ELSE 0 END), 0) AS "refundCount"
+FROM "qbit_card_transaction" AS q
+WHERE "deleteTime" IS NULL
+  AND released = FALSE
+  AND "settleAmount" NOT IN (0, 0.06, 1)
+  AND remarks NOT IN ('reversalTx', 'refund')
+  AND "accountId"::UUID IN (
+      'a9cda2aa-92c6-4f98-ae58-a2e01ecae10b',
+      '4d0a940c-48c8-4571-8869-8a9a5ab0b13f',
+      '09837659-6b48-4de5-9368-97686d747564',
+      '4119aa0f-c4db-40f6-8dc0-af0f4ba66d23',
+      '5044e827-f811-4611-8403-38cd1fe74120'
+  )
+  AND "completeTime" >= '2026-03-10 00:00:00'
+  AND "completeTime" <= '2026-09-07 00:00:00'
+GROUP BY "accountId";
+```
+
+## SQL 17：getSecondLabels
+
+> 代码位置：`QbitCardLabelServiceImpl.getLabelConsumptions()` 调用 `OdsLabelTransactionMapper.getSecondLabels()`。用途：按账户聚合交易上的二级标签，供标签规则和账户标签数据使用。
+
+> 性能备注：当前 SQL 查询约 20 秒；增加 `"createTime"` 分区范围后约 0.7 秒。建议保留交易完成时间的业务过滤，同时补充 `"createTime"` 范围以触发分区裁剪。
+
+```sql
+SELECT
+    "accountId",
+    ARRAY_AGG(DISTINCT q."secondLabel") AS "secondLabels"
+FROM "qbit_card_transaction" AS q
+WHERE "deleteTime" IS NULL
+  AND "accountId"::UUID IN (
+      'a9cda2aa-92c6-4f98-ae58-a2e01ecae10b',
+      '4d0a940c-48c8-4571-8869-8a9a5ab0b13f',
+      '09837659-6b48-4de5-9368-97686d747564',
+      '4119aa0f-c4db-40f6-8dc0-af0f4ba66d23',
+      '5044e827-f811-4611-8403-38cd1fe74120'
+  )
+  AND "completeTime" >= '2026-03-10 00:00:00'
+  AND "completeTime" <= '2026-09-07 00:00:00'
+GROUP BY "accountId";
+```
+
+## SQL 18：getLabelConsumption（标签条件 mock）
+
+> 代码位置：`AccountLabelServiceImpl.processLabelData()` 调用 `getLabelConsumptions()` 时，由 `r4/r5/r15` 等标签规则动态拼接标签条件。用途：展示带二级标签集合的消费统计 SQL；标签值根据现有日志进行 mock。
+
+```sql
+SELECT
+    "accountId",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Closed' THEN "settleAmount" ELSE 0 END), 0) AS "closedSum",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Closed' THEN 1 ELSE 0 END), 0) AS "closedCount",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Fail' THEN "settleAmount" ELSE 0 END), 0) AS "failedSum",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Fail' THEN 1 ELSE 0 END), 0) AS "failedCount",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Pending' THEN "settleAmount" ELSE 0 END), 0) AS "pendingSum",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Consumption' AND status = 'Pending' THEN 1 ELSE 0 END), 0) AS "pendingCount",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Credit' AND status = 'Closed' THEN "settleAmount" ELSE 0 END), 0) AS "refundSum",
+    COALESCE(SUM(CASE WHEN "businessType" = 'Credit' AND status = 'Closed' THEN 1 ELSE 0 END), 0) AS "refundCount"
+FROM "qbit_card_transaction" AS q
+WHERE "deleteTime" IS NULL
+  AND "secondLabel" IN (
+      '数字商品媒体',
+      '数字商品 – 游戏',
+      '大型数字商品商家',
+      '付费电视/广播/流媒体服务',
+      '计算机软件商店',
+      '数字产品-应用程序',
+      '直接营销——连续性/订阅商家',
+      '计算机编程、数据处理和集成系统设计服务'
+  )
+  AND "accountId"::UUID IN (
+      'a9cda2aa-92c6-4f98-ae58-a2e01ecae10b',
+      '4d0a940c-48c8-4571-8869-8a9a5ab0b13f',
+      '09837659-6b48-4de5-9368-97686d747564',
+      '4119aa0f-c4db-40f6-8dc0-af0f4ba66d23',
+      '5044e827-f811-4611-8403-38cd1fe74120'
+  )
+  AND "completeTime" >= '2026-03-10 00:00:00'
+  AND "completeTime" <= '2026-09-07 00:00:00'
+GROUP BY "accountId";
+```
+
+> SQL 15–18 是根据当前源码 Mapper 补充的标签链路 SQL；SQL 18 的标签值为基于现有日志的 mock 参数。
+
+## SQL 19：getControlStatistics（当前链路最慢）
+
+> 代码位置：`QbitCardLabelServiceImpl` 调用 `OdsLabelTransactionMapper.getControlStatistics()`。
+>
+> 用途：按账户统计量子卡交易的消费、拒付、退款、未验证、关闭、有效、冲正、强制验证、盗刷和零授权等管控指标，供自动管控规则判断。
+>
+> 性能备注：本次日志单次最大耗时约 19.73 秒，平均约 16.2 秒，共执行 32 次，是当前自动管控链路最慢的 SQL。SQL 同时保留 `transaction_time` 业务时间条件，并增加 `create_time` 前后 7 天条件以触发分区裁剪。
+
+```sql
+SELECT
+    COALESCE(SUM(CASE
+        WHEN qcte."type" = 'Consumption'
+         AND NOT qcte.business_code_list @> '1001'::jsonb
+         AND NOT qcte.business_code_list @> '1008'::jsonb
+         AND NOT qcte.business_code_list @> '1009'::jsonb
+         AND NOT qcte.business_code_list @> '1011'::jsonb
+         AND NOT qcte.business_code_list @> '1013'::jsonb
+         AND NOT qcte.business_code_list @> '1015'::jsonb
+         AND NOT qcte.business_code_list @> '1103'::jsonb
+        THEN 1 ELSE 0
+    END), 0) AS "allConsumeCount",
+    COALESCE(SUM(CASE
+        WHEN qcte."type" = 'Consumption'
+         AND NOT qcte.business_code_list @> '1001'::jsonb
+         AND NOT qcte.business_code_list @> '1008'::jsonb
+         AND NOT qcte.business_code_list @> '1009'::jsonb
+         AND NOT qcte.business_code_list @> '1013'::jsonb
+         AND NOT qcte.business_code_list @> '1015'::jsonb
+        THEN qcte.usd_amount ELSE 0
+    END) - SUM(CASE
+        WHEN qcte.business_code_list @> '1105'::jsonb
+        THEN qcte.usd_amount ELSE 0
+    END), 0) AS "allConsumeAmount",
+    COALESCE(SUM(CASE
+        WHEN qcte."type" = 'Consumption'
+         AND qcte.status = 'Fail'
+         AND NOT qcte.business_code_list @> '1008'::jsonb
+         AND NOT qcte.business_code_list @> '1009'::jsonb
+         AND NOT qcte.business_code_list @> '1011'::jsonb
+         AND NOT qcte.business_code_list @> '1013'::jsonb
+         AND NOT qcte.business_code_list @> '1015'::jsonb
+        THEN 1 ELSE 0
+    END), 0) AS "rejectCount",
+    COALESCE(SUM(CASE
+        WHEN qcte."type" = 'Consumption'
+         AND qcte.status = 'Fail'
+         AND NOT qcte.business_code_list @> '1008'::jsonb
+         AND NOT qcte.business_code_list @> '1009'::jsonb
+         AND NOT qcte.business_code_list @> '1013'::jsonb
+         AND NOT qcte.business_code_list @> '1015'::jsonb
+        THEN qcte.usd_amount ELSE 0
+    END), 0) AS "rejectAmount",
+    COALESCE(SUM(CASE
+        WHEN qcte."type" = 'Credit'
+         AND NOT qcte.business_code_list @> '1105'::jsonb
+        THEN 1 ELSE 0
+    END), 0) AS "creditCount",
+    COALESCE(SUM(CASE
+        WHEN qcte."type" = 'Credit'
+         AND NOT qcte.business_code_list @> '1105'::jsonb
+        THEN qcte.usd_amount ELSE 0
+    END), 0) AS "creditAmount",
+    COALESCE(SUM(CASE
+        WHEN qcte."type" = 'Consumption'
+         AND NOT qcte.business_code_list @> '1001'::jsonb
+         AND NOT qcte.business_code_list @> '1006'::jsonb
+         AND NOT qcte.business_code_list @> '1008'::jsonb
+         AND NOT qcte.business_code_list @> '1009'::jsonb
+         AND NOT qcte.business_code_list @> '1103'::jsonb
+         AND NOT qcte.business_code_list @> '1010'::jsonb
+         AND NOT qcte.business_code_list @> '1011'::jsonb
+         AND NOT qcte.business_code_list @> '1013'::jsonb
+         AND NOT qcte.business_code_list @> '1015'::jsonb
+        THEN 1 ELSE 0
+    END), 0) AS "unVerifyCount",
+    COALESCE(SUM(CASE
+        WHEN qcte."type" = 'Consumption'
+         AND NOT qcte.business_code_list @> '1001'::jsonb
+         AND NOT qcte.business_code_list @> '1006'::jsonb
+         AND NOT qcte.business_code_list @> '1008'::jsonb
+         AND NOT qcte.business_code_list @> '1009'::jsonb
+         AND NOT qcte.business_code_list @> '1013'::jsonb
+         AND NOT qcte.business_code_list @> '1015'::jsonb
+        THEN qcte.usd_amount ELSE 0
+    END) - SUM(CASE
+        WHEN qcte.business_code_list @> '1105'::jsonb
+        THEN qcte.usd_amount ELSE 0
+    END), 0) AS "unVerifyAmount",
+    COALESCE(SUM(CASE
+        WHEN qcte."type" = 'Consumption'
+         AND qcte.status = 'Closed'
+         AND NOT qcte.business_code_list @> '1001'::jsonb
+         AND NOT qcte.business_code_list @> '1006'::jsonb
+         AND NOT qcte.business_code_list @> '1103'::jsonb
+         AND NOT qcte.business_code_list @> '1010'::jsonb
+         AND NOT qcte.business_code_list @> '1011'::jsonb
+         AND NOT qcte.business_code_list @> '1013'::jsonb
+        THEN 1 ELSE 0
+    END), 0) AS "closeCount",
+    COALESCE(SUM(CASE
+        WHEN qcte."type" = 'Consumption'
+         AND qcte.status = 'Closed'
+         AND NOT qcte.business_code_list @> '1001'::jsonb
+         AND NOT qcte.business_code_list @> '1006'::jsonb
+         AND NOT qcte.business_code_list @> '1013'::jsonb
+        THEN qcte.usd_amount ELSE 0
+    END) - SUM(CASE
+        WHEN qcte.business_code_list @> '1105'::jsonb
+        THEN qcte.usd_amount ELSE 0
+    END), 0) AS "closeAmount",
+    COALESCE(SUM(CASE
+        WHEN qcte."type" = 'Consumption'
+         AND qcte.status = 'Closed'
+         AND NOT qcte.business_code_list @> '1001'::jsonb
+         AND NOT qcte.business_code_list @> '1006'::jsonb
+         AND NOT qcte.business_code_list @> '1103'::jsonb
+         AND NOT qcte.business_code_list @> '1010'::jsonb
+         AND NOT qcte.business_code_list @> '1011'::jsonb
+         AND NOT qcte.business_code_list @> '1013'::jsonb
+        THEN 1 ELSE 0
+    END) - SUM(CASE
+        WHEN qcte."type" = 'Credit'
+         AND NOT qcte.business_code_list @> '1105'::jsonb
+        THEN 1 ELSE 0
+    END), 0) AS "effectiveCount",
+    COALESCE(SUM(CASE
+        WHEN qcte."type" = 'Consumption'
+         AND qcte.status = 'Closed'
+         AND NOT qcte.business_code_list @> '1001'::jsonb
+         AND NOT qcte.business_code_list @> '1006'::jsonb
+         AND NOT qcte.business_code_list @> '1013'::jsonb
+        THEN qcte.usd_amount ELSE 0
+    END) - SUM(CASE
+        WHEN qcte."type" = 'Credit'
+        THEN qcte.usd_amount ELSE 0
+    END), 0) AS "effectiveAmount",
+    COALESCE(SUM(CASE WHEN qcte."type" = 'Reversal' THEN 1 ELSE 0 END), 0) AS "reversalCount",
+    COALESCE(SUM(CASE WHEN qcte."type" = 'Reversal' THEN qcte.usd_amount ELSE 0 END), 0) AS "reversalAmount",
+    COALESCE(SUM(CASE WHEN qcte.business_code_list @> '1001'::jsonb THEN 1 ELSE 0 END), 0) AS "mandatoryCount",
+    COALESCE(SUM(CASE WHEN qcte.business_code_list @> '1001'::jsonb THEN qcte.usd_amount ELSE 0 END), 0) AS "mandatoryAmount",
+    COALESCE(SUM(CASE WHEN qcte.business_code_list @> '1013'::jsonb THEN 1 ELSE 0 END), 0) AS "theftbrushCount",
+    COALESCE(SUM(CASE WHEN qcte.business_code_list @> '1013'::jsonb THEN qcte.usd_amount ELSE 0 END), 0) AS "theftbrushAmount",
+    COALESCE(SUM(CASE
+        WHEN qcte.business_code_list @> '1010'::jsonb
+         AND NOT qcte.business_code_list @> '1011'::jsonb
+         AND NOT qcte.business_code_list @> '1013'::jsonb
+        THEN 1 ELSE 0
+    END), 0) AS "zeroAuthCount",
+    a."id" AS "accountId"
+FROM "quantum_card_transaction_extend_p" AS qcte
+LEFT JOIN "qbitCard" AS q
+    ON qcte."card_id" = q.id
+LEFT JOIN account AS a
+    ON qcte."account_id" = a."id"
+WHERE qcte."delete_time" IS NULL
+  AND qcte."account_id"::UUID IN (
+      '1236a60b-4914-445b-8b54-c546e16e15a0',
+      '18445cc5-294f-4e0d-aaf1-5c8f4c071d2b',
+      '18cce9f3-7ce7-4449-b9ac-979b875371b5',
+      '4869df81-26a3-4799-9666-2621866c5c08',
+      '7659a5f4-b45b-4b9f-b12e-cce88470aeb3',
+      '87320d36-a579-49de-8352-ada6f7b04f05',
+      '875db7bc-a043-45ea-bd99-8b5ce87c3d52',
+      'a9cda2aa-92c6-4f98-ae58-a2e01ecae10b',
+      '4d0a940c-48c8-4571-8869-8a9a5ab0b13f',
+      '09837659-6b48-4de5-9368-97686d747564',
+      '4119aa0f-c4db-40f6-8dc0-af0f4ba66d23',
+      '5044e827-f811-4611-8403-38cd1fe74120',
+      '11189e43-03a5-4dd3-98f4-e853cab0cedb',
+      '3c453dc2-4a4a-4d1f-8614-2d8d024af63f',
+      '16ce1cec-33f0-48a9-aa7b-dc9fd952aef4',
+      '97034b7e-aa68-4abf-a56e-250b4ff37266',
+      '4d47bcc5-c8f3-4c74-ad14-f0390e83618e'
+  )
+  AND qcte."transaction_time" >= '2026-03-10 00:00:00'
+  AND qcte."transaction_time" <= '2026-09-07 00:00:00'
+  AND qcte."create_time" >= ('2026-03-10 00:00:00'::timestamp - INTERVAL '7 days')
+  AND qcte."create_time" <= ('2026-09-07 00:00:00'::timestamp + INTERVAL '7 days')
+GROUP BY a."id";
+```
