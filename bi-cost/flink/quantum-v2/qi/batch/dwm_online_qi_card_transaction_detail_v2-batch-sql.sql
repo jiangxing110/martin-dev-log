@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-15
+-- Updated Time:   2026-09-07 18:35:12
 -- 历史名称：sp_init_qi_card_dwm_by_fast.sql
 -- Description:    Quantum QI v2 DWM 批量初始化/回刷
 -- 作业元信息：
@@ -14,7 +15,7 @@
 --   3. DWM 按 transaction_time 月分区
 --   4. 不处理 cost_fixed_fee，固定成本由独立脚本回刷
 --   5. 大表必须在 JDBC 子查询内下推时间窗口，并关闭 auto-commit 以启用 PostgreSQL 游标读取。
---   6. qbit_card_transaction 和 quantum_card_transaction_extend 都是亿级表，必须在数据库侧先按交易时间裁剪主表，再按 transaction_id 补扩展字段。
+--   6. qbit_card_transaction 和 quantum_card_transaction_extend_p 都是亿级表，必须在数据库侧先按交易时间裁剪主表，再按 transaction_id 补扩展字段。
 --********************************************************************--
 
 SET 'parallelism.default' = '4';
@@ -62,7 +63,7 @@ CREATE TEMPORARY TABLE source_qbit_card_transaction (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT t.id::text AS id, t."transactionId"::text AS transaction_id, t."accountId"::text AS account_id, t."cardId"::text AS card_id, t.status, t."transactionTime" AS transaction_time, t."businessType" AS business_type, t.provider, CAST(t."specialSourceData" AS text) AS special_source_data, t.version, t.remarks, t."createTime" AS create_time, t."updateTime" AS update_time, t."deleteTime" AS delete_time, e.usd_amount, e.channel_provision, e.country FROM public.qbit_card_transaction t INNER JOIN public.card_bin b ON b.system_provider = t.provider AND b.brand = ''QbitIssuing'' LEFT JOIN public.quantum_card_transaction_extend e ON e.transaction_id::text = t."transactionId"::text AND e.channel_provision = ''QBIT'' WHERE t."deleteTime" IS NULL AND t."transactionTime" >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t."transactionTime" < CAST(''${end_time}'' AS TIMESTAMP(6)) AND t."businessType" IN (''Consumption'', ''Reversal'', ''Credit'')) AS qbit_card_transaction_f',
+    'table-name' = '(SELECT t.id::text AS id, t."transactionId"::text AS transaction_id, t."accountId"::text AS account_id, t."cardId"::text AS card_id, t.status, t."transactionTime" AS transaction_time, t."businessType" AS business_type, t.provider, CAST(t."specialSourceData" AS text) AS special_source_data, t.version, t.remarks, t."createTime" AS create_time, t."updateTime" AS update_time, t."deleteTime" AS delete_time, e.usd_amount, e.channel_provision, e.country FROM public.qbit_card_transaction t INNER JOIN public.card_bin b ON b.system_provider = t.provider AND b.brand = ''QbitIssuing'' LEFT JOIN public.quantum_card_transaction_extend_p e ON e.transaction_id::text = t."transactionId"::text AND e.channel_provision = ''QBIT'' WHERE t."deleteTime" IS NULL AND t."transactionTime" >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND t."transactionTime" < CAST(''${end_time}'' AS TIMESTAMP(6)) AND t."businessType" IN (''Consumption'', ''Reversal'', ''Credit'')) AS qbit_card_transaction_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

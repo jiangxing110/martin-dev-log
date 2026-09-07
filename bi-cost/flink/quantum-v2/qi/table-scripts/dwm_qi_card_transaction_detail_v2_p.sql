@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-15
+-- Updated Time:   2026-09-07 18:35:12
 -- Description:    QI v2 渠道交易明细 DWM 表
 -- Notes:
 --   1. v2 表不替换旧 dwm_qi_card_transaction_detail_p，先并行落地。
@@ -43,7 +44,7 @@ PARTITION BY RANGE (
 
 COMMENT ON TABLE "dwm"."dwm_qi_card_transaction_detail_v2_p" IS 'QI v2 渠道交易明细 DWM 表，保留状态机当前事实';
 COMMENT ON COLUMN "dwm"."dwm_qi_card_transaction_detail_v2_p"."id" IS 'DWM 主键，对应 qbit_card_transaction.id';
-COMMENT ON COLUMN "dwm"."dwm_qi_card_transaction_detail_v2_p"."transaction_id" IS '原始交易ID，用于关联 quantum_card_transaction_extend.transaction_id';
+COMMENT ON COLUMN "dwm"."dwm_qi_card_transaction_detail_v2_p"."transaction_id" IS '原始交易ID，用于关联 quantum_card_transaction_extend_p.transaction_id';
 COMMENT ON COLUMN "dwm"."dwm_qi_card_transaction_detail_v2_p"."account_id" IS '账户ID，来源 qbit_card_transaction.accountId';
 COMMENT ON COLUMN "dwm"."dwm_qi_card_transaction_detail_v2_p"."account_type" IS '账户类型，来源 dim_account.account_type';
 COMMENT ON COLUMN "dwm"."dwm_qi_card_transaction_detail_v2_p"."account_category" IS '账户分类，来源 dim_account.type';
@@ -59,7 +60,7 @@ COMMENT ON COLUMN "dwm"."dwm_qi_card_transaction_detail_v2_p"."source_update_tim
 COMMENT ON COLUMN "dwm"."dwm_qi_card_transaction_detail_v2_p"."source_delete_time" IS '来源记录软删除时间';
 COMMENT ON COLUMN "dwm"."dwm_qi_card_transaction_detail_v2_p"."is_current_valid" IS '当前记录是否可作为 DWS 候选，最终计算仍由 DWS 状态条件决定';
 COMMENT ON COLUMN "dwm"."dwm_qi_card_transaction_detail_v2_p"."billing_amount" IS '清算/计费金额 USD';
-COMMENT ON COLUMN "dwm"."dwm_qi_card_transaction_detail_v2_p"."is_qbit_provision" IS '是否 QBIT 渠道，来源 quantum_card_transaction_extend.channel_provision';
+COMMENT ON COLUMN "dwm"."dwm_qi_card_transaction_detail_v2_p"."is_qbit_provision" IS '是否 QBIT 渠道，来源 quantum_card_transaction_extend_p.channel_provision';
 COMMENT ON COLUMN "dwm"."dwm_qi_card_transaction_detail_v2_p"."is_hk_region" IS '是否香港地区交易，country IN (HK,HKG)';
 COMMENT ON COLUMN "dwm"."dwm_qi_card_transaction_detail_v2_p"."is_consumption" IS '是否 Consumption 交易';
 COMMENT ON COLUMN "dwm"."dwm_qi_card_transaction_detail_v2_p"."is_reversal_or_credit" IS '是否 Reversal 或 Credit，用于净额抵减';

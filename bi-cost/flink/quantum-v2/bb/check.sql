@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         Codex
 -- Created Time:   2026-07-20
+-- Updated Time:   2026-09-07 18:35:12
 -- Description:    BB V2 成本口径独立排查 SQL
 -- Purpose:
 --   1. 不依赖 bi_month 脚本中的 tmp_* 临时表，可单独执行。
@@ -139,7 +140,7 @@ raw_refund_by_post_date AS (
         COUNT(DISTINCT CASE WHEN RIGHT(s.raw_data::json->>'txnLocation', 2) NOT IN ('US', 'USA') AND c."type" = 'Master' THEN t.source_id END) AS master_int_refund_count,
         COUNT(DISTINCT CASE WHEN RIGHT(s.raw_data::json->>'txnLocation', 2) NOT IN ('US', 'USA') AND c."type" = 'VISA' THEN t.source_id END) AS visa_int_refund_count,
         COUNT(DISTINCT CASE WHEN RIGHT(s.raw_data::json->>'txnLocation', 2) IN ('US', 'USA') AND c."type" IN ('Master', 'VISA') THEN t.source_id END) AS dom_refund_count
-    FROM public.quantum_card_transaction_extend t
+    FROM public.quantum_card_transaction_extend_p t
     INNER JOIN public."qbitCard" c
         ON c."id" = t.card_id
     INNER JOIN ods.ods_qbit_card_settlement s
@@ -410,7 +411,7 @@ extra_amount AS (
             ELSE 'International'
         END AS region,
         -SUM(s.billing_amount) AS net_amount
-    FROM public.quantum_card_transaction_extend t
+    FROM public.quantum_card_transaction_extend_p t
     INNER JOIN public."qbitCard" c ON c."id" = t.card_id
     INNER JOIN extra_settlement s
         ON t.card_transaction_id::text = s.qbit_card_transaction_id
@@ -639,7 +640,7 @@ null_detail_amount AS (
         c."type" AS card_org,
         CASE WHEN s.settle_country IN ('US', 'USA') THEN 'Domestic' ELSE 'International' END AS region,
         -SUM(s.billing_amount) AS net_amount
-    FROM public.quantum_card_transaction_extend t
+    FROM public.quantum_card_transaction_extend_p t
     INNER JOIN public."qbitCard" c ON c."id" = t.card_id
     INNER JOIN settlement s ON t.card_transaction_id::text = s.qbit_card_transaction_id
     CROSS JOIN params p
@@ -741,7 +742,7 @@ raw_q3 AS (
         COUNT(*) AS joined_rows,
         COUNT(DISTINCT CONCAT(t.id::text, ':', s.settlement_id)) AS distinct_pairs,
         -SUM(s.billing_amount) AS net_amount
-    FROM public.quantum_card_transaction_extend t
+    FROM public.quantum_card_transaction_extend_p t
     INNER JOIN public."qbitCard" c ON c."id" = t.card_id
     INNER JOIN raw_settlement s ON t.card_transaction_id::text = s.qbit_card_transaction_id
     CROSS JOIN params p
@@ -936,7 +937,7 @@ raw_txn AS MATERIALIZED (
         t.original_completion_time,
         t.business_code_list,
         c."type" AS card_org
-    FROM public.quantum_card_transaction_extend t
+    FROM public.quantum_card_transaction_extend_p t
     INNER JOIN public."qbitCard" c ON c."id" = t.card_id
     CROSS JOIN params p
     WHERE t.channel_provision = 'BLUEBANC'
@@ -1153,7 +1154,7 @@ refund_transaction AS (
         t.card_id::text AS card_id,
         t.detail,
         c."type" AS card_org
-    FROM public.quantum_card_transaction_extend t
+    FROM public.quantum_card_transaction_extend_p t
     INNER JOIN public."qbitCard" c
         ON c."id" = t.card_id
     WHERE t.channel_provision = 'BLUEBANC'
@@ -1223,7 +1224,7 @@ SELECT
     s.transaction_type,
     s.billing_amount
 FROM ods.ods_qbit_card_settlement s
-INNER JOIN public.quantum_card_transaction_extend t
+INNER JOIN public.quantum_card_transaction_extend_p t
     ON t.card_transaction_id::text = s.qbit_card_transaction_id
 INNER JOIN public."qbitCard" c
     ON c."id" = t.card_id
@@ -1264,7 +1265,7 @@ SELECT
          AND c."type" IN ('Master', 'VISA')
         THEN t.source_id
     END) AS dom_refund_count
-FROM public.quantum_card_transaction_extend t
+FROM public.quantum_card_transaction_extend_p t
 INNER JOIN public."qbitCard" c
     ON c."id" = t.card_id
 INNER JOIN ods.ods_qbit_card_settlement s

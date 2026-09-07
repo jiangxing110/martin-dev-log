@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-16
--- Updated Time:   2026-09-07 18:35:12
+-- Updated Time:   2026-10-07 18:35:12
 -- Description:    BB v2 渠道固定成本批量回刷（月固定成本按天均分，逐日分摊）
 -- 作业元信息：
 --   作业类型：批处理
@@ -65,7 +65,7 @@ CREATE TEMPORARY TABLE source_dws_bb_card_finance_daily_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, report_date, account_id, account_type, account_category, system_type, sale_id, am_id, total_net_amount, special_fee_type, delete_time FROM dws.dws_bb_card_finance_daily_v2_p WHERE report_date >= CAST(''2026-08-01 00:00:00'' AS date) AND report_date < CAST(''2026-09-01 00:00:00'' AS date)) AS dws_bb_card_finance_daily_v2_p_f',
+    'table-name' = '(SELECT id, report_date, account_id, account_type, account_category, system_type, sale_id, am_id, total_net_amount, special_fee_type, delete_time FROM dws.dws_bb_card_finance_daily_v2_p WHERE report_date >= CAST(''2026-09-01 00:00:00'' AS date) AND report_date < CAST(''2026-10-01 00:00:00'' AS date)) AS dws_bb_card_finance_daily_v2_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -77,13 +77,13 @@ SELECT DISTINCT report_month, CAST(DATE_FORMAT(CAST(DATE_ADD(report_month, 32) A
 FROM (
     SELECT CAST(DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
     FROM source_dws_bb_card_finance_daily_v2_p
-    WHERE report_date >= CAST('2026-08-01 00:00:00' AS DATE)
-      AND report_date < CAST('2026-09-01 00:00:00' AS DATE)
+    WHERE report_date >= CAST('2026-09-01 00:00:00' AS DATE)
+      AND report_date < CAST('2026-10-01 00:00:00' AS DATE)
     UNION
     SELECT CAST(DATE_FORMAT(CAST(statistics_time AS TIMESTAMP(6)), 'yyyy-MM-01') AS DATE) AS report_month
     FROM source_bi_month_tag
     WHERE tag = 'CHANNEL_COST' AND provider = 'BB'
-      AND statistics_time >= CAST('2026-08-01 00:00:00' AS TIMESTAMP(6)) AND statistics_time < CAST('2026-09-01 00:00:00' AS TIMESTAMP(6))
+      AND statistics_time >= CAST('2026-09-01 00:00:00' AS TIMESTAMP(6)) AND statistics_time < CAST('2026-10-01 00:00:00' AS TIMESTAMP(6))
 ) m
 WHERE report_month IS NOT NULL;
 
@@ -208,7 +208,7 @@ CREATE TEMPORARY TABLE source_delete_bb_channel_fixed_fee_monthly_result (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT dws.fn_delete_bb_channel_fixed_fee_v2_cdc(CAST(''2026-08-01'' AS date), CAST(''2026-09-01'' AS date), false) AS affected_rows) AS delete_result',
+    'table-name' = '(SELECT dws.fn_delete_bb_channel_fixed_fee_v2_cdc(CAST(''2026-09-01'' AS date), CAST(''2026-10-01'' AS date), false) AS affected_rows) AS delete_result',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-16
--- Updated Time:   2026-09-07 18:35:12
+-- Updated Time:   2026-10-07 18:35:12
 -- Description:    BB v2 Active Card Count 批量回刷
 -- 作业元信息：
 --   作业类型：批处理
@@ -42,7 +42,7 @@ CREATE TEMPORARY TABLE source_dwm_bb_card_auth_detail_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, card_proxy, account_id, account_type, account_category, system_type, auth_time, update_time, delete_time FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE auth_time >= CAST(''2026-08-01 00:00:00'' AS timestamp) AND auth_time < CAST(''2026-09-01 00:00:00'' AS timestamp)) AS dwm_bb_card_auth_detail_v2_p_f',
+    'table-name' = '(SELECT id, card_proxy, account_id, account_type, account_category, system_type, auth_time, update_time, delete_time FROM dwm.dwm_bb_card_auth_detail_v2_p WHERE auth_time >= CAST(''2026-09-01 00:00:00'' AS timestamp) AND auth_time < CAST(''2026-10-01 00:00:00'' AS timestamp)) AS dwm_bb_card_auth_detail_v2_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -55,7 +55,7 @@ CREATE TEMPORARY TABLE source_month_scope (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT CAST(gs.month_start AS DATE) AS report_month FROM generate_series(date_trunc(''month'', CAST(''2026-08-01 00:00:00'' AS TIMESTAMP(6))), date_trunc(''month'', CAST(''2026-09-01 00:00:00'' AS TIMESTAMP(6))) - INTERVAL ''1 month'', INTERVAL ''1 month'') AS gs(month_start)) AS month_scope_f',
+    'table-name' = '(SELECT CAST(gs.month_start AS DATE) AS report_month FROM generate_series(date_trunc(''month'', CAST(''2026-09-01 00:00:00'' AS TIMESTAMP(6))), date_trunc(''month'', CAST(''2026-10-01 00:00:00'' AS TIMESTAMP(6))) - INTERVAL ''1 month'', INTERVAL ''1 month'') AS gs(month_start)) AS month_scope_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -78,7 +78,7 @@ CREATE TEMPORARY TABLE source_dws_bb_card_finance_daily_v2_p (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, report_date, account_id, account_type, account_category, system_type, sale_id, am_id, special_fee_type, remarks, delete_time FROM dws.dws_bb_card_finance_daily_v2_p WHERE report_date >= CAST(''2026-08-01 00:00:00'' AS date) AND report_date < CAST(''2026-09-01 00:00:00'' AS date)) AS dws_bb_card_finance_daily_v2_p_f',
+    'table-name' = '(SELECT id, report_date, account_id, account_type, account_category, system_type, sale_id, am_id, special_fee_type, remarks, delete_time FROM dws.dws_bb_card_finance_daily_v2_p WHERE report_date >= CAST(''2026-09-01 00:00:00'' AS date) AND report_date < CAST(''2026-10-01 00:00:00'' AS date)) AS dws_bb_card_finance_daily_v2_p_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -267,7 +267,7 @@ CREATE TEMPORARY TABLE source_delete_bb_active_card_count_monthly_result (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT dws.fn_delete_bb_active_card_count_v2_cdc(CAST(''2026-08-01'' AS date), CAST(''2026-09-01'' AS date), false) AS affected_rows) AS delete_result',
+    'table-name' = '(SELECT dws.fn_delete_bb_active_card_count_v2_cdc(CAST(''2026-09-01'' AS date), CAST(''2026-10-01'' AS date), false) AS affected_rows) AS delete_result',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
