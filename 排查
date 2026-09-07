@@ -113,3 +113,11 @@ ods_online_crypto_assets_transactions-cdc-sql
 ods_online_idv_channel_request_record-cdc-sql
 ods_online_payment_transaction_record-cdc-sql
 ods_online_qbit_physical_card-cdc-sql
+
+
+主要优化三点：
+
+1.隐藏月账单 0 的费用项;
+2.差额计算需要增加毛利返现的类型，需要返现账单+明细均需要改动;
+3.活跃卡fee明细
+4.admin 客户账单查询需要增加账单更新时间；
