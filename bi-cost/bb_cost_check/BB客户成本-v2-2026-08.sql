@@ -716,3 +716,35 @@ FROM (
 ORDER BY t.seq;
 
 
+
+
+08月成本返现金
+Mastercard Domestic Count Fee	9039.3700
+Mastercard International Count Fee	93711.0210
+VISA Domestic Count Fee	1572.2350
+VISA International Count Fee	22103.2260
+AC Mastercard Domestic Count Fee	11416.4420
+AC Mastercard International Count Fee	9373.1370
+AC VISA Domestic Count Fee	1014.3475
+AC VISA International Count Fee	6011.1540
+Mastercard Domestic Dollar Volume Fee	12407.1844
+Mastercard International Dollar Volume Fee	97235.6883
+Visa Domestic Dollar Volume Fee	1063.0609
+Visa International Dollar Volume Fee	13855.4191
+Mastercard International Reversal Fee	11859.9050
+Visa International Reversal Fee	9117.7800
+Domestic Reversal Fee	1717.7000
+Mastercard International Refund Fee	2538.2955
+VISA International Refund Fee	2554.3350
+Domestic Refund Fee	658.0330
+Mastercard International Decline Fee	38355.0550
+Visa International Decline Fee	7427.0280
+Domestic Decline Fee	9471.1130
+AC Mastercard International Decline Fee	3975.7105
+AC Visa International Decline Fee	416.6190
+AC Domestic Decline Fee	11089.2220
+Active Card Account Fee	13042.4000
+Volume Fee Cost	76108.0028
+Cashback Income	343678.9793
+Fixed Fee	0.0000
+TOTAL	467133.4839
