@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-15
--- Updated Time:   2026-08-23 21:40:00
+-- Updated Time:   2026-09-08 12:22:00
 -- Description:    Quantum QI v2 DWS 批量初始化/回刷
 -- 作业元信息：
 --   作业类型：批处理
@@ -87,7 +87,7 @@ CREATE TEMPORARY TABLE source_dwm_qi_card_transaction_detail_v2_p (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
     -- DWM 明细可能长期累计到千万级，这里必须在 JDBC 子查询内下推时间窗口，避免 Flink 先全表拉取后再过滤。
-    'table-name' = '(SELECT id, transaction_id, account_id, account_type, account_category, system_type, status, transaction_time, version, remarks, create_time, update_time, delete_time, source_update_time, source_delete_time, is_current_valid, billing_amount, is_qbit_provision, is_hk_region, is_consumption, is_reversal_or_credit, has_special_code, is_vip_account, business_type, card_id, sale_id, am_id FROM dwm.dwm_qi_card_transaction_detail_v2_p WHERE delete_time IS NULL AND transaction_time >= CAST(''${start_time}'' AS timestamp) AND transaction_time < CAST(''${end_time}'' AS timestamp)) AS dwm_qi_card_transaction_detail_v2_f',
+    'table-name' = '(SELECT id, transaction_id, account_id, account_type, account_category, system_type, status, transaction_time, version, remarks, create_time, update_time, delete_time, source_update_time, source_delete_time, is_current_valid, billing_amount, is_qbit_provision, is_hk_region, is_consumption, is_reversal_or_credit, has_special_code, is_vip_account, business_type, card_id, sale_id, am_id FROM dwm.dwm_qi_card_transaction_detail_v2_p WHERE delete_time IS NULL AND create_time >= CAST(''${start_time}'' AS timestamp) AND create_time < CAST(''${end_time}'' AS timestamp)) AS dwm_qi_card_transaction_detail_v2_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

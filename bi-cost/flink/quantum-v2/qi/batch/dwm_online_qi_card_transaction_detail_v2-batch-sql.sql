@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-15
--- Updated Time:   2026-09-07 18:35:12
+-- Updated Time:   2026-09-08 12:22:00
 -- 历史名称：sp_init_qi_card_dwm_by_fast.sql
 -- Description:    Quantum QI v2 DWM 批量初始化/回刷
 -- 作业元信息：
