@@ -1,9 +1,9 @@
 -- BB 月度 Cashback rate 种子数据
--- Updated Time: 2026-08-24 01:45:57
+-- Updated Time: 2026-09-08 12:30:00
 -- 说明:
 -- 1. tag 使用 BB_CASH_RATE，供 BB CDC / batch 按 report_month 读取。
 -- 2. 2026-01 ~ 2026-07 使用 BI 提供的月度 cashback rate。
--- 3. 2026-08 及无月度配置时使用 0.02059391，待 BI 提供 2026-08 实际值后再替换。
+-- 3. 2026-07 使用 0.02061664，2026-08 使用 0.02059184，均按实际渠道返现反推。
 -- 4. 2099-01-01 为 fallback 配置，默认 rate 为 0.02059391，避免月份没有 rate 时返回 NULL。
 
 BEGIN;
@@ -53,8 +53,8 @@ WITH seed_rows AS (
             (4, '2026-04-01 00:00:00+08'::timestamptz, '2026-04', 0.02161762::numeric, 'BB 2026-04 monthly cashback rate seed'),
             (5, '2026-05-01 00:00:00+08'::timestamptz, '2026-05', 0.02122117::numeric, 'BB 2026-05 monthly cashback rate seed'),
             (6, '2026-06-01 00:00:00+08'::timestamptz, '2026-06', 0.02085309::numeric, 'BB 2026-06 monthly cashback rate seed'),
-            (7, '2026-07-01 00:00:00+08'::timestamptz, '2026-07', 0.02059391::numeric, 'BB 2026-07 monthly cashback rate seed'),
-            (8, '2026-08-01 00:00:00+08'::timestamptz, '2026-08', 0.02059391::numeric, 'BB 2026-08 monthly cashback rate seed; temporary default'),
+            (7, '2026-07-01 00:00:00+08'::timestamptz, '2026-07', 0.02061664::numeric, 'BB 2026-07 monthly cashback rate seed; derived from actual cashback'),
+            (8, '2026-08-01 00:00:00+08'::timestamptz, '2026-08', 0.02059184::numeric, 'BB 2026-08 monthly cashback rate seed; derived from actual cashback'),
             (99, '2099-01-01 00:00:00+08'::timestamptz, 'DEFAULT_FALLBACK', 0.02059391::numeric, 'BB fallback cashback rate seed')
     ) AS s(period_no, statistics_time, detail, rate, remarks)
 )

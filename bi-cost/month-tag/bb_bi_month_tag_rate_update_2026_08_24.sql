@@ -1,5 +1,5 @@
 -- BB 月度 Cashback rate 修正脚本
--- Updated Time: 2026-08-24 01:45:57
+-- Updated Time: 2026-09-08 12:30:00
 -- 说明：直接修正 ods.ods_bi_month_tag 中现有的有效 BB_CASH_RATE 记录。
 
 BEGIN;
@@ -12,8 +12,8 @@ WITH rate_rows(detail, amount) AS (
         ('2026-04', 0.02161762::numeric),
         ('2026-05', 0.02122117::numeric),
         ('2026-06', 0.02085309::numeric),
-        ('2026-07', 0.02059391::numeric),
-        ('2026-08', 0.02059391::numeric),
+        ('2026-07', 0.02061664::numeric),
+        ('2026-08', 0.02059184::numeric),
         ('DEFAULT_FALLBACK', 0.02059391::numeric)
 )
 UPDATE "ods"."ods_bi_month_tag" target

@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         Codex
 -- Created Time:   2026-08-18 00:00:00
+-- Updated Time:   2026-09-08 12:35:00
 -- Description:    按 BB 实际渠道返现及 DW 实际 cashback base
 --                 自动反推月度 cashback_rate，并更新 cashback_income
 --
@@ -28,7 +29,8 @@ WITH actual_month AS (
             (DATE '2026-04-01', CAST(339556 AS NUMERIC(20, 4))),
             (DATE '2026-05-01', CAST(352991 AS NUMERIC(20, 4))),
             (DATE '2026-06-01', CAST(332480 AS NUMERIC(20, 4))),
-            (DATE '2026-07-01', CAST(359663 AS NUMERIC(20, 4)))
+            (DATE '2026-07-01', CAST(359663 AS NUMERIC(20, 4))),
+            (DATE '2026-08-01', CAST(340422 AS NUMERIC(20, 4)))
     ) AS t(report_month, actual_cashback_income)
 ),
 
@@ -50,7 +52,7 @@ monthly_base AS (
     WHERE delete_time IS NULL
       AND special_fee_type = 'NORMAL'
       AND report_date >= DATE '2026-01-01'
-      AND report_date <  DATE '2026-08-01'
+      AND report_date <  DATE '2026-09-01'
     GROUP BY
         DATE_TRUNC('month', report_date)::date
 ),
@@ -115,7 +117,8 @@ WITH actual_month AS (
             (DATE '2026-04-01', CAST(339556 AS NUMERIC(20, 4))),
             (DATE '2026-05-01', CAST(352991 AS NUMERIC(20, 4))),
             (DATE '2026-06-01', CAST(332480 AS NUMERIC(20, 4))),
-            (DATE '2026-07-01', CAST(359663 AS NUMERIC(20, 4)))
+            (DATE '2026-07-01', CAST(359663 AS NUMERIC(20, 4))),
+            (DATE '2026-08-01', CAST(340422 AS NUMERIC(20, 4)))
     ) AS t(report_month, actual_cashback_income)
 ),
 
@@ -132,7 +135,7 @@ monthly_base AS (
     WHERE delete_time IS NULL
       AND special_fee_type = 'NORMAL'
       AND report_date >= DATE '2026-01-01'
-      AND report_date <  DATE '2026-08-01'
+      AND report_date <  DATE '2026-09-01'
 
     GROUP BY
         DATE_TRUNC('month', report_date)::date
@@ -191,7 +194,8 @@ WITH actual_month AS (
             (DATE '2026-04-01', CAST(339556 AS NUMERIC(20, 4))),
             (DATE '2026-05-01', CAST(352991 AS NUMERIC(20, 4))),
             (DATE '2026-06-01', CAST(332480 AS NUMERIC(20, 4))),
-            (DATE '2026-07-01', CAST(359663 AS NUMERIC(20, 4)))
+            (DATE '2026-07-01', CAST(359663 AS NUMERIC(20, 4))),
+            (DATE '2026-08-01', CAST(340422 AS NUMERIC(20, 4)))
     ) AS t(report_month, actual_cashback_income)
 ),
 
@@ -203,7 +207,7 @@ monthly_base AS (
     WHERE delete_time IS NULL
       AND special_fee_type = 'NORMAL'
       AND report_date >= DATE '2026-01-01'
-      AND report_date < DATE '2026-08-01'
+      AND report_date < DATE '2026-09-01'
     GROUP BY DATE_TRUNC('month', report_date)::date
 ),
 
