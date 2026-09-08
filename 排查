@@ -121,3 +121,49 @@ ods_online_qbit_physical_card-cdc-sql
 2.差额计算需要增加毛利返现的类型，需要返现账单+明细均需要改动;
 3.活跃卡fee明细
 4.admin 客户账单查询需要增加账单更新时间；
+
+
+bb 成本渠道返现金
+Mastercard Domestic Count Fee	9122.7550
+Mastercard International Count Fee	93900.4605
+VISA Domestic Count Fee	1574.9175
+VISA International Count Fee	21991.1310
+AC Mastercard Domestic Count Fee	11347.0090
+AC Mastercard International Count Fee	9342.1290
+AC VISA Domestic Count Fee	1006.3725
+AC VISA International Count Fee	5995.4130
+Mastercard Domestic Dollar Volume Fee	12354.7271
+Mastercard International Dollar Volume Fee	97052.9994
+Visa Domestic Dollar Volume Fee	1046.8854
+Visa International Dollar Volume Fee	13303.4245
+Mastercard International Reversal Fee	11794.4760
+Visa International Reversal Fee	9094.2180
+Domestic Reversal Fee	1712.1820
+Mastercard International Refund Fee	2810.5845
+VISA International Refund Fee	2867.7240
+Domestic Refund Fee	708.3910
+Mastercard International Decline Fee	13366.9290
+Visa International Decline Fee	2593.2480
+Domestic Decline Fee	3440.4730
+AC Mastercard International Decline Fee	1284.1340
+AC Visa International Decline Fee	137.8020
+AC Domestic Decline Fee	3183.3520
+Active Card Account Fee	6041.0000
+Volume Fee Cost	75601.2623
+Fixed Fee	0.0000
+BB Channel Cashback Base	16427867.1900
+BB Cashback Income	338414.6865
+TOTAL	412673.9998
+
+
+qi 成本渠道返现
+qiReimbursement	315607.3327	1.00000000	315607.3327
+qiCardService	84527.4580	0.97490000	82405.8188
+qiSettleAuth	25529.3650	0.90190000	23024.9343
+qiSettleVip	118929.6100	1.06360000	126493.5332
+qiVrmFee	46796.9400	1.34340000	62867.0092
+qiHkRegular	238.1340	0.99040000	235.8479
+qiHkVip	357.2010	0.99040000	353.7719
+qiDcsf	20256.4392	1.12630000	22814.8275
+fixed_fee_cost	0.0000		0.0000
+TOTAL	612242.4799		633803.0754
