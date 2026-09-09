@@ -208,3 +208,56 @@ bb: -926
 
 BB Cashback Income	340456.2291
 TOTAL	466179.6133
+
+
+   /**
+     * 查询各产品收入、有效收入、成本、毛利及毛利率。
+     */
+    @GetMapping("/product-income-effective-profit-cogs")
+    public Result<List<ProductIncomeEffectiveProfitCogsVO>> queryProductIncomeEffectiveProfitCogs(
+            @Valid @ParameterObject StatisticsQueryDTO queryDTO) {
+        return Result.ok(profitService.queryProductIncomeEffectiveProfitCogs(queryDTO));
+    }
+
+
+
+dws_tpv_metrics表 product ='other' , metric_name='公司理财',  这个新增一个Other类型
+dws_tpv_metrics表 product ='other' , metric_name in ('线下API一次性收入' , ‘收入调整' , ‘API低消调整’,’线下实体卡制卡费') 都归属于量子卡业务 
+API低消调整为-  ， 其他指标都为+
+
+
+业务调整
+QbitCardGroupBelongEnum 新增了
+了LINK_WALLET("Link_Wallet");
+类型
+此类group 我们在
+api日账单
+
+商户资金对账单,业务明细对账单
+CustomerSettleType里
+ /**
+     * 商户资金对账单
+     */
+    Merchant_Capital_Statement("Merchant_Capital_Statement", "商户资金对账单"),
+    /**
+     * 业务明细对账单
+     */
+    Detailed_Business_Statement("Detailed_Business_Statement", "业务明细对账单"),
+关于grouptransaction交易要过滤这部分
+相关的余额计算,交易明细过滤
+
+
+  OrendaCardRecharge44661616("OrendaCardRecharge44661616", "OrendaCard44661616", CardChannelProvisionEnum.ORENDA, "44661616", "44661616储值卡"),
+    OrendaCardRecharge44661609("OrendaCardRecharge44661609"
+
+【测试中】【admin】核心数据看板收入补充线下逻辑
+    https://github.com/PalmDrive/qbit-assets/pull/7453
+
+日账单和月资金账单排除掉 sle 的卡和余额
+    https://github.com/PalmDrive/qbit-assets/pull/7454
+
+net 账单
+    https://github.com/PalmDrive/qbit-assets/pull/7455
+    https://github.com/PalmDrive/qbit-admin-v3/pull/2393
+
+    

@@ -13,3 +13,8 @@ Revenue Sharing为我方跟客户对渠道返现总额扣除渠道交易成本�
 我希望参考ApiClientTransactionJob这个job 
 我们对设置过scheme返现的客户(注意我希望如果是月结还是保持不变)及其子客户发生的scheme-fee交易进行特殊的按月结处理
 2.消费类型的交易里面除了scheme-fee还有其他的费率哪些fee我不要按月结处理
+
+
+现在补充一下 产品的意思是 scheme 不真实扣钱 无论是实时收费 还是月结收费 ,
+我们只是为了记录scheme-fee 用于rs 返现计算
+所以我们的月账单讲不再计算这些费用

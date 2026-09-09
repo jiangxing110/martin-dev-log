@@ -1,0 +1,50 @@
+-- 01. INSERT_DATA dws_qbit_card_wallet_transaction_2026
+-- =========================================
+INSERT INTO "public"."dws_qbit_card_wallet_transaction_2026" (
+  "id", "account_id", "business_type","status", "origin_amount", "transaction_count",
+  "fee", "create_date","version", "create_time", "update_time"
+)
+SELECT
+  generate_snowflake_id(),
+  tr."accountId",
+  tr."businessType",
+  tr."status",
+  COALESCE(SUM(tr."originAmount"), 0) AS origin_amount,
+  COUNT(*) AS transaction_count,
+  COALESCE(SUM(tr."fee"), 0) AS fee,
+  TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date,
+  1 AS version,
+  NOW() AS create_time,
+  NOW() AS update_time
+FROM "qbitCardWalletTransaction" AS tr
+WHERE tr."deleteTime" IS NULL
+  AND tr."createTime" >= '2026-01-01 00:00:00' AND tr."createTime" < '2026-09-09 00:00:00'
+GROUP BY tr."accountId", tr."businessType", create_date, tr."status"
+ON CONFLICT (id) DO NOTHING;
+
+-- 02. INSERT_DATA dws_qbit_card_transaction_2026
+-- =========================================
+INSERT INTO "public"."dws_qbit_card_transaction_2026" (
+  "id", "account_id", "business_type", "status", "provider", "bin", "origin_amount", "settle_amount",
+  "transaction_count", "fee", "create_date", "version", "create_time","update_time")
+SELECT
+  generate_snowflake_id(),
+  tr."accountId",
+  tr."businessType",
+  tr."status",
+  tr."provider",
+  qc."firstSix" AS "bin",
+  COALESCE(SUM(tr."originalAmount"), 0) AS origin_amount,
+  COALESCE(SUM(tr."settleAmount"), 0) AS settle_amount,
+  COUNT(*) AS transaction_count,
+  COALESCE(SUM(tr."fee"), 0) AS fee,
+  TO_CHAR(tr."createTime", 'YYYY-MM-DD')::DATE AS create_date,
+  1 AS version,
+  NOW() AS create_time,
+  NOW() AS update_time
+FROM "qbit_card_transaction" AS tr
+LEFT JOIN "qbitCard" AS qc ON tr."cardId" = qc."id"
+WHERE tr."deleteTime" IS NULL
+  AND tr."createTime" >= '2026-01-01 00:00:00' AND tr."createTime" < '2026-09-09 00:00:00'
+GROUP BY tr."accountId", tr."provider", qc."firstSix", tr."businessType", create_date, tr."status"
+ON CONFLICT (id) DO NOTHING;
