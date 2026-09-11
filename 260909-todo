@@ -22,3 +22,310 @@ e1c08be6-a0d9-4505-845d-4941564ee09e
 3f38b842-3c23-4d25-937b-1f5a4b49fa33
 9bef0306-963e-47fc-ae86-f207c0732ea3
 04f428e0-0698-432f-8946-d049bdf8ad36
+
+
+我想说查询 毛利返现涉及的交易明细的时候要分成两种
+1.qbit_card_transaction 相关的交易
+2.  @XxlJob("schemeSignatureFeeJob")
+    public void schemeSignatureFee() {
+        String param = XxlJobHelper.getJobParam();
+        XxlJobHelper.log("SchemeSignatureFeeJob 开始执行，param: {}", param);
+        long start = System.currentTimeMillis();
+
+        QueryFilterDTO params = parseSignatureFeeParam(param);
+        apiClientTransactionService.syncSignatureFee(params.getStartDate(), params.getEndDate());
+
+        XxlJobHelper.log("SchemeSignatureFeeJob 执行完毕，耗时 {}ms", System.currentTimeMillis() - start);
+    }这些落尽api_client_transaction 的签名fee
+
+    @Override
+    public BigDecimal getRsSchemeFee(String accountId, List<QbitCardProviderEnum> providers, String startTime, String endTime, String country) {
+        List<String> providerStrings = providers.stream().map(QbitCardProviderEnum::name).collect(Collectors.toList());
+        QueryFilterDTO filter = new QueryFilterDTO();
+        filter.setAccountId(accountId);
+        filter.setStartTime(startTime);
+        filter.setEndTime(endTime);
+        CompletableFuture<BigDecimal> cardTransactionFeeFuture = CompletableFutureUtils.reportSupplyAsync(() ->
+                Func.getValue(odsQbitCardTransactionMapper.getRsSchemeFeeFromCardTransaction(filter, providerStrings), BigDecimal.ZERO));
+        CompletableFuture<BigDecimal> apiClientTransactionFeeFuture = CompletableFutureUtils.reportSupplyAsync(() ->
+                Func.getValue(odsQbitCardTransactionMapper.getRsSchemeFeeFromApiClientTransaction(filter, providerStrings), BigDecimal.ZERO));
+        try {
+            CompletableFuture.allOf(cardTransactionFeeFuture, apiClientTransactionFeeFuture);
+            return cardTransactionFeeFuture.get().add(apiClientTransactionFeeFuture.get()).setScale(2, RoundingMode.DOWN);
+        } catch (InterruptedException e) {
+            throw ExceptionCodeFactory.businessCode(CodeConstant.CODE_11010100001, HttpStatus.BAD_REQUEST, "查询RS毛利返现Scheme Fee线程被中断");
+        } catch (ExecutionException e) {
+            log.error("查询RS毛利返现Scheme Fee异常 accountId: {}", accountId, e);
+            throw ExceptionCodeFactory.businessCode(CodeConstant.CODE_11010100001, HttpStatus.BAD_REQUEST, "查询RS毛利返现Scheme Fee线程被中断");
+        }
+    } 参考这个查询交易查询涉及的交易
+
+毛利返现明细导出现在的字段
+VerifiedName
+DisplayId
+Transaction Time
+Completion Time
+AccountId
+TransactionId
+Transaction status
+Transaction type
+Card BIN
+Card ID
+CardLastFour
+Cardholder Name
+Card label
+Budget name
+OriginAmount
+SettleAmount
+Fee
+Transaction currency
+transactionNotes   
+
+签名fee拿不到的
+transactionNotes  
+TransactionId
+Card BIN
+Card ID
+CardLastFour
+Cardholder Name
+Card label
+Budget name
+OriginAmount
+SettleAmount
+
+
+SELECT COUNT(*)
+FROM (
+    SELECT
+        "qcte"."transaction_id"
+    FROM quantum_card_transaction_extend_p "qcte"
+    WHERE "qcte"."transaction_time" >= '2025-09-01 00:00:00'
+      AND "qcte"."type" IN ('Consumption', 'Reversal', 'Credit', 'Refund')
+      AND "qcte"."delete_time" IS NULL
+      AND "qcte"."status" = 'Closed'
+      AND (
+            "qcte"."channel_provision" IN ('I2C', 'I2C', 'I2C', 'I2C')
+            OR "qcte"."transaction_scope" = 1
+          )
+      AND "qcte"."account_id" IN (
+            SELECT account_id
+            FROM api_account_relation
+            WHERE root_id = '2fd1d1f0-684b-4a9d-a36a-c6c7558aeda0'
+              AND delete_time IS NULL
+          )
+      AND "qcte"."completion_time"::TIMESTAMPTZ >= TO_TIMESTAMP(1785513600000 / 1000)
+      AND "qcte"."completion_time"::TIMESTAMPTZ <= TO_TIMESTAMP(1788191999999 / 1000)
+
+    UNION ALL
+
+    SELECT
+        "act"."id"
+    FROM api_client_transaction "act"
+    CROSS JOIN LATERAL jsonb_array_elements("act"."fees"::jsonb) AS "feeItem"
+    WHERE "act"."delete_time" IS NULL
+      AND "act"."status" = 'Closed'
+      AND "act"."business_module" = 'quantum'
+      AND "feeItem"->>'type' = 'schemeSignatureFee'
+      AND "act"."account_id" IN (
+            SELECT account_id
+            FROM api_account_relation
+            WHERE root_id = '2fd1d1f0-684b-4a9d-a36a-c6c7558aeda0'
+              AND delete_time IS NULL
+          )
+      AND "act"."complete_time"::TIMESTAMPTZ >= TO_TIMESTAMP(1785513600000 / 1000)
+      AND "act"."complete_time"::TIMESTAMPTZ <= TO_TIMESTAMP(1788191999999 / 1000)
+) "revenueSharingTransaction";
+我觉得你这个是有问题的
+<select id="getRsSchemeFeeFromCardTransaction" resultType="java.math.BigDecimal">
+        SELECT
+        COALESCE(SUM(
+        COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'schemeSettleFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'issuerCardServiceFeesIntFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'issuerTransactionFeesByAuthIntFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'issuerTransactionFeesSettlementIntFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'visaRiskManagerIntFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'verificationFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'schemeRefundFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'schemeReversalFee', '')::NUMERIC, 0)
+        ), 0)
+        FROM "qbit_card_transaction" as tr
+        LEFT JOIN account ON tr."accountId"::UUID=account.id::UUID
+        LEFT JOIN api_account_relation aar ON aar.account_id = account.id
+        <where>
+            tr."deleteTime" IS NULL and tr.status='Closed'
+            AND (
+            COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'schemeSettleFee', '')::NUMERIC, 0) != 0
+            OR COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'issuerCardServiceFeesIntFee', '')::NUMERIC, 0) != 0
+            OR COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'issuerTransactionFeesByAuthIntFee', '')::NUMERIC, 0) !=
+            0
+            OR COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'issuerTransactionFeesSettlementIntFee', '')::NUMERIC, 0)
+            != 0
+            OR COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'visaRiskManagerIntFee', '')::NUMERIC, 0) != 0
+            OR COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'verificationFee', '')::NUMERIC, 0) != 0
+            OR COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'schemeRefundFee', '')::NUMERIC, 0) != 0
+            OR COALESCE(NULLIF(tr."specialSourceData"::jsonb->>'schemeReversalFee', '')::NUMERIC, 0) != 0
+            )
+            <include refid="defaultCompleteTimeSearch"/>
+            <include refid="defaultProvidersWhereSql"/>
+            <if test="entity.accountId != null and entity.accountId != ''">
+                AND EXISTS (
+                SELECT 1 FROM "account" a
+                LEFT JOIN api_account_relation aar ON a.id = aar.account_id
+                WHERE a.id = tr."accountId"::UUID
+                AND (
+                a.id = #{entity.accountId}::UUID
+                OR a."parentAccountId" = #{entity.accountId}::UUID
+                OR aar.root_id = #{entity.accountId}::UUID )
+                )
+            </if>
+        </where>
+    </select>
+
+    <select id="getRsSchemeFeeFromApiClientTransaction" resultType="java.math.BigDecimal">
+        SELECT
+        COALESCE(SUM((fee_item->>'amount')::NUMERIC), 0)
+        FROM api_client_transaction act
+        CROSS JOIN LATERAL jsonb_array_elements(act.fees::jsonb) fee_item
+        <where>
+            act.delete_time IS NULL
+            AND act.status = 'Closed'
+            AND act.business_module = 'quantum'
+            AND fee_item->>'type' IN (
+            'issuerCardServiceIntFee',
+            'issuerCardServiceDomFee',
+            'issuerTransactionAuthIntFee',
+            'issuerTransactionAuthDomFee',
+            'issuerTransactionSettlementIntFee',
+            'issuerTransactionSettlementDomFee',
+            'visaRiskManagerIntFee',
+            'visaRiskManagerDomFee',
+            'schemeVerificationIntFee',
+            'schemeVerificationDomFee',
+            'schemeRefundFee',
+            'schemeReversalFee',
+            'schemeSignatureFee'
+            )
+            <if test="entity.startTime != null and entity.startTime != ''">
+                <![CDATA[AND act.complete_time >= #{entity.startTime}]]>
+            </if>
+            <if test="entity.endTime != null and entity.endTime != ''">
+                <![CDATA[AND act.complete_time <= #{entity.endTime}]]>
+            </if>
+            <if test="providers != null and providers.size > 0">
+                AND act.provider IN
+                <foreach item="item" collection="providers" open="(" separator="," close=")">
+                    #{item}
+                </foreach>
+            </if>
+            <if test="entity.accountId != null and entity.accountId != ''">
+                AND EXISTS (
+                SELECT 1 FROM "account" a
+                LEFT JOIN api_account_relation aar ON a.id = aar.account_id
+                WHERE a.id = act.account_id::UUID
+                AND (
+                a.id = #{entity.accountId}::UUID
+                OR a."parentAccountId" = #{entity.accountId}::UUID
+                OR aar.root_id = #{entity.accountId}::UUID
+                )
+                )
+            </if>
+        </where>
+    </select>
+毛利返现金的主交易都在qbit_card_transaction 
+是因为有一部分是月结的手续费记录在 api_client_transaction
+签名fee 比较特殊在api_client_transaction
+
+
+我觉得我们查询交易和判断笔数可以 不用关联那么多
+查询出来交易在去查 账户 card cardholder 这些我们excel 需要的字段信息
+
+
+
+enrichRows
+这个方法我们需要改一下
+1.我们重accountId 获取账号信息
+2.根据交易ID 去qbit_card_transaction 获取
+交易时间 OriginAmount	SettleAmount
+然后从jiao里获取卡id 然后查询
+Card BIN	Card ID	CardLastFour	Cardholder Name	Card label	Budget name
+
+
+  /** 根据有效交易 ID 批量查询卡交易，过滤签名费使用的空 UUID。 */
+    private Map<String, QbitCardTransaction> loadTransactionsByRows(List<QuantumAccountTransactionDetailVO> rows) {
+        Set<String> transactionIds = rows.stream().map(QuantumAccountTransactionDetailVO::getTransactionId)
+                .filter(this::isValidTransactionId).collect(Collectors.toSet());
+        return transactionIds.isEmpty() ? Collections.emptyMap() : loadTransactions(transactionIds);
+    }
+    那你这个就是有问题的啊
+
+          SELECT
+        "act"."complete_time" AS "completeTime",
+        "act"."account_id" AS "accountId",
+        "act"."transaction_id" AS "transactionId",
+        ("feeItem"->>'amount')::NUMERIC AS "fee",
+        'USD' AS "transactionCurrency",
+        "feeItem"->>'type' AS "type",
+        'Closed' AS "status"
+        FROM api_client_transaction "act"
+
+                SELECT
+        "qct"."createTime" AS "transactionTime",
+        "qct"."completeTime" AS "completeTime",
+        "qct"."accountId" AS "accountId",
+        "qct"."cardId" AS "cardId",
+        "qct"."originalAmount" AS "originalAmount",
+        "qct"."settleAmount" AS "settleAmount",
+        (COALESCE(NULLIF("qct"."specialSourceData"::jsonb->>'schemeSettleFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF("qct"."specialSourceData"::jsonb->>'issuerCardServiceFeesIntFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF("qct"."specialSourceData"::jsonb->>'issuerTransactionFeesByAuthIntFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF("qct"."specialSourceData"::jsonb->>'issuerTransactionFeesSettlementIntFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF("qct"."specialSourceData"::jsonb->>'visaRiskManagerIntFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF("qct"."specialSourceData"::jsonb->>'verificationFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF("qct"."specialSourceData"::jsonb->>'schemeRefundFee', '')::NUMERIC, 0)
+        + COALESCE(NULLIF("qct"."specialSourceData"::jsonb->>'schemeReversalFee', '')::NUMERIC, 0)) AS "fee",
+        "qct"."detail" AS "detail",
+        "qct"."transactionCurrency" AS "transactionCurrency",
+        "qct"."transactionId" AS "transactionId",
+        "qct"."businessType" AS "type",
+        "qct"."status" AS "status"
+
+
+        https://qbit-test.oss-cn-hangzhou.aliyuncs.com/Infinity Card Active Card Details_2cdf2484-26df-43e1-847b-72d5f5cda6ec_2026-07-20260910170007144.csv
+
+        0 0 1 * * ?
+        whiteLabelCustomerProfileSyncJob
+
+
+@Override
+    @Transactional(rollbackFor = Exception.class)
+    public WhiteLabelCustomerProfileSyncVO sync(WhiteLabelCustomerProfileSyncDTO request) {
+        WhiteLabelCustomerProfileSyncVO result = new WhiteLabelCustomerProfileSyncVO();
+        result.setRequestId(request.getRequestId());
+        List<WhiteLabelCustomerProfileItemDTO> items = request.getProfiles();
+        Set<String> accountIds = items.stream().map(WhiteLabelCustomerProfileItemDTO::getAccountId).collect(Collectors.toSet());
+        if (accountIds.size() != items.size()) {
+            addError(result, null, "同一请求内accountId不能重复");
+            result.setFailedCount(items.size());
+            return result;
+        }
+
+        Map<String, Account> accounts = new HashMap<>();
+        List<Account> accountList = accountMapper.selectBatchIds(accountIds);
+        accountList.forEach(account -> accounts.put(account.getId(), account));
+        List<WhiteLabelCustomerProfileItemDTO> invalidItems = items.stream()
+                .filter(item -> !accounts.containsKey(item.getAccountId()))
+                .toList();
+        if (!invalidItems.isEmpty()) {
+            invalidItems.forEach(item -> addError(result, item.getAccountId(), "qbit账户不存在"));
+            result.setFailedCount(invalidItems.size());
+            return result;
+        }
+        for (WhiteLabelCustomerProfileItemDTO item : items) {
+            upsert(item);
+            result.setSuccessCount(result.getSuccessCount() + 1);
+        }
+        log.info("白标客户配置同步完成, requestId={}, successCount={}, failedCount={}",
+                request.getRequestId(), result.getSuccessCount(), result.getFailedCount());
+        return result;
+    }
+ WhiteLabelCustomerProfileSyncDTO(requestId=wl-profile-0a6b8ab6-ee0f-42a0-9e78-acb6459855b9, profiles=[WhiteLabelCustomerProfileItemDTO(accountId=743ee88e-dfcc-4946-ad91-9b25470eec93, adminDomain=www.baidu.com, appDomain=xc, brandName=null, loginEmail=noreply@email.quantum-card.com, brandLogo=null, favicon=null, sourceVersion=null), WhiteLabelCustomerProfileItemDTO(accountId=c2ac76e6-016a-4925-a125-6bfb26e54a07, adminDomain=test-u-app-admin.qbitnetwork.com:26813, appDomain=test-mobile-white-label.qbitnetwork.com, brandName=品牌, loginEmail=noreply@email.quantum-card.com, brandLogo=http://test-mobile-white-upload.oss-cn-hangzhou.aliyuncs.com/general/489789/6a7eeb0d5f6aa22b615894ba.jpg?Expires=1788489308970&OSSAccessKeyId=LTAI5tGjLKDfAF1azW36YE5Z&Signature=zpmDfSUCJ7g5VMIwsw2HpGuTd8A%3D, favicon=http://test-mobile-white-upload.oss-cn-hangzhou.aliyuncs.com/general/489789/690da305af7a572b04f44ecd.png?Expires=1764263881799&OSSAccessKeyId=LTAI5tGjLKDfAF1azW36YE5Z&Signature=9Ai%2F7hPRw2fqjA4QC4ZjktqiN7w%3D, sourceVersion=null), WhiteLabelCustomerProfileItemDTO(accountId=743ee88e-dfcc-4946-ad91-9b25470eec93, adminDomain=https://test-u-app-admin.qbitnetwork.com:26813, appDomain=https://test-mobile-white-label.qbitnetwork.com/, brandName=ceshi, loginEmail=test-u-app@qq.com, brandLogo=null, favicon=null, sourceVersion=null), WhiteLabelCustomerProfileItemDTO(accountId=dae974a8-bcd8-4ebc-8d12-7f0856898824, adminDomain=adsasda, appDomain=asdasd, brandName=test12, loginEmail=noreply@email.quantum-card.com, brandLogo=http://test-mobile-white-upload.oss-cn-hangzhou.aliyuncs.com/general/354161044397498368/6931878baf7ab265378e5137.webp?Expires=1766618496505&OSSAccessKeyId=LTAI5tGjLKDfAF1azW36YE5Z&Signature=m%2Fs5LPau5%2BHjDOev3S%2FA2sF4fZ8%3D, favicon=http://test-mobile-white-upload.oss-cn-hangzhou.aliyuncs.com/general/354161044397498368/69318790af7ab265378e5138.png?Expires=1766618500323&OSSAccessKeyId=LTAI5tGjLKDfAF1azW36YE5Z&Signature=zQkhJ2c%2B70wNPi%2FEoaywoo6IC3w%3D, sourceVersion=null), WhiteLabelCustomerProfileItemDTO(accountId=8514f03a-ebbb-4979-bcb8-01da34e638aa, adminDomain=https://www.admin.baidu.com/, appDomain=https://www.baidu1.com/, brandName=45645456465, loginEmail=suntianci074@qbitnetwork.com, brandLogo=null, favicon=null, sourceVersion=null), WhiteLabelCustomerProfileItemDTO(accountId=1066710e-49d2-4422-973a-7e00024658ac, adminDomain=US Lopez company, appDomain=US Lopez company, brandName=US Lopez company, loginEmail=US Lopez company@qq.com, brandLogo=null, favicon=null, sourceVersion=null), WhiteLabelCustomerProfileItemDTO(accountId=27c14ebc-b87f-4388-8933-89289be7bd58, adminDomain=adminDomain_5e10bf9b7bfa, appDomain=appDomain_5c1eb65f5aaf, brandName=QbitPay, loginEmail=qibt@qq.com, brandLogo=null, favicon=null, sourceVersion=null), WhiteLabelCustomerProfileItemDTO(accountId=6caf5feb-d484-40ff-b8a0-03307b0ad944, adminDomain=www.Thompson.com, appDomain=www.Thompson.com, brandName=Thompson, loginEmail=63155580111@qq.com, brandLogo=null, favicon=null, sourceVersion=null), WhiteLabelCustomerProfileItemDTO(accountId=659b9ebf-ea15-48a8-aca5-1e9964309928, adminDomain=adminDomain_5e10bf9b7bfa, appDomain=appDomain_5c1eb65f5aaf, brandName=iPeakoinPay, loginEmail=qibt666666@qq.com, brandLogo=null, favicon=null, sourceVersion=null), WhiteLabelCustomerProfileItemDTO(accountId=b7238bbe-6b20-48e3-b8fe-603468d057ce, adminDomain=www.admin32.com, appDomain=www.rwtperut32.com, brandName=5635123, loginEmail=noreply@email.quantum-card.com, brandLogo=null, favicon=null, sourceVersion=null), WhiteLabelCustomerProfileItemDTO(accountId=55c59d76-1246-4e62-9a94-ccd2b48f7c60, adminDomain=https://www.admin.baidu.com/, appDomain=https://www.baidu1.com/, brandName=45645456465, loginEmail=suntianci074@qbitnetwork.com, brandLogo=null, favicon=null, sourceVersion=null), WhiteLabelCustomerProfileItemDTO(accountId=f6e2679d-d430-4e2f-96e8-98ca7378e07e, adminDomain=www.admin10086.com, appDomain=www.rwtperut10086.com, brandName=Michelle, loginEmail=r.rabngbdt@qopef.ci, brandLogo=null, favicon=null, sourceVersion=null), WhiteLabelCustomerProfileItemDTO(accountId=79377473-a4a2-4e8c-994d-a4559fb155cb, adminDomain=122836100086, appDomain=122836100086, brandName=122836100086, loginEmail=122836100086@qq.com, brandLogo=null, favicon=null, sourceVersion=null)])   

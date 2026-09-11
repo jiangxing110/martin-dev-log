@@ -1,0 +1,10 @@
+    @PostMapping("/monthly-commission/estimate")
+这个接口我看了也是一样的喽
+1.毛利返现的预估我们应该设置0 真正应该去查询的是 其他的两个呀在
+partner_commission_fee_transaction
+
+'438a5a26-cca9-4aa9-bc0a-77b5fdae24ec',
+'36c66164-9aa5-413d-b8ea-c2d37ff5c90c'
+
+
+"{\"accountIds\": [\"438a5a26-cca9-4aa9-bc0a-77b5fdae24ec\",\"36c66164-9aa5-413d-b8ea-c2d37ff5c90c\"],\"billMonths\": [\"2026-08\"]}";
