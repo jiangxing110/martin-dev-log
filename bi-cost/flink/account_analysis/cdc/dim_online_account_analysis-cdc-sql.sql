@@ -31,6 +31,7 @@ SET 'restart-strategy.fixed-delay.delay' = '60s';
 CREATE TEMPORARY TABLE source_account (
     id                 STRING,
     `verifiedName`     STRING,
+    `displayId`        STRING,
     `type`             STRING,
     status             STRING,
     `referralCodeId`   STRING,
@@ -405,6 +406,7 @@ CREATE TEMPORARY VIEW v_dim_account_analysis AS
 SELECT
     a.id AS account_id,
     a.`verifiedName` AS verified_name,
+    a.`displayId` AS display_id,
     a.`type` AS account_category,
     a.status,
     ae.`systemType` AS system_type,
@@ -450,6 +452,7 @@ WHERE a.`type` IN ('ApiClient', 'MasterAccount', 'Merchant', 'TestAccount');
 CREATE TEMPORARY TABLE sink_dim_account_analysis (
     account_id           STRING,
     verified_name        STRING,
+    display_id           STRING,
     account_category     STRING,
     status               STRING,
     system_type          STRING,

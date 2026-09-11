@@ -12,6 +12,7 @@
 CREATE TABLE "dim"."dim_account_analysis" (
   "account_id" varchar(64) COLLATE "pg_catalog"."default" NOT NULL,
   "verified_name" varchar(255) COLLATE "pg_catalog"."default",
+  "display_id" varchar(128) COLLATE "pg_catalog"."default",
   "account_category" varchar(64) COLLATE "pg_catalog"."default",
   "status" varchar(64) COLLATE "pg_catalog"."default",
   "system_type" varchar(64) COLLATE "pg_catalog"."default",
@@ -38,6 +39,7 @@ ALTER TABLE "dim"."dim_account_analysis"
 COMMENT ON TABLE "dim"."dim_account_analysis" IS '客户分析维表，按最上层客户沉淀基础属性、扩展属性、风险等级和业务激活时间';
 COMMENT ON COLUMN "dim"."dim_account_analysis"."account_id" IS '客户ID，来源 dim_account.id';
 COMMENT ON COLUMN "dim"."dim_account_analysis"."verified_name" IS '客户名称，来源 dim_account.verified_name';
+COMMENT ON COLUMN "dim"."dim_account_analysis"."display_id" IS '客户展示ID，来源 dim_account.displayId';
 COMMENT ON COLUMN "dim"."dim_account_analysis"."account_category" IS '客户类型，来源 dim_account.type';
 COMMENT ON COLUMN "dim"."dim_account_analysis"."status" IS '客户状态，来源 dim_account.status';
 COMMENT ON COLUMN "dim"."dim_account_analysis"."system_type" IS '客户系统类型，来源 accountExtend.systemType / dim_account.system_type';

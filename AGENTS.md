@@ -38,15 +38,12 @@
 ### Step 3：发布日志
 上线后在 `changelogs/` 记录变更内容（参考 `template.md`）。
 
-### Step 4：提交
-```bash
-git add <相关文件>
-git commit -m "描述"
-git push
-```
+### Step 4：交付
+
+默认只保留工作区中的代码和文档修改，不执行 `git commit` 或 `git push`。只有在用户明确要求时，才执行提交或推送。
 
 ## 常用操作
 
 - 书写新文档：在根目录或对应子目录下创建 `.md` 文件
 - 查看已有文档：`/Users/martinjiang/Desktop/martin-dev-log/`
-- Git 管理：commit → push 到 GitHub
+- Git 管理：按用户明确要求执行 commit / push；未明确要求时不执行

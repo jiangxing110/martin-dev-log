@@ -30,6 +30,7 @@ SET 'restart-strategy.fixed-delay.delay' = '60s';
 CREATE TEMPORARY TABLE source_dim_account (
     id               STRING,
     verified_name    STRING,
+    display_id       STRING,
     account_category STRING,
     status           STRING,
     system_type      STRING,
@@ -40,7 +41,7 @@ CREATE TEMPORARY TABLE source_dim_account (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id::text AS id, verified_name, "type" AS account_category, status, system_type, CURRENT_TIMESTAMP AS create_time, CURRENT_TIMESTAMP AS update_time, CAST(NULL AS TIMESTAMP(6)) AS delete_time FROM dim.dim_account WHERE "type" IN (''ApiClient'', ''MasterAccount'', ''Merchant'', ''TestAccount'')) AS dim_account_f',
+    'table-name' = '(SELECT id::text AS id, verified_name, display_id, "type" AS account_category, status, system_type, CURRENT_TIMESTAMP AS create_time, CURRENT_TIMESTAMP AS update_time, CAST(NULL AS TIMESTAMP(6)) AS delete_time FROM dim.dim_account WHERE "type" IN (''ApiClient'', ''MasterAccount'', ''Merchant'', ''TestAccount'')) AS dim_account_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -349,6 +350,7 @@ CREATE TEMPORARY VIEW v_dim_account_analysis AS
 SELECT
     da.id AS account_id,
     da.verified_name,
+    da.display_id,
     da.account_category,
     da.status,
     da.system_type,
@@ -391,6 +393,7 @@ LEFT JOIN v_treasury_active ta
 CREATE TEMPORARY TABLE sink_dim_account_analysis (
     account_id           STRING,
     verified_name        STRING,
+    display_id           STRING,
     account_category     STRING,
     status               STRING,
     system_type          STRING,
