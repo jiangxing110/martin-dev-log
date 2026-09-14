@@ -24,11 +24,17 @@ WITH account_root_relation AS (
   WHERE delete_time IS NULL
 ),
 rule_departments AS (
-  SELECT DISTINCT
-    department_id
+  SELECT DISTINCT department_id
   FROM "dim"."dim_sales_commission_rule"
   WHERE enabled = true
     AND delete_time IS NULL
+),
+crypto_rule_departments AS (
+  SELECT DISTINCT department_id
+  FROM "dim"."dim_sales_commission_rule"
+  WHERE enabled = true
+    AND delete_time IS NULL
+    AND (product = 'crypto' OR product IS NULL)
 ),
 sale_department_mapping AS (
   SELECT
@@ -48,6 +54,23 @@ sale_department_mapping AS (
     FROM "public"."system_user_department" sud
     LEFT JOIN rule_departments rd
       ON rd.department_id = sud.department_id::text
+    WHERE sud.delete_time IS NULL
+  ) ranked
+  WHERE rn = 1
+),
+crypto_sale_department_mapping AS (
+  SELECT sale_id, department_id
+  FROM (
+    SELECT
+      sud.user_id::text AS sale_id,
+      sud.department_id::text AS department_id,
+      ROW_NUMBER() OVER (
+        PARTITION BY sud.user_id::text
+        ORDER BY sud.update_time DESC, sud.id DESC
+      ) AS rn
+    FROM "public"."system_user_department" sud
+    JOIN crypto_rule_departments crd
+      ON crd.department_id = sud.department_id::text
     WHERE sud.delete_time IS NULL
   ) ranked
   WHERE rn = 1
@@ -81,7 +104,7 @@ revenue_base AS (
       ELSE 'current_payout'
     END AS commission_stage,
     r.sale_id,
-    sdm.department_id AS department_id,
+    CASE WHEN r.product = 'crypto_connect' THEN csdm.department_id ELSE sdm.department_id END AS department_id,
     r.am_id,
     r.settlement_month AS activity_month,
     CASE
@@ -100,6 +123,8 @@ revenue_base AS (
   FROM "dws"."dws_metrics_sales_revenue_monthly" r
   LEFT JOIN sale_department_mapping sdm
     ON sdm.sale_id = COALESCE(r.sale_id, r.am_id)
+  LEFT JOIN crypto_sale_department_mapping csdm
+    ON csdm.sale_id = COALESCE(r.sale_id, r.am_id)
   WHERE r.delete_time IS NULL
     AND (
       (r.product = 'open_api' AND r.metric_code = 'month_revenue'
@@ -125,7 +150,7 @@ revenue_base AS (
     r.provider,
     r.metric_code,
     r.sale_id,
-    sdm.department_id,
+    CASE WHEN r.product = 'crypto_connect' THEN csdm.department_id ELSE sdm.department_id END,
     r.am_id
 ),
 global_account_channel_cost AS (
@@ -314,10 +339,10 @@ crypto_acceptance_cost AS (
     r.provider,
     SUM(
       CASE
-        WHEN sdm.department_id = '1851130772357509121'
+        WHEN csdm.department_id = '1851130772357509121'
          AND r.metric_code IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero')
           THEN COALESCE(r.income_value, 0) * 0.0009
-        WHEN COALESCE(sdm.department_id, '') <> '1851130772357509121'
+        WHEN COALESCE(csdm.department_id, '') <> '1851130772357509121'
          AND r.metric_code = 'assets_acceptance_fee_gt_zero'
           THEN COALESCE(r.income_value, 0) * 0.0009
         ELSE 0
@@ -326,6 +351,8 @@ crypto_acceptance_cost AS (
   FROM "dws"."dws_metrics_sales_revenue_monthly" r
   LEFT JOIN sale_department_mapping sdm
     ON sdm.sale_id = COALESCE(r.sale_id, r.am_id)
+  LEFT JOIN crypto_sale_department_mapping csdm
+    ON csdm.sale_id = COALESCE(r.sale_id, r.am_id)
   WHERE r.delete_time IS NULL
     AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     AND r.product = 'crypto_connect'
@@ -499,7 +526,11 @@ estimate_base AS (
     CASE
       WHEN b.product = 'qbit_card' AND a.card_active_time IS NOT NULL THEN (b.settlement_month - a.card_active_time::date)
       WHEN b.product = 'group_account' AND a.global_active_time IS NOT NULL THEN (b.settlement_month - a.global_active_time::date)
-      WHEN b.product = 'crypto' AND a.crypto_active_time IS NOT NULL THEN (b.settlement_month - a.crypto_active_time::date)
+      WHEN b.product = 'crypto'
+       AND (a.crypto_active_time IS NULL OR a.crypto_active_time::date > (b.settlement_month + interval '1 month')::date)
+        THEN 0
+      WHEN b.product = 'crypto'
+        THEN ((b.settlement_month + interval '1 month')::date - a.crypto_active_time::date)
       WHEN b.product = 'open_api' AND a.api_active_time IS NOT NULL THEN (b.settlement_month - a.api_active_time::date)
       WHEN b.product = 'treasury' AND a.treasury_active_time IS NOT NULL THEN (b.settlement_month - a.treasury_active_time::date)
       ELSE NULL

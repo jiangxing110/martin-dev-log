@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans (recommended) or superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 按当前部门产品白名单重建销售佣金规则，补齐当前部门的非加密规则和 13～20 行部门的加密规则。
+**Goal:** 按当前部门产品白名单重建销售佣金规则，补齐当前部门的非加密规则和 13～20 行部门的加密规则，并将销售三组 `2097615280722743297` 作为业务例外纳入加密。
 
 **Architecture:** 用显式部门产品映射替代普通部门与产品的笛卡尔积。规则表按当前 `department_id` 精确匹配；海外销售部 - 2 使用独立特殊规则；加密成本特殊口径继续由销售返佣物化视图负责。
 
@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - 13～20 行部门有 `crypto` 业务。
-- 国内新增销售小组不配置 `crypto`，但配置需要的非加密产品。
+- 国内新增销售小组原则上不配置 `crypto`，但销售三组 `2097615280722743297` 为业务例外；其他小组配置需要的非加密产品。
 - 海外销售部 - 2 使用直邀 20%、非直邀 10% 的特殊规则。
 - 普通 `crypto` 规则使用 GP 和 12%/6%/3.6% 活跃天数阶梯。
 - 加密成本的是否忽略 0 由现有物化视图成本逻辑控制。
@@ -27,7 +27,7 @@
 - [ ] 使用显式部门产品映射生成普通规则。
 - [ ] 为国内新增小组补齐非加密产品规则。
 - [ ] 为 13～20 行部门生成普通 `crypto` 规则，并保留海外销售部 - 2 特殊规则。
-- [ ] 删除旧的批量 `crypto` 误配逻辑，保证国内部门及小组不再生成 `crypto`。
+- [ ] 删除旧的批量 `crypto` 误配逻辑，保证未列入白名单的国内部门及小组不再生成 `crypto`。
 
 ### Task 2: 静态规则核对
 
@@ -35,7 +35,7 @@
 - Check: `/Users/martinjiang/VsCodeProjects/martin-dev-log/sale-repoet/sales-commission/table-scripts/dim_sales_commission_rule.sql`
 
 - [ ] 核对 13～20 行部门名单和部门 ID。
-- [ ] 核对 7 个新增国内小组不存在 `crypto` 产品规则。
+- [ ] 核对未列入白名单的国内新增小组不存在 `crypto` 产品规则，并确认销售三组存在 `crypto` 规则。
 - [ ] 核对普通加密规则、海外销售部 - 2 特殊规则和 OpenAPI 规则。
 - [ ] 运行 `git diff --check`。
 

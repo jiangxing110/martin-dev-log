@@ -3,6 +3,8 @@
 -- 口径：按当前部门 ID 精确匹配；国内新增销售小组只配置非加密产品。
 -- 说明：product/provider/item 为空表示通配；start_time/end_time 使用左闭右开区间。
 
+BEGIN;
+
 CREATE TABLE IF NOT EXISTS "dim"."dim_sales_commission_rule" (
   "id" int8 NOT NULL,
   "rule_code" varchar(64) NOT NULL,
@@ -43,15 +45,8 @@ ON "dim"."dim_sales_commission_rule" ("department_id", "product", "provider", "i
 CREATE INDEX IF NOT EXISTS "idx_dim_sales_commission_rule_time"
 ON "dim"."dim_sales_commission_rule" ("start_time", "end_time");
 
--- 清理旧版批量生成区间，避免部门名单变化后留下旧规则或发生 ID 错配。
-UPDATE "dim"."dim_sales_commission_rule"
-SET "enabled" = false,
-    "delete_time" = now(),
-    "update_time" = now(),
-    "remarks" = '按2026-09-14规则重建，停用旧版生成记录'
-WHERE "id" BETWEEN 100001 AND 100096
-   OR "id" BETWEEN 200001 AND 200032
-   OR "id" BETWEEN 300001 AND 300032;
+-- 规则重建：清空整张规则表，避免旧部门、旧产品或旧规则残留。
+TRUNCATE TABLE "dim"."dim_sales_commission_rule";
 
 -- 当前组织中允许计算 crypto 的部门：13～20 行的实际业务部门。
 -- 海外业务为组织节点，不直接承接销售人员，因此不生成部门规则。
@@ -63,7 +58,8 @@ WITH crypto_departments(department_id) AS (
     ('1740320675756810242'), -- 海外业务销售部 - 1
     ('1851130772357509121'), -- 海外业务销售部 - 2，下面单独配置
     ('1740320716902932481'), -- 大客户管理部
-    ('1760576792068489218')  -- 创新业务部
+    ('1760576792068489218'), -- 创新业务部
+    ('2097615280722743297')  -- 销售三组
 ),
 ordinary_departments(department_id, department_name) AS (
   VALUES
@@ -126,7 +122,7 @@ generated_rules AS (
   CROSS JOIN active_ranges ar
   WHERE p.product <> 'crypto' OR cd.department_id IS NOT NULL
 ),
-upserted AS (
+inserted AS (
   INSERT INTO "dim"."dim_sales_commission_rule" (
     "id", "rule_code", "rule_name", "department_id", "product", "provider", "item",
     "commission_base_type", "active_days_min", "active_days_max", "commission_rate",
@@ -158,7 +154,32 @@ upserted AS (
     "delete_time" = NULL
   RETURNING 1
 )
-SELECT COUNT(*) AS ordinary_rule_count FROM upserted;
+SELECT COUNT(*) AS ordinary_rule_count FROM inserted;
+
+-- 普通 crypto 部门：活跃超过 1095 天仍保留收入记录，但佣金率为 0。
+WITH crypto_zero_departments(department_id, department_name) AS (
+  VALUES
+    ('2077248232127864834', '国际销售团队'),
+    ('2028709205416460290', '大客户销售部'),
+    ('1762301052057112578', '其他'),
+    ('1740320675756810242', '海外业务销售部 - 1'),
+    ('1740320716902932481', '大客户管理部'),
+    ('1760576792068489218', '创新业务部'),
+    ('2097615280722743297', '销售三组')
+)
+INSERT INTO "dim"."dim_sales_commission_rule" (
+  "id", "rule_code", "rule_name", "department_id", "product", "provider", "item",
+  "commission_base_type", "active_days_min", "active_days_max", "commission_rate",
+  "invite_type", "start_time", "end_time", "priority", "enabled", "remarks"
+)
+SELECT
+  100069 + ROW_NUMBER() OVER (ORDER BY department_id),
+  concat('gp_', department_id, '_crypto_over_1095'),
+  concat(department_name, '-加密稳定币-GP-1096天以上-0%'),
+  department_id, 'crypto', NULL, NULL, 'gp', 1096, 999999, 0.000000,
+  'all', timestamp '2026-01-01', timestamp '2099-01-01', 100, true,
+  '加密业务活跃超过1095天，佣金率为0'
+FROM crypto_zero_departments;
 
 -- 海外业务销售部 - 2：直邀/非直邀特殊规则，product=NULL 表示所有产品。
 INSERT INTO "dim"."dim_sales_commission_rule" (
@@ -265,15 +286,4 @@ ON CONFLICT ("id") DO UPDATE SET
   "commission_rate" = EXCLUDED."commission_rate", "invite_type" = EXCLUDED."invite_type", "start_time" = EXCLUDED."start_time", "end_time" = EXCLUDED."end_time",
   "priority" = EXCLUDED."priority", "enabled" = EXCLUDED."enabled", "remarks" = EXCLUDED."remarks", "update_time" = now(), "delete_time" = NULL;
 
--- 清理旧脚本遗留的国内 crypto 规则。新组织关系仍按当前部门精确匹配。
-UPDATE "dim"."dim_sales_commission_rule"
-SET "enabled" = false,
-    "delete_time" = now(),
-    "update_time" = now(),
-    "remarks" = '按2026-09-14新业务口径停用：非加密业务部门'
-WHERE "product" = 'crypto'
-  AND "department_id" NOT IN (
-    '2077248232127864834', '2028709205416460290', '1762301052057112578',
-    '1740320675756810242', '1851130772357509121', '1740320716902932481', '1760576792068489218'
-  )
-  AND "delete_time" IS NULL;
+COMMIT;

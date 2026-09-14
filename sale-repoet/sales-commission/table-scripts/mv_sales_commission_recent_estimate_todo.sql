@@ -472,7 +472,11 @@ estimate_base AS (
     CASE
       WHEN b.product = 'qbit_card' AND a.card_active_time IS NOT NULL THEN (b.settlement_month - a.card_active_time::date)
       WHEN b.product = 'group_account' AND a.global_active_time IS NOT NULL THEN (b.settlement_month - a.global_active_time::date)
-      WHEN b.product = 'crypto' AND a.crypto_active_time IS NOT NULL THEN (b.settlement_month - a.crypto_active_time::date)
+      WHEN b.product = 'crypto'
+       AND (a.crypto_active_time IS NULL OR a.crypto_active_time::date > (b.settlement_month + interval '1 month')::date)
+        THEN 0
+      WHEN b.product = 'crypto'
+        THEN ((b.settlement_month + interval '1 month')::date - a.crypto_active_time::date)
       WHEN b.product = 'open_api' AND a.api_active_time IS NOT NULL THEN (b.settlement_month - a.api_active_time::date)
       WHEN b.product = 'treasury' AND a.treasury_active_time IS NOT NULL THEN (b.settlement_month - a.treasury_active_time::date)
       ELSE NULL
