@@ -156,16 +156,33 @@ inserted AS (
 )
 SELECT COUNT(*) AS ordinary_rule_count FROM inserted;
 
--- 普通 crypto 部门：活跃超过 1095 天仍保留收入记录，但佣金率为 0。
-WITH crypto_zero_departments(department_id, department_name) AS (
+-- 所有有阶梯规则的产品：活跃超过 1095 天仍保留收入记录，但佣金率为 0。
+WITH zero_rate_departments(department_id, department_name) AS (
   VALUES
+    ('1740319905791647746', '销售一部'),
+    ('1740319923059597313', '销售二部'),
+    ('2066369412858433538', '销售三部'),
     ('2077248232127864834', '国际销售团队'),
-    ('2028709205416460290', '大客户销售部'),
-    ('1762301052057112578', '其他'),
-    ('1740320675756810242', '海外业务销售部 - 1'),
     ('1740320716902932481', '大客户管理部'),
+    ('1740320675756810242', '海外业务销售部 - 1'),
+    ('1762301052057112578', '其他'),
     ('1760576792068489218', '创新业务部'),
-    ('2097615280722743297', '销售三组')
+    ('2097614575010123778', '销售一组'),
+    ('2097614680696270850', '销售二组'),
+    ('2097614776689037313', '销售三组'),
+    ('2097614875836264450', '销售四组'),
+    ('2097615094967676929', '销售一组'),
+    ('2097615188473221122', '销售二组'),
+    ('2097615280722743297', '销售三组'),
+    ('2028709205416460290', '大客户销售部')
+),
+zero_rate_products(product, product_name) AS (
+  VALUES
+    ('qbit_card', '量子卡'),
+    ('group_account', '全球账户'),
+    ('treasury', '理财'),
+    ('crypto', '加密稳定币'),
+    ('open_api', 'OpenAPI')
 )
 INSERT INTO "dim"."dim_sales_commission_rule" (
   "id", "rule_code", "rule_name", "department_id", "product", "provider", "item",
@@ -173,13 +190,20 @@ INSERT INTO "dim"."dim_sales_commission_rule" (
   "invite_type", "start_time", "end_time", "priority", "enabled", "remarks"
 )
 SELECT
-  100069 + ROW_NUMBER() OVER (ORDER BY department_id),
-  concat('gp_', department_id, '_crypto_over_1095'),
-  concat(department_name, '-加密稳定币-GP-1096天以上-0%'),
-  department_id, 'crypto', NULL, NULL, 'gp', 1096, 999999, 0.000000,
+  100069 + ROW_NUMBER() OVER (ORDER BY d.department_id, p.product),
+  concat('gp_', d.department_id, '_', p.product, '_over_1095'),
+  concat(d.department_name, '-', p.product_name, '-GP-1096天以上-0%'),
+  d.department_id, p.product, NULL, NULL, 'gp', 1096, 999999, 0.000000,
   'all', timestamp '2026-01-01', timestamp '2099-01-01', 100, true,
-  '加密业务活跃超过1095天，佣金率为0'
-FROM crypto_zero_departments;
+  '产品活跃超过1095天，佣金率为0'
+FROM zero_rate_departments d
+JOIN zero_rate_products p
+  ON p.product <> 'crypto'
+  OR d.department_id IN (
+    '2077248232127864834', '2028709205416460290', '1762301052057112578',
+    '1740320675756810242', '1740320716902932481', '1760576792068489218',
+    '2097615280722743297'
+  );
 
 -- 海外业务销售部 - 2：直邀/非直邀特殊规则，product=NULL 表示所有产品。
 INSERT INTO "dim"."dim_sales_commission_rule" (

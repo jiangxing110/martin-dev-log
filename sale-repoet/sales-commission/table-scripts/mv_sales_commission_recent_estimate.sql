@@ -463,6 +463,7 @@ revenue_cost_allocated AS (
     (
       CASE
         WHEN x.product_effective_revenue <> 0 THEN x.total_cogs * x.effective_revenue / x.product_effective_revenue
+        WHEN x.cost_allocation_rn = 1 THEN x.total_cogs
         ELSE 0
       END
       + CASE
@@ -482,7 +483,11 @@ revenue_cost_allocated AS (
       )::numeric(20,4) AS product_effective_revenue,
       SUM(CASE WHEN b.product = 'qbit_card' THEN b.effective_revenue ELSE 0 END) OVER (
         PARTITION BY b.settlement_month, b.root_account_id, b.product
-      )::numeric(20,4) AS qbit_card_effective_revenue
+      )::numeric(20,4) AS qbit_card_effective_revenue,
+      ROW_NUMBER() OVER (
+        PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, '')
+        ORDER BY CASE WHEN b.effective_revenue <> 0 THEN 0 ELSE 1 END, b.sale_id NULLS LAST, b.department_id NULLS LAST
+      ) AS cost_allocation_rn
     FROM revenue_base b
     LEFT JOIN v_cost_by_account_product c
       ON c.settlement_month = b.settlement_month
@@ -524,15 +529,31 @@ estimate_base AS (
       ELSE GREATEST(b.allocated_effective_revenue - b.allocated_cogs, 0)::numeric(20,4)
     END AS gp,
     CASE
-      WHEN b.product = 'qbit_card' AND a.card_active_time IS NOT NULL THEN (b.settlement_month - a.card_active_time::date)
-      WHEN b.product = 'group_account' AND a.global_active_time IS NOT NULL THEN (b.settlement_month - a.global_active_time::date)
+      WHEN b.product = 'qbit_card'
+       AND (a.card_active_time IS NULL OR a.card_active_time::date > (b.settlement_month + interval '1 month')::date)
+        THEN 0
+      WHEN b.product = 'qbit_card'
+        THEN ((b.settlement_month + interval '1 month')::date - a.card_active_time::date)
+      WHEN b.product = 'group_account'
+       AND (a.global_active_time IS NULL OR a.global_active_time::date > (b.settlement_month + interval '1 month')::date)
+        THEN 0
+      WHEN b.product = 'group_account'
+        THEN ((b.settlement_month + interval '1 month')::date - a.global_active_time::date)
       WHEN b.product = 'crypto'
        AND (a.crypto_active_time IS NULL OR a.crypto_active_time::date > (b.settlement_month + interval '1 month')::date)
         THEN 0
       WHEN b.product = 'crypto'
         THEN ((b.settlement_month + interval '1 month')::date - a.crypto_active_time::date)
-      WHEN b.product = 'open_api' AND a.api_active_time IS NOT NULL THEN (b.settlement_month - a.api_active_time::date)
-      WHEN b.product = 'treasury' AND a.treasury_active_time IS NOT NULL THEN (b.settlement_month - a.treasury_active_time::date)
+      WHEN b.product = 'open_api'
+       AND (a.api_active_time IS NULL OR a.api_active_time::date > (b.settlement_month + interval '1 month')::date)
+        THEN 0
+      WHEN b.product = 'open_api'
+        THEN ((b.settlement_month + interval '1 month')::date - a.api_active_time::date)
+      WHEN b.product = 'treasury'
+       AND (a.treasury_active_time IS NULL OR a.treasury_active_time::date > (b.settlement_month + interval '1 month')::date)
+        THEN 0
+      WHEN b.product = 'treasury'
+        THEN ((b.settlement_month + interval '1 month')::date - a.treasury_active_time::date)
       ELSE NULL
     END AS active_days,
     CASE
