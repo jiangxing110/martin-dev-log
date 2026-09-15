@@ -1,0 +1,17 @@
+需求
+/Users/martinjiang/VsCodeProjects/martin-dev-log/qbit-assets/sprint-17/kyc-pm-d/新增KYC-PM费用项.md
+我负责账单部分
+这个是处理底层的业务代码
+https://github.com/PalmDrive/qbit-assets/pull/7494
+我想进行一次需求分析我们要干嘛
+文案输出到
+/Users/martinjiang/VsCodeProjects/martin-dev-log/qbit-assets/sprint-17/kyc-pm-d
+
+OK关联/Users/martinjiang/WebstormProjects/qbitpay_service 项目 
+我们的feeType 也要更新到这个项目的
+按计划执行吧
+最后不要commit push
+
+
+INSERT INTO "public"."accountFee" ( "remarks", "createTime", "updateTime", "deleteTime", "version", "accountId", "feeType", "rate", "mathType", "startTime", "endTime", "type", "low", "high", "threshold", "childFeeType", "raw", "provider", "providerField", "enable", "collectionRate") 
+VALUES ('', now(), now(), NULL, 1, '00000000-0000-0000-0000-000000000000', 'KycPmVerificationFee_Caas', '0.85', 'Count', '2026-09-15 00:00:00+08', '2099-02-01 23:59:59+08', 'Single', '0', NULL, NULL, 'MasterAccount', NULL, NULL, NULL, 't', '0');
