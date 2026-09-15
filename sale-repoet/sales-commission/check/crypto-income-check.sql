@@ -72,3 +72,43 @@ FROM dws.dws_sales_commission_snapshot_detail_p
 WHERE root_account_id ='95d362d7-56fe-4f50-82cb-f97a51afc263'
 and product='crypto'
 and settlement_month='2026-08-01'
+
+收入
+2026-08-01	qbit_card	qbit_card_collection_fee_income	IQ	cdecea01-c18b-46fd-8ccb-040fcad51401		869.920	2026-09-03 03:49:38.056	1	source=dwm_customer_collection_fee_daily;route=daily_to_monthly;business_version=v1
+2026-08-01	qbit_card	physical_card_cost	BB	cdecea01-c18b-46fd-8ccb-040fcad51401		0.000	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+2026-08-01	qbit_card	qbit_account_recharge_fee	BB	cdecea01-c18b-46fd-8ccb-040fcad51401		0.000	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+2026-08-01	qbit_card	qbit_account_recharge_fee	BZ	cdecea01-c18b-46fd-8ccb-040fcad51401		0.000	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+2026-08-01	qbit_card	physical_card_cost	BZ	cdecea01-c18b-46fd-8ccb-040fcad51401		0.000	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+2026-08-01	qbit_card	main	BB	cdecea01-c18b-46fd-8ccb-040fcad51401		0.000	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+2026-08-01	qbit_card	virtual_card_create_fee_amount		cdecea01-c18b-46fd-8ccb-040fcad51401		0.000	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+2026-08-01	qbit_card	qbit_account_recharge_fee	PC	cdecea01-c18b-46fd-8ccb-040fcad51401		0.000	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+2026-08-01	qbit_card	physical_card_cost	IQ	cdecea01-c18b-46fd-8ccb-040fcad51401		0.000	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+2026-08-01	qbit_card	qbit_account_recharge_fee	IQ	cdecea01-c18b-46fd-8ccb-040fcad51401		0.000	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+2026-08-01	qbit_card	qbit_card_main_fee	IQ	cdecea01-c18b-46fd-8ccb-040fcad51401		94806.520	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+2026-08-01	qbit_card	main	BZ	cdecea01-c18b-46fd-8ccb-040fcad51401		0.000	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+2026-08-01	qbit_card	main	IQ	cdecea01-c18b-46fd-8ccb-040fcad51401		95676.440	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+2026-08-01	qbit_card	physical_card_cost	PC	cdecea01-c18b-46fd-8ccb-040fcad51401		0.000	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+2026-08-01	qbit_card	physical_card_cost		cdecea01-c18b-46fd-8ccb-040fcad51401		0.000	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+2026-08-01	qbit_card	main	PC	cdecea01-c18b-46fd-8ccb-040fcad51401		0.000	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+2026-08-01	qbit_card	main		cdecea01-c18b-46fd-8ccb-040fcad51401		0.000	2026-09-04 10:08:07.719	1	source=unified_dwm_to_monthly_plus_collect;business_version=v2
+成本
+BB	0.0000
+BPC	0.0000
+IQ	113516.9291
+SL	0.0000
+渠道返现
+BB	0.0000
+IQ	119728.1577
+客户返现
+
+
+
+FX_Cross费用收入：62332
+Settlement_Auth_Fee收入：20665
+其他费用收入：18068
+量子卡Cashback ： 119805.05829692
+之前月账单_QI汇总：22749.34
+
+QI成本：121958.75750463
+返现：3595.94
+代收：33524.25

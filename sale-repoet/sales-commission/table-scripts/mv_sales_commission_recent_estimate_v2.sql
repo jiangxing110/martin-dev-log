@@ -676,10 +676,10 @@ qbit_card_channel_rebate AS (
       date_trunc('month', q.report_date)::date AS settlement_month,
       COALESCE(aar.root_id, q.account_id) AS root_account_id,
       'qbit_card' AS product,
-      'QI' AS provider,
+      'IQ' AS provider,
       ABS(SUM(
           COALESCE(q.rebate_interchange_base_amt, 0) * COALESCE(q.rebate_interchange_rate, 0)
-        + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 0)
+          + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 0)
       ))::numeric(20,4) AS channel_rebate
     FROM "dws"."dws_qi_card_finance_daily_v2_p" q
     LEFT JOIN account_root_relation aar
@@ -745,6 +745,11 @@ revenue_cost_allocated AS (
           WHEN x.product_effective_revenue <> 0 THEN x.total_channel_rebate * x.effective_revenue / x.product_effective_revenue
           ELSE 0
         END
+      - CASE
+          WHEN x.product = 'qbit_card' AND x.qbit_card_effective_revenue <> 0
+            THEN x.total_customer_rebate_cost * x.effective_revenue / x.qbit_card_effective_revenue
+          ELSE 0
+        END
     ), 0)::numeric(20,4) AS allocated_effective_revenue,
     (
       CASE
@@ -752,11 +757,6 @@ revenue_cost_allocated AS (
         WHEN x.cost_allocation_rn = 1 THEN x.total_cogs
         ELSE 0
       END
-      + CASE
-          WHEN x.product = 'qbit_card' AND x.qbit_card_effective_revenue <> 0
-            THEN x.total_customer_rebate_cost * x.effective_revenue / x.qbit_card_effective_revenue
-          ELSE 0
-        END
     )::numeric(20,4) AS allocated_cogs
   FROM (
     SELECT
