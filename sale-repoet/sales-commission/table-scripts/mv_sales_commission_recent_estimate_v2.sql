@@ -623,6 +623,26 @@ offline_refund_cost AS (
     AND date_trunc('month', t.statistics_time)::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY date_trunc('month', t.statistics_time)::date, COALESCE(aar.root_id, t.account_id), t.product_line
 ),
+-- 量子卡/加密专项成本指标；provider 为空时由分摊逻辑跨渠道分配。
+commission_metric_cost AS (
+  SELECT
+    r.settlement_month,
+    r.root_account_id,
+    CASE r.metric_code
+      WHEN 'qbit_card_collection_fee' THEN 'qbit_card'
+      WHEN 'crypto_connect_income' THEN 'crypto'
+    END AS product,
+    NULLIF(TRIM(r.provider), '') AS provider,
+    SUM(COALESCE(r.income_value, 0))::numeric(20,4) AS cogs
+  FROM "dws"."dws_metrics_sales_revenue_monthly" r
+  WHERE r.delete_time IS NULL
+    AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    AND (
+      (r.product = 'qbit_card' AND r.metric_code = 'qbit_card_collection_fee')
+      OR (r.product = 'crypto_connect' AND r.metric_code = 'crypto_connect_income')
+    )
+  GROUP BY r.settlement_month, r.root_account_id, r.metric_code, NULLIF(TRIM(r.provider), '')
+),
 crypto_acceptance_cost AS (
   SELECT
     r.settlement_month,
@@ -733,6 +753,8 @@ v_cost_by_account_product AS (
     UNION ALL
     -- v2: 线下退款（所有 product_line）
     SELECT settlement_month, root_account_id, product, provider, cogs FROM offline_refund_cost
+    UNION ALL
+    SELECT settlement_month, root_account_id, product, provider, cogs FROM commission_metric_cost
   ) cost_union
   GROUP BY settlement_month, root_account_id, product, provider
 ),
@@ -753,33 +775,58 @@ revenue_cost_allocated AS (
     ), 0)::numeric(20,4) AS allocated_effective_revenue,
     (
       CASE
-        WHEN x.product_effective_revenue <> 0 THEN x.total_cogs * x.effective_revenue / x.product_effective_revenue
-        WHEN x.cost_allocation_rn = 1 THEN x.total_cogs
+        WHEN x.product_effective_revenue <> 0 THEN x.provider_cogs * x.effective_revenue / x.product_effective_revenue
+        WHEN x.cost_allocation_rn = 1 THEN x.provider_cogs
+        ELSE 0
+      END
+      + CASE
+        WHEN x.all_product_effective_revenue <> 0 THEN x.unscoped_cogs * x.effective_revenue / x.all_product_effective_revenue
+        WHEN x.all_cost_allocation_rn = 1 THEN x.unscoped_cogs
         ELSE 0
       END
     )::numeric(20,4) AS allocated_cogs
   FROM (
     SELECT
       b.*,
-      COALESCE(c.cogs, 0)::numeric(20,4) AS total_cogs,
+      COALESCE(c.provider_cogs, 0)::numeric(20,4) AS provider_cogs,
+      COALESCE(c.unscoped_cogs, 0)::numeric(20,4) AS unscoped_cogs,
       COALESCE(r.channel_rebate, 0)::numeric(20,4) AS total_channel_rebate,
       COALESCE(cr.customer_rebate_cost, 0)::numeric(20,4) AS total_customer_rebate_cost,
       SUM(b.effective_revenue) OVER (
         PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, '')
       )::numeric(20,4) AS product_effective_revenue,
+      SUM(b.effective_revenue) OVER (
+        PARTITION BY b.settlement_month, b.root_account_id, b.product
+      )::numeric(20,4) AS all_product_effective_revenue,
       SUM(CASE WHEN b.product = 'qbit_card' THEN b.effective_revenue ELSE 0 END) OVER (
         PARTITION BY b.settlement_month, b.root_account_id, b.product
       )::numeric(20,4) AS qbit_card_effective_revenue,
       ROW_NUMBER() OVER (
         PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, '')
         ORDER BY CASE WHEN b.effective_revenue <> 0 THEN 0 ELSE 1 END, b.sale_id NULLS LAST, b.department_id NULLS LAST
-      ) AS cost_allocation_rn
+      ) AS cost_allocation_rn,
+      ROW_NUMBER() OVER (
+        PARTITION BY b.settlement_month, b.root_account_id, b.product
+        ORDER BY CASE WHEN b.effective_revenue <> 0 THEN 0 ELSE 1 END, b.sale_id NULLS LAST, b.department_id NULLS LAST
+      ) AS all_cost_allocation_rn
     FROM revenue_base b
-    LEFT JOIN v_cost_by_account_product c
-      ON c.settlement_month = b.settlement_month
-     AND c.root_account_id = b.root_account_id
-     AND c.product = b.product
-     AND COALESCE(c.provider, '') = COALESCE(b.provider, '')
+    LEFT JOIN LATERAL (
+      SELECT
+        SUM(CASE
+          WHEN NULLIF(TRIM(c.provider), '') IS NULL THEN c.cogs
+          ELSE 0
+        END) AS unscoped_cogs,
+        SUM(CASE
+          WHEN NULLIF(TRIM(c.provider), '') IS NOT NULL
+           AND NULLIF(TRIM(c.provider), '') = NULLIF(TRIM(b.provider), '')
+            THEN c.cogs
+          ELSE 0
+        END) AS provider_cogs
+      FROM v_cost_by_account_product c
+      WHERE c.settlement_month = b.settlement_month
+        AND c.root_account_id = b.root_account_id
+        AND c.product = b.product
+    ) c ON true
     LEFT JOIN qbit_card_channel_rebate r
       ON r.settlement_month = b.settlement_month
      AND r.root_account_id = b.root_account_id
