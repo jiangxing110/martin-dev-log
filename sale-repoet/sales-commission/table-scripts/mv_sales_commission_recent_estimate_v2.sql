@@ -94,7 +94,7 @@ revenue_base AS (
     CASE WHEN r.product = 'crypto_connect' THEN 'crypto' WHEN r.product = 'global_account' THEN 'group_account' ELSE r.product END AS product,
     r.provider,
     CASE
-      WHEN r.product = 'open_api' AND r.metric_code IN ('month_revenue', 'month_receivable') THEN r.metric_code
+      WHEN r.product = 'open_api' AND r.metric_code IN ('month_revenue', 'month_receivable') THEN 'api_monthly_fee'
       ELSE NULL
     END AS item,
     CASE

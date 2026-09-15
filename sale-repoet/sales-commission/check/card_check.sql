@@ -64,3 +64,33 @@ WHERE q.delete_time IS NULL
 GROUP BY
     DATE_TRUNC('month', q.report_date)::date,
     COALESCE(aar.root_id, q.account_id);
+
+ 2026-08-01	2cef54b6-51c9-47c8-a56a-66934cbfd619	121986.903946050000   
+
+ WITH account_root_relation AS (
+    SELECT account_id, root_id
+    FROM ods.ods_api_account_relation
+    WHERE delete_time IS NULL
+)
+SELECT
+    DATE_TRUNC('month', q.report_date)::date AS settlement_month,
+    COALESCE(aar.root_id, q.account_id) AS root_account_id,
+    ABS(SUM(
+        COALESCE(q.rebate_interchange_base_amt, 0)
+            * COALESCE(q.rebate_interchange_rate, 0)
+      + COALESCE(q.rebate_incentive_base_amt, 0)
+            * COALESCE(q.rebate_incentive_rate, 0)
+    )) AS channel_rebate
+FROM dws.dws_qi_card_finance_daily_v2_p q
+LEFT JOIN account_root_relation aar
+    ON aar.account_id = q.account_id
+WHERE q.delete_time IS NULL
+  AND q.report_date >= DATE '2026-08-01'
+  AND q.report_date < DATE '2026-09-01'
+  AND COALESCE(aar.root_id, q.account_id)
+      = '2cef54b6-51c9-47c8-a56a-66934cbfd619'
+GROUP BY
+    DATE_TRUNC('month', q.report_date)::date,
+    COALESCE(aar.root_id, q.account_id);
+
+ 2026-08-01	2cef54b6-51c9-47c8-a56a-66934cbfd619	119728.157676280000
