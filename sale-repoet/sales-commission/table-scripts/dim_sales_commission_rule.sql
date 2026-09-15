@@ -1,6 +1,6 @@
 -- 销售佣金返佣规则维表
 -- 规则重建版本：2026-09-14
--- 口径：按当前部门 ID 精确匹配；国内新增销售小组只配置非加密产品。
+-- 口径：按当前部门 ID 精确匹配；所有有销售人员归属的业务部门均可承接加密业务。
 -- 说明：product/provider/item 为空表示通配；start_time/end_time 使用左闭右开区间。
 
 BEGIN;
@@ -48,20 +48,8 @@ ON "dim"."dim_sales_commission_rule" ("start_time", "end_time");
 -- 规则重建：清空整张规则表，避免旧部门、旧产品或旧规则残留。
 TRUNCATE TABLE "dim"."dim_sales_commission_rule";
 
--- 当前组织中允许计算 crypto 的部门：13～20 行的实际业务部门。
--- 海外业务为组织节点，不直接承接销售人员，因此不生成部门规则。
-WITH crypto_departments(department_id) AS (
-  VALUES
-    ('2077248232127864834'), -- 国际销售团队
-    ('2028709205416460290'), -- 大客户销售部
-    ('1762301052057112578'), -- 其他
-    ('1740320675756810242'), -- 海外业务销售部 - 1
-    ('1851130772357509121'), -- 海外业务销售部 - 2，下面单独配置
-    ('1740320716902932481'), -- 大客户管理部
-    ('1760576792068489218'), -- 创新业务部
-    ('2097615280722743297')  -- 销售三组
-),
-ordinary_departments(department_id, department_name) AS (
+-- 当前组织中实际承接销售业务的部门；海外业务为组织节点，不直接承接销售人员。
+WITH ordinary_departments(department_id, department_name) AS (
   VALUES
     ('1740319905791647746', '销售一部'),
     ('1740319923059597313', '销售二部'),
@@ -118,9 +106,7 @@ generated_rules AS (
     CASE WHEN p.product = 'crypto' THEN '加密业务普通GP阶梯规则' ELSE '普通产品GP阶梯规则' END AS remarks
   FROM ordinary_departments d
   CROSS JOIN products p
-  LEFT JOIN crypto_departments cd ON cd.department_id = d.department_id
   CROSS JOIN active_ranges ar
-  WHERE p.product <> 'crypto' OR cd.department_id IS NOT NULL
 ),
 inserted AS (
   INSERT INTO "dim"."dim_sales_commission_rule" (
@@ -190,20 +176,14 @@ INSERT INTO "dim"."dim_sales_commission_rule" (
   "invite_type", "start_time", "end_time", "priority", "enabled", "remarks"
 )
 SELECT
-  100069 + ROW_NUMBER() OVER (ORDER BY d.department_id, p.product),
+  500000 + ROW_NUMBER() OVER (ORDER BY d.department_id, p.product),
   concat('gp_', d.department_id, '_', p.product, '_over_1095'),
   concat(d.department_name, '-', p.product_name, '-GP-1096天以上-0%'),
   d.department_id, p.product, NULL, NULL, 'gp', 1096, 999999, 0.000000,
   'all', timestamp '2026-01-01', timestamp '2099-01-01', 100, true,
   '产品活跃超过1095天，佣金率为0'
 FROM zero_rate_departments d
-JOIN zero_rate_products p
-  ON p.product <> 'crypto'
-  OR d.department_id IN (
-    '2077248232127864834', '2028709205416460290', '1762301052057112578',
-    '1740320675756810242', '1740320716902932481', '1760576792068489218',
-    '2097615280722743297'
-  );
+CROSS JOIN zero_rate_products p;
 
 -- 海外业务销售部 - 2：直邀/非直邀特殊规则，product=NULL 表示所有产品。
 INSERT INTO "dim"."dim_sales_commission_rule" (

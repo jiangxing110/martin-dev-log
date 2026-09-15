@@ -32,3 +32,35 @@ eab456c44fe35648f40997dd5f337f85	2cef54b6-51c9-47c8-a56a-66934cbfd619	2026-08-01
 
 
 我看这个客户的量子卡激活时间是 2026-09-14 02:47:49.908
+
+
+WITH account_root_relation AS (
+    SELECT account_id, root_id
+    FROM ods.ods_api_account_relation
+    WHERE delete_time IS NULL
+)
+SELECT
+    DATE_TRUNC('month', q.report_date)::date AS settlement_month,
+    COALESCE(aar.root_id, q.account_id) AS root_account_id,
+    SUM(
+        COALESCE(q.cost_reimbursement_base_amt, 0) * COALESCE(q.cost_reimbursement_rate, 0)
+      + COALESCE(q.cost_service_base_amt, 0) * COALESCE(q.cost_service_rate, 0)
+      + COALESCE(q.cost_acs_regular_base_amt, 0) * COALESCE(q.cost_acs_regular_rate, 0)
+      + COALESCE(q.cost_acs_vip_base_amt, 0) * COALESCE(q.cost_acs_vip_rate, 0)
+      + COALESCE(q.cost_vrm_base_amt, 0) * COALESCE(q.cost_vrm_rate, 0)
+      + COALESCE(q.cost_hk_regular_base_amt, 0) * COALESCE(q.cost_hk_regular_rate, 0)
+      + COALESCE(q.cost_hk_vip_base_amt, 0) * COALESCE(q.cost_hk_vip_rate, 0)
+      + COALESCE(q.cost_dcsf_base_amt, 0) * COALESCE(q.cost_dcsf_rate, 0)
+      + COALESCE(q.cost_fixed_fee, 0)
+    ) AS qbit_cost
+FROM dws.dws_qi_card_finance_daily_v2_p q
+LEFT JOIN account_root_relation aar
+    ON aar.account_id = q.account_id
+WHERE q.delete_time IS NULL
+  AND q.report_date >= DATE '2026-08-01'
+  AND q.report_date < DATE '2026-09-01'
+  AND COALESCE(aar.root_id, q.account_id)
+      = '2cef54b6-51c9-47c8-a56a-66934cbfd619'
+GROUP BY
+    DATE_TRUNC('month', q.report_date)::date,
+    COALESCE(aar.root_id, q.account_id);

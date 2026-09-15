@@ -210,7 +210,7 @@ qbit_card_qi_cost AS (
     date_trunc('month', q.report_date)::date AS settlement_month,
     COALESCE(aar.root_id, q.account_id) AS root_account_id,
     'qbit_card' AS product,
-    'QI' AS provider,
+    'IQ' AS provider,
     SUM(
         COALESCE(q.cost_reimbursement_base_amt, 0) * COALESCE(q.cost_reimbursement_rate, 0)
       + COALESCE(q.cost_service_base_amt, 0) * COALESCE(q.cost_service_rate, 0)
