@@ -1,0 +1,18 @@
+0.项目结构有调整请重新扫描
+/Users/martinjiang/IdeaProjects/qbit-assets
+/Users/martinjiang/IdeaProjects/interlace_partner_service
+/Users/martinjiang/IdeaProjects/interlace-assets-api
+项目
+1.user."userType"='Agent' 
+这个代表二代合伙人级别的合伙人,对于我们的合伙人的那几个首页接口来说他们只看自己的
+就是得用他们自己的userId 取查询邀请码id 取查询客户参与统计
+不是二代的合伙人我用accountId 查询他们所有的邀请码
+2.对于之前合伙人返佣我们在合伙人端加了一个定时任务取assets 取拉去合伙人的返佣信息我们初期合伙人少还好但是一旦多少了
+我怕单次请求的数据太多了 我想能不能由asset这变写一个定时任务算完返佣然后请求合伙人项目
+
+更新开发方案到
+/Users/martinjiang/VsCodeProjects/martin-dev-log/parter-account-profit
+
+3./Users/martinjiang/VsCodeProjects/martin-dev-log/parter-account-profit/渠道月度佣金账单_2026-06 (6).xlsx 这个是他们需要导出的
+两个非毛利返佣的明细 
+我想知道我们在合伙人返佣金的那个表里我们asset 也没有给他推送过去
