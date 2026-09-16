@@ -623,8 +623,8 @@ offline_refund_cost AS (
     AND date_trunc('month', t.statistics_time)::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY date_trunc('month', t.statistics_time)::date, COALESCE(aar.root_id, t.account_id), t.product_line
 ),
--- 量子卡/加密专项成本指标；provider 为空时由分摊逻辑跨渠道分配。
-commission_metric_cost AS (
+-- 量子卡/加密专项扣减指标：不进入 cogs，直接从有效收入中扣减。
+commission_metric_deduction AS (
   SELECT
     r.settlement_month,
     r.root_account_id,
@@ -633,7 +633,7 @@ commission_metric_cost AS (
       WHEN 'crypto_connect_income' THEN 'crypto'
     END AS product,
     NULLIF(TRIM(r.provider), '') AS provider,
-    SUM(COALESCE(r.income_value, 0))::numeric(20,4) AS cogs
+    SUM(COALESCE(r.income_value, 0))::numeric(20,4) AS deduction_amount
   FROM "dws"."dws_metrics_sales_revenue_monthly" r
   WHERE r.delete_time IS NULL
     AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
@@ -753,8 +753,6 @@ v_cost_by_account_product AS (
     UNION ALL
     -- v2: 线下退款（所有 product_line）
     SELECT settlement_month, root_account_id, product, provider, cogs FROM offline_refund_cost
-    UNION ALL
-    SELECT settlement_month, root_account_id, product, provider, cogs FROM commission_metric_cost
   ) cost_union
   GROUP BY settlement_month, root_account_id, product, provider
 ),
@@ -770,6 +768,16 @@ revenue_cost_allocated AS (
       - CASE
           WHEN x.product = 'qbit_card' AND x.qbit_card_effective_revenue <> 0
             THEN x.total_customer_rebate_cost * x.effective_revenue / x.qbit_card_effective_revenue
+          ELSE 0
+        END
+      - CASE
+          WHEN x.product_effective_revenue <> 0
+            THEN x.provider_metric_deduction * x.effective_revenue / x.product_effective_revenue
+          ELSE 0
+        END
+      - CASE
+          WHEN x.all_product_effective_revenue <> 0
+            THEN x.unscoped_metric_deduction * x.effective_revenue / x.all_product_effective_revenue
           ELSE 0
         END
     ), 0)::numeric(20,4) AS allocated_effective_revenue,
@@ -790,6 +798,8 @@ revenue_cost_allocated AS (
       b.*,
       COALESCE(c.provider_cogs, 0)::numeric(20,4) AS provider_cogs,
       COALESCE(c.unscoped_cogs, 0)::numeric(20,4) AS unscoped_cogs,
+      COALESCE(md.provider_metric_deduction, 0)::numeric(20,4) AS provider_metric_deduction,
+      COALESCE(md.unscoped_metric_deduction, 0)::numeric(20,4) AS unscoped_metric_deduction,
       COALESCE(r.channel_rebate, 0)::numeric(20,4) AS total_channel_rebate,
       COALESCE(cr.customer_rebate_cost, 0)::numeric(20,4) AS total_customer_rebate_cost,
       SUM(b.effective_revenue) OVER (
@@ -827,6 +837,23 @@ revenue_cost_allocated AS (
         AND c.root_account_id = b.root_account_id
         AND c.product = b.product
     ) c ON true
+    LEFT JOIN LATERAL (
+      SELECT
+        SUM(CASE
+          WHEN NULLIF(TRIM(md.provider), '') IS NULL THEN md.deduction_amount
+          ELSE 0
+        END) AS unscoped_metric_deduction,
+        SUM(CASE
+          WHEN NULLIF(TRIM(md.provider), '') IS NOT NULL
+           AND NULLIF(TRIM(md.provider), '') = NULLIF(TRIM(b.provider), '')
+            THEN md.deduction_amount
+          ELSE 0
+        END) AS provider_metric_deduction
+      FROM commission_metric_deduction md
+      WHERE md.settlement_month = b.settlement_month
+        AND md.root_account_id = b.root_account_id
+        AND md.product = b.product
+    ) md ON true
     LEFT JOIN qbit_card_channel_rebate r
       ON r.settlement_month = b.settlement_month
      AND r.root_account_id = b.root_account_id

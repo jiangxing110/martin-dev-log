@@ -8,3 +8,122 @@ partner_commission_fee_transaction
 
 
 "{\"accountIds\": [\"438a5a26-cca9-4aa9-bc0a-77b5fdae24ec\",\"36c66164-9aa5-413d-b8ea-c2d37ff5c90c\"],\"billMonths\": [\"2026-08\"]}";
+
+
+firstSix type
+
+查询阶梯
+CREATE TABLE "public"."account_fee_item" (
+  "id" int8 NOT NULL,
+  "remarks" varchar COLLATE "pg_catalog"."default" DEFAULT ''::character varying,
+  "create_time" timestamptz(6) NOT NULL DEFAULT now(),
+  "update_time" timestamptz(6) NOT NULL DEFAULT now(),
+  "delete_time" timestamptz(6),
+  "version" int4 NOT NULL DEFAULT 1,
+  "template_id" int8,
+  "fee_name" varchar COLLATE "pg_catalog"."default" NOT NULL,
+  "channel" varchar COLLATE "pg_catalog"."default",
+  "channel_field" varchar COLLATE "pg_catalog"."default",
+  "transaction_country" varchar COLLATE "pg_catalog"."default",
+  "deduction_node" varchar COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'realtime'::character varying,
+  "rate_type" varchar COLLATE "pg_catalog"."default" NOT NULL DEFAULT 'fixed'::character varying,
+  "max_amount" numeric(20,12),
+  "min_amount" numeric(20,12),
+  "rate_value" numeric(20,12) NOT NULL,
+  "effective_time" timestamptz(6) NOT NULL,
+  "expiration_time" timestamptz(6) NOT NULL,
+  "ladder_max_amount" numeric(20,12),
+  "ladder_min_amount" numeric(20,12) NOT NULL DEFAULT '0'::numeric,
+  "account_id" uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'::uuid,
+  "collection_rate_value" numeric(20,12) NOT NULL,
+  "related_id" uuid,
+  "partner_commission_fee_id" int8,
+  CONSTRAINT "PK_02f5b7d35bfd9dcfe6c3a846b01" PRIMARY KEY ("id")
+)
+;
+
+ALTER TABLE "public"."account_fee_item" 
+  OWNER TO "qbit_admin";
+
+CREATE INDEX "IDX_1cb98d41ade08b6e251b7c3578" ON "public"."account_fee_item" USING btree (
+  "create_time" "pg_catalog"."timestamptz_ops" ASC NULLS LAST
+);
+
+CREATE INDEX "idx_account_fee_item_query" ON "public"."account_fee_item" USING btree (
+  "account_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "fee_name" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "transaction_country" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "effective_time" "pg_catalog"."timestamptz_ops" ASC NULLS LAST,
+  "ladder_min_amount" "pg_catalog"."numeric_ops" ASC NULLS LAST,
+  "channel" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "channel_field" COLLATE "pg_catalog"."default" "pg_catalog"."text_ops" ASC NULLS LAST
+);
+
+COMMENT ON COLUMN "public"."account_fee_item"."remarks" IS '备注';
+
+COMMENT ON COLUMN "public"."account_fee_item"."template_id" IS '模板id';
+
+COMMENT ON COLUMN "public"."account_fee_item"."fee_name" IS '费用名称';
+
+COMMENT ON COLUMN "public"."account_fee_item"."channel" IS '渠道';
+
+COMMENT ON COLUMN "public"."account_fee_item"."channel_field" IS '渠道字段 (如何是量子卡可以用 bin 、 如果是全球账户或其他业务可以用usd 之类的)';
+
+COMMENT ON COLUMN "public"."account_fee_item"."transaction_country" IS '交易国家';
+
+COMMENT ON COLUMN "public"."account_fee_item"."deduction_node" IS '扣费节点';
+
+COMMENT ON COLUMN "public"."account_fee_item"."rate_type" IS '费率类型';
+
+COMMENT ON COLUMN "public"."account_fee_item"."max_amount" IS '最大金额';
+
+COMMENT ON COLUMN "public"."account_fee_item"."min_amount" IS '最小金额';
+
+COMMENT ON COLUMN "public"."account_fee_item"."rate_value" IS '费率值';
+
+COMMENT ON COLUMN "public"."account_fee_item"."effective_time" IS '生效时间';
+
+COMMENT ON COLUMN "public"."account_fee_item"."expiration_time" IS '失效时间';
+
+COMMENT ON COLUMN "public"."account_fee_item"."ladder_max_amount" IS '阶梯最大金额';
+
+COMMENT ON COLUMN "public"."account_fee_item"."ladder_min_amount" IS '阶梯最小金额';
+
+COMMENT ON COLUMN "public"."account_fee_item"."account_id" IS '账户id';
+
+COMMENT ON COLUMN "public"."account_fee_item"."collection_rate_value" IS '代收费率值';
+
+COMMENT ON COLUMN "public"."account_fee_item"."related_id" IS '关联ID';
+
+COMMENT ON COLUMN "public"."account_fee_item"."partner_commission_fee_id" IS '合伙人费率ID';
+根据
+partner_commission_fee_transaction.fee_id
+查询
+SELECT * FROM account_fee_item WHERE id='2095458271786700802'
+related_id 
+SELECT * FROM account_fee_item WHERE related_id='a1681313-bba9-4057-ab5a-3bc247246b3a'
+2100179694429990914	账户开通同步合伙人费用	2026-09-16 19:07:13.303806+08	2026-09-16 19:07:13.303806+08		1		QuantumCardShoppingFee	QbitIssuing	49387519	all	realtime	fixed			5.000000000000	2026-08-13 00:00:00+08	2099-01-01 00:00:00+08		0.000000000000	ff12262b-ce2d-402e-a88b-dff69003f0da	0.000000000000	a1681313-bba9-4057-ab5a-3bc247246b3a	2100179694153166850
+2100179694803283970	账户开通同步合伙人费用	2026-09-16 19:07:13.392202+08	2026-09-16 19:07:13.392202+08		1		QuantumCardShoppingFee	QbitIssuing	49387519	all	realtime	fixed			5.000000000000	2026-08-13 00:00:00+08	2099-01-01 00:00:00+08		2.000000000000	ff12262b-ce2d-402e-a88b-dff69003f0da	0.000000000000	a1681313-bba9-4057-ab5a-3bc247246b3a	2100179694534848513
+2100179695193354242	账户开通同步合伙人费用	2026-09-16 19:07:13.485188+08	2026-09-16 19:07:13.485188+08		1		QuantumCardShoppingFee	QbitIssuing	49387519	all	realtime	fixed			5.000000000000	2026-08-13 00:00:00+08	2099-01-01 00:00:00+08		51.000000000000	ff12262b-ce2d-402e-a88b-dff69003f0da	0.000000000000	a1681313-bba9-4057-ab5a-3bc247246b3a	2100179694924918786
+2100179695587618818	账户开通同步合伙人费用	2026-09-16 19:07:13.578191+08	2026-09-16 19:07:13.578191+08		1		QuantumCardShoppingFee	QbitIssuing	49387519	all	realtime	fixed			5.000000000000	2026-08-13 00:00:00+08	2099-01-01 00:00:00+08		101.000000000000	ff12262b-ce2d-402e-a88b-dff69003f0da	0.000000000000	a1681313-bba9-4057-ab5a-3bc247246b3a	2100179695306600450
+2100179696015437826	账户开通同步合伙人费用	2026-09-16 19:07:13.677836+08	2026-09-16 19:07:13.677836+08		1		QuantumCardShoppingFee	QbitIssuing	49387519	all	realtime	fixed			5.000000000000	2026-08-13 00:00:00+08	2099-01-01 00:00:00+08		501.000000000000	ff12262b-ce2d-402e-a88b-dff69003f0da	0.000000000000	a1681313-bba9-4057-ab5a-3bc247246b3a	2100179695700865026
+
+检查三个项目本次改动的代码
+1:检查空指针风险
+2:检查代码备注
+3:检查javadoc
+
+select *
+from dws.mv_sales_commission_recent_estimate 
+where settlement_month='2026-08-01'
+and root_account_id='2cef54b6-51c9-47c8-a56a-66934cbfd619'
+
+1832089343	2026-09-16	2026-08-01	2cef54b6-51c9-47c8-a56a-66934cbfd619	open_api	BB	api_monthly_fee	billing_decline_fee	current_payout	cdecea01-c18b-46fd-8ccb-040fcad51401		2097615280722743297	non_direct	2026-07-01	2026-08-01	2026-09-01	0.2400	0.0000	0.2400	0.2400	0.100000	0.0240	0	open_api_monthly_2097615280722743297_0_365	2026-09-16 15:13:17.877225+08
+771819086	2026-09-16	2026-08-01	2cef54b6-51c9-47c8-a56a-66934cbfd619	qbit_card	BB		real_time_processing_fee	current_payout	cdecea01-c18b-46fd-8ccb-040fcad51401		2097615280722743297	non_direct	2026-08-01	2026-08-01	2026-08-01	0.0000	0.0000	0.0000	0.0000	0.120000	0.0000	0	gp_2097615280722743297_qbit_card_0_180	2026-09-16 15:13:17.877225+08
+2081949850	2026-09-16	2026-08-01	2cef54b6-51c9-47c8-a56a-66934cbfd619	open_api		api_monthly_fee	api_monthly_billing	future_payout	cdecea01-c18b-46fd-8ccb-040fcad51401		2097615280722743297	non_direct	2026-08-01	2026-08-01	2026-09-01	21736.0400	0.0000	21736.0400	21736.0400	0.100000	2173.6040	0	open_api_monthly_2097615280722743297_0_365	2026-09-16 15:13:17.877225+08
+1959276920	2026-09-16	2026-08-01	2cef54b6-51c9-47c8-a56a-66934cbfd619	open_api		api_monthly_fee	billing_decline_fee	current_payout	cdecea01-c18b-46fd-8ccb-040fcad51401		2097615280722743297	non_direct	2026-07-01	2026-08-01	2026-09-01	0.0000	0.0000	0.0000	0.0000	0.100000	0.0000	0	open_api_monthly_2097615280722743297_0_365	2026-09-16 15:13:17.877225+08
+1847482152	2026-09-16	2026-08-01	2cef54b6-51c9-47c8-a56a-66934cbfd619	open_api	IQ	api_monthly_fee	billing_decline_fee	current_payout	cdecea01-c18b-46fd-8ccb-040fcad51401		2097615280722743297	non_direct	2026-07-01	2026-08-01	2026-09-01	22749.3400	0.0000	22749.3400	22749.3400	0.100000	2274.9340	0	open_api_monthly_2097615280722743297_0_365	2026-09-16 15:13:17.877225+08
+2127902839	2026-09-16	2026-08-01	2cef54b6-51c9-47c8-a56a-66934cbfd619	qbit_card			real_time_processing_fee	current_payout	cdecea01-c18b-46fd-8ccb-040fcad51401		2097615280722743297	non_direct	2026-08-01	2026-08-01	2026-08-01	0.0000	0.0000	0.0000	0.0000	0.120000	0.0000	0	gp_2097615280722743297_qbit_card_0_180	2026-09-16 15:13:17.877225+08
+697448493	2026-09-16	2026-08-01	2cef54b6-51c9-47c8-a56a-66934cbfd619	qbit_card	BZ		real_time_processing_fee	current_payout	cdecea01-c18b-46fd-8ccb-040fcad51401		2097615280722743297	non_direct	2026-08-01	2026-08-01	2026-08-01	0.0000	0.0000	0.0000	0.0000	0.120000	0.0000	0	gp_2097615280722743297_qbit_card_0_180	2026-09-16 15:13:17.877225+08
+212087384	2026-09-16	2026-08-01	2cef54b6-51c9-47c8-a56a-66934cbfd619	qbit_card	IQ		real_time_processing_fee	current_payout	cdecea01-c18b-46fd-8ccb-040fcad51401		2097615280722743297	non_direct	2026-08-01	2026-08-01	2026-08-01	220420.6645	113512.3289	106908.3356	106908.3356	0.120000	12829.0003	0	gp_2097615280722743297_qbit_card_0_180	2026-09-16 15:13:17.877225+08
+1630378637	2026-09-16	2026-08-01	2cef54b6-51c9-47c8-a56a-66934cbfd619	qbit_card	PC		real_time_processing_fee	current_payout	cdecea01-c18b-46fd-8ccb-040fcad51401		2097615280722743297	non_direct	2026-08-01	2026-08-01	2026-08-01	0.0000	0.0000	0.0000	0.0000	0.120000	0.0000	0	gp_2097615280722743297_qbit_card_0_180	2026-09-16 15:13:17.877225+08
