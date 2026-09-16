@@ -1,0 +1,163 @@
+量子卡交易打标优化
+
+## 1. 目标
+
+当同一笔交易同时命中 Payment（支付标签）和 Platform（消费/平台标签）规则时，两个标签都应写入交易数据。
+
+典型复现数据：
+
+- `detail = google GB`
+- Payment 规则：`google%`，命中 `Google`
+- Platform 规则：`%google%`，应命中 `Google`
+- 当前结果：`paymentLabel = Google`，`platformLabel` 为空
+- 期望结果：`paymentLabel = Google`，`platformLabel = Google`
+
+## 2. 根因结论
+
+现有流程先匹配 Payment，再将 Payment 返回的 `expression` 作为 `removeChar` 传给 Platform。数据库函数 `get_detail_platform_v2(...)` 会根据 `removeChar` 从 `detail` 中删除已命中的字符，因此：
+
+```text
+原始 detail: google GB
+Payment 命中: Google,google
+Platform 输入: GB
+Platform 规则: %google%
+结果: 不命中
+```
+
+问题是标签编排层把两个本应独立的匹配串成了“消费剩余文本匹配”，而不是 Payment 和 Platform 的规则优先级配置问题。
+
+## 3. 改更方案
+
+### 3.1 总体原则
+
+Payment 与 Platform 都必须基于同一份原始 `detail` 独立匹配。正常的 Payment → Platform 组合流程不再传递 Payment 的 `removeChar`。
+
+数据库函数签名和第四个参数保留不变，避免影响其他确实需要显式排除字符的调用方。
+
+### 3.2 qbitpay_service（Node/NestJS）
+
+项目路径：`/Users/martinjiang/WebstormProjects/qbitpay_service`
+
+修改文件：
+
+1. `src/modules/qbit-card/qbit-card/transaction-scene/qbit-card-transaction-scene.service.ts`
+   - `getPlatform(...)`：保留 Payment 查询和 Platform 查询顺序，但 Platform 调用不再传 `paymentLabel.expression`。
+   - `runLabelLevelOne(...)`：同样取消 `removeChar` 传递，确保交易正式打标路径同时保留两个标签。
+   - `getPlatformV2(...)` 的 `removeChar` 参数暂不删除，继续支持已有特殊调用。
+
+逻辑目标：
+
+```ts
+const paymentLabel = await this.getPlatformV2(detail, mcc, { type: Payment });
+const platformLabel = await this.getPlatformV2(detail, mcc, { type: Platform });
+```
+
+### 3.3 qbit-assets（Java/Spring/MyBatis）
+
+项目路径：`/Users/martinjiang/IdeaProjects/qbit-assets`
+
+修改文件：
+
+1. `qbit-core/src/main/java/com/qbit/common_all/quantum/transaction/service/impl/QuantumCardTransactionExtendServiceImpl.java`
+   - `updateLabel(...)`：Platform 查询改为传空的 `removeChar`。
+
+2. `qbit-core/src/main/java/com/qbit/common_all/quantum/transaction/service/impl/QuantumCardTransactionLabelServiceImpl.java`
+   - `setCardTransactionLabelInfo(...)`：Platform 查询不再使用 Payment 返回的 `removeChar`。
+
+3. `qbit-core/src/main/java/com/qbit/common_all/quantum/transaction/service/impl/QbitCardTransactionScenePatternServiceImpl.java`
+   - `getPlatform(...)`：取消 Payment expression 到 Platform 查询参数的传递。
+   - `getPlatformV2(...)`、Mapper 和 `get_detail_platform_v2` 的 `removeChar` 能力保留，保证接口兼容。
+
+不修改：
+
+- `qbit-core/src/main/resources/mapper/QbitCardTransactionMapper.xml`
+- `qbit-core/src/main/java/com/qbit/core/mapper/transaction/qbitcard/QbitCardTransactionMapper.java`
+- `qbit-core/src/main/java/com/qbit/core/mapper/transaction/qbitcard/QbitCardTransactionScenePatternMapper.java`
+- 数据库函数 `get_detail_platform_v2`
+
+## 4. 测试方案
+
+### 4.1 Node 回归测试
+
+新增或扩展交易场景服务测试，验证真实编排参数：
+
+1. Payment 和 Platform 规则均命中 `google GB` 时，Platform 查询收到空 `removeChar`，最终返回两个标签。
+2. 只有 Payment 命中时，Platform 仍返回空，不改变原有结果。
+3. 只有 Platform 命中时，Platform 正常返回标签。
+4. `getPlatformV2` 显式传入 `removeChar` 的能力保持不变，避免误伤其他调用方。
+
+建议命令：
+
+```bash
+npm test -- --runInBand <对应测试文件>
+npm run build
+```
+
+### 4.2 Java 回归测试
+
+在 `qbit-core` 现有测试体系中补充场景测试，优先覆盖可验证编排参数的 Service 层：
+
+1. `QuantumCardTransactionExtendServiceImpl.updateLabel` 的 Payment、Platform 均基于原始 detail 查询。
+2. `QuantumCardTransactionLabelServiceImpl.setCardTransactionLabelInfo` 同时写入 Payment 和 Platform。
+3. `QbitCardTransactionScenePatternServiceImpl.getPlatform` 不再把 Payment expression 作为 Platform 的排除词。
+4. `removeChar` 显式参数的底层查询接口仍可用。
+
+建议命令：
+
+```bash
+cd /Users/martinjiang/IdeaProjects/qbit-assets
+mvn test -DskipTests=false -Dtest=QuantumCardTransactionExtendServiceImplTest
+mvn compile -q -pl qbit-core -am
+```
+
+如果测试环境没有可用 PostgreSQL，则使用 Mapper mock/参数捕获测试验证调用参数，并将数据库函数的两条 SQL 复现作为集成验证项：
+
+```sql
+SELECT get_detail_platform_v2('google GB', '5732', 'Platform', '');
+-- 期望返回 Google,...
+
+SELECT get_detail_platform_v2('google GB', '5732', 'Platform', 'google');
+-- 该结果继续为空属于函数当前语义，不作为本次修改目标
+```
+
+## 5. 实施顺序
+
+### 第一阶段：Node 项目
+
+- 先新增失败回归测试，证明 Payment 命中后 Platform 查询被传入 `google`。
+- 最小修改两处编排逻辑，让 Platform 使用空 `removeChar`。
+- 运行回归测试、全量相关测试和构建。
+
+### 第二阶段：Java 项目
+
+- 先新增失败回归测试，证明三条 Java 编排路径会把 Payment expression 传给 Platform。
+- 最小修改三处编排逻辑，统一 Platform 使用原始 detail 匹配。
+- 运行指定测试、qbit-core 编译及相关模块测试。
+
+### 第三阶段：联调验证
+
+- 使用 `detail = google GB`、MCC `5732` 的测试交易重新执行打标。
+- 确认交易记录同时为 `paymentLabel = Google`、`platformLabel = Google`。
+- 检查二级标签计算仍以两个一级标签为输入，未产生空指针或回归。
+
+## 6. 风险、兼容性与回滚
+
+风险较低：本次只改变正常 Payment → Platform 组合流程的输入，不改变规则排序、标签名称、数据库函数或表结构。
+
+主要兼容性注意事项：
+
+- 不要删除 `removeChar` 字段、DTO 属性、Mapper 参数或数据库函数参数；其他业务可能显式使用它。
+- 不要修改 `getBusinessCode` 中已经不带 Payment removeChar 的调用。
+- 历史交易不会自动重算；如需修复历史数据，应单独执行受控的重跑脚本或管理操作，并先评估二级标签影响。
+
+回滚方式：分别回滚两个项目中上述编排层改动即可，数据库无需回滚。
+
+## 7. 验收标准
+
+- `google GB` 同时命中 Payment `google%` 和 Platform `%google%`。
+- 主表 `qbit_card_transaction` 最终同时写入 `paymentLabel = Google` 与 `platformLabel = Google`。
+- 扩展表 `quantum_card_transaction_extend_p` 最终同时写入 `payment_label = Google` 与 `platform_label = Google`，通过 `card_transaction_id` 与主表对应交易关联。
+- Payment 未命中、Platform 单独命中等既有场景结果不变。
+- Node 相关测试和构建通过。
+- Java `qbit-core` 相关测试与编译通过。
+- 数据库函数及其 `removeChar` 显式调用契约不变。
