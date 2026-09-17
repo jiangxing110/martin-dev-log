@@ -193,9 +193,15 @@ revenue_base AS (
     LEFT JOIN sale_department_mapping sdm_inner ON sdm_inner.sale_id = sr_inner.sale_id
     WHERE sr_inner.relation_account_id = COALESCE(aar.root_id, t.account_id)
       AND sr_inner.delete_time IS NULL
-      AND date_trunc('month', t.statistics_time)::date >= sr_inner.relation_start_time
-      AND (date_trunc('month', t.statistics_time)::date < sr_inner.relation_end_time OR sr_inner.relation_end_time IS NULL)
-    ORDER BY sr_inner.relation_start_time DESC
+      AND sr_inner.relation_start_time <= t.statistics_time
+    ORDER BY
+      CASE
+        WHEN sr_inner.relation_end_time IS NULL
+          OR t.statistics_time < sr_inner.relation_end_time THEN 0
+        ELSE 1
+      END,
+      sr_inner.relation_start_time DESC,
+      sr_inner.id DESC
     LIMIT 1
   ) sr ON true
   WHERE t.delete_time IS NULL
@@ -245,9 +251,15 @@ revenue_base AS (
     LEFT JOIN sale_department_mapping sdm_inner ON sdm_inner.sale_id = sr_inner.sale_id
     WHERE sr_inner.relation_account_id = COALESCE(aar.root_id, t.account_id)
       AND sr_inner.delete_time IS NULL
-      AND date_trunc('month', t.statistics_time)::date >= sr_inner.relation_start_time
-      AND (date_trunc('month', t.statistics_time)::date < sr_inner.relation_end_time OR sr_inner.relation_end_time IS NULL)
-    ORDER BY sr_inner.relation_start_time DESC
+      AND sr_inner.relation_start_time <= t.statistics_time
+    ORDER BY
+      CASE
+        WHEN sr_inner.relation_end_time IS NULL
+          OR t.statistics_time < sr_inner.relation_end_time THEN 0
+        ELSE 1
+      END,
+      sr_inner.relation_start_time DESC,
+      sr_inner.id DESC
     LIMIT 1
   ) sr ON true
   WHERE t.delete_time IS NULL
@@ -267,59 +279,7 @@ revenue_base AS (
     sr.department_id,
     sr.am_id
 
-  -- v2: 返现调整增加
-  UNION ALL
-  SELECT
-    CURRENT_DATE AS report_date,
-    date_trunc('month', t.statistics_time)::date AS settlement_month,
-    COALESCE(aar.root_id, t.account_id) AS root_account_id,
-    CASE t.product_line
-      WHEN 'GLOBAL_ACCOUNT' THEN 'group_account'
-      WHEN 'QUANTUM_CARD' THEN 'qbit_card'
-      WHEN 'CRYPTO_ASSET' THEN 'crypto'
-    END AS product,
-    CAST(t.provider AS VARCHAR) AS provider,
-    NULL AS item,
-    'real_time_processing_fee' AS source_type,
-    'current_payout' AS commission_stage,
-    sr.sale_id,
-    sr.department_id,
-    sr.am_id,
-    date_trunc('month', t.statistics_time)::date AS activity_month,
-    date_trunc('month', t.statistics_time)::date AS collection_month,
-    date_trunc('month', t.statistics_time)::date AS payable_settlement_month,
-    SUM(COALESCE(t.amount, 0))::numeric(20,4) AS effective_revenue
-  FROM ods.ods_bi_month_tag t
-  LEFT JOIN account_root_relation aar ON aar.account_id = t.account_id
-  LEFT JOIN LATERAL (
-    SELECT
-      sr_inner.sale_id,
-      sdm_inner.department_id,
-      sr_inner.am_id
-    FROM dim.dim_sale_account_relation_p sr_inner
-    LEFT JOIN sale_department_mapping sdm_inner ON sdm_inner.sale_id = sr_inner.sale_id
-    WHERE sr_inner.relation_account_id = COALESCE(aar.root_id, t.account_id)
-      AND sr_inner.delete_time IS NULL
-      AND date_trunc('month', t.statistics_time)::date >= sr_inner.relation_start_time
-      AND (date_trunc('month', t.statistics_time)::date < sr_inner.relation_end_time OR sr_inner.relation_end_time IS NULL)
-    ORDER BY sr_inner.relation_start_time DESC
-    LIMIT 1
-  ) sr ON true
-  WHERE t.delete_time IS NULL
-    AND t.account_id IS NOT NULL
-    AND t.tag = 'CASHBACK_ADJUSTMENT_INCREASE'
-    AND date_trunc('month', t.statistics_time)::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
-  GROUP BY
-    date_trunc('month', t.statistics_time)::date,
-    COALESCE(aar.root_id, t.account_id),
-    t.product_line,
-    t.tag,
-    t.provider,
-    sr.sale_id,
-    sr.department_id,
-    sr.am_id
-
-  -- v2: 返现调整减少（负数）
+  -- v2: 返现调整增加（按业务口径扣减有效收入）
   UNION ALL
   SELECT
     CURRENT_DATE AS report_date,
@@ -352,9 +312,73 @@ revenue_base AS (
     LEFT JOIN sale_department_mapping sdm_inner ON sdm_inner.sale_id = sr_inner.sale_id
     WHERE sr_inner.relation_account_id = COALESCE(aar.root_id, t.account_id)
       AND sr_inner.delete_time IS NULL
-      AND date_trunc('month', t.statistics_time)::date >= sr_inner.relation_start_time
-      AND (date_trunc('month', t.statistics_time)::date < sr_inner.relation_end_time OR sr_inner.relation_end_time IS NULL)
-    ORDER BY sr_inner.relation_start_time DESC
+      AND sr_inner.relation_start_time <= t.statistics_time
+    ORDER BY
+      CASE
+        WHEN sr_inner.relation_end_time IS NULL
+          OR t.statistics_time < sr_inner.relation_end_time THEN 0
+        ELSE 1
+      END,
+      sr_inner.relation_start_time DESC,
+      sr_inner.id DESC
+    LIMIT 1
+  ) sr ON true
+  WHERE t.delete_time IS NULL
+    AND t.account_id IS NOT NULL
+    AND t.tag = 'CASHBACK_ADJUSTMENT_INCREASE'
+    AND date_trunc('month', t.statistics_time)::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+  GROUP BY
+    date_trunc('month', t.statistics_time)::date,
+    COALESCE(aar.root_id, t.account_id),
+    t.product_line,
+    t.tag,
+    t.provider,
+    sr.sale_id,
+    sr.department_id,
+    sr.am_id
+
+  -- v2: 返现调整减少（按业务口径增加有效收入）
+  UNION ALL
+  SELECT
+    CURRENT_DATE AS report_date,
+    date_trunc('month', t.statistics_time)::date AS settlement_month,
+    COALESCE(aar.root_id, t.account_id) AS root_account_id,
+    CASE t.product_line
+      WHEN 'GLOBAL_ACCOUNT' THEN 'group_account'
+      WHEN 'QUANTUM_CARD' THEN 'qbit_card'
+      WHEN 'CRYPTO_ASSET' THEN 'crypto'
+    END AS product,
+    CAST(t.provider AS VARCHAR) AS provider,
+    NULL AS item,
+    'real_time_processing_fee' AS source_type,
+    'current_payout' AS commission_stage,
+    sr.sale_id,
+    sr.department_id,
+    sr.am_id,
+    date_trunc('month', t.statistics_time)::date AS activity_month,
+    date_trunc('month', t.statistics_time)::date AS collection_month,
+    date_trunc('month', t.statistics_time)::date AS payable_settlement_month,
+    SUM(COALESCE(t.amount, 0))::numeric(20,4) AS effective_revenue
+  FROM ods.ods_bi_month_tag t
+  LEFT JOIN account_root_relation aar ON aar.account_id = t.account_id
+  LEFT JOIN LATERAL (
+    SELECT
+      sr_inner.sale_id,
+      sdm_inner.department_id,
+      sr_inner.am_id
+    FROM dim.dim_sale_account_relation_p sr_inner
+    LEFT JOIN sale_department_mapping sdm_inner ON sdm_inner.sale_id = sr_inner.sale_id
+    WHERE sr_inner.relation_account_id = COALESCE(aar.root_id, t.account_id)
+      AND sr_inner.delete_time IS NULL
+      AND sr_inner.relation_start_time <= t.statistics_time
+    ORDER BY
+      CASE
+        WHEN sr_inner.relation_end_time IS NULL
+          OR t.statistics_time < sr_inner.relation_end_time THEN 0
+        ELSE 1
+      END,
+      sr_inner.relation_start_time DESC,
+      sr_inner.id DESC
     LIMIT 1
   ) sr ON true
   WHERE t.delete_time IS NULL
@@ -928,15 +952,15 @@ estimate_base AS (
 rule_candidates AS (
   SELECT
     b.*,
-    r.rule_code,
+    COALESCE(r.rule_code, 'NO_MATCHED_RULE') AS rule_code,
     r.commission_base_type,
-    r.commission_rate,
+    COALESCE(r.commission_rate, 0)::numeric(20,6) AS commission_rate,
     ROW_NUMBER() OVER (
       PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, ''), COALESCE(b.item, ''), COALESCE(b.sale_id, ''), b.source_type, b.commission_stage
       ORDER BY r.priority ASC, r.id ASC
     ) AS rn
   FROM estimate_base b
-  JOIN "dim"."dim_sales_commission_rule" r
+  LEFT JOIN "dim"."dim_sales_commission_rule" r
     ON r.department_id = b.department_id
    AND (r.product IS NULL OR r.product = b.product)
    AND (r.provider IS NULL OR r.provider = b.provider)
