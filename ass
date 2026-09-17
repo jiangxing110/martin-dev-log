@@ -725,3 +725,10 @@
     now() AS refreshed_at
    FROM rule_candidates
   WHERE rule_candidates.rn = 1;
+
+
+应该说有渠道的
+  real_time 实收+  有渠道 API 月结实收
+- COGS
+- 返现
++ API 月费 / 一次性手续费实收

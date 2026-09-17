@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 基于现有销售返佣物化视图，新增账户级合伙人客户毛利物化视图及每月 21 号固化上个月数据的快照主表、详情表和 Flink SQL 任务。
+**Goal:** 基于销售 v2 的底层收入、成本、返现和调整事实逻辑，独立计算账户级合伙人客户毛利，并每月 21 号固化上个月数据。
 
-**Architecture:** 复用 `dws.mv_sales_commission_recent_estimate` 已完成的收入/成本归集结果，去掉佣金字段和佣金规则过滤，在账户、渠道、费用项维度重新汇总并关联 `dim_account_analysis.referral_user_id`。快照任务读取目标月份物化视图，在同一 statement set 中写入详情和主表。
+**Architecture:** 不读取 `dws.mv_sales_commission_recent_estimate`。合伙人视图直接复用销售 v2 的底层收入、成本、返现及 `bi_month_tag` 调整逻辑，以 root account 的 `referralCode` 关联新版合伙人。有渠道的 real_time 与 API 月结实收按共享毛利池分配；API 月费/一次性费用保留明细但不进入毛利返佣 gp；快照任务读取目标月份物化视图，在同一 statement set 中写入详情和主表。
 
 **Tech Stack:** PostgreSQL/ADBPG materialized view、Flink SQL、JDBC/ADBPG connector、Markdown。
 
@@ -14,7 +14,9 @@
 
 - 本期落地客户经营毛利、量子账户/加密资产返佣配置及返佣结果表。
 - `open_api` 与 `qbit_card` 对外统一为 `qbit_card`，使用 `source_product` 区分原始产品。
-- 过滤 `item = 'month_revenue'` 的 API 实收数据。
+- 仅纳入 API 实收 `month_revenue`，不纳入 API 应收 `month_receivable`。
+- 有渠道的 real_time 与 API 月结手续费共享 COGS、返现后的渠道毛利池；池毛利非正时两类 gp 均为 0。
+- API 月费/一次性手续费保留实收明细，但不进入毛利阶梯返佣 gp。
 - 负毛利在明细和汇总中原样保留，不在中间层归零。
 - 返佣采用超额累进，负毛利不产生返佣，最终返佣金额不低于 0。
 - 返佣结果表建立在 `public` schema，不使用 `dws` schema。
@@ -28,9 +30,9 @@
 - Create: `table-scripts/dws_partner_account_profit_snapshot_detail_p.sql`
 - Create: `cdc/sp_refresh_mv_partner_account_profit_recent_estimate.sql`
 
-- [ ] 建立物化视图，关联 `dim_account_analysis.referral_user_id`，并按客户/产品/渠道/费用项聚合。
+- [x] 建立物化视图，直接读取收入、成本、返现和调整事实表，以邀请码关联新版合伙人，并按客户/产品/渠道/费用项聚合。
 - [ ] 建立主表和详情表，按 `snapshot_date` 分区并加入查询索引。
-- [ ] 静态检查字段、过滤条件、产品标准化和毛利公式。
+- [x] 静态检查字段、API 应收过滤、产品标准化和有渠道 API 月结共享毛利池公式。
 
 ### Task 2: Create snapshot jobs
 
