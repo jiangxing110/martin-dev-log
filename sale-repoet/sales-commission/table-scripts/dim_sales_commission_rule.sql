@@ -290,4 +290,45 @@ ON CONFLICT ("id") DO UPDATE SET
   "commission_rate" = EXCLUDED."commission_rate", "invite_type" = EXCLUDED."invite_type", "start_time" = EXCLUDED."start_time", "end_time" = EXCLUDED."end_time",
   "priority" = EXCLUDED."priority", "enabled" = EXCLUDED."enabled", "remarks" = EXCLUDED."remarks", "update_time" = now(), "delete_time" = NULL;
 
+-- OpenAPI月结手续费：与 real_time 共用渠道毛利池，按活跃天数取 real_time 阶梯，佣金基数为分摊后的毛利。
+WITH departments(department_id, department_name) AS (
+  SELECT * FROM (VALUES
+    ('1740319905791647746', '销售一部'), ('1740319923059597313', '销售二部'), ('2066369412858433538', '销售三部'),
+    ('2077248232127864834', '国际销售团队'), ('1740320716902932481', '大客户管理部'), ('1740320675756810242', '海外业务销售部 - 1'),
+    ('1762301052057112578', '其他'), ('1760576792068489218', '创新业务部'), ('2097614575010123778', '销售一组'),
+    ('2097614680696270850', '销售二组'), ('2097614776689037313', '销售三组'), ('2097614875836264450', '销售四组'),
+    ('2097615094967676929', '销售一组'), ('2097615188473221122', '销售二组'), ('2097615280722743297', '销售三组'),
+    ('2028709205416460290', '大客户销售部')
+  ) AS x(department_id, department_name)
+),
+ranges(active_days_min, active_days_max, range_code, rate) AS (
+  VALUES
+    (0, 180, '0_180', 0.120000::numeric),
+    (181, 365, '181_365', 0.060000::numeric),
+    (366, 1095, '366_1095', 0.036000::numeric)
+),
+generated_rules AS (
+  SELECT
+    350000 + row_number() OVER (ORDER BY d.department_id, r.active_days_min) AS id,
+    concat('open_api_monthly_settlement_gp_', d.department_id, '_', r.range_code) AS rule_code,
+    concat(d.department_name, '-OpenAPI月结手续费毛利-', r.range_code) AS rule_name,
+    d.department_id, 'open_api' AS product, NULL::varchar AS provider, 'api_monthly_settlement_fee' AS item,
+    'gp' AS commission_base_type, r.active_days_min, r.active_days_max, r.rate AS commission_rate, 'all' AS invite_type,
+    timestamp '2026-01-01' AS start_time, timestamp '2099-01-01' AS end_time, 100 AS priority, true AS enabled,
+    '有渠道的API月结手续费与real_time共用渠道毛利池，按反向占比分摊后计佣' AS remarks
+  FROM departments d CROSS JOIN ranges r
+)
+INSERT INTO "dim"."dim_sales_commission_rule" (
+  "id", "rule_code", "rule_name", "department_id", "product", "provider", "item",
+  "commission_base_type", "active_days_min", "active_days_max", "commission_rate",
+  "invite_type", "start_time", "end_time", "priority", "enabled", "remarks"
+)
+SELECT * FROM generated_rules
+ON CONFLICT ("id") DO UPDATE SET
+  "rule_code" = EXCLUDED."rule_code", "rule_name" = EXCLUDED."rule_name", "department_id" = EXCLUDED."department_id",
+  "product" = EXCLUDED."product", "provider" = EXCLUDED."provider", "item" = EXCLUDED."item",
+  "commission_base_type" = EXCLUDED."commission_base_type", "active_days_min" = EXCLUDED."active_days_min", "active_days_max" = EXCLUDED."active_days_max",
+  "commission_rate" = EXCLUDED."commission_rate", "invite_type" = EXCLUDED."invite_type", "start_time" = EXCLUDED."start_time", "end_time" = EXCLUDED."end_time",
+  "priority" = EXCLUDED."priority", "enabled" = EXCLUDED."enabled", "remarks" = EXCLUDED."remarks", "update_time" = now(), "delete_time" = NULL;
+
 COMMIT;

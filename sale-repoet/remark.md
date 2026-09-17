@@ -626,3 +626,55 @@ wallet.collectedItems
 这种的枚举都要 没有都按0处理
 
 包括其他的金额相关也是一样
+
+
+关于实收的处理
+SELECT
+r.*
+FROM dws.dws_metrics_sales_revenue_monthly r
+WHERE 1=1
+and product='open_api' and metric_code!='month_receivable'
+and root_account_id='9a6e4d51-d5cf-471f-8c13-9922c1213638'
+
+a09f52ca56dc29bd03a42e9459b0984f	9a6e4d51-d5cf-471f-8c13-9922c1213638	2026-08-01	2026-07-01	open_api	month_revenue	BB	269ce892-8728-4954-bb05-613163dbd142		932.922	2026-09-17 14:50:09.267	1	source=api_client_debit_record;route=received_v5_adjusted_amount;business_version=v5;amount_basis=coalesce_adjust_amount_or_amount;grain=report_date+settlement_month	2026-09-17 14:50:09.267	2026-09-17 14:50:09.267		income
+47260fea3b1bdffda3d1a47b81384375	9a6e4d51-d5cf-471f-8c13-9922c1213638	2026-08-01	2026-07-01	open_api	month_revenue	BZ	269ce892-8728-4954-bb05-613163dbd142		0.250	2026-09-17 14:50:09.267	1	source=api_client_debit_record;route=received_v5_adjusted_amount;business_version=v5;amount_basis=coalesce_adjust_amount_or_amount;grain=report_date+settlement_month	2026-09-17 14:50:09.267	2026-09-17 14:50:09.267		income
+19d555fb2827b8388f3505874017a2f3	9a6e4d51-d5cf-471f-8c13-9922c1213638	2026-08-01	2026-07-01	open_api	month_revenue		269ce892-8728-4954-bb05-613163dbd142		4686.701	2026-09-17 14:50:09.267	1	source=api_client_debit_record;route=received_v5_adjusted_amount;business_version=v5;amount_basis=coalesce_adjust_amount_or_amount;grain=report_date+settlement_month	2026-09-17 14:50:09.267	2026-09-17 14:50:09.267		income
+
+我来写一下销售毛利具体规则吧, 之后补充到文档:
+销售毛利根据实际收到的钱来统计
+
+
+API账单实际收到的钱：目前拆分为三部分
+API月结手续费 ，API月费 ， API一次性手续费   ， 其中API月费，API一次性手续费直接乘相关的提成费率就行，不参于渠道毛利之间的计算 ,  API月结手续费和real_time的提成费率一致
+
+real_time + API月结手续费 -  COGS - 返现 = 毛利
+在页面上展示是完全拆分的：real_time和API账单的
+
+假设：
+100 + 100 - 150 - 100 = -50
+当毛利<=0:
+real_time : 0
+API账单 : 0
+
+200 + 100 - 150 - 100 = 50
+当毛利>0(根据占比来拆分):
+real_time : +16.66
+API账单 : +33.33
+
+目前来说 有渠道的就是API月结手续费 没有的就是其中API月费，API一次性手续费直接乘相关的提成费率就行
+
+SELECT * FROM dws.mv_sales_commission_recent_estimate 
+WHERE root_account_id='9a6e4d51-d5cf-471f-8c13-9922c1213638'
+and settlement_month='2026-08-01'
+
+111213455	2026-09-17	2026-08-01	9a6e4d51-d5cf-471f-8c13-9922c1213638	crypto			real_time_processing_fee	current_payout	269ce892-8728-4954-bb05-613163dbd142		1740319923059597313	non_direct	2026-08-01	2026-08-01	2026-08-01	0.0000	774.0000	0.0000	0.0000	0.120000	0.0000	0	gp_1740319923059597313_crypto_0_180	2026-09-17 16:48:54.05538+08
+142064102	2026-09-17	2026-08-01	9a6e4d51-d5cf-471f-8c13-9922c1213638	open_api		api_monthly_fee	api_monthly_billing	future_payout	269ce892-8728-4954-bb05-613163dbd142		1740319923059597313	non_direct	2026-08-01	2026-08-01	2026-09-01	36455.1700	0.0000	36455.1700	36455.1700	0.100000	3645.5170	40	open_api_monthly_1740319923059597313_0_365	2026-09-17 16:48:54.05538+08
+2064281882	2026-09-17	2026-08-01	9a6e4d51-d5cf-471f-8c13-9922c1213638	open_api		api_monthly_fee	billing_decline_fee	current_payout	269ce892-8728-4954-bb05-613163dbd142		1740319923059597313	non_direct	2026-07-01	2026-08-01	2026-09-01	4686.7010	0.0000	4686.7010	4686.7010	0.100000	468.6701	40	open_api_monthly_1740319923059597313_0_365	2026-09-17 16:48:54.05538+08
+483970358	2026-09-17	2026-08-01	9a6e4d51-d5cf-471f-8c13-9922c1213638	qbit_card			real_time_processing_fee	current_payout	269ce892-8728-4954-bb05-613163dbd142		1740319923059597313	non_direct	2026-08-01	2026-08-01	2026-08-01	8900.8000	0.0000	8900.8000	8900.8000	0.120000	1068.0960	48	gp_1740319923059597313_qbit_card_0_180	2026-09-17 16:48:54.05538+08
+2139526408	2026-09-17	2026-08-01	9a6e4d51-d5cf-471f-8c13-9922c1213638	qbit_card	BB		real_time_processing_fee	current_payout	269ce892-8728-4954-bb05-613163dbd142		1740319923059597313	non_direct	2026-08-01	2026-08-01	2026-08-01	12653.8938	26080.2689	0.0000	0.0000	0.120000	0.0000	48	gp_1740319923059597313_qbit_card_0_180	2026-09-17 16:48:54.05538+08
+1093270875	2026-09-17	2026-08-01	9a6e4d51-d5cf-471f-8c13-9922c1213638	qbit_card	BZ		real_time_processing_fee	current_payout	269ce892-8728-4954-bb05-613163dbd142		1740319923059597313	non_direct	2026-08-01	2026-08-01	2026-08-01	802.8800	6100.7414	0.0000	0.0000	0.120000	0.0000	48	gp_1740319923059597313_qbit_card_0_180	2026-09-17 16:48:54.05538+08
+1485531385	2026-09-17	2026-08-01	9a6e4d51-d5cf-471f-8c13-9922c1213638	open_api	BB	api_monthly_fee	billing_decline_fee	current_payout	269ce892-8728-4954-bb05-613163dbd142		1740319923059597313	non_direct	2026-07-01	2026-08-01	2026-09-01	932.9220	0.0000	932.9220	932.9220	0.100000	93.2922	40	open_api_monthly_1740319923059597313_0_365	2026-09-17 16:48:54.05538+08
+231038848	2026-09-17	2026-08-01	9a6e4d51-d5cf-471f-8c13-9922c1213638	open_api	BZ	api_monthly_fee	billing_decline_fee	current_payout	269ce892-8728-4954-bb05-613163dbd142		1740319923059597313	non_direct	2026-07-01	2026-08-01	2026-09-01	0.2500	0.0000	0.2500	0.2500	0.100000	0.0250	40	open_api_monthly_1740319923059597313_0_365	2026-09-17 16:48:54.05538+08
+48324581	2026-09-17	2026-08-01	9a6e4d51-d5cf-471f-8c13-9922c1213638	qbit_card	IQ		real_time_processing_fee	current_payout	269ce892-8728-4954-bb05-613163dbd142		1740319923059597313	non_direct	2026-08-01	2026-08-01	2026-08-01	0.0000	0.0000	0.0000	0.0000	0.120000	0.0000	48	gp_1740319923059597313_qbit_card_0_180	2026-09-17 16:48:54.05538+08
+983297101	2026-09-17	2026-08-01	9a6e4d51-d5cf-471f-8c13-9922c1213638	qbit_card	PC		real_time_processing_fee	current_payout	269ce892-8728-4954-bb05-613163dbd142		1740319923059597313	non_direct	2026-08-01	2026-08-01	2026-08-01	0.0000	0.0000	0.0000	0.0000	0.120000	0.0000	48	gp_1740319923059597313_qbit_card_0_180	2026-09-17 16:48:54.05538+08
+这部分是当前的结果记录一下 我们后面拿来比对

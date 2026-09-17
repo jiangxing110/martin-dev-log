@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-20
--- Updated Time:   2026-09-17 16:45:53
+-- Updated Time:   2026-09-17 17:23:45
 -- Description:    销售佣金8号前预估物化视图 v2
 -- Notes:
 --   1. 基于 v1，新增结汇成本、线下退款、收入调整、返现调整、线下API收入、线下实体卡制卡费的支持。
@@ -19,6 +19,7 @@
 --   13. v1 额外扣减 public.cash_back_bonuses 中 QuantumAccountHandlingFeeOnBehalf 且 Closed 的量子卡客户返现成本。
 --   14. v2 新增：SETTLEMENT_COST、OFFLINE_REFUND、OFFLINE_API_INCOME、OFFLINE_PHYSICAL_CARD_FEE、
 --       CASHBACK_ADJUSTMENT、INCOME_ADJUSTMENT、payment_transaction_record fee_cost。
+--   15. 有渠道的 OpenAPI 月结实收与 real_time 共用渠道毛利池；池毛利为正时按产品定义反向占比分摊。
 --********************************************************************--
 
 DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_sales_commission_recent_estimate";
@@ -96,7 +97,14 @@ revenue_base_raw AS (
     CASE WHEN r.product = 'crypto_connect' THEN 'crypto' WHEN r.product = 'global_account' THEN 'group_account' ELSE r.product END AS product,
     r.provider,
     CASE
-      WHEN r.product = 'open_api' AND r.metric_code IN ('month_revenue', 'month_receivable') THEN 'api_monthly_fee'
+      -- 有渠道的 API 月结实收进入 real_time + API 月结手续费的共享毛利池。
+      WHEN r.product = 'open_api'
+       AND r.metric_code = 'month_revenue'
+       AND NULLIF(TRIM(r.provider), '') IS NOT NULL
+        THEN 'api_monthly_settlement_fee'
+      -- 无渠道的月费/一次性费用当前源表未给出进一步类型，仍按原直算月费逻辑处理。
+      WHEN r.product = 'open_api' AND r.metric_code IN ('month_revenue', 'month_receivable')
+        THEN 'api_monthly_fee'
       ELSE NULL
     END AS item,
     CASE
@@ -927,6 +935,78 @@ revenue_cost_allocated AS (
      AND cr.product = b.product
   ) x
 ),
+-- 渠道毛利池：real_time 与有渠道的 API 月结实收共用收入、成本、返现后的毛利。
+-- 池毛利 <= 0 时两类明细均为 0；池毛利 > 0 时按产品定义反向占比分摊：
+-- real_time 分配 API 月结收入占比，API 月结分配 real_time 收入占比。
+channel_gp_pool AS (
+  SELECT
+    b.settlement_month,
+    b.root_account_id,
+    b.provider,
+    b.sale_id,
+    b.department_id,
+    SUM(CASE
+      WHEN b.source_type = 'real_time_processing_fee'
+       AND b.product <> 'open_api'
+        THEN b.allocated_effective_revenue
+      ELSE 0
+    END)::numeric(20,4) AS real_time_effective_revenue,
+    SUM(CASE
+      WHEN b.product = 'open_api'
+       AND b.item = 'api_monthly_settlement_fee'
+        THEN b.allocated_effective_revenue
+      ELSE 0
+    END)::numeric(20,4) AS api_monthly_settlement_effective_revenue,
+    SUM(b.allocated_effective_revenue)::numeric(20,4) AS pool_effective_revenue,
+    SUM(b.allocated_cogs)::numeric(20,4) AS pool_cogs
+  FROM revenue_cost_allocated b
+  WHERE b.commission_stage = 'current_payout'
+    AND NULLIF(TRIM(b.provider), '') IS NOT NULL
+    AND (
+      (b.source_type = 'real_time_processing_fee' AND b.product <> 'open_api')
+      OR (b.product = 'open_api' AND b.item = 'api_monthly_settlement_fee')
+    )
+  GROUP BY
+    b.settlement_month,
+    b.root_account_id,
+    b.provider,
+    b.sale_id,
+    b.department_id
+),
+channel_gp_pool_allocated AS (
+  SELECT
+    b.*,
+    CASE
+      WHEN b.source_type = 'real_time_processing_fee'
+       AND b.product <> 'open_api'
+       AND p.real_time_effective_revenue > 0
+       AND p.api_monthly_settlement_effective_revenue > 0
+        THEN (
+          GREATEST(p.pool_effective_revenue - p.pool_cogs, 0)
+          * p.api_monthly_settlement_effective_revenue
+          / (p.real_time_effective_revenue + p.api_monthly_settlement_effective_revenue)
+          * b.allocated_effective_revenue / p.real_time_effective_revenue
+        )::numeric(20,4)
+      WHEN b.product = 'open_api'
+       AND b.item = 'api_monthly_settlement_fee'
+       AND p.real_time_effective_revenue > 0
+       AND p.api_monthly_settlement_effective_revenue > 0
+        THEN (
+          GREATEST(p.pool_effective_revenue - p.pool_cogs, 0)
+          * p.real_time_effective_revenue
+          / (p.real_time_effective_revenue + p.api_monthly_settlement_effective_revenue)
+          * b.allocated_effective_revenue / p.api_monthly_settlement_effective_revenue
+        )::numeric(20,4)
+      ELSE NULL
+    END AS pooled_gp
+  FROM revenue_cost_allocated b
+  LEFT JOIN channel_gp_pool p
+    ON p.settlement_month = b.settlement_month
+   AND p.root_account_id = b.root_account_id
+   AND p.provider = b.provider
+   AND p.sale_id IS NOT DISTINCT FROM b.sale_id
+   AND p.department_id IS NOT DISTINCT FROM b.department_id
+),
 estimate_base AS (
   SELECT
     b.report_date,
@@ -946,6 +1026,7 @@ estimate_base AS (
     b.allocated_effective_revenue AS effective_revenue,
     b.allocated_cogs AS cogs,
     CASE
+      WHEN b.pooled_gp IS NOT NULL THEN b.pooled_gp
       WHEN b.department_id = '1851130772357509121'
         THEN (b.allocated_effective_revenue - b.allocated_cogs)::numeric(20,4)
       ELSE GREATEST(b.allocated_effective_revenue - b.allocated_cogs, 0)::numeric(20,4)
@@ -982,7 +1063,7 @@ estimate_base AS (
       WHEN a.referral_user_id IS NOT NULL AND a.referral_user_id = b.sale_id THEN 'direct'
     ELSE 'non_direct'
     END AS invite_type
-  FROM revenue_cost_allocated b
+  FROM channel_gp_pool_allocated b
   LEFT JOIN "dim"."dim_account_analysis" a
     ON a.account_id = b.root_account_id
    AND a.delete_time IS NULL
