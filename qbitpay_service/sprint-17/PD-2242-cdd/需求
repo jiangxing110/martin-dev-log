@@ -1,0 +1,76 @@
+这个是一个cdd相关的需求我们需要根据
+/Users/martinjiang/IdeaProjects/qbit-assets
+/Users/martinjiang/WebstormProjects/qbitpay_service
+两个项目进行需求分析
+/Users/martinjiang/VsCodeProjects/martin-dev-log/qbitpay_service/sprint-17/PD-2242-cdd/【PD-1999】CDD-品牌名_DBA 字段采集 &搜索增强.pdf
+这个是需求文档
+在 Admin 端以下两个页面的筛选搜索框中，新增「品牌名/DBA」和「官方网站」两个搜索字段，均支持模糊搜索：
+- CDD 审核 → CDD 审核 3.0 页面
+- 客户管理 → 客户信息 → 新用户全量信息页面
+- 首页→ API客户业务→ API客户管理
+- CDD 审核 → CDD 审核 3.0 页面
+curl --url 'https://global.service.test.qbitnetwork.com/admin-graphql' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Origin: https://test-admin-v3.qbitnetwork.com' \
+  -H 'Referer: https://test-admin-v3.qbitnetwork.com/' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-site' \
+  -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36' \
+  -H 'accept: */*' \
+  -H 'authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRjNWVlNzA1LTFkYjgtNDcyOS04OTU0LTJiY2I4NjZiNmZkZCIsImFjY291bnQiOiIrODYxODU1ODI0MTQ0MCIsInJvbGUiOiJBZG1pbiIsImFjY291bnRJZCI6ImZjMzgyN2VjLTU4ZTktNGY0Mi1hNjYxLWEzYWE2NThjM2U2MSIsInBob25lIjoiKzg2MTg1NTgyNDE0NDAiLCJpc01vcmUiOmZhbHNlLCJpYXQiOjE3ODk1NzI0MzUsImV4cCI6MTc4OTY1ODgzNX0.Uf_vOGwZ6WH4RQwvfh9v3bJ3SH7qSKdirwS1IfaQoss' \
+  -H 'content-type: application/json' \
+  -H 'fingerprint: 901aaab3ea524de187e73c7c1ed9d966' \
+  -H 'sec-ch-ua: "Google Chrome";v="153", "Not_A Brand";v="8", "Chromium";v="153"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  --data-raw $'{"operationName":"cddKyCaseList","variables":{"queryParams":{"filter":{"customerUpdateTime":["2026-06-16T16:00:00.000Z","2026-09-17T15:59:59.999Z"]},"pagination":{"limit":20,"page":0}}},"query":"query cddKyCaseList($queryParams: QueryParams\u0021) {\\n  data: KyCase(queryParams: $queryParams) {\\n    total\\n    data {\\n      id\\n      accountId\\n      account {\\n        id\\n        type\\n        verifiedName\\n        verifiedNameEn\\n        tagsList\\n        status\\n        referralCode {\\n          code\\n          __typename\\n        }\\n        infinityLaunchFlag\\n        customerCategory\\n        salesAccountRelation {\\n          operationManager {\\n            nickname\\n            __typename\\n          }\\n          sale {\\n            nickname\\n            __typename\\n          }\\n          __typename\\n        }\\n        __typename\\n      }\\n      dormant\\n      businessName\\n      formerName\\n      cddNamesScreeningStatus\\n      phone\\n      registrationRegion\\n      otherRegistrationRegion\\n      hasFaceAuth\\n      faceAuthStatus\\n      kycStatus\\n      kybQbitCardStatus\\n      kybGlobalAccountStatus\\n      kybDigitalCurrenciesStatus\\n      kybParticleFinanceStatus\\n      kybAcquiringStatus\\n      riskLevel\\n      customerUpdateTime\\n      reviewUpdateTime\\n      __typename\\n    }\\n    __typename\\n  }\\n}"}'
+- 客户管理 → 客户信息 → 新用户全量信息页面
+curl --url 'https://circle-test.qbitnetwork.com/api/admin/account/list' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRjNWVlNzA1LTFkYjgtNDcyOS04OTU0LTJiY2I4NjZiNmZkZCIsImFjY291bnQiOiIrODYxODU1ODI0MTQ0MCIsInJvbGUiOiJBZG1pbiIsImFjY291bnRJZCI6ImZjMzgyN2VjLTU4ZTktNGY0Mi1hNjYxLWEzYWE2NThjM2U2MSIsInBob25lIjoiKzg2MTg1NTgyNDE0NDAiLCJpc01vcmUiOmZhbHNlLCJpYXQiOjE3ODk1NzI0MzUsImV4cCI6MTc4OTY1ODgzNX0.Uf_vOGwZ6WH4RQwvfh9v3bJ3SH7qSKdirwS1IfaQoss' \
+  -H 'content-type: application/json' \
+  -H 'domain: test-admin.qbitnetwork.com' \
+  -H 'fingerprint: 901aaab3ea524de187e73c7c1ed9d966' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: 3e3cc5b490b9f7b53584c0ce044a51a5cf514454e42c9260634642cff09f8b20' \
+  -H 'origin: https://test-admin-v3.qbitnetwork.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://test-admin-v3.qbitnetwork.com/' \
+  -H 'sec-ch-ua: "Google Chrome";v="153", "Not_A Brand";v="8", "Chromium";v="153"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-site' \
+  -H 'sign: 9dbdab225c7d06797b4e0a290051ce7a535df608620f86345ca7a26bbc63a7db' \
+  -H 'timestamp: 1789575366366' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36' \
+  --data-raw '{"pagination":{"current":1,"size":10}}'
+
+- 首页→ API客户业务→ API客户管理
+curl --url 'https://circle-test.qbitnetwork.com/api/admin/apiClient/convert/api-customer/sub/audit/page' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRjNWVlNzA1LTFkYjgtNDcyOS04OTU0LTJiY2I4NjZiNmZkZCIsImFjY291bnQiOiIrODYxODU1ODI0MTQ0MCIsInJvbGUiOiJBZG1pbiIsImFjY291bnRJZCI6ImZjMzgyN2VjLTU4ZTktNGY0Mi1hNjYxLWEzYWE2NThjM2U2MSIsInBob25lIjoiKzg2MTg1NTgyNDE0NDAiLCJpc01vcmUiOmZhbHNlLCJpYXQiOjE3ODk1NzI0MzUsImV4cCI6MTc4OTY1ODgzNX0.Uf_vOGwZ6WH4RQwvfh9v3bJ3SH7qSKdirwS1IfaQoss' \
+  -H 'content-type: application/json' \
+  -H 'domain: test-admin.qbitnetwork.com' \
+  -H 'fingerprint: 901aaab3ea524de187e73c7c1ed9d966' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: ccd108ee2fd7fd71ce2578c8dbfb3f1aff51321a6e86753d05454efe190fa561' \
+  -H 'origin: https://test-admin-v3.qbitnetwork.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://test-admin-v3.qbitnetwork.com/' \
+  -H 'sec-ch-ua: "Google Chrome";v="153", "Not_A Brand";v="8", "Chromium";v="153"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-site' \
+  -H 'sign: 86b39349b78d27329dcad71ca0cc5936eedee98ade1a4f454002e61c882e1622' \
+  -H 'timestamp: 1789575463688' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36' \
+  --data-raw '{"current":1,"size":20}'
+
