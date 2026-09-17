@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-20
+-- Updated Time:   2026-09-17 16:45:53
 -- Description:    销售佣金8号前预估物化视图 v2
 -- Notes:
 --   1. 基于 v1，新增结汇成本、线下退款、收入调整、返现调整、线下API收入、线下实体卡制卡费的支持。
@@ -82,7 +83,8 @@ crypto_sale_department_mapping AS (
   ) ranked
   WHERE rn = 1
 ),
-revenue_base AS (
+-- 先保留各收入/调账来源的原始明细；同一计算维度的调账需在分摊前合并。
+revenue_base_raw AS (
   SELECT
     CURRENT_DATE AS report_date,
     CASE
@@ -395,6 +397,42 @@ revenue_base AS (
     sr.department_id,
     sr.am_id
 ),
+-- 避免主收入与 bi_month_tag 调账分别参与分摊分母、但在最终规则去重时丢失其中一行。
+-- 例如：main 97,100.85 与 CASHBACK_ADJUSTMENT_INCREASE -9,149 必须先合并为 87,951.85。
+revenue_base AS (
+  SELECT
+    report_date,
+    settlement_month,
+    root_account_id,
+    product,
+    provider,
+    item,
+    source_type,
+    commission_stage,
+    sale_id,
+    department_id,
+    am_id,
+    activity_month,
+    collection_month,
+    payable_settlement_month,
+    SUM(effective_revenue)::numeric(20,4) AS effective_revenue
+  FROM revenue_base_raw
+  GROUP BY
+    report_date,
+    settlement_month,
+    root_account_id,
+    product,
+    provider,
+    item,
+    source_type,
+    commission_stage,
+    sale_id,
+    department_id,
+    am_id,
+    activity_month,
+    collection_month,
+    payable_settlement_month
+),
 global_account_channel_cost AS (
   SELECT
     source_month AS settlement_month,
@@ -497,14 +535,14 @@ qbit_card_qi_cost AS (
     'qbit_card' AS product,
     'IQ' AS provider,
     SUM(
-        COALESCE(q.cost_reimbursement_base_amt, 0) * COALESCE(q.cost_reimbursement_rate, 0)
-      + COALESCE(q.cost_service_base_amt, 0) * COALESCE(q.cost_service_rate, 0)
-      + COALESCE(q.cost_acs_regular_base_amt, 0) * COALESCE(q.cost_acs_regular_rate, 0)
-      + COALESCE(q.cost_acs_vip_base_amt, 0) * COALESCE(q.cost_acs_vip_rate, 0)
-      + COALESCE(q.cost_vrm_base_amt, 0) * COALESCE(q.cost_vrm_rate, 0)
-      + COALESCE(q.cost_hk_regular_base_amt, 0) * COALESCE(q.cost_hk_regular_rate, 0)
-      + COALESCE(q.cost_hk_vip_base_amt, 0) * COALESCE(q.cost_hk_vip_rate, 0)
-      + COALESCE(q.cost_dcsf_base_amt, 0) * COALESCE(q.cost_dcsf_rate, 0)
+        COALESCE(q.cost_reimbursement_base_amt, 0) * COALESCE(q.cost_reimbursement_rate, 1)
+      + COALESCE(q.cost_service_base_amt, 0) * COALESCE(q.cost_service_rate, 1)
+      + COALESCE(q.cost_acs_regular_base_amt, 0) * COALESCE(q.cost_acs_regular_rate, 1)
+      + COALESCE(q.cost_acs_vip_base_amt, 0) * COALESCE(q.cost_acs_vip_rate, 1)
+      + COALESCE(q.cost_vrm_base_amt, 0) * COALESCE(q.cost_vrm_rate, 1)
+      + COALESCE(q.cost_hk_regular_base_amt, 0) * COALESCE(q.cost_hk_regular_rate, 1)
+      + COALESCE(q.cost_hk_vip_base_amt, 0) * COALESCE(q.cost_hk_vip_rate, 1)
+      + COALESCE(q.cost_dcsf_base_amt, 0) * COALESCE(q.cost_dcsf_rate, 1)
       + COALESCE(q.cost_fixed_fee, 0)
     )::numeric(20,4) AS cogs
   FROM "dws"."dws_qi_card_finance_daily_v2_p" q
