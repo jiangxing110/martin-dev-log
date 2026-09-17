@@ -1,0 +1,107 @@
+--********************************************************************--
+-- 数据同步：PG public.bi_month_tag → ADB PG ods.ods_bi_month_tag
+-- 适配：移除WITH TIME ZONE / DEFAULT / 主键约束，纯Flink标准语法
+--********************************************************************--
+
+-- 批处理配置
+SET 'parallelism.default' = '2';
+SET 'pipeline.operator-chaining' = 'false';
+SET 'table.exec.sink.upsert-materialize' = 'NONE';
+-- SET 'table.dml-sync' = 'true';
+-- 使用固定延迟重启策略，最多尝试 3 次，每次间隔 60 秒。超过后任务直接 FAIL，不再重启。
+SET 'restart-strategy.type' = 'fixed-delay';
+SET 'restart-strategy.fixed-delay.attempts' = '3';
+SET 'restart-strategy.fixed-delay.delay' = '60s';
+
+-- =============================================
+-- 1. 源表：业务PostgreSQL（标准Flink类型，无非法语法）
+-- =============================================
+CREATE TEMPORARY TABLE pg_bi_month_tag (
+    id bigint,
+    create_time timestamp(6),
+    update_time timestamp(6),
+    delete_time timestamp(6),
+    version integer,
+    tag varchar(255),
+    statistics_time timestamp(6),
+    amount numeric,
+    remarks varchar(255),
+    detail varchar(255),
+    account_type varchar(255),
+    provider varchar(255),
+    product_line varchar(255),
+    account_id STRING
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.PG_TEST_HOST}:${secret_values.PG_TEST_PORT1}/${secret_values.PG_TEST_DATABASE}',
+    'username' = '${secret_values.PG_TEST_USERNAME}',
+    'password' = '${secret_values.PG_TEST_PASSWORD}',
+    'table-name' = 'public.bi_month_tag',
+    'source.extend-type.enabled' = 'true'
+);
+
+-- =============================================
+-- 2. 目标表：ADB PG（upsert 写入，幂等）
+-- =============================================
+CREATE TEMPORARY TABLE ods_bi_month_tag (
+    id bigint,
+    create_time timestamp(6),
+    update_time timestamp(6),
+    delete_time timestamp(6),
+    version integer,
+    tag varchar(255),
+    statistics_time timestamp(6),
+    amount numeric,
+    remarks varchar(255),
+    detail varchar(255),
+    account_type varchar(255),
+    provider varchar(255),
+    product_line varchar(255),
+    account_id STRING,
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'adbpg',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'tableName' = 'ods_bi_month_tag',
+    'targetSchema' = 'ods',
+    'userName' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'writeMode' = 'upsert',
+    'batchSize' = '3000'
+);
+
+-- =============================================
+-- 3. 数据写入（同步全量数据，包含 delete_time，用于传播软删除状态）
+-- =============================================
+INSERT INTO ods_bi_month_tag (
+    id,
+    create_time,
+    update_time,
+    delete_time,
+    version,
+    tag,
+    statistics_time,
+    amount,
+    remarks,
+    detail,
+    account_type,
+    provider,
+    product_line,
+    account_id
+)
+SELECT
+    id,
+    create_time,
+    update_time,
+    delete_time,
+    version,
+    tag,
+    statistics_time,
+    amount,
+    remarks,
+    detail,
+    account_type,
+    provider,
+    product_line,
+    account_id
+FROM pg_bi_month_tag;
