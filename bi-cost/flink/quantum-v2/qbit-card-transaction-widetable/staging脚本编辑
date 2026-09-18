@@ -1,0 +1,11 @@
+STAGING_PG_ASSETS_PASSWORD
+STAGING_PG_ASSETS_USERNAME
+STAGING_PG_ASSETS_PORT
+STAGING_PG_ASSETS_HOST
+
+
+/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/account_relation/dim_online_sale_account_relation-batch-sql.sql
+/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/quantum-v2/qbit-card-transaction-widetable/batch/dwm_online_qbit_card_transaction_widetable-batch-sql.sql
+我现在要对写一份呢staging 数据库的表 这两个每天全量部一次所有 我们的脚本要改造
+新增完的结果到
+/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/quantum-v2/qbit-card-transaction-widetable/staging
