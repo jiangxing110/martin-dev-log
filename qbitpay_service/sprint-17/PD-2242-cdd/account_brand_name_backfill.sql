@@ -5,7 +5,8 @@ INSERT INTO account_brand_name (
     create_time, update_time, version
 )
 SELECT
-    (-ROW_NUMBER() OVER (ORDER BY source_type, source_id, account_id))::BIGINT,
+    (1000000000000000000
+        + ('x' || SUBSTR(MD5(source_type || ':' || source_id || ':' || account_id), 1, 15))::BIT(60)::BIGINT),
     account_id,
     brand_name,
     LOWER(BTRIM(brand_name)),
@@ -16,12 +17,12 @@ SELECT
     0
 FROM (
     SELECT account_id, product_name AS brand_name, 'API_COMPLIANCE' AS source_type,
-           id::VARCHAR AS source_id
+           'CAAS:' || id::VARCHAR AS source_id
     FROM open_api_compliance_extend
     WHERE delete_time IS NULL AND product_name IS NOT NULL AND BTRIM(product_name) <> ''
     UNION ALL
     SELECT account_id, product_name AS brand_name, 'API_COMPLIANCE' AS source_type,
-           id::VARCHAR AS source_id
+           'BAAS:' || id::VARCHAR AS source_id
     FROM baas_open_api_compliance_extend
     WHERE delete_time IS NULL AND product_name IS NOT NULL AND BTRIM(product_name) <> ''
 ) source
