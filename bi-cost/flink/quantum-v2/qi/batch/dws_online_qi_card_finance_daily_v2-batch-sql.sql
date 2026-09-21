@@ -179,8 +179,16 @@ SELECT
             WHEN billing_amount > 1000 THEN 0.5
             ELSE 0
         END ELSE 0 END) AS DECIMAL(20, 4)) AS cost_dcsf_base_amt,
-    CAST(SUM(CASE WHEN status IN ('Closed', 'Pending') AND is_hk_region = FALSE AND business_type = 'Consumption' THEN billing_amount * CAST(0.02 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS rebate_interchange_base_amt,
-    CAST(SUM(CASE WHEN status IN ('Closed', 'Pending') AND is_hk_region = FALSE AND business_type = 'Consumption' THEN billing_amount * CAST(0.0118 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS rebate_incentive_base_amt
+    CAST(SUM(CASE
+        WHEN status IN ('Closed', 'Pending') AND is_hk_region = FALSE AND business_type IN ('Consumption', 'Reversal', 'Credit')
+            THEN billing_amount * CASE WHEN business_type = 'Consumption' THEN 1 ELSE -1 END * CAST(0.02 AS DECIMAL(20, 4))
+        ELSE CAST(0 AS DECIMAL(20, 4))
+    END) AS DECIMAL(20, 4)) AS rebate_interchange_base_amt,
+    CAST(SUM(CASE
+        WHEN status IN ('Closed', 'Pending') AND is_hk_region = FALSE AND business_type IN ('Consumption', 'Reversal', 'Credit')
+            THEN billing_amount * CASE WHEN business_type = 'Consumption' THEN 1 ELSE -1 END * CAST(0.0118 AS DECIMAL(20, 4))
+        ELSE CAST(0 AS DECIMAL(20, 4))
+    END) AS DECIMAL(20, 4)) AS rebate_incentive_base_amt
 FROM v_qi_dwm_daily_rows
 GROUP BY report_date, account_id, account_type, account_category, system_type, sale_id, am_id;
 

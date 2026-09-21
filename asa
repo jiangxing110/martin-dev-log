@@ -23,3 +23,8 @@ QI成本: 121958.75750463
 | BPC 成本 | 0 | -12,689.0117 | 多算 12,689.0117 |
 | 总成本 | **121,982.9544** | **134,671.9661** | **多 12,689.0117** |
 | 毛利 | **52,168.5201** | **57,595.2370** | 多 5,426.7169 |
+
+目前bi更新了qi 渠道返现金的成本改成了按净消费来
+/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/成本/QI客户毛利2026-08 净消费版本.sql
+我们需要更新一下/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/quantum-v2/qi
+下面的脚本渠道返现的部分
