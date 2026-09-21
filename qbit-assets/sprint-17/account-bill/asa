@@ -1,0 +1,65 @@
+我检查后，真正还没完全处理的是下面这些。
+1. 扣款逻辑仍有按当前账户类型判断
+ApiClientDebitRecordServiceImpl 里仍存在：
+private boolean isDirectCustomer(String accountId)
+它通过当前 account.type 判断直客。这里应该改为：
+api_client_debit_record.bill_id
+    → api_client_bill.customer_type
+    → 判断 API / DIRECT
+否则账户类型后续变化时，历史账单可能走错扣款流程。
+文件：
+[ApiClientDebitRecordServiceImpl.java](/Users/martinjiang/IdeaProjects/qbit-assets/qbit-core/src/main/java/com/qbit/common_all/api/client/bill/service/impl/ApiClientDebitRecordServiceImpl.java)
+2. 客户端返现/支付展示仍有当前账户类型判断
+ApiClientBillServiceImpl.getRebateOrPay() 仍通过当前账户类型区分 API 客户。
+需要改成通过：
+api_client_netting_bill.bill_id
+    → api_client_bill.customer_type
+判断展示和支付逻辑。
+文件：
+[ApiClientBillServiceImpl.java](/Users/martinjiang/IdeaProjects/qbit-assets/qbit-core/src/main/java/com/qbit/common_all/api/client/bill/service/impl/ApiClientBillServiceImpl.java)
+3. TestAccount 的历史归类还没最终确认
+现在 SQL 会把非 API 类型归为 DIRECT，包括：
+MasterAccount
+Merchant
+TestAccount
+其中 TestAccount 是否应该归为 DIRECT，需要确认。建议测试账户单独处理，避免进入真实直客账单逻辑。
+4. 返现任务需要生产验证
+需要确认 create_rebate_bill 是否确实会给这些非 API 账户生成返现账单：
+MasterAccount
+Merchant
+TestAccount
+尤其是截图中已经存在非 API 的 Rebate 历史账单，不能再假设所有返现账单都是 API。
+5. 通知模板和定时任务还需要上线确认
+代码中已经有：
+direct_customer_billing_settlement_notice
+但还需要确认：
+通知模板 SQL 是否已经执行
+中文和英文模板是否都存在
+XXL-JOB 的 Cron 是否配置正确
+是否只给直客发送
+是否会重复发送
+6. CSV 还需要真实数据验证
+代码已接入新旧来源，但还要验证：
+新旧来源相同 transaction_id/source_id 时新来源是否覆盖旧来源
+新来源是否需要补充 provider
+是否需要展示卡 BIN、卡号后四位、卡状态
+一个交易对应多个费用时，是一行还是多行
+直客 ZIP 是否同时包含费用 CSV 和 ActiveCardFee CSV
+7. 测试还没有补齐
+至少需要验证：
+API 只有旧费率
+API 只有新费率
+API 新旧费率同时存在
+新旧来源重复
+普通直客
+只有 ActiveCardFee 的直客
+直客没有返现
+返现大于账单
+账单大于返现
+账户类型变更后的历史账单
+目前最优先要处理的是第 1、2 项，因为这两个地方还会根据当前账户类型判断历史账单。
+
+
+1,2项干吧,3 TestAccount 归为 DIRECT
+第四项，直客会生成返现账单的
+5. 通知模板和定时任务还需要上线确认，这个我sql已经打了会发的
