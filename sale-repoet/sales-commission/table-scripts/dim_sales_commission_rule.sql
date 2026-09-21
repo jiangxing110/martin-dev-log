@@ -290,7 +290,7 @@ ON CONFLICT ("id") DO UPDATE SET
   "commission_rate" = EXCLUDED."commission_rate", "invite_type" = EXCLUDED."invite_type", "start_time" = EXCLUDED."start_time", "end_time" = EXCLUDED."end_time",
   "priority" = EXCLUDED."priority", "enabled" = EXCLUDED."enabled", "remarks" = EXCLUDED."remarks", "update_time" = now(), "delete_time" = NULL;
 
--- OpenAPI月结手续费：与 real_time 共用渠道毛利池，按活跃天数取 real_time 阶梯，佣金基数为分摊后的毛利。
+-- OpenAPI月结手续费：与 real_time 共用渠道毛利池，继承同渠道 real_time 收入最高产品的活跃天数阶梯，佣金基数为分摊后的毛利。
 WITH departments(department_id, department_name) AS (
   SELECT * FROM (VALUES
     ('1740319905791647746', '销售一部'), ('1740319923059597313', '销售二部'), ('2066369412858433538', '销售三部'),
@@ -315,7 +315,7 @@ generated_rules AS (
     d.department_id, 'open_api' AS product, NULL::varchar AS provider, 'api_monthly_settlement_fee' AS item,
     'gp' AS commission_base_type, r.active_days_min, r.active_days_max, r.rate AS commission_rate, 'all' AS invite_type,
     timestamp '2026-01-01' AS start_time, timestamp '2099-01-01' AS end_time, 100 AS priority, true AS enabled,
-    '有渠道的API月结手续费与real_time共用渠道毛利池，按反向占比分摊后计佣' AS remarks
+    '有渠道的API月结手续费与real_time共用渠道毛利池，继承收入最高real_time产品的活跃天数，按effective_revenue正向占比分摊后计佣' AS remarks
   FROM departments d CROSS JOIN ranges r
 )
 INSERT INTO "dim"."dim_sales_commission_rule" (

@@ -1,30 +1,168 @@
-这里都是QI的
-FX_Cross费用收入: 62332
-Settlement_Auth_Fee收入: 20665
-其他费用收入: 18068
-量子卡Cashback: 119805.05829692
-之前月账单_QI汇总: 22749.34
+1.cdd列表
+curl --url 'https://global.service.test.qbitnetwork.com/admin-graphql' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Origin: https://test-admin-v3.qbitnetwork.com' \
+  -H 'Referer: https://test-admin-v3.qbitnetwork.com/' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-site' \
+  -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36' \
+  -H 'accept: */*' \
+  -H 'authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRjNWVlNzA1LTFkYjgtNDcyOS04OTU0LTJiY2I4NjZiNmZkZCIsImFjY291bnQiOiIrODYxODU1ODI0MTQ0MCIsInJvbGUiOiJBZG1pbiIsImFjY291bnRJZCI6ImZjMzgyN2VjLTU4ZTktNGY0Mi1hNjYxLWEzYWE2NThjM2U2MSIsInBob25lIjoiKzg2MTg1NTgyNDE0NDAiLCJpc01vcmUiOmZhbHNlLCJpYXQiOjE3ODk5NzU0MjQsImV4cCI6MTc5MDA2MTgyNH0.-8Iw7oGT2i1OlSsRs6DYsN1bHRUqhj7GfTZILhvSdHc' \
+  -H 'content-type: application/json' \
+  -H 'fingerprint: 901aaab3ea524de187e73c7c1ed9d966' \
+  -H 'sec-ch-ua: "Google Chrome";v="153", "Not_A Brand";v="8", "Chromium";v="153"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  --data-raw $'{"operationName":"cddKyCaseList","variables":{"queryParams":{"filter":{"customerUpdateTime":["2026-06-20T16:00:00.000Z","2026-09-21T15:59:59.999Z"]},"pagination":{"limit":20,"page":0}}},"query":"query cddKyCaseList($queryParams: QueryParams\u0021) {\\n  data: KyCase(queryParams: $queryParams) {\\n    total\\n    data {\\n      id\\n      accountId\\n      account {\\n        id\\n        type\\n        verifiedName\\n        verifiedNameEn\\n        tagsList\\n        status\\n        referralCode {\\n          code\\n          __typename\\n        }\\n        infinityLaunchFlag\\n        customerCategory\\n        salesAccountRelation {\\n          operationManager {\\n            nickname\\n            __typename\\n          }\\n          sale {\\n            nickname\\n            __typename\\n          }\\n          __typename\\n        }\\n        __typename\\n      }\\n      dormant\\n      businessName\\n      formerName\\n      cddNamesScreeningStatus\\n      phone\\n      registrationRegion\\n      otherRegistrationRegion\\n      hasFaceAuth\\n      faceAuthStatus\\n      kycStatus\\n      kybQbitCardStatus\\n      kybGlobalAccountStatus\\n      kybDigitalCurrenciesStatus\\n      kybParticleFinanceStatus\\n      kybAcquiringStatus\\n      riskLevel\\n      customerUpdateTime\\n      reviewUpdateTime\\n      __typename\\n    }\\n    __typename\\n  }\\n}"}'
 
-QI成本: 121958.75750463
-返现: 3595.94
-代收: 33524.25
+2.
+curl --url 'https://global.service.test.qbitnetwork.com/admin-graphql' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Origin: https://test-admin-v3.qbitnetwork.com' \
+  -H 'Referer: https://test-admin-v3.qbitnetwork.com/' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-site' \
+  -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36' \
+  -H 'accept: */*' \
+  -H 'authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRjNWVlNzA1LTFkYjgtNDcyOS04OTU0LTJiY2I4NjZiNmZkZCIsImFjY291bnQiOiIrODYxODU1ODI0MTQ0MCIsInJvbGUiOiJBZG1pbiIsImFjY291bnRJZCI6ImZjMzgyN2VjLTU4ZTktNGY0Mi1hNjYxLWEzYWE2NThjM2U2MSIsInBob25lIjoiKzg2MTg1NTgyNDE0NDAiLCJpc01vcmUiOmZhbHNlLCJpYXQiOjE3ODk5NzU0MjQsImV4cCI6MTc5MDA2MTgyNH0.-8Iw7oGT2i1OlSsRs6DYsN1bHRUqhj7GfTZILhvSdHc' \
+  -H 'content-type: application/json' \
+  -H 'fingerprint: 901aaab3ea524de187e73c7c1ed9d966' \
+  -H 'sec-ch-ua: "Google Chrome";v="153", "Not_A Brand";v="8", "Chromium";v="153"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  --data-raw $'{"operationName":"cddKyCaseDetail","variables":{"queryParams":{"pagination":{"page":0,"limit":1},"filter":{"kyCaseId":"90e1dcd6-d74e-439e-8606-3cbbb7c14120","accountId":"9be98b3e-3f86-4a34-9431-b7b802eca3f4","isLatest":true}}},"query":"query cddKyCaseDetail($queryParams: QueryParams\u0021) {\\n  data: kycBusinessListByAdmin(queryParams: $queryParams) {\\n    pageTotal\\n    total\\n    data {\\n      id\\n      remarks\\n      closeTime\\n      kyCaseId\\n      accountId\\n      parentAccountId\\n      isLatest\\n      status\\n      closeTime\\n      createTime\\n      kycType\\n      businessKycContent {\\n        id\\n        createTime\\n        kycId\\n        registrationRegion\\n        businessName\\n        formerName\\n        businessNameEn\\n        businessType\\n        otherBusinessType\\n        businessID\\n        certificateNumber\\n        businessOperationPeriod\\n        businessRegistrationDate\\n        ein\\n        workplace\\n        employeeNumber\\n        mainBusiness\\n        documentsLanguage\\n        hasCompanyShareholders\\n        businessOperationAddress {\\n          addressLine1\\n          addressLine2\\n          state\\n          city\\n          country\\n          postalCode\\n          state\\n          __typename\\n        }\\n        businessRegistrationAddress {\\n          addressLine1\\n          addressLine2\\n          state\\n          city\\n          country\\n          postalCode\\n          __typename\\n        }\\n        cddKycBusinessDetailAttachments {\\n          fileUrl\\n          fileUrls\\n          filename\\n          fileUseType\\n          fileType\\n          __typename\\n        }\\n        tradedCompany\\n        stockExchangeName\\n        stockCode\\n        authorizedShareCapital\\n        issuedShareCapital\\n        shareCapitalCurrency\\n        __typename\\n      }\\n      businessKycPerson {\\n        id\\n        isUBO\\n        isShareholder\\n        isDirector\\n        sharePercent\\n        isShareholder\\n        isRepresentative\\n        isOtherRepresentative\\n        companyRole\\n        companyRoleOther\\n        isAuthorizer\\n        country\\n        fromId\\n        ssn\\n        name {\\n          lastName\\n          firstName\\n          firstNameEn\\n          lastNameEn\\n          firstNamePinYin\\n          lastNamePinYin\\n          __typename\\n        }\\n        phone\\n        email\\n        birthday\\n        gender\\n        address {\\n          addressLine1\\n          addressLine2\\n          city\\n          country\\n          postalCode\\n          state\\n          __typename\\n        }\\n        identification {\\n          expirationDate\\n          number\\n          type\\n          issue\\n          startDate\\n          address {\\n            addressLine1\\n            addressLine2\\n            city\\n            country\\n            postalCode\\n            state\\n            __typename\\n          }\\n          identificationAttachments {\\n            filename\\n            fileUrl\\n            fileUrls\\n            fileType\\n            fileUseType\\n            __typename\\n          }\\n          __typename\\n        }\\n        cddBusinessPersonAttachments {\\n          filename\\n          fileUrl\\n          fileUrls\\n          fileType\\n          fileUseType\\n          __typename\\n        }\\n        twoMeta {\\n          status\\n          message\\n          __typename\\n        }\\n        threeMeta {\\n          status\\n          message\\n          __typename\\n        }\\n        realAddress {\\n          address {\\n            addressLine1\\n            addressLine2\\n            state\\n            city\\n            country\\n            postalCode\\n            __typename\\n          }\\n          __typename\\n        }\\n        __typename\\n      }\\n      individualKycContent {\\n        id\\n        phone\\n        dob\\n        firstName\\n        firstNameAlphabet\\n        lastName\\n        lastNameAlphabet\\n        nationality\\n        scenarioNotes\\n        address {\\n          addressLine1\\n          addressLine2\\n          city\\n          country\\n          postalCode\\n          state\\n          __typename\\n        }\\n        addressEn {\\n          addressLine1\\n          addressLine2\\n          city\\n          country\\n          postalCode\\n          state\\n          __typename\\n        }\\n        threeMeta {\\n          id\\n          key\\n          type\\n          status\\n          message\\n          __typename\\n        }\\n        identification {\\n          expirationDate\\n          number\\n          type\\n          issue\\n          startDate\\n          address {\\n            addressLine1\\n            addressLine2\\n            city\\n            country\\n            postalCode\\n            state\\n            __typename\\n          }\\n          identificationAttachments {\\n            filename\\n            fileUrl\\n            fileUrls\\n            fileType\\n            fileUseType\\n            __typename\\n          }\\n          __typename\\n        }\\n        __typename\\n      }\\n      companyBusinessInformation {\\n        id\\n        remarks\\n        createTime\\n        updateTime\\n        deleteTime\\n        version\\n        mainBusiness\\n        otherMinBusiness\\n        industryCategory\\n        industryCategoryType\\n        hasWebsite\\n        websiteUrl\\n        businessDescription\\n        businessTransactionCountries\\n        monthlyTransactionVolume\\n        annualTurnover\\n        distributorMasterMerchantAttachment\\n        proofOfBusinessAttachment {\\n          filename\\n          fileUrl\\n          fileType\\n          fileUseType\\n          __typename\\n        }\\n        __typename\\n      }\\n      accountInfo {\\n        type\\n        accountType\\n        masterUserInfo {\\n          id\\n          phone\\n          email\\n          __typename\\n        }\\n        accountExtends {\\n          systemType\\n          __typename\\n        }\\n        customerCategory\\n        openApiAccessType\\n        __typename\\n      }\\n      __typename\\n    }\\n    __typename\\n  }\\n}"}'
+  {
+  "id": "6e6dfdbc-2c42-4dd2-a126-2227aeb5b980",
+  "remarks": "",
+  "createTime": "2026-09-21T07:33:27.583Z",
+  "updateTime": "2026-09-21T07:33:25.165Z",
+  "deleteTime": null,
+  "version": null,
+  "mainBusiness": "B2B",
+  "otherMinBusiness": "",
+  "industryCategory": "Fashion Clothing and Accessories",
+  "industryCategoryType": "TangiblesGoods",
+  "hasWebsite": false,
+  "websiteUrl": "",
+  "businessDescription": "ytw",
+  "businessTransactionCountries": [
+    "HK"
+  ],
+  "monthlyTransactionVolume": "",
+  "annualTurnover": "1,000,000 ~ 10,000,000 USD",
+  "distributorMasterMerchantAttachment": null,
+  "proofOfBusinessAttachment": [
+    {
+      "filename": "业务经营证明",
+      "fileUrl": null,
+      "fileType": null,
+      "fileUseType": "proofOfBusinessAttachment",
+      "__typename": "AttachmentsOutput"
+    }
+  ],
+  "__typename": "CddCompanyBusinessInformation"
+} 我们新家的品牌应该放到CddCompanyBusinessInformation
 
-62332+20665+18068-3595=97100
+api母户审核时看详情
+curl --url 'https://circle-test.qbitnetwork.com/api/assets/internal/convert/api-customer/compliance/caas/get' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRjNWVlNzA1LTFkYjgtNDcyOS04OTU0LTJiY2I4NjZiNmZkZCIsImFjY291bnQiOiIrODYxODU1ODI0MTQ0MCIsInJvbGUiOiJBZG1pbiIsImFjY291bnRJZCI6ImZjMzgyN2VjLTU4ZTktNGY0Mi1hNjYxLWEzYWE2NThjM2U2MSIsInBob25lIjoiKzg2MTg1NTgyNDE0NDAiLCJpc01vcmUiOmZhbHNlLCJpYXQiOjE3ODk5NzU0MjQsImV4cCI6MTc5MDA2MTgyNH0.-8Iw7oGT2i1OlSsRs6DYsN1bHRUqhj7GfTZILhvSdHc' \
+  -H 'content-type: application/json' \
+  -H 'domain: test-admin.qbitnetwork.com' \
+  -H 'fingerprint: 901aaab3ea524de187e73c7c1ed9d966' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: 4499a13b43bf091f73a26182c9999a7681a93cdd03c19d2cf53f643f60639be1' \
+  -H 'origin: https://test-admin-v3.qbitnetwork.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://test-admin-v3.qbitnetwork.com/' \
+  -H 'sec-ch-ua: "Google Chrome";v="153", "Not_A Brand";v="8", "Chromium";v="153"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-site' \
+  -H 'sign: c88ab33e82edcef4003647e739afddf00091a2189a8f9d9d98b7cfd7acbb3dab' \
+  -H 'timestamp: 1789976404283' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36' \
+  --data-raw '{"accountId":"b7f69448-2f8d-4ad3-ab1e-bda739cdb744"}'
+  但是之前名字时productName
 
-| 计算项目 | 正确计算逻辑 | 当前视图计算逻辑 | 差异 |
-|---|---:|---:|---:|
-| `main` 收入 | 97,100.8500 | 97,100.8500 | 0 |
-| 代收手续费 | -33,524.2500 | -33,524.2500 | 0 |
-| QI 渠道返现 | +119,723.8745 | +137,839.6031 | 多算 18,115.7286 |
-| `CASHBACK_ADJUSTMENT_INCREASE` | -9,149.0000 | -9,149.0000 | 0 |
-| 客户返现 | 0 | 0 | 0 |
-| 有效收入 | **174,151.4745** | **192,267.2031** | **多 18,115.7286** |
-| QI 成本 | -121,982.9544 | -121,982.9544 | 0 |
-| BPC 成本 | 0 | -12,689.0117 | 多算 12,689.0117 |
-| 总成本 | **121,982.9544** | **134,671.9661** | **多 12,689.0117** |
-| 毛利 | **52,168.5201** | **57,595.2370** | 多 5,426.7169 |
+母户的baas  
+curl --url 'https://circle-test.qbitnetwork.com/api/assets/internal/convert/api-customer/compliance/baas/get' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRjNWVlNzA1LTFkYjgtNDcyOS04OTU0LTJiY2I4NjZiNmZkZCIsImFjY291bnQiOiIrODYxODU1ODI0MTQ0MCIsInJvbGUiOiJBZG1pbiIsImFjY291bnRJZCI6ImZjMzgyN2VjLTU4ZTktNGY0Mi1hNjYxLWEzYWE2NThjM2U2MSIsInBob25lIjoiKzg2MTg1NTgyNDE0NDAiLCJpc01vcmUiOmZhbHNlLCJpYXQiOjE3ODk5NzU0MjQsImV4cCI6MTc5MDA2MTgyNH0.-8Iw7oGT2i1OlSsRs6DYsN1bHRUqhj7GfTZILhvSdHc' \
+  -H 'content-type: application/json' \
+  -H 'domain: test-admin.qbitnetwork.com' \
+  -H 'fingerprint: 901aaab3ea524de187e73c7c1ed9d966' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: 51d2b359b9a7cce7fa4194ffc7deb3adcbeacd7fb9c0d2bcc2aec1448417a4ba' \
+  -H 'origin: https://test-admin-v3.qbitnetwork.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://test-admin-v3.qbitnetwork.com/' \
+  -H 'sec-ch-ua: "Google Chrome";v="153", "Not_A Brand";v="8", "Chromium";v="153"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-site' \
+  -H 'sign: 43586ffdebb0d71e4c5308e63fefd8b20d18e966be3f72469e10d072d81e3d8f' \
+  -H 'timestamp: 1789977100585' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36' \
+  --data-raw '{"accountId":"5e811045-d4f2-4248-9e9c-f4ab9916f5a6"}'
+这两个有 品牌 其他waas 那种命运
 
-目前bi更新了qi 渠道返现金的成本改成了按净消费来
-/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/成本/QI客户毛利2026-08 净消费版本.sql
-我们需要更新一下/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/flink/quantum-v2/qi
-下面的脚本渠道返现的部分
+  然后 子户审批caas模式的详情接口
+  curl --url 'https://circle-test.qbitnetwork.com/api/admin/apiClient/convert/api-customer/sub/compliance/caas/get' \
+  -H 'accept: application/json, text/plain, */*' \
+  -H 'accept-language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjRjNWVlNzA1LTFkYjgtNDcyOS04OTU0LTJiY2I4NjZiNmZkZCIsImFjY291bnQiOiIrODYxODU1ODI0MTQ0MCIsInJvbGUiOiJBZG1pbiIsImFjY291bnRJZCI6ImZjMzgyN2VjLTU4ZTktNGY0Mi1hNjYxLWEzYWE2NThjM2U2MSIsInBob25lIjoiKzg2MTg1NTgyNDE0NDAiLCJpc01vcmUiOmZhbHNlLCJpYXQiOjE3ODk5NzU0MjQsImV4cCI6MTc5MDA2MTgyNH0.-8Iw7oGT2i1OlSsRs6DYsN1bHRUqhj7GfTZILhvSdHc' \
+  -H 'content-type: application/json' \
+  -H 'domain: test-admin.qbitnetwork.com' \
+  -H 'fingerprint: 901aaab3ea524de187e73c7c1ed9d966' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: f17037d2ff749126804a62433e06c0f9faddaa85d6bcbb9082dc76b20012578c' \
+  -H 'origin: https://test-admin-v3.qbitnetwork.com' \
+  -H 'priority: u=1, i' \
+  -H 'referer: https://test-admin-v3.qbitnetwork.com/' \
+  -H 'sec-ch-ua: "Google Chrome";v="153", "Not_A Brand";v="8", "Chromium";v="153"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sec-fetch-dest: empty' \
+  -H 'sec-fetch-mode: cors' \
+  -H 'sec-fetch-site: same-site' \
+  -H 'sign: a5ed489ac6b0b35f6d15dcc5d7becb8a38e861e4a17de8dd57ac5c93ee0829df' \
+  -H 'timestamp: 1789976561165' \
+  -H 'user-agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36' \
+  --data-raw '{"accountId":"502a00e7-ea84-4486-8aed-c8f2ce67dc82"}'
+
+
+这些也要回显产品名称吧
+
+
+month_revenue
+offline_api_income_amount
+
+API 费用 - 一次性合规 & 接入费，卡面设计费，白标系统部署费
+实际收费
+
+15.00%
+
+15.00%
+15.00%
+
+下个月第一天 - API上线时间
+
+API 费用 - 月费（技术服务费）
+实际收费
+
+10.00%
+
+10.00%
+0.00%
+下个月第一天 - API上线时间

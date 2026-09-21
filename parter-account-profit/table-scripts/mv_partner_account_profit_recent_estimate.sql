@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-09-02
--- Updated Time:   2026-09-21 13:45:00
+-- Updated Time:   2026-09-21 17:34:03
 -- Description:    合伙人客户毛利近6个月估算物化视图
 -- Notes:
 --   1. 独立复用销售 v2 的底层收入、成本、返现和调整事实逻辑，不读取销售佣金物化视图。
@@ -10,6 +10,8 @@
 --   4. API 月费/一次性手续费实收保留明细，但不进入毛利返佣 gp；API 应收不输出。
 --   5. 输出字段、物化视图名称和下游快照结构保持不变。
 --   6. 量子卡 physical_card_gp 为预计算实体卡毛利，按渠道直接补充最终量子卡 GP，不参与收入、成本或返现分摊。
+--   7. BZ clearing_base_amt × reimbursement_rate 为渠道返现，增加有效收入，不计入成本。
+--   8. 线下 API 收入由月度指标 bi_month_tag/offline_api_income_amount 读取，归属 OpenAPI 一次性手续费。
 --********************************************************************--
 
 DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_partner_account_profit_recent_estimate";
@@ -84,9 +86,17 @@ revenue_base_raw AS (
       ELSE r.settlement_month
     END AS settlement_month,
     r.root_account_id,
-    CASE WHEN r.product = 'crypto_connect' THEN 'crypto' WHEN r.product = 'global_account' THEN 'group_account' ELSE r.product END AS product,
+    CASE
+      WHEN r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount' THEN 'open_api'
+      WHEN r.product = 'crypto_connect' THEN 'crypto'
+      WHEN r.product = 'global_account' THEN 'group_account'
+      ELSE r.product
+    END AS product,
     r.provider,
     CASE
+      -- 线下 API 收入在月度指标表中以 bi_month_tag 存储，业务上属于 OpenAPI 一次性手续费。
+      WHEN r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount'
+        THEN 'api_one_time_fee'
       -- 有渠道的 API 月结实收进入 real_time + API 月结手续费的共享毛利池。
       WHEN r.product = 'open_api'
        AND r.metric_code = 'month_revenue'
@@ -98,6 +108,8 @@ revenue_base_raw AS (
       ELSE NULL
     END AS item,
     CASE
+      WHEN r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount'
+        THEN 'offline_api_income'
       WHEN r.product = 'open_api' AND r.metric_code = 'month_revenue'
        AND r.settlement_month = date_trunc('month', r.report_date - interval '1 month')::date THEN 'billing_decline_fee'
       WHEN r.product = 'open_api' AND r.metric_code = 'month_revenue' THEN 'past_due_invoice'
@@ -137,6 +149,8 @@ revenue_base_raw AS (
           AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date)
       OR (r.product = 'qbit_card' AND r.metric_code = 'main'
           AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date)
+      OR (r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount'
+          AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date)
     )
   GROUP BY
     CASE WHEN r.product = 'open_api' AND r.metric_code = 'month_revenue' THEN date_trunc('month', r.report_date)::date ELSE r.settlement_month END,
@@ -146,14 +160,19 @@ revenue_base_raw AS (
     date_trunc('month', r.report_date + interval '1 month')::date,
     r.root_account_id,
     r.product,
-    CASE WHEN r.product = 'crypto_connect' THEN 'crypto' WHEN r.product = 'global_account' THEN 'group_account' ELSE r.product END,
+    CASE
+      WHEN r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount' THEN 'open_api'
+      WHEN r.product = 'crypto_connect' THEN 'crypto'
+      WHEN r.product = 'global_account' THEN 'group_account'
+      ELSE r.product
+    END,
     r.provider,
     r.metric_code,
     r.sale_id,
     CASE WHEN r.product = 'crypto_connect' THEN csdm.department_id ELSE sdm.department_id END,
     r.am_id
 
-  -- v2: 量子卡线下收入 / 实体卡制卡费 / 收入调整增加
+  -- v2: 实体卡制卡费 / 收入调整增加；线下 API 收入改由月度指标 bi_month_tag/offline_api_income_amount 读取。
   UNION ALL
   SELECT
     CURRENT_DATE AS report_date,
@@ -199,7 +218,7 @@ revenue_base_raw AS (
   ) sr ON true
   WHERE t.delete_time IS NULL
     AND t.account_id IS NOT NULL
-    AND t.tag IN ('OFFLINE_API_INCOME', 'OFFLINE_PHYSICAL_CARD_FEE', 'INCOME_ADJUSTMENT_INCREASE')
+    AND t.tag IN ('OFFLINE_PHYSICAL_CARD_FEE', 'INCOME_ADJUSTMENT_INCREASE')
     AND date_trunc('month', t.statistics_time)::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY
     date_trunc('month', t.statistics_time)::date,
@@ -580,8 +599,7 @@ qbit_card_bz_cost AS (
     'qbit_card' AS product,
     'BZ' AS provider,
     SUM(
-        COALESCE(z.clearing_base_amt, 0) * COALESCE(z.reimbursement_rate, 0)
-      + COALESCE(z.refund_base_amt, 0) * COALESCE(z.reimbursement_rate, 0)
+        COALESCE(z.refund_base_amt, 0) * COALESCE(z.reimbursement_rate, 0)
       + COALESCE(z.visa_charges_base_amt, 0) * COALESCE(z.visa_charges_rate, 0)
       + COALESCE(z.card_create_count, 0) * COALESCE(z.card_setup_rate, 0)
       + COALESCE(z.card_create_count, 0) * COALESCE(z.account_activation_rate, 0)
@@ -746,6 +764,21 @@ qbit_card_channel_rebate AS (
     WHERE q.delete_time IS NULL
       AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     GROUP BY date_trunc('month', q.report_date)::date, COALESCE(aar.root_id, q.account_id)
+    UNION ALL
+    SELECT
+      date_trunc('month', z.report_date)::date AS settlement_month,
+      COALESCE(aar.root_id, z.account_id) AS root_account_id,
+      'qbit_card' AS product,
+      'BZ' AS provider,
+      ABS(SUM(
+        COALESCE(z.clearing_base_amt, 0) * COALESCE(z.reimbursement_rate, 0)
+      ))::numeric(20,4) AS channel_rebate
+    FROM "dws"."dws_bz_card_finance_daily_v2_p" z
+    LEFT JOIN account_root_relation aar
+      ON aar.account_id = z.account_id
+    WHERE z.delete_time IS NULL
+      AND z.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    GROUP BY date_trunc('month', z.report_date)::date, COALESCE(aar.root_id, z.account_id)
   ) rebate_union
   GROUP BY settlement_month, root_account_id, product, provider
 ),
