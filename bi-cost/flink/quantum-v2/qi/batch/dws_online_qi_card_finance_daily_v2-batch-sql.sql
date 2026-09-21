@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-15
--- Updated Time:   2026-09-08 12:22:00
+-- Updated Time:   2026-09-21 18:30:33
 -- Description:    Quantum QI v2 DWS 批量初始化/回刷
 -- 作业元信息：
 --   作业类型：批处理
@@ -11,6 +11,7 @@
 --   1. 主链路: DWM v2 -> DWS v2
 --   2. 粒度: account_id + report_date + sale_id + am_id
 --   3. 只记录成本/返现计费基数和对应 rate，结果金额由下游按 base * rate 计算
+--   4. reimbursement 基数对齐 QI 客户毛利：QI 渠道非 HK 净消费 × 1.35%，倍率取 QI_COST_REIMBURSEMENT_RATE。
 --********************************************************************--
 
 SET 'parallelism.default' = '4';
@@ -106,6 +107,7 @@ SELECT
     am_id,
     status,
     billing_amount,
+    is_qbit_provision,
     is_hk_region,
     business_type,
     has_special_code
@@ -133,8 +135,20 @@ SELECT
             THEN billing_amount * CASE WHEN business_type = 'Consumption' THEN 1 ELSE -1 END
         ELSE CAST(0 AS DECIMAL(20, 4))
     END) AS DECIMAL(20, 4)) AS total_net_amount,
-    CAST(SUM(CASE WHEN is_hk_region = FALSE AND business_type = 'Consumption' AND status IN ('Closed', 'Pending') THEN billing_amount * CAST(0.0135 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS cost_reimbursement_base_amt,
-    CAST(SUM(CASE WHEN is_hk_region = FALSE AND status IN ('Closed', 'Pending') AND business_type IN ('Consumption', 'Reversal', 'Credit') THEN
+    -- QI 客户毛利口径：QI 渠道非 HK 的净消费（消费 - 冲正/贷记）× 1.35%。
+    -- 月度倍率在写入阶段由 QI_COST_REIMBURSEMENT_RATE 赋给 cost_reimbursement_rate。
+    CAST(SUM(CASE
+        WHEN is_qbit_provision = TRUE
+         AND is_hk_region = FALSE
+         AND status IN ('Closed', 'Pending')
+         AND business_type IN ('Consumption', 'Reversal', 'Credit')
+            THEN billing_amount
+                 * CASE WHEN business_type = 'Consumption' THEN 1 ELSE -1 END
+                 * CAST(0.0135 AS DECIMAL(20, 4))
+        ELSE CAST(0 AS DECIMAL(20, 4))
+    END) AS DECIMAL(20, 4)) AS cost_reimbursement_base_amt,
+    -- QI 客户毛利口径：QI 渠道非 HK 的消费/冲正/贷记按金额阶梯计算 Card Service 成本。
+    CAST(SUM(CASE WHEN is_qbit_provision = TRUE AND is_hk_region = FALSE AND status IN ('Closed', 'Pending') AND business_type IN ('Consumption', 'Reversal', 'Credit') THEN
         CASE
             WHEN ABS(billing_amount) < 5 THEN billing_amount * CAST(0.00095 AS DECIMAL(20, 4))
             WHEN ABS(billing_amount) < 10 THEN billing_amount * CAST(0.00145 AS DECIMAL(20, 4))

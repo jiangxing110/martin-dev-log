@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-09-02
--- Updated Time:   2026-09-21 17:34:03
+-- Updated Time:   2026-09-21 19:00:00
 -- Description:    合伙人客户毛利近6个月估算物化视图
 -- Notes:
 --   1. 独立复用销售 v2 的底层收入、成本、返现和调整事实逻辑，不读取销售佣金物化视图。
@@ -12,6 +12,7 @@
 --   6. 量子卡 physical_card_gp 为预计算实体卡毛利，按渠道直接补充最终量子卡 GP，不参与收入、成本或返现分摊。
 --   7. BZ clearing_base_amt × reimbursement_rate 为渠道返现，增加有效收入，不计入成本。
 --   8. 线下 API 收入由月度指标 bi_month_tag/offline_api_income_amount 读取，归属 OpenAPI 一次性手续费。
+--   9. 不再读取 public.cash_back_bonuses 中 QuantumAccountHandlingFeeOnBehalf 且 Closed 的客户返现。
 --********************************************************************--
 
 DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_partner_account_profit_recent_estimate";
@@ -782,19 +783,6 @@ qbit_card_channel_rebate AS (
   ) rebate_union
   GROUP BY settlement_month, root_account_id, product, provider
 ),
-qbit_card_customer_rebate_cost AS (
-  SELECT
-    to_date(cbb."month" || '-01', 'YYYY-MM-DD') AS settlement_month,
-    cbb.account_id::text AS root_account_id,
-    'qbit_card' AS product,
-    SUM(COALESCE(cbb.cash_back_amount, 0))::numeric(20,4) AS customer_rebate_cost
-  FROM "public"."cash_back_bonuses" cbb
-  WHERE cbb.delete_time IS NULL
-    AND cbb.project = 'QuantumAccountHandlingFeeOnBehalf'
-    AND cbb.status = 'Closed'
-    AND to_date(cbb."month" || '-01', 'YYYY-MM-DD') >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
-  GROUP BY to_date(cbb."month" || '-01', 'YYYY-MM-DD'), cbb.account_id::text
-),
 v_cost_by_account_product AS (
   SELECT
     settlement_month,
@@ -838,11 +826,6 @@ revenue_cost_allocated AS (
           ELSE 0
         END
       - CASE
-          WHEN x.product = 'qbit_card' AND x.qbit_card_effective_revenue <> 0
-            THEN x.total_customer_rebate_cost * x.effective_revenue / x.qbit_card_effective_revenue
-          ELSE 0
-        END
-      - CASE
           WHEN x.product_effective_revenue <> 0
             THEN x.provider_metric_deduction * x.effective_revenue / x.product_effective_revenue
           ELSE 0
@@ -873,16 +856,12 @@ revenue_cost_allocated AS (
       COALESCE(md.provider_metric_deduction, 0)::numeric(20,4) AS provider_metric_deduction,
       COALESCE(md.unscoped_metric_deduction, 0)::numeric(20,4) AS unscoped_metric_deduction,
       COALESCE(r.channel_rebate, 0)::numeric(20,4) AS total_channel_rebate,
-      COALESCE(cr.customer_rebate_cost, 0)::numeric(20,4) AS total_customer_rebate_cost,
       SUM(b.effective_revenue) OVER (
         PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, '')
       )::numeric(20,4) AS product_effective_revenue,
       SUM(b.effective_revenue) OVER (
         PARTITION BY b.settlement_month, b.root_account_id, b.product
       )::numeric(20,4) AS all_product_effective_revenue,
-      SUM(CASE WHEN b.product = 'qbit_card' THEN b.effective_revenue ELSE 0 END) OVER (
-        PARTITION BY b.settlement_month, b.root_account_id, b.product
-      )::numeric(20,4) AS qbit_card_effective_revenue,
       ROW_NUMBER() OVER (
         PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, '')
         ORDER BY CASE WHEN b.effective_revenue <> 0 THEN 0 ELSE 1 END, b.sale_id NULLS LAST, b.department_id NULLS LAST
@@ -931,10 +910,6 @@ revenue_cost_allocated AS (
      AND r.root_account_id = b.root_account_id
      AND r.product = b.product
      AND COALESCE(r.provider, '') = COALESCE(b.provider, '')
-    LEFT JOIN qbit_card_customer_rebate_cost cr
-      ON cr.settlement_month = b.settlement_month
-     AND cr.root_account_id = b.root_account_id
-     AND cr.product = b.product
   ) x
 ),
 partner_customer_relation AS (

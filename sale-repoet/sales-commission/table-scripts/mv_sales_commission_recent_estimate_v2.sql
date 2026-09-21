@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-20
--- Updated Time:   2026-09-21 17:50:15
+-- Updated Time:   2026-09-21 19:00:00
 -- Description:    销售佣金8号前预估物化视图 v2
 -- Notes:
 --   1. 基于 v1，新增结汇成本、线下退款、收入调整、返现调整、线下实体卡制卡费的支持；
@@ -17,13 +17,12 @@
 --   10. 成本按 settlement_month + root_account_id + product + provider 汇总后，再按收入占比分摊到明细行。
 --   11. 量子卡渠道返现金作为收入加回；海外销售二部允许客户间毛利抵扣，其余部门单客户/渠道负毛利按 0 计佣。
 --   12. 读取 dws.dws_metrics_sales_revenue_monthly，收入仅使用 income_value。
---   13. v1 额外扣减 public.cash_back_bonuses 中 QuantumAccountHandlingFeeOnBehalf 且 Closed 的量子卡客户返现成本。
---   14. v2 新增：SETTLEMENT_COST、OFFLINE_REFUND、OFFLINE_PHYSICAL_CARD_FEE、
+--   13. v2 新增：SETTLEMENT_COST、OFFLINE_REFUND、OFFLINE_PHYSICAL_CARD_FEE、
 --       CASHBACK_ADJUSTMENT、INCOME_ADJUSTMENT、payment_transaction_record fee_cost。
---   15. 有渠道的 OpenAPI 月结实收与 real_time 共用渠道毛利池；池毛利为正时按各自 effective_revenue 正向占比分摊。
---   16. 量子卡 physical_card_gp 为预计算实体卡毛利，仅在最终量子卡 GP 层补充，不参与收入、成本、返现分摊。
---   17. BZ clearing_base_amt × reimbursement_rate 为渠道返现，增加有效收入，不计入成本。
---   18. API 月结手续费继承同账户/渠道/销售维度中收入最高 real_time 产品的活跃天数与返佣阶梯。
+--   14. 有渠道的 OpenAPI 月结实收与 real_time 共用渠道毛利池；池毛利为正时按各自 effective_revenue 正向占比分摊。
+--   15. 量子卡 physical_card_gp 为预计算实体卡毛利，仅在最终量子卡 GP 层补充，不参与收入、成本、返现分摊。
+--   16. BZ clearing_base_amt × reimbursement_rate 为渠道返现，增加有效收入，不计入成本。
+--   17. API 月结手续费继承同账户/渠道/销售维度中收入最高 real_time 产品的活跃天数与返佣阶梯。
 --********************************************************************--
 
 DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_sales_commission_recent_estimate";
@@ -811,19 +810,6 @@ qbit_card_channel_rebate AS (
   ) rebate_union
   GROUP BY settlement_month, root_account_id, product, provider
 ),
-qbit_card_customer_rebate_cost AS (
-  SELECT
-    to_date(cbb."month" || '-01', 'YYYY-MM-DD') AS settlement_month,
-    cbb.account_id::text AS root_account_id,
-    'qbit_card' AS product,
-    SUM(COALESCE(cbb.cash_back_amount, 0))::numeric(20,4) AS customer_rebate_cost
-  FROM "public"."cash_back_bonuses" cbb
-  WHERE cbb.delete_time IS NULL
-    AND cbb.project = 'QuantumAccountHandlingFeeOnBehalf'
-    AND cbb.status = 'Closed'
-    AND to_date(cbb."month" || '-01', 'YYYY-MM-DD') >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
-  GROUP BY to_date(cbb."month" || '-01', 'YYYY-MM-DD'), cbb.account_id::text
-),
 v_cost_by_account_product AS (
   SELECT
     settlement_month,
@@ -867,11 +853,6 @@ revenue_cost_allocated AS (
           ELSE 0
         END
       - CASE
-          WHEN x.product = 'qbit_card' AND x.qbit_card_effective_revenue <> 0
-            THEN x.total_customer_rebate_cost * x.effective_revenue / x.qbit_card_effective_revenue
-          ELSE 0
-        END
-      - CASE
           WHEN x.product_effective_revenue <> 0
             THEN x.provider_metric_deduction * x.effective_revenue / x.product_effective_revenue
           ELSE 0
@@ -902,16 +883,12 @@ revenue_cost_allocated AS (
       COALESCE(md.provider_metric_deduction, 0)::numeric(20,4) AS provider_metric_deduction,
       COALESCE(md.unscoped_metric_deduction, 0)::numeric(20,4) AS unscoped_metric_deduction,
       COALESCE(r.channel_rebate, 0)::numeric(20,4) AS total_channel_rebate,
-      COALESCE(cr.customer_rebate_cost, 0)::numeric(20,4) AS total_customer_rebate_cost,
       SUM(b.effective_revenue) OVER (
         PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, '')
       )::numeric(20,4) AS product_effective_revenue,
       SUM(b.effective_revenue) OVER (
         PARTITION BY b.settlement_month, b.root_account_id, b.product
       )::numeric(20,4) AS all_product_effective_revenue,
-      SUM(CASE WHEN b.product = 'qbit_card' THEN b.effective_revenue ELSE 0 END) OVER (
-        PARTITION BY b.settlement_month, b.root_account_id, b.product
-      )::numeric(20,4) AS qbit_card_effective_revenue,
       ROW_NUMBER() OVER (
         PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, '')
         ORDER BY CASE WHEN b.effective_revenue <> 0 THEN 0 ELSE 1 END, b.sale_id NULLS LAST, b.department_id NULLS LAST
@@ -960,10 +937,6 @@ revenue_cost_allocated AS (
      AND r.root_account_id = b.root_account_id
      AND r.product = b.product
      AND COALESCE(r.provider, '') = COALESCE(b.provider, '')
-    LEFT JOIN qbit_card_customer_rebate_cost cr
-      ON cr.settlement_month = b.settlement_month
-     AND cr.root_account_id = b.root_account_id
-     AND cr.product = b.product
   ) x
 ),
 -- 渠道毛利池：real_time 与有渠道的 API 月结实收共用收入、成本、返现后的毛利。
