@@ -2,13 +2,13 @@
 
 ## 摘要
 
-有渠道的 `open_api.month_revenue` 归为 API 月结手续费，与同账号、同渠道、同销售/部门的 `real_time_processing_fee` 共用毛利池；正毛利按产品确认的反向收入占比拆分，负毛利两类明细均归零。无渠道 OpenAPI 实收不进入该池。
+有渠道的 `open_api.month_revenue` 归为 API 月结手续费，与同账号、同渠道、同销售/部门的 `real_time_processing_fee` 共用毛利池；正毛利按各自 `effective_revenue` 正向占比拆分，负毛利两类明细均归零。无渠道 OpenAPI 实收不进入该池。
 
 ## 数据流
 
 1. `provider` 非空的 OpenAPI 实收映射为 `item = api_monthly_settlement_fee`。
 2. 现有收入和成本分摊完成后，以 `settlement_month + root_account_id + provider + sale_id + department_id` 聚合渠道毛利池。
-3. 池内 `real_time` 与 API 月结手续费分别获得反向收入占比的 GP；页面保留原始明细行。
+3. 池内 `real_time` 与 API 月结手续费分别获得各自 `effective_revenue` 正向占比的 GP；页面保留原始明细行。
 4. 无渠道 OpenAPI 继续使用实际收费规则；`month_receivable` 保持未来发薪。
 
 ## 约束

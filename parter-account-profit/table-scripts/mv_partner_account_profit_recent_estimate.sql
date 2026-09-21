@@ -1,14 +1,15 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-09-02
--- Updated Time:   2026-09-17 19:30:00
+-- Updated Time:   2026-09-21 13:45:00
 -- Description:    合伙人客户毛利近6个月估算物化视图
 -- Notes:
 --   1. 独立复用销售 v2 的底层收入、成本、返现和调整事实逻辑，不读取销售佣金物化视图。
 --   2. 通过 root account 的 referralCode 关联新版合伙人。
---   3. 有渠道 real_time 与 API 月结实收共用渠道毛利池，并按反向实收占比分摊。
+--   3. 有渠道 real_time 与 API 月结实收共用渠道毛利池，并按各自 effective_revenue 正向占比分摊。
 --   4. API 月费/一次性手续费实收保留明细，但不进入毛利返佣 gp；API 应收不输出。
 --   5. 输出字段、物化视图名称和下游快照结构保持不变。
+--   6. 量子卡 physical_card_gp 为预计算实体卡毛利，按渠道直接补充最终量子卡 GP，不参与收入、成本或返现分摊。
 --********************************************************************--
 
 DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_partner_account_profit_recent_estimate";
@@ -600,19 +601,18 @@ qbit_card_bz_cost AS (
     AND z.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY date_trunc('month', z.report_date)::date, COALESCE(aar.root_id, z.account_id)
 ),
-qbit_card_physical_cost AS (
+-- 实体卡毛利已由上游按渠道计算完成，仅用于最终 GP 补充。
+qbit_card_physical_gp AS (
   SELECT
     r.settlement_month,
     r.root_account_id,
-    'qbit_card' AS product,
     r.provider,
-    SUM(COALESCE(r.income_value, 0))::numeric(20,4) AS cogs
+    SUM(COALESCE(r.income_value, 0))::numeric(20,4) AS physical_card_gp
   FROM "dws"."dws_metrics_sales_revenue_monthly" r
   WHERE r.delete_time IS NULL
     AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     AND r.product = 'qbit_card'
-    AND r.provider = 'QI'
-    AND r.metric_code = 'physical_card_cost'
+    AND r.metric_code = 'physical_card_gp'
   GROUP BY r.settlement_month, r.root_account_id, r.provider
 ),
 -- v2: 全球账户离线 fee_cost（从 payment_transaction_record 直接查询）
@@ -737,7 +737,7 @@ qbit_card_channel_rebate AS (
       'qbit_card' AS product,
       'IQ' AS provider,
       ABS(SUM(
-          COALESCE(q.rebate_interchange_base_amt, 0) * COALESCE(q.rebate_interchange_rate, 0)
+          COALESCE(q.rebate_interchange_base_amt, 0) * 1
           + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 0)
       ))::numeric(20,4) AS channel_rebate
     FROM "dws"."dws_qi_card_finance_daily_v2_p" q
@@ -973,7 +973,7 @@ channel_gp_pool_allocated AS (
        AND p.api_monthly_settlement_effective_revenue > 0
         THEN (
           GREATEST(p.pool_effective_revenue - p.pool_cogs, 0)
-          * p.api_monthly_settlement_effective_revenue
+          * p.real_time_effective_revenue
           / (p.real_time_effective_revenue + p.api_monthly_settlement_effective_revenue)
           * b.allocated_effective_revenue / p.real_time_effective_revenue
         )::numeric(20,4)
@@ -983,7 +983,7 @@ channel_gp_pool_allocated AS (
        AND p.api_monthly_settlement_effective_revenue > 0
         THEN (
           GREATEST(p.pool_effective_revenue - p.pool_cogs, 0)
-          * p.real_time_effective_revenue
+          * p.api_monthly_settlement_effective_revenue
           / (p.real_time_effective_revenue + p.api_monthly_settlement_effective_revenue)
           * b.allocated_effective_revenue / p.api_monthly_settlement_effective_revenue
         )::numeric(20,4)
@@ -996,7 +996,7 @@ channel_gp_pool_allocated AS (
    AND p.root_account_referral_id = b.root_account_referral_id
    AND p.provider = b.provider
 ),
-partner_profit_base AS (
+partner_profit_base_pre_physical_gp AS (
   SELECT
     b.report_date,
     b.settlement_month,
@@ -1016,6 +1016,42 @@ partner_profit_base AS (
     END AS gp
   FROM channel_gp_pool_allocated b
   WHERE b.commission_stage = 'current_payout'
+),
+-- 实体卡毛利按源表 provider 直接补到同渠道量子卡的最终 GP；同渠道多条明细时仅补一次。
+partner_profit_base AS (
+  SELECT
+    b.report_date,
+    b.settlement_month,
+    b.root_account_id,
+    b.root_account_referral_id,
+    b.product,
+    b.source_product,
+    b.provider,
+    b.item,
+    b.source_type,
+    b.effective_revenue,
+    b.cogs,
+    CASE
+      WHEN b.source_product = 'qbit_card'
+       AND b.physical_gp_target_rn = 1
+        THEN (b.gp + COALESCE(p.physical_card_gp, 0))::numeric(20,4)
+      ELSE b.gp
+    END AS gp
+  FROM (
+    SELECT
+      e.*,
+      ROW_NUMBER() OVER (
+        PARTITION BY e.settlement_month, e.root_account_id, e.root_account_referral_id,
+                     e.source_product, COALESCE(e.provider, '')
+        ORDER BY e.effective_revenue DESC, e.source_type, e.item NULLS FIRST
+      ) AS physical_gp_target_rn
+    FROM partner_profit_base_pre_physical_gp e
+  ) b
+  LEFT JOIN qbit_card_physical_gp p
+    ON p.settlement_month = b.settlement_month
+   AND p.root_account_id = b.root_account_id
+   AND COALESCE(p.provider, '') = COALESCE(b.provider, '')
+   AND b.source_product = 'qbit_card'
 ),
 aggregated AS (
   SELECT

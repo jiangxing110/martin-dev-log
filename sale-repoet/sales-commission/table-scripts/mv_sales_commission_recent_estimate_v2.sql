@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-20
--- Updated Time:   2026-09-17 17:23:45
+-- Updated Time:   2026-09-21 13:45:00
 -- Description:    销售佣金8号前预估物化视图 v2
 -- Notes:
 --   1. 基于 v1，新增结汇成本、线下退款、收入调整、返现调整、线下API收入、线下实体卡制卡费的支持。
@@ -19,7 +19,8 @@
 --   13. v1 额外扣减 public.cash_back_bonuses 中 QuantumAccountHandlingFeeOnBehalf 且 Closed 的量子卡客户返现成本。
 --   14. v2 新增：SETTLEMENT_COST、OFFLINE_REFUND、OFFLINE_API_INCOME、OFFLINE_PHYSICAL_CARD_FEE、
 --       CASHBACK_ADJUSTMENT、INCOME_ADJUSTMENT、payment_transaction_record fee_cost。
---   15. 有渠道的 OpenAPI 月结实收与 real_time 共用渠道毛利池；池毛利为正时按产品定义反向占比分摊。
+--   15. 有渠道的 OpenAPI 月结实收与 real_time 共用渠道毛利池；池毛利为正时按各自 effective_revenue 正向占比分摊。
+--   16. 量子卡 physical_card_gp 为预计算实体卡毛利，仅在最终量子卡 GP 层补充，不参与收入、成本、返现分摊。
 --********************************************************************--
 
 DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_sales_commission_recent_estimate";
@@ -618,22 +619,18 @@ qbit_card_bz_cost AS (
     AND z.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY date_trunc('month', z.report_date)::date, COALESCE(aar.root_id, z.account_id)
 ),
-qbit_card_physical_cost AS (
+-- 实体卡毛利已由上游按渠道计算完成：不作为成本扣减，也不参与量子卡渠道返现、客户返现及成本分摊。
+qbit_card_physical_gp AS (
   SELECT
     r.settlement_month,
     r.root_account_id,
-    'qbit_card' AS product,
     r.provider,
-    SUM(COALESCE(r.income_value, 0))::numeric(20,4) AS cogs
+    SUM(COALESCE(r.income_value, 0))::numeric(20,4) AS physical_card_gp
   FROM "dws"."dws_metrics_sales_revenue_monthly" r
-  LEFT JOIN sale_department_mapping sdm
-    ON sdm.sale_id = COALESCE(r.sale_id, r.am_id)
   WHERE r.delete_time IS NULL
     AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     AND r.product = 'qbit_card'
-    AND r.provider = 'QI'
-    AND r.metric_code = 'physical_card_cost'
-    AND sdm.department_id IN ('1740319905791647746', '1740319923059597313')
+    AND r.metric_code = 'physical_card_gp'
   GROUP BY r.settlement_month, r.root_account_id, r.provider
 ),
 -- v2: 全球账户离线 fee_cost（从 payment_transaction_record 直接查询）
@@ -768,7 +765,7 @@ qbit_card_channel_rebate AS (
       'qbit_card' AS product,
       'IQ' AS provider,
       ABS(SUM(
-          COALESCE(q.rebate_interchange_base_amt, 0) * COALESCE(q.rebate_interchange_rate, 0)
+          COALESCE(q.rebate_interchange_base_amt, 0) * 1
           + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 0)
       ))::numeric(20,4) AS channel_rebate
     FROM "dws"."dws_qi_card_finance_daily_v2_p" q
@@ -936,8 +933,7 @@ revenue_cost_allocated AS (
   ) x
 ),
 -- 渠道毛利池：real_time 与有渠道的 API 月结实收共用收入、成本、返现后的毛利。
--- 池毛利 <= 0 时两类明细均为 0；池毛利 > 0 时按产品定义反向占比分摊：
--- real_time 分配 API 月结收入占比，API 月结分配 real_time 收入占比。
+-- 池毛利 <= 0 时两类明细均为 0；池毛利 > 0 时按各自 effective_revenue 正向占比分摊。
 channel_gp_pool AS (
   SELECT
     b.settlement_month,
@@ -983,7 +979,7 @@ channel_gp_pool_allocated AS (
        AND p.api_monthly_settlement_effective_revenue > 0
         THEN (
           GREATEST(p.pool_effective_revenue - p.pool_cogs, 0)
-          * p.api_monthly_settlement_effective_revenue
+          * p.real_time_effective_revenue
           / (p.real_time_effective_revenue + p.api_monthly_settlement_effective_revenue)
           * b.allocated_effective_revenue / p.real_time_effective_revenue
         )::numeric(20,4)
@@ -993,7 +989,7 @@ channel_gp_pool_allocated AS (
        AND p.api_monthly_settlement_effective_revenue > 0
         THEN (
           GREATEST(p.pool_effective_revenue - p.pool_cogs, 0)
-          * p.real_time_effective_revenue
+          * p.api_monthly_settlement_effective_revenue
           / (p.real_time_effective_revenue + p.api_monthly_settlement_effective_revenue)
           * b.allocated_effective_revenue / p.api_monthly_settlement_effective_revenue
         )::numeric(20,4)
@@ -1007,7 +1003,7 @@ channel_gp_pool_allocated AS (
    AND p.sale_id IS NOT DISTINCT FROM b.sale_id
    AND p.department_id IS NOT DISTINCT FROM b.department_id
 ),
-estimate_base AS (
+estimate_base_pre_physical_gp AS (
   SELECT
     b.report_date,
     b.settlement_month,
@@ -1067,6 +1063,48 @@ estimate_base AS (
   LEFT JOIN "dim"."dim_account_analysis" a
     ON a.account_id = b.root_account_id
    AND a.delete_time IS NULL
+),
+-- 将预计算的实体卡毛利直接加到同渠道的最终量子卡 GP，不跨渠道分摊。
+estimate_base AS (
+  SELECT
+    b.report_date,
+    b.settlement_month,
+    b.root_account_id,
+    b.product,
+    b.provider,
+    b.item,
+    b.source_type,
+    b.commission_stage,
+    b.sale_id,
+    b.department_id,
+    b.am_id,
+    b.activity_month,
+    b.collection_month,
+    b.payable_settlement_month,
+    b.effective_revenue,
+    b.cogs,
+    CASE
+      WHEN b.product = 'qbit_card'
+       AND b.physical_gp_target_rn = 1
+        THEN (b.gp + COALESCE(p.physical_card_gp, 0))::numeric(20,4)
+      ELSE b.gp
+    END AS gp,
+    b.active_days,
+    b.invite_type
+  FROM (
+    SELECT
+      e.*,
+      ROW_NUMBER() OVER (
+        PARTITION BY e.settlement_month, e.root_account_id, e.product, COALESCE(e.provider, '')
+        ORDER BY e.effective_revenue DESC, e.source_type, e.item NULLS FIRST
+      ) AS physical_gp_target_rn
+    FROM estimate_base_pre_physical_gp e
+  ) b
+  LEFT JOIN qbit_card_physical_gp p
+    ON p.settlement_month = b.settlement_month
+   AND p.root_account_id = b.root_account_id
+   AND COALESCE(p.provider, '') = COALESCE(b.provider, '')
+   AND b.product = 'qbit_card'
 ),
 rule_candidates AS (
   SELECT

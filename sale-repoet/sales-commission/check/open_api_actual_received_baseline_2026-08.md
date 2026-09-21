@@ -1,7 +1,7 @@
 # OpenAPI 实收与毛利基线（2026-08）
 
 - Created Time: 2026-09-17 16:45:53
-- Updated Time: 2026-09-17 17:19:50
+- Updated Time: 2026-09-21 13:45:00
 - 账户：`9a6e4d51-d5cf-471f-8c13-9922c1213638`
 - 结算月：`2026-08-01`
 - 销售：`269ce892-8728-4954-bb05-613163dbd142`
@@ -16,16 +16,16 @@
 - API 月结手续费：与 `real_time` 使用相同毛利提成规则。
 - 毛利池：`real_time + API月结手续费 - COGS - 返现`。
 - 毛利池小于等于 0：`real_time` 和 API 月结手续费均不计毛利/返佣。
-- 毛利池大于 0：按产品示例采用**反向收入占比**拆分毛利：
-  - `real_time` 毛利 = 毛利池 × API 月结手续费收入 / (`real_time` 收入 + API 月结手续费收入)
-  - API 月结手续费毛利 = 毛利池 × `real_time` 收入 / (`real_time` 收入 + API 月结手续费收入)
+- 毛利池大于 0：按各自 **effective_revenue 正向占比**拆分毛利：
+  - `real_time` 毛利 = 毛利池 × `real_time` 收入 / (`real_time` 收入 + API 月结手续费收入)
+  - API 月结手续费毛利 = 毛利池 × API 月结手续费收入 / (`real_time` 收入 + API 月结手续费收入)
 - 页面仍需将 `real_time` 与 API 账单收入分别展示。
 
 示例：`real_time = 200`、API 月结手续费 = `100`、成本 = `150`、返现 = `100` 时，毛利池为 `50`：
 
 ```text
-real_time 毛利       = 50 × 100 / 300 = 16.67
-API 月结手续费毛利  = 50 × 200 / 300 = 33.33
+real_time 毛利       = 50 × 200 / 300 = 33.33
+API 月结手续费毛利  = 50 × 100 / 300 = 16.67
 ```
 
 ### OpenAPI 实收分类
@@ -34,7 +34,7 @@ API 月结手续费毛利  = 50 × 200 / 300 = 33.33
 
 | 源表条件 | 业务分类 | 计佣方式 |
 |---|---|---|
-| `provider` 非空（如 BB、BZ） | API 月结手续费 | 与同账号、同渠道的 `real_time` 进入共同毛利池，按上述反向收入占比分摊 GP |
+| `provider` 非空（如 BB、BZ） | API 月结手续费 | 与同账号、同渠道的 `real_time` 进入共同毛利池，按上述 effective_revenue 正向占比分摊 GP |
 | `provider` 为空 | 非渠道 API 收入 | 不参与渠道毛利池，需按 API 月费或 API 一次性手续费的实际收费规则计佣 |
 | `metric_code = month_receivable` | API 月账单应收 | 仅作 `future_payout` 展示，不参与当期实收毛利池 |
 
@@ -50,7 +50,7 @@ API 月结手续费毛利  = 50 × 200 / 300 = 33.33
 1. API 月结手续费需要使用新 `item = api_monthly_settlement_fee`，不再匹配当前 `api_monthly_fee` 的实收 10% 规则。
 2. 渠道毛利池按 `settlement_month + root_account_id + provider + sale_id + department_id` 聚合。
 3. 毛利池为负或零时，`real_time` 与 API 月结手续费的 GP 均归零。
-4. 页面仍保留 `real_time` 和 API 月结手续费两条展示记录，仅 GP/返佣来自同一个渠道毛利池的反向占比拆分。
+4. 页面仍保留 `real_time` 和 API 月结手续费两条展示记录，仅 GP/返佣来自同一个渠道毛利池的 effective_revenue 正向占比拆分。
 
 ## 源表实收基线
 
