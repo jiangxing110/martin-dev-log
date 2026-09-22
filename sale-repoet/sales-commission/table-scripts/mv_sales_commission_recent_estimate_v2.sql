@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-20
--- Updated Time:   2026-09-22 14:35:06
+-- Updated Time:   2026-09-22 16:30:00
 -- Description:    销售佣金8号前预估物化视图 v2
 -- Notes:
 --   1. 基于 v1，新增结汇成本、线下退款、收入调整、返现调整、线下实体卡制卡费的支持；
@@ -14,12 +14,12 @@
 --   7. 本物化视图承载8号前页面查询结果。
 --   8. 每次刷新保留近半年展示结算月数据；API实收按report_date归属展示结算月。
 --   9. 每月8号快照任务从本物化视图读取目标 settlement_month 并固化到快照表。
---   10. 成本按 settlement_month + root_account_id + product + provider 汇总后，再按收入占比分摊到明细行。
+--   10. 成本按 settlement_month + root_account_id + product + provider 汇总；量子卡渠道成本优先完整挂到对应渠道明细，避免成本丢失。
 --   11. 量子卡渠道返现金作为收入加回；海外销售二部允许客户间毛利抵扣，其余部门单客户/渠道负毛利按 0 计佣。
 --   12. 读取 dws.dws_metrics_sales_revenue_monthly，收入仅使用 income_value。
 --   13. v2 新增：SETTLEMENT_COST、OFFLINE_REFUND、OFFLINE_PHYSICAL_CARD_FEE、
 --       CASHBACK_ADJUSTMENT、INCOME_ADJUSTMENT、payment_transaction_record fee_cost。
---   14. 有渠道的 OpenAPI 月结实收与 real_time 共用渠道毛利池；池毛利为正时按各自 effective_revenue 正向占比分摊。
+--   14. GP 直接按明细 effective_revenue - cogs 计算，避免渠道毛利池重复扣减收入调整项。
 --   15. 量子卡 physical_card_gp 为预计算实体卡毛利，仅在最终量子卡 GP 层补充，不参与收入、成本、返现分摊。
 --   16. 渠道返现直接读取 BB/QI/BZ 日表已计算结果，计入对应 qbit_card/provider 明细；同一客户/渠道仅挂到一条明细，避免重复。
 --   17. API 月结手续费继承同账户/渠道/销售维度中收入最高 real_time 产品的活跃天数与返佣阶梯。
@@ -29,13 +29,6 @@ DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_sales_commission_recent_estimate";
 
 CREATE MATERIALIZED VIEW "dws"."mv_sales_commission_recent_estimate" AS
 WITH account_root_relation AS (
-  SELECT
-    account_id,
-    root_id
-  FROM "ods"."ods_api_account_relation"
-  WHERE delete_time IS NULL
-),
-bb_account_root_relation AS (
   SELECT
     account_id::varchar AS account_id,
     root_id::varchar AS root_id
@@ -555,7 +548,7 @@ qbit_card_bb_cost AS (
       + COALESCE(b.cost_fixed_fee, 0)
     )::numeric(20,4) AS cogs
   FROM "dws"."dws_bb_card_finance_daily_v2_p" b
-  LEFT JOIN bb_account_root_relation aar
+  LEFT JOIN account_root_relation aar
     ON aar.account_id = b.account_id
   LEFT JOIN qbit_card_bb_month_net_amount mn
     ON mn.settlement_month = date_trunc('month', b.report_date)::date
@@ -566,7 +559,7 @@ qbit_card_bb_cost AS (
 qbit_card_qi_cost AS (
   SELECT
     date_trunc('month', q.report_date)::date AS settlement_month,
-    COALESCE(aar.root_id, q.account_id) AS root_account_id,
+    COALESCE(aar.root_id::varchar, q.account_id::varchar) AS root_account_id,
     'qbit_card' AS product,
     'IQ' AS provider,
     SUM(
@@ -582,10 +575,10 @@ qbit_card_qi_cost AS (
     )::numeric(20,4) AS cogs
   FROM "dws"."dws_qi_card_finance_daily_v2_p" q
   LEFT JOIN account_root_relation aar
-    ON aar.account_id = q.account_id
+    ON aar.account_id = q.account_id::varchar
   WHERE q.delete_time IS NULL
     AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
-  GROUP BY date_trunc('month', q.report_date)::date, COALESCE(aar.root_id, q.account_id)
+  GROUP BY date_trunc('month', q.report_date)::date, COALESCE(aar.root_id::varchar, q.account_id::varchar)
 ),
 qbit_card_sl_cost AS (
   SELECT
@@ -778,7 +771,7 @@ qbit_card_channel_rebate AS (
       'BB' AS provider,
       SUM(COALESCE(b.cashback_income, 0))::numeric(20,4) AS channel_rebate
     FROM "dws"."dws_bb_card_finance_daily_v2_p" b
-    LEFT JOIN bb_account_root_relation aar
+    LEFT JOIN account_root_relation aar
       ON aar.account_id = b.account_id
     WHERE b.delete_time IS NULL
       AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
@@ -874,8 +867,10 @@ revenue_cost_allocated AS (
     ), 0)::numeric(20,4) AS allocated_effective_revenue,
     (
       CASE
-        WHEN x.product_effective_revenue <> 0 THEN x.provider_cogs * x.effective_revenue / x.product_effective_revenue
-        WHEN x.cost_allocation_rn = 1 THEN x.provider_cogs
+        WHEN x.product_effective_revenue <> 0
+          THEN x.provider_cogs * x.effective_revenue / x.product_effective_revenue
+        WHEN x.cost_allocation_rn = 1
+          THEN x.provider_cogs
         ELSE 0
       END
       + CASE
@@ -1067,7 +1062,6 @@ estimate_base_pre_physical_gp AS (
     b.allocated_effective_revenue AS effective_revenue,
     b.allocated_cogs AS cogs,
     CASE
-      WHEN b.pooled_gp IS NOT NULL THEN b.pooled_gp
       WHEN b.department_id = '1851130772357509121'
         THEN (b.allocated_effective_revenue - b.allocated_cogs)::numeric(20,4)
       ELSE GREATEST(b.allocated_effective_revenue - b.allocated_cogs, 0)::numeric(20,4)
@@ -1191,7 +1185,7 @@ rule_candidates AS (
     r.commission_base_type,
     COALESCE(r.commission_rate, 0)::numeric(20,6) AS commission_rate,
     ROW_NUMBER() OVER (
-      PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, ''), COALESCE(b.item, ''), COALESCE(b.sale_id, ''), b.source_type, b.commission_stage
+      PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, ''), COALESCE(b.item, ''), COALESCE(b.sale_id, ''), COALESCE(b.am_id, ''), b.source_type, b.commission_stage
       ORDER BY r.priority ASC, r.id ASC
     ) AS rn
   FROM estimate_base b
@@ -1217,6 +1211,7 @@ SELECT
     COALESCE(provider, ''),
     COALESCE(item, ''),
     COALESCE(sale_id, ''),
+    COALESCE(am_id, ''),
     source_type,
     commission_stage
   )))::bigint AS id,

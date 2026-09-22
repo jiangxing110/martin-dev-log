@@ -1,72 +1,12 @@
-直客账单:
-1.邮件通知的那个可以说出来不用我们发单独建了任务了
-2.直客的查询逻辑得改
-  1.状态非SELECT status FROM account where status not in ('Inactive', 'Cleared')
-  2.    <select id="customerList" resultType="com.qbit.common_all.api.client.bill.domain.vo.QuantumCardApiCustomerVO">
-        SELECT "oac"."id",
-        "oacc"."sign_time",
-        "oacc"."online_time",
-        "oacc"."min_amount",
-        "oacc"."discount_type",
-        "verifiedName",
-        "oacc"."discount_duration",
-        "oacc"."discount_percent",
-        "oacc"."other_amount" "otherAmountStr",
-        "oacc"."debit_type",
-        "oacc"."statement_type",
-        "oacc"."discount_config",
-        "oacc"."minimum_volume_commitments_config" as "minimumVolumeCommitmentsConfig"
-        from "openApiClient" "oac"
-        LEFT JOIN "openApiClientConfig" "oacc" on "oac"."id" = "oacc"."id"
-        LEFT JOIN account "ac" on ac."id" = "oac"."id"
-        <if test="entity.salesIds!= null and entity.salesIds.size >0">
-            LEFT JOIN "salesAccountRelation" sar ON ac."id"=sar."accountId" and sar."deleteTime" IS null
-        </if>
-        WHERE "oac"."deleteTime" IS NULL
-        and "oacc"."deleteTime" IS null
-        and "oacc"."min_amount" IS NOT NULL
-        and "oac".status = 'Active'
-        and "ac".type = 'ApiClient'
-        and "oacc"."online_time" IS NOT NULL
-        <if test="today!= null and today!=''">
-            <![CDATA[ and "oacc"."online_time" <= TO_TIMESTAMP(#{today} / 1000)]]>
-        </if>
-        <if test="entity.accountIds != null and entity.accountIds.size >0">
-            and oac."id"::UUID IN
-            <foreach item="item" index="index" collection="entity.accountIds"
-                     open="(" separator="," close=")" nullable="true">
-                #{item}
-            </foreach>
-        </if>
-        <if test="entity.salesIds!= null and entity.salesIds.size >0">
-            and sar."salesId"::UUID IN
-            <foreach item="item" index="index" collection="entity.salesIds"
-                     open="(" separator="," close=")" nullable="true">
-                #{item}
-            </foreach>
-        </if>
-    </select> API这种情况查不到的
- // 直客没有 api_client_transaction，因此不能沿用 API 客户的交易统计入口。
-        // 直客账户需要从两个新费率来源取并集：
-        // 1. account_fee_transaction：普通月结费用；
-        // 2. accountToDo.ActiveCardFee：尚未迁移到新费率体系的活跃卡月费。
-        // 第一阶段只取账户 ID，后续再按最终确认的直客账户范围查询具体费用明细。
-        List<String> feeAccountIds = accountFeeTransactionMapper.selectMonthlySettlementAccountIds(start, nextMonthStart, accountIds);
-        List<String> activeCardAccountIds = accountToDoMapper.selectActiveCardFeeAccountIds(billMonth, accountIds);
-        List<String> candidateAccountIds = Stream.concat(feeAccountIds.stream(), activeCardAccountIds.stream()).filter(Objects::nonNull).distinct().toList();
-        if (CollectionUtil.isEmpty(candidateAccountIds)) {
-            return;
-        }
-        因为他计算 没有收费的也要默认生成 所以不能feeAccountIds,activeCardAccountIds这样查
+crypto			real_time_processing_fee	current_payout	0.0000	0.0000	0.0000	0.0000	0.0000
+open_api	BB	api_monthly_settlement_fee	billing_decline_fee	current_payout	78.4000	0.0000	78.4000	78.4000	7.8400
+open_api	IQ	api_monthly_settlement_fee	billing_decline_fee	current_payout	330.3200	0.0000	330.3200	330.3200	33.0320
+open_api		api_monthly_fee	api_monthly_billing	future_payout	450.5600	0.0000	450.5600	450.5600	45.0560
+open_api		api_monthly_fee	billing_decline_fee	current_payout	0.0000	0.0000	0.0000	0.0000	0.0000
+qbit_card	BB		real_time_processing_fee	current_payout	595.3709	50.3487	545.0222	545.0222	54.5022
+qbit_card	IQ		real_time_processing_fee	current_payout	40998.8739	7223.8335	33775.0404	33775.0404	3377.5040
+合计					42453.5248	7274.1822	35179.3426	35179.3426	3517.9342
 
-
-3.还有就是直客的账单生成要补充RS返现补差的部分逻辑
-
-
-
-sql1
-open_api	BB	771.1220	0.0000	101.6387	2
-qbit_card	BB	7963.8358	7871.7151	1049.6837	1
 
 sql2
-191	386593.9500	7963.8358	0.00000000	0.02060000
+2026-08-01	16966.397617470000	4691.231497260000	551.563450000000	2791.382044000000	768.371589000000	0.762082400000	1.143123600000	471.603024970000	1752.4167	27994.871128700000

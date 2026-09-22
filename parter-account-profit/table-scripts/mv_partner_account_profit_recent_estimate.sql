@@ -1,12 +1,12 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-09-02
--- Updated Time:   2026-09-22 14:35:06
+-- Updated Time:   2026-09-22 16:30:00
 -- Description:    合伙人客户毛利近6个月估算物化视图
 -- Notes:
 --   1. 独立复用销售 v2 的底层收入、成本、返现和调整事实逻辑，不读取销售佣金物化视图。
 --   2. 通过 root account 的 referralCode 关联新版合伙人。
---   3. 有渠道 real_time 与 API 月结实收共用渠道毛利池，并按各自 effective_revenue 正向占比分摊。
+--   3. GP 直接按明细 effective_revenue - cogs 计算，避免渠道毛利池重复扣减收入调整项。
 --   4. API 月费/一次性手续费实收保留明细，但不进入毛利返佣 gp；API 应收不输出。
 --   5. 输出字段、物化视图名称和下游快照结构保持不变。
 --   6. 量子卡 physical_card_gp 为预计算实体卡毛利，按渠道直接补充最终量子卡 GP，不参与收入、成本或返现分摊。
@@ -19,13 +19,6 @@ DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_partner_account_profit_recent_estimat
 
 CREATE MATERIALIZED VIEW "dws"."mv_partner_account_profit_recent_estimate" AS
 WITH account_root_relation AS (
-  SELECT
-    account_id,
-    root_id
-  FROM "ods"."ods_api_account_relation"
-  WHERE delete_time IS NULL
-),
-bb_account_root_relation AS (
   SELECT
     account_id::varchar AS account_id,
     root_id::varchar AS root_id
@@ -538,7 +531,7 @@ qbit_card_bb_cost AS (
       + COALESCE(b.cost_fixed_fee, 0)
     )::numeric(20,4) AS cogs
   FROM "dws"."dws_bb_card_finance_daily_v2_p" b
-  LEFT JOIN bb_account_root_relation aar
+  LEFT JOIN account_root_relation aar
     ON aar.account_id = b.account_id
   LEFT JOIN qbit_card_bb_month_net_amount mn
     ON mn.settlement_month = date_trunc('month', b.report_date)::date
@@ -549,7 +542,7 @@ qbit_card_bb_cost AS (
 qbit_card_qi_cost AS (
   SELECT
     date_trunc('month', q.report_date)::date AS settlement_month,
-    COALESCE(aar.root_id, q.account_id) AS root_account_id,
+    COALESCE(aar.root_id::varchar, q.account_id::varchar) AS root_account_id,
     'qbit_card' AS product,
     'IQ' AS provider,
     SUM(
@@ -565,10 +558,10 @@ qbit_card_qi_cost AS (
     )::numeric(20,4) AS cogs
   FROM "dws"."dws_qi_card_finance_daily_v2_p" q
   LEFT JOIN account_root_relation aar
-    ON aar.account_id = q.account_id
+    ON aar.account_id = q.account_id::varchar
   WHERE q.delete_time IS NULL
     AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
-  GROUP BY date_trunc('month', q.report_date)::date, COALESCE(aar.root_id, q.account_id)
+  GROUP BY date_trunc('month', q.report_date)::date, COALESCE(aar.root_id::varchar, q.account_id::varchar)
 ),
 qbit_card_sl_cost AS (
   SELECT
@@ -751,7 +744,7 @@ qbit_card_channel_rebate AS (
       'BB' AS provider,
       SUM(COALESCE(b.cashback_income, 0))::numeric(20,4) AS channel_rebate
     FROM "dws"."dws_bb_card_finance_daily_v2_p" b
-    LEFT JOIN bb_account_root_relation aar
+    LEFT JOIN account_root_relation aar
       ON aar.account_id = b.account_id
     WHERE b.delete_time IS NULL
       AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
@@ -847,8 +840,10 @@ revenue_cost_allocated AS (
     ), 0)::numeric(20,4) AS allocated_effective_revenue,
     (
       CASE
-        WHEN x.product_effective_revenue <> 0 THEN x.provider_cogs * x.effective_revenue / x.product_effective_revenue
-        WHEN x.cost_allocation_rn = 1 THEN x.provider_cogs
+        WHEN x.product_effective_revenue <> 0
+          THEN x.provider_cogs * x.effective_revenue / x.product_effective_revenue
+        WHEN x.cost_allocation_rn = 1
+          THEN x.provider_cogs
         ELSE 0
       END
       + CASE
@@ -1028,7 +1023,6 @@ partner_profit_base_pre_physical_gp AS (
     b.allocated_cogs AS cogs,
     CASE
       WHEN b.product = 'open_api' AND b.item = 'api_monthly_fee' THEN 0::numeric(20,4)
-      WHEN b.pooled_gp IS NOT NULL THEN b.pooled_gp
       ELSE (b.allocated_effective_revenue - b.allocated_cogs)::numeric(20,4)
     END AS gp
   FROM channel_gp_pool_allocated b
