@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-20
--- Updated Time:   2026-09-21 19:00:00
+-- Updated Time:   2026-09-22 10:30:00
 -- Description:    销售佣金8号前预估物化视图 v2
 -- Notes:
 --   1. 基于 v1，新增结汇成本、线下退款、收入调整、返现调整、线下实体卡制卡费的支持；
@@ -21,7 +21,7 @@
 --       CASHBACK_ADJUSTMENT、INCOME_ADJUSTMENT、payment_transaction_record fee_cost。
 --   14. 有渠道的 OpenAPI 月结实收与 real_time 共用渠道毛利池；池毛利为正时按各自 effective_revenue 正向占比分摊。
 --   15. 量子卡 physical_card_gp 为预计算实体卡毛利，仅在最终量子卡 GP 层补充，不参与收入、成本、返现分摊。
---   16. BZ clearing_base_amt × reimbursement_rate 为渠道返现，增加有效收入，不计入成本。
+--   16. 渠道返现直接计入对应 qbit_card/provider 明细；同一客户/渠道仅挂到一条明细，避免重复。
 --   17. API 月结手续费继承同账户/渠道/销售维度中收入最高 real_time 产品的活跃天数与返佣阶梯。
 --********************************************************************--
 
@@ -849,7 +849,9 @@ revenue_cost_allocated AS (
     GREATEST((
       x.effective_revenue
       + CASE
-          WHEN x.product_effective_revenue <> 0 THEN x.total_channel_rebate * x.effective_revenue / x.product_effective_revenue
+          WHEN x.product = 'qbit_card'
+           AND x.cost_allocation_rn = 1
+            THEN x.total_channel_rebate
           ELSE 0
         END
       - CASE

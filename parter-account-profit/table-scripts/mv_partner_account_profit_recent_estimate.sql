@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-09-02
--- Updated Time:   2026-09-21 19:00:00
+-- Updated Time:   2026-09-22 10:30:00
 -- Description:    合伙人客户毛利近6个月估算物化视图
 -- Notes:
 --   1. 独立复用销售 v2 的底层收入、成本、返现和调整事实逻辑，不读取销售佣金物化视图。
@@ -10,7 +10,7 @@
 --   4. API 月费/一次性手续费实收保留明细，但不进入毛利返佣 gp；API 应收不输出。
 --   5. 输出字段、物化视图名称和下游快照结构保持不变。
 --   6. 量子卡 physical_card_gp 为预计算实体卡毛利，按渠道直接补充最终量子卡 GP，不参与收入、成本或返现分摊。
---   7. BZ clearing_base_amt × reimbursement_rate 为渠道返现，增加有效收入，不计入成本。
+--   7. 渠道返现直接计入对应 qbit_card/provider 明细；同一客户/渠道仅挂到一条明细，避免重复。
 --   8. 线下 API 收入由月度指标 bi_month_tag/offline_api_income_amount 读取，归属 OpenAPI 一次性手续费。
 --   9. 不再读取 public.cash_back_bonuses 中 QuantumAccountHandlingFeeOnBehalf 且 Closed 的客户返现。
 --********************************************************************--
@@ -822,7 +822,9 @@ revenue_cost_allocated AS (
     GREATEST((
       x.effective_revenue
       + CASE
-          WHEN x.product_effective_revenue <> 0 THEN x.total_channel_rebate * x.effective_revenue / x.product_effective_revenue
+          WHEN x.product = 'qbit_card'
+           AND x.cost_allocation_rn = 1
+            THEN x.total_channel_rebate
           ELSE 0
         END
       - CASE
