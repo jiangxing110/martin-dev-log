@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-20
--- Updated Time:   2026-09-22 16:30:00
+-- Updated Time:   2026-09-22 18:58:24
 -- Description:    销售佣金8号前预估物化视图 v2
 -- Notes:
 --   1. 基于 v1，新增结汇成本、线下退款、收入调整、返现调整、线下实体卡制卡费的支持；
@@ -943,18 +943,17 @@ revenue_cost_allocated AS (
      AND COALESCE(r.provider, '') = COALESCE(b.provider, '')
   ) x
 ),
--- 渠道毛利池：real_time 与有渠道的 API 月结实收共用收入、成本、返现后的毛利。
--- 池毛利 <= 0 时两类明细均为 0；池毛利 > 0 时按各自 effective_revenue 正向占比分摊。
+-- 渠道毛利池：量子卡与同渠道 API 月结实收共用收入、成本、返现后的毛利。
+-- 非海外销售二部的池毛利 <= 0 时归 0；海外销售二部保留负毛利。
+-- 池毛利按量子卡/API 月结实收在渠道总收入中的占比分摊。
 channel_gp_pool AS (
   SELECT
     b.settlement_month,
     b.root_account_id,
     b.provider,
-    b.sale_id,
-    b.department_id,
     SUM(CASE
       WHEN b.source_type = 'real_time_processing_fee'
-       AND b.product <> 'open_api'
+       AND b.product = 'qbit_card'
         THEN b.allocated_effective_revenue
       ELSE 0
     END)::numeric(20,4) AS real_time_effective_revenue,
@@ -970,15 +969,13 @@ channel_gp_pool AS (
   WHERE b.commission_stage = 'current_payout'
     AND NULLIF(TRIM(b.provider), '') IS NOT NULL
     AND (
-      (b.source_type = 'real_time_processing_fee' AND b.product <> 'open_api')
+      (b.source_type = 'real_time_processing_fee' AND b.product = 'qbit_card')
       OR (b.product = 'open_api' AND b.item = 'api_monthly_settlement_fee')
     )
   GROUP BY
     b.settlement_month,
     b.root_account_id,
-    b.provider,
-    b.sale_id,
-    b.department_id
+    b.provider
 ),
 -- API 月结手续费不按 api_active_time 单独取档，而是继承同一渠道 real_time 收入最高产品的活跃天数。
 channel_gp_rate_anchor AS (
@@ -1005,7 +1002,7 @@ channel_gp_rate_anchor AS (
     WHERE b.commission_stage = 'current_payout'
       AND NULLIF(TRIM(b.provider), '') IS NOT NULL
       AND b.source_type = 'real_time_processing_fee'
-      AND b.product <> 'open_api'
+      AND b.product = 'qbit_card'
   ) ranked
   WHERE rn = 1
 ),
@@ -1014,34 +1011,62 @@ channel_gp_pool_allocated AS (
     b.*,
     CASE
       WHEN b.source_type = 'real_time_processing_fee'
-       AND b.product <> 'open_api'
-       AND p.real_time_effective_revenue > 0
-       AND p.api_monthly_settlement_effective_revenue > 0
+       AND b.product = 'qbit_card'
+       AND b.channel_pool_effective_revenue > 0
         THEN (
-          GREATEST(p.pool_effective_revenue - p.pool_cogs, 0)
-          * p.real_time_effective_revenue
-          / (p.real_time_effective_revenue + p.api_monthly_settlement_effective_revenue)
-          * b.allocated_effective_revenue / p.real_time_effective_revenue
+          CASE
+            WHEN b.department_id = '1851130772357509121'
+              THEN b.channel_pool_effective_revenue - b.channel_pool_cogs
+            ELSE GREATEST(b.channel_pool_effective_revenue - b.channel_pool_cogs, 0)
+          END
+          * b.allocated_effective_revenue / b.channel_pool_effective_revenue
         )::numeric(20,4)
       WHEN b.product = 'open_api'
        AND b.item = 'api_monthly_settlement_fee'
-       AND p.real_time_effective_revenue > 0
-       AND p.api_monthly_settlement_effective_revenue > 0
+       AND b.channel_pool_effective_revenue > 0
         THEN (
-          GREATEST(p.pool_effective_revenue - p.pool_cogs, 0)
-          * p.api_monthly_settlement_effective_revenue
-          / (p.real_time_effective_revenue + p.api_monthly_settlement_effective_revenue)
-          * b.allocated_effective_revenue / p.api_monthly_settlement_effective_revenue
+          CASE
+            WHEN b.department_id = '1851130772357509121'
+              THEN b.channel_pool_effective_revenue - b.channel_pool_cogs
+            ELSE GREATEST(b.channel_pool_effective_revenue - b.channel_pool_cogs, 0)
+          END
+          * b.allocated_effective_revenue / b.channel_pool_effective_revenue
         )::numeric(20,4)
       ELSE NULL
     END AS pooled_gp
-  FROM revenue_cost_allocated b
-  LEFT JOIN channel_gp_pool p
-    ON p.settlement_month = b.settlement_month
-   AND p.root_account_id = b.root_account_id
-   AND p.provider = b.provider
-   AND p.sale_id IS NOT DISTINCT FROM b.sale_id
-   AND p.department_id IS NOT DISTINCT FROM b.department_id
+  FROM (
+    SELECT
+      b.*,
+      SUM(
+        CASE
+          WHEN b.commission_stage = 'current_payout'
+           AND NULLIF(TRIM(b.provider), '') IS NOT NULL
+           AND (
+             (b.source_type = 'real_time_processing_fee' AND b.product = 'qbit_card')
+             OR (b.product = 'open_api' AND b.item = 'api_monthly_settlement_fee')
+           )
+            THEN b.allocated_effective_revenue
+          ELSE 0
+        END
+      ) OVER (
+        PARTITION BY b.settlement_month, b.root_account_id, b.provider
+      )::numeric(20,4) AS channel_pool_effective_revenue,
+      SUM(
+        CASE
+          WHEN b.commission_stage = 'current_payout'
+           AND NULLIF(TRIM(b.provider), '') IS NOT NULL
+           AND (
+             (b.source_type = 'real_time_processing_fee' AND b.product = 'qbit_card')
+             OR (b.product = 'open_api' AND b.item = 'api_monthly_settlement_fee')
+           )
+            THEN b.allocated_cogs
+          ELSE 0
+        END
+      ) OVER (
+        PARTITION BY b.settlement_month, b.root_account_id, b.provider
+      )::numeric(20,4) AS channel_pool_cogs
+    FROM revenue_cost_allocated b
+  ) b
 ),
 estimate_base_pre_physical_gp AS (
   SELECT
@@ -1062,6 +1087,15 @@ estimate_base_pre_physical_gp AS (
     b.allocated_effective_revenue AS effective_revenue,
     b.allocated_cogs AS cogs,
     CASE
+      -- 量子卡与 API 月结属于渠道池，池 GP 为空时按 0 处理，不能退回逐行 GP。
+      WHEN (
+        b.source_type = 'real_time_processing_fee'
+        AND b.product = 'qbit_card'
+      ) OR (
+        b.product = 'open_api'
+        AND b.item = 'api_monthly_settlement_fee'
+      )
+        THEN COALESCE(b.pooled_gp, 0)::numeric(20,4)
       WHEN b.department_id = '1851130772357509121'
         THEN (b.allocated_effective_revenue - b.allocated_cogs)::numeric(20,4)
       ELSE GREATEST(b.allocated_effective_revenue - b.allocated_cogs, 0)::numeric(20,4)
@@ -1158,6 +1192,11 @@ estimate_base AS (
     CASE
       WHEN b.product = 'qbit_card'
        AND b.physical_gp_target_rn = 1
+       AND b.department_id <> '1851130772357509121'
+       AND b.gp = 0
+        THEN 0::numeric(20,4)
+      WHEN b.product = 'qbit_card'
+       AND b.physical_gp_target_rn = 1
         THEN (b.gp + COALESCE(p.physical_card_gp, 0))::numeric(20,4)
       ELSE b.gp
     END AS gp,
@@ -1178,6 +1217,64 @@ estimate_base AS (
    AND COALESCE(p.provider, '') = COALESCE(b.provider, '')
    AND b.product = 'qbit_card'
 ),
+-- 最终展示前按同一客户/月份/渠道复核毛利：成本始终保留真实分摊结果，非海外销售二部负毛利时仅将 GP 归零。
+channel_gp_finalized AS (
+  SELECT
+    b.report_date,
+    b.settlement_month,
+    b.root_account_id,
+    b.product,
+    b.provider,
+    b.item,
+    b.source_type,
+    b.commission_stage,
+    b.sale_id,
+    b.department_id,
+    b.am_id,
+    b.activity_month,
+    b.collection_month,
+    b.payable_settlement_month,
+    b.effective_revenue,
+    b.cogs AS cogs,
+    CASE
+      WHEN b.is_channel_pool_row
+       AND b.department_id <> '1851130772357509121'
+       AND b.final_channel_gp <= 0
+        THEN 0::numeric(20,4)
+      ELSE b.gp
+    END AS gp,
+    b.active_days,
+    b.invite_type
+  FROM (
+    SELECT
+      e.*,
+      (
+        (e.source_type = 'real_time_processing_fee' AND e.product = 'qbit_card')
+        OR (e.product = 'open_api' AND e.item = 'api_monthly_settlement_fee')
+      ) AS is_channel_pool_row,
+      SUM(
+        CASE
+          WHEN (e.source_type = 'real_time_processing_fee' AND e.product = 'qbit_card')
+            OR (e.product = 'open_api' AND e.item = 'api_monthly_settlement_fee')
+            THEN e.effective_revenue
+          ELSE 0
+        END
+      ) OVER (
+        PARTITION BY e.settlement_month, e.root_account_id, e.provider
+      )
+      - SUM(
+        CASE
+          WHEN (e.source_type = 'real_time_processing_fee' AND e.product = 'qbit_card')
+            OR (e.product = 'open_api' AND e.item = 'api_monthly_settlement_fee')
+            THEN e.cogs
+          ELSE 0
+        END
+      ) OVER (
+        PARTITION BY e.settlement_month, e.root_account_id, e.provider
+      ) AS final_channel_gp
+    FROM estimate_base e
+  ) b
+),
 rule_candidates AS (
   SELECT
     b.*,
@@ -1188,7 +1285,7 @@ rule_candidates AS (
       PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, ''), COALESCE(b.item, ''), COALESCE(b.sale_id, ''), COALESCE(b.am_id, ''), b.source_type, b.commission_stage
       ORDER BY r.priority ASC, r.id ASC
     ) AS rn
-  FROM estimate_base b
+  FROM channel_gp_finalized b
   LEFT JOIN "dim"."dim_sales_commission_rule" r
     ON r.department_id = b.department_id
    AND (r.product IS NULL OR r.product = b.product)
@@ -1200,7 +1297,37 @@ rule_candidates AS (
    AND b.settlement_month::timestamp >= r.start_time
    AND b.settlement_month::timestamp < r.end_time
    AND r.enabled = true
-   AND r.delete_time IS NULL
+    AND r.delete_time IS NULL
+),
+output_rows AS (
+  SELECT *
+  FROM rule_candidates
+  WHERE rn = 1
+),
+output_final AS (
+  SELECT
+    o.*,
+    SUM(
+      CASE
+        WHEN (o.source_type = 'real_time_processing_fee' AND o.product = 'qbit_card')
+          OR (o.product = 'open_api' AND o.item = 'api_monthly_settlement_fee')
+          THEN o.effective_revenue
+        ELSE 0
+      END
+    ) OVER (
+      PARTITION BY o.settlement_month, o.root_account_id, o.provider
+    ) AS final_output_revenue,
+    SUM(
+      CASE
+        WHEN (o.source_type = 'real_time_processing_fee' AND o.product = 'qbit_card')
+          OR (o.product = 'open_api' AND o.item = 'api_monthly_settlement_fee')
+          THEN o.cogs
+        ELSE 0
+      END
+    ) OVER (
+      PARTITION BY o.settlement_month, o.root_account_id, o.provider
+    ) AS final_output_cogs
+  FROM output_rows o
 )
 SELECT
   abs(hashtext(concat_ws(':',
@@ -1231,16 +1358,67 @@ SELECT
   collection_month,
   payable_settlement_month,
   effective_revenue,
+  -- 成本保留真实分摊结果；负毛利只影响 GP，不清除 cogs。
   cogs,
-  gp,
-  (CASE WHEN commission_base_type = 'actual_fee' THEN effective_revenue ELSE gp END)::numeric(20,4) AS commission_base,
+  CASE
+    WHEN (
+      (source_type = 'real_time_processing_fee' AND product = 'qbit_card')
+      OR (product = 'open_api' AND item = 'api_monthly_settlement_fee')
+    )
+     AND final_output_revenue > 0
+      THEN (
+        CASE
+          WHEN department_id = '1851130772357509121'
+            THEN final_output_revenue - final_output_cogs
+          ELSE GREATEST(final_output_revenue - final_output_cogs, 0)
+        END
+        * effective_revenue / final_output_revenue
+      )::numeric(20,4)
+    ELSE gp
+  END AS gp,
+  (
+    CASE
+      WHEN commission_base_type = 'actual_fee' THEN effective_revenue
+      WHEN (
+        (source_type = 'real_time_processing_fee' AND product = 'qbit_card')
+        OR (product = 'open_api' AND item = 'api_monthly_settlement_fee')
+      )
+       AND final_output_revenue > 0
+        THEN (
+          CASE
+            WHEN department_id = '1851130772357509121'
+              THEN final_output_revenue - final_output_cogs
+            ELSE GREATEST(final_output_revenue - final_output_cogs, 0)
+          END
+          * effective_revenue / final_output_revenue
+        )::numeric(20,4)
+      ELSE gp
+    END
+  )::numeric(20,4) AS commission_base,
   commission_rate,
-  ((CASE WHEN commission_base_type = 'actual_fee' THEN effective_revenue ELSE gp END) * commission_rate)::numeric(20,4) AS estimated_commission,
+  (
+    CASE
+      WHEN commission_base_type = 'actual_fee' THEN effective_revenue
+      WHEN (
+        (source_type = 'real_time_processing_fee' AND product = 'qbit_card')
+        OR (product = 'open_api' AND item = 'api_monthly_settlement_fee')
+      )
+       AND final_output_revenue > 0
+        THEN (
+          CASE
+            WHEN department_id = '1851130772357509121'
+              THEN final_output_revenue - final_output_cogs
+            ELSE GREATEST(final_output_revenue - final_output_cogs, 0)
+          END
+          * effective_revenue / final_output_revenue
+        )::numeric(20,4)
+      ELSE gp
+    END * commission_rate
+  )::numeric(20,4) AS estimated_commission,
   active_days,
   rule_code,
   now() AS refreshed_at
-FROM rule_candidates
-WHERE rn = 1
+FROM output_final
 WITH DATA
 DISTRIBUTED BY (id);
 
