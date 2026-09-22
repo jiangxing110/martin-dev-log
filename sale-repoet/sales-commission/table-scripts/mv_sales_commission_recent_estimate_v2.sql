@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-20
--- Updated Time:   2026-09-22 10:30:00
+-- Updated Time:   2026-09-22 14:35:06
 -- Description:    销售佣金8号前预估物化视图 v2
 -- Notes:
 --   1. 基于 v1，新增结汇成本、线下退款、收入调整、返现调整、线下实体卡制卡费的支持；
@@ -21,7 +21,7 @@
 --       CASHBACK_ADJUSTMENT、INCOME_ADJUSTMENT、payment_transaction_record fee_cost。
 --   14. 有渠道的 OpenAPI 月结实收与 real_time 共用渠道毛利池；池毛利为正时按各自 effective_revenue 正向占比分摊。
 --   15. 量子卡 physical_card_gp 为预计算实体卡毛利，仅在最终量子卡 GP 层补充，不参与收入、成本、返现分摊。
---   16. 渠道返现直接计入对应 qbit_card/provider 明细；同一客户/渠道仅挂到一条明细，避免重复。
+--   16. 渠道返现直接读取 BB/QI/BZ 日表已计算结果，计入对应 qbit_card/provider 明细；同一客户/渠道仅挂到一条明细，避免重复。
 --   17. API 月结手续费继承同账户/渠道/销售维度中收入最高 real_time 产品的活跃天数与返佣阶梯。
 --********************************************************************--
 
@@ -33,6 +33,13 @@ WITH account_root_relation AS (
     account_id,
     root_id
   FROM "ods"."ods_api_account_relation"
+  WHERE delete_time IS NULL
+),
+bb_account_root_relation AS (
+  SELECT
+    account_id::varchar AS account_id,
+    root_id::varchar AS root_id
+  FROM public.api_account_relation
   WHERE delete_time IS NULL
 ),
 rule_departments AS (
@@ -548,7 +555,7 @@ qbit_card_bb_cost AS (
       + COALESCE(b.cost_fixed_fee, 0)
     )::numeric(20,4) AS cogs
   FROM "dws"."dws_bb_card_finance_daily_v2_p" b
-  LEFT JOIN account_root_relation aar
+  LEFT JOIN bb_account_root_relation aar
     ON aar.account_id = b.account_id
   LEFT JOIN qbit_card_bb_month_net_amount mn
     ON mn.settlement_month = date_trunc('month', b.report_date)::date
@@ -769,9 +776,9 @@ qbit_card_channel_rebate AS (
       COALESCE(aar.root_id, b.account_id) AS root_account_id,
       'qbit_card' AS product,
       'BB' AS provider,
-      ABS(SUM(COALESCE(b.bb_rebate_base_amt, 0) * 0.021195))::numeric(20,4) AS channel_rebate
+      SUM(COALESCE(b.cashback_income, 0))::numeric(20,4) AS channel_rebate
     FROM "dws"."dws_bb_card_finance_daily_v2_p" b
-    LEFT JOIN account_root_relation aar
+    LEFT JOIN bb_account_root_relation aar
       ON aar.account_id = b.account_id
     WHERE b.delete_time IS NULL
       AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
