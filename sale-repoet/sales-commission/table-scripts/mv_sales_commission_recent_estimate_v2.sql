@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-20
--- Updated Time:   2026-09-22 18:58:24
+-- Updated Time:   2026-09-23 00:30:00
 -- Description:    销售佣金8号前预估物化视图 v2
 -- Notes:
 --   1. 基于 v1，新增结汇成本、线下退款、收入调整、返现调整、线下实体卡制卡费的支持；
@@ -194,7 +194,7 @@ revenue_base_raw AS (
   UNION ALL
   SELECT
     CURRENT_DATE AS report_date,
-    date_trunc('month', t.statistics_time)::date AS settlement_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS settlement_month,
     COALESCE(aar.root_id, t.account_id) AS root_account_id,
     CASE t.product_line
       WHEN 'GLOBAL_ACCOUNT' THEN 'group_account'
@@ -208,9 +208,9 @@ revenue_base_raw AS (
     sr.sale_id,
     sr.department_id,
     sr.am_id,
-    date_trunc('month', t.statistics_time)::date AS activity_month,
-    date_trunc('month', t.statistics_time)::date AS collection_month,
-    date_trunc('month', t.statistics_time)::date AS payable_settlement_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS activity_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS collection_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS payable_settlement_month,
     SUM(COALESCE(t.amount, 0))::numeric(20,4) AS effective_revenue
   FROM ods.ods_bi_month_tag t
   LEFT JOIN account_root_relation aar ON aar.account_id = t.account_id
@@ -237,9 +237,9 @@ revenue_base_raw AS (
   WHERE t.delete_time IS NULL
     AND t.account_id IS NOT NULL
     AND t.tag IN ('OFFLINE_PHYSICAL_CARD_FEE', 'INCOME_ADJUSTMENT_INCREASE')
-    AND date_trunc('month', t.statistics_time)::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    AND date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY
-    date_trunc('month', t.statistics_time)::date,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date,
     COALESCE(aar.root_id, t.account_id),
     t.product_line,
     t.tag,
@@ -252,7 +252,7 @@ revenue_base_raw AS (
   UNION ALL
   SELECT
     CURRENT_DATE AS report_date,
-    date_trunc('month', t.statistics_time)::date AS settlement_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS settlement_month,
     COALESCE(aar.root_id, t.account_id) AS root_account_id,
     CASE t.product_line
       WHEN 'GLOBAL_ACCOUNT' THEN 'group_account'
@@ -266,9 +266,9 @@ revenue_base_raw AS (
     sr.sale_id,
     sr.department_id,
     sr.am_id,
-    date_trunc('month', t.statistics_time)::date AS activity_month,
-    date_trunc('month', t.statistics_time)::date AS collection_month,
-    date_trunc('month', t.statistics_time)::date AS payable_settlement_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS activity_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS collection_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS payable_settlement_month,
     (-SUM(COALESCE(t.amount, 0)))::numeric(20,4) AS effective_revenue
   FROM ods.ods_bi_month_tag t
   LEFT JOIN account_root_relation aar ON aar.account_id = t.account_id
@@ -298,9 +298,9 @@ revenue_base_raw AS (
       'INCOME_ADJUSTMENT_DECREASE',
       'API_MINIMUM_CONSUMPTION_ADJUSTMENT_DECREASE'
     )
-    AND date_trunc('month', t.statistics_time)::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    AND date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY
-    date_trunc('month', t.statistics_time)::date,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date,
     COALESCE(aar.root_id, t.account_id),
     t.product_line,
     t.tag,
@@ -313,7 +313,7 @@ revenue_base_raw AS (
   UNION ALL
   SELECT
     CURRENT_DATE AS report_date,
-    date_trunc('month', t.statistics_time)::date AS settlement_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS settlement_month,
     COALESCE(aar.root_id, t.account_id) AS root_account_id,
     CASE t.product_line
       WHEN 'GLOBAL_ACCOUNT' THEN 'group_account'
@@ -327,9 +327,9 @@ revenue_base_raw AS (
     sr.sale_id,
     sr.department_id,
     sr.am_id,
-    date_trunc('month', t.statistics_time)::date AS activity_month,
-    date_trunc('month', t.statistics_time)::date AS collection_month,
-    date_trunc('month', t.statistics_time)::date AS payable_settlement_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS activity_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS collection_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS payable_settlement_month,
     (-SUM(COALESCE(t.amount, 0)))::numeric(20,4) AS effective_revenue
   FROM ods.ods_bi_month_tag t
   LEFT JOIN account_root_relation aar ON aar.account_id = t.account_id
@@ -356,9 +356,9 @@ revenue_base_raw AS (
   WHERE t.delete_time IS NULL
     AND t.account_id IS NOT NULL
     AND t.tag = 'CASHBACK_ADJUSTMENT_INCREASE'
-    AND date_trunc('month', t.statistics_time)::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    AND date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY
-    date_trunc('month', t.statistics_time)::date,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date,
     COALESCE(aar.root_id, t.account_id),
     t.product_line,
     t.tag,
@@ -371,7 +371,7 @@ revenue_base_raw AS (
   UNION ALL
   SELECT
     CURRENT_DATE AS report_date,
-    date_trunc('month', t.statistics_time)::date AS settlement_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS settlement_month,
     COALESCE(aar.root_id, t.account_id) AS root_account_id,
     CASE t.product_line
       WHEN 'GLOBAL_ACCOUNT' THEN 'group_account'
@@ -385,9 +385,9 @@ revenue_base_raw AS (
     sr.sale_id,
     sr.department_id,
     sr.am_id,
-    date_trunc('month', t.statistics_time)::date AS activity_month,
-    date_trunc('month', t.statistics_time)::date AS collection_month,
-    date_trunc('month', t.statistics_time)::date AS payable_settlement_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS activity_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS collection_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS payable_settlement_month,
     SUM(COALESCE(t.amount, 0))::numeric(20,4) AS effective_revenue
   FROM ods.ods_bi_month_tag t
   LEFT JOIN account_root_relation aar ON aar.account_id = t.account_id
@@ -414,9 +414,9 @@ revenue_base_raw AS (
   WHERE t.delete_time IS NULL
     AND t.account_id IS NOT NULL
     AND t.tag = 'CASHBACK_ADJUSTMENT_DECREASE'
-    AND date_trunc('month', t.statistics_time)::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    AND date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY
-    date_trunc('month', t.statistics_time)::date,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date,
     COALESCE(aar.root_id, t.account_id),
     t.product_line,
     t.tag,
@@ -691,7 +691,7 @@ global_account_offline_fee_cost AS (
 -- v2: bi_month_tag 中的线下退款（含 account_id，按 product_line 区分归属）
 offline_refund_cost AS (
   SELECT
-    date_trunc('month', t.statistics_time)::date AS settlement_month,
+    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS settlement_month,
     COALESCE(aar.root_id, t.account_id) AS root_account_id,
     CASE t.product_line
       WHEN 'GLOBAL_ACCOUNT' THEN 'group_account'
@@ -705,17 +705,17 @@ offline_refund_cost AS (
   WHERE t.delete_time IS NULL
     AND t.account_id IS NOT NULL
     AND t.tag = 'OFFLINE_REFUND'
-    AND date_trunc('month', t.statistics_time)::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
-  GROUP BY date_trunc('month', t.statistics_time)::date, COALESCE(aar.root_id, t.account_id), t.product_line
+    AND date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+  GROUP BY date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date, COALESCE(aar.root_id, t.account_id), t.product_line
 ),
--- 量子卡/加密专项扣减指标：不进入 cogs，直接从有效收入中扣减。
+-- 量子卡专项扣减指标：不进入 cogs，直接从有效收入中扣减。
+-- crypto_connect_income 与 crypto_connect/main 是同一笔加密收入的重复指标，不能再次扣减。
 commission_metric_deduction AS (
   SELECT
     r.settlement_month,
     r.root_account_id,
     CASE r.metric_code
       WHEN 'qbit_card_collection_fee' THEN 'qbit_card'
-      WHEN 'crypto_connect_income' THEN 'crypto'
     END AS product,
     NULLIF(TRIM(r.provider), '') AS provider,
     SUM(COALESCE(r.income_value, 0))::numeric(20,4) AS deduction_amount
@@ -724,7 +724,6 @@ commission_metric_deduction AS (
     AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     AND (
       (r.product = 'qbit_card' AND r.metric_code = 'qbit_card_collection_fee')
-      OR (r.product = 'crypto_connect' AND r.metric_code = 'crypto_connect_income')
     )
   GROUP BY r.settlement_month, r.root_account_id, r.metric_code, NULLIF(TRIM(r.provider), '')
 ),
