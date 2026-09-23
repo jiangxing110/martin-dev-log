@@ -1,0 +1,56 @@
+[
+  {
+    "name": "测试",
+    "type": "PostgreSQL",
+    "host": "pgm-bp1mqp60787s06info.pg.rds.aliyuncs.com",
+    "port": "1921",
+    "database": "qbit_test_core",
+    "username": "qbit_admin",
+    "password": ""
+  },
+  {
+    "name": "staging",
+    "type": "PostgreSQL",
+    "host": "47.97.210.176",
+    "port": "26793",
+    "database": "staging",
+    "username": "qbit_admin",
+    "password": ""
+  },
+  {
+    "name": "生产只读-数仓",
+    "type": "PostgreSQL",
+    "host": "47.97.210.176",
+    "port": "26797",
+    "database": "qbitpay_prod_core",
+    "username": "qbit_read",
+    "password": ""
+  },
+  {
+    "name": "生产自读-pg",
+    "type": "PostgreSQL",
+    "host": "47.97.210.176",
+    "port": "26788",
+    "database": "qbitpay_prod_core",
+    "username": "qbit_prod_read",
+    "password": ""
+  },
+  {
+    "name": "生产flink-数仓",
+    "type": "PostgreSQL",
+    "host": "47.97.210.176",
+    "port": "26797",
+    "database": "qbitpay_prod_core",
+    "username": "flink_cdc_user",
+    "password": ""
+  },
+  {
+    "name": "本地-redis",
+    "type": "REDIS",
+    "host": "localhost",
+    "port": "6379",
+    "database": "",
+    "username": "default",
+    "password": ""
+  }
+]

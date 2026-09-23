@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-28
+-- Updated Time:   2026-09-23 00:00:00
 -- Description:    客户分析维表 dim_account_analysis CDC 增量同步
 -- 作业元信息：
 --   作业类型：流处理 CDC
@@ -10,8 +11,8 @@
 -- Notes:
 --   1. 以 account 为客户主 CDC 源，只保留最上层客户类型。
 --   2. 激活时间按 api_account_relation.root_id 合并后计算。
---   3. CDC 不使用 OVER 累计窗口，避免 CDC join 产生 update/delete changelog 后无法规划；
---      卡/crypto 激活时间按总额超过阈值后的最早交易时间刷新，精确累计跨阈值时间由 batch 定期重刷兜底。
+--   3. 卡激活时间由 batch 按根客户累计入金首次超过 5000 的交易时间计算；
+--      CDC 仅读取已有维表值，避免在 CDC 更新流上使用累计窗口。
 --********************************************************************--
 
 SET 'parallelism.default' = '1';
@@ -38,6 +39,7 @@ CREATE TEMPORARY TABLE source_account (
     `createTime`       TIMESTAMP(6),
     `updateTime`       TIMESTAMP(6),
     `deleteTime`       TIMESTAMP(6),
+    proc_time          AS PROCTIME(),
     PRIMARY KEY (id) NOT ENFORCED
 ) WITH (
     'connector' = 'postgres-cdc',
@@ -182,6 +184,23 @@ CREATE TEMPORARY TABLE source_api_account_relation (
     'scan.snapshot.fetch.size' = '4096'
 );
 
+-- 量子卡累计窗口不能直接消费 CDC 关系表 Join 产生的 UPDATE/DELETE。
+-- 使用 JDBC Lookup，避免关系表变更进入窗口算子。
+CREATE TEMPORARY TABLE lookup_api_account_relation (
+    account_id STRING,
+    root_id    STRING,
+    PRIMARY KEY (account_id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = '(SELECT account_id::text AS account_id, root_id::text AS root_id FROM public.api_account_relation WHERE delete_time IS NULL) AS api_account_relation_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'lookup.cache.max-rows' = '100000',
+    'lookup.cache.ttl' = '10 min'
+);
+
 CREATE TEMPORARY TABLE source_qbit_card_wallet_transaction (
     id                STRING,
     `accountId`       STRING,
@@ -317,34 +336,6 @@ CREATE TEMPORARY TABLE source_fund_orders (
     'scan.snapshot.fetch.size' = '4096'
 );
 
-CREATE TEMPORARY VIEW v_card_active AS
-SELECT
-    root_account_id,
-    MIN(transaction_time) AS card_active_time
-FROM (
-    SELECT
-        COALESCE(aar.root_id, t.`accountId`) AS root_account_id,
-        t.`transactionTime` AS transaction_time,
-        COALESCE(t.`originAmount`, CAST(0 AS DECIMAL(20, 4))) AS origin_amount
-    FROM source_qbit_card_wallet_transaction t
-    LEFT JOIN source_api_account_relation aar
-        ON aar.account_id = t.`accountId`
-       AND aar.delete_time IS NULL
-    WHERE t.`businessType` IN (
-        'TransferInFromIPeakoin',
-        'QbitCryptoToQbitCardWallet',
-        'TransferInFromQbitGlobal',
-        'Deposit',
-        'TransferInFromFinancing',
-        'TransferInFromCryptoAssets',
-        'AccountDepositCNY'
-    )
-      AND t.status = 'Closed'
-      AND t.`deleteTime` IS NULL
-) recharge_base
-GROUP BY root_account_id
-HAVING SUM(origin_amount) > CAST(5000 AS DECIMAL(20, 4));
-
 CREATE TEMPORARY VIEW v_global_active AS
 SELECT
     COALESCE(aar.root_id, t.`accountId`) AS root_account_id,
@@ -402,6 +393,22 @@ WHERE f.`type` = 'purchase'
   AND f.delete_time IS NULL
 GROUP BY COALESCE(aar.root_id, f.account_id);
 
+-- card_active_time 由 batch 精确回刷，CDC 只读取现有维表值，避免覆盖正确结果。
+CREATE TEMPORARY TABLE lookup_dim_account_analysis (
+    account_id       STRING,
+    card_active_time TIMESTAMP(6),
+    PRIMARY KEY (account_id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
+    'table-name' = 'dim.dim_account_analysis',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'lookup.cache.max-rows' = '100000',
+    'lookup.cache.ttl' = '10 min'
+);
+
 CREATE TEMPORARY VIEW v_dim_account_analysis AS
 SELECT
     a.id AS account_id,
@@ -437,8 +444,8 @@ LEFT JOIN source_cdd_risk_rating crr
 LEFT JOIN source_referral_code rc
     ON rc.id = a.`referralCodeId`
    AND rc.`deleteTime` IS NULL
-LEFT JOIN v_card_active ca
-    ON ca.root_account_id = a.id
+LEFT JOIN lookup_dim_account_analysis FOR SYSTEM_TIME AS OF a.proc_time ca
+    ON ca.account_id = a.id
 LEFT JOIN v_global_active ga
     ON ga.root_account_id = a.id
 LEFT JOIN v_crypto_active cra
