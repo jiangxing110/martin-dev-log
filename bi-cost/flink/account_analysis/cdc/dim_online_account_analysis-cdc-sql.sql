@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-28
--- Updated Time:   2026-09-23 00:00:00
+-- Updated Time:   2026-09-23 18:10:00
 -- Description:    客户分析维表 dim_account_analysis CDC 增量同步
 -- 作业元信息：
 --   作业类型：流处理 CDC
@@ -454,7 +454,7 @@ LEFT JOIN v_api_active aa
     ON aa.root_account_id = a.id
 LEFT JOIN v_treasury_active ta
     ON ta.root_account_id = a.id
-WHERE a.`type` IN ('ApiClient', 'MasterAccount', 'Merchant', 'TestAccount');
+WHERE a.`type` IN ('ApiClient', 'MasterAccount', 'Merchant', 'TestAccount', 'Business');
 
 CREATE TEMPORARY TABLE sink_dim_account_analysis (
     account_id           STRING,

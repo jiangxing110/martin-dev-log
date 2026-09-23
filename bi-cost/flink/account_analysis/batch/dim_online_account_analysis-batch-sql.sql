@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-28
--- Updated Time:   2026-09-23 00:00:00
+-- Updated Time:   2026-09-23 18:00:00
 -- Description:    客户分析维表 dim_account_analysis 批量初始化/回刷
 -- 作业元信息：
 --   作业类型：批处理
@@ -10,7 +10,7 @@
 --   源库变更响应：源库变化不会自动触发本作业，需调度重跑或由 CDC 增量脚本刷新。
 -- Notes:
 --   1. 客户主数据来源 dim.dim_account，只保留最上层客户数据。
---   2. 激活时间按 ods.ods_api_account_relation 归并到 root account 后计算。
+--   2. 激活时间按 public.api_account_relation 归并到 root account 后计算。
 --   3. 量子卡激活时间：按根客户累计有效入金首次严格超过 5000 的交易时间计算。
 --   4. CDC 与 batch 使用相同的量子卡激活时间口径。
 --   5. 仓库中未提供部分 ODS DDL，字段按业务字段命名书写，执行前需核对真实字段。
@@ -44,7 +44,7 @@ CREATE TEMPORARY TABLE source_dim_account (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT id::text AS id, verified_name, display_id, "type" AS account_category, status, system_type, CURRENT_TIMESTAMP AS create_time, CURRENT_TIMESTAMP AS update_time, CAST(NULL AS TIMESTAMP(6)) AS delete_time FROM dim.dim_account WHERE "type" IN (''ApiClient'', ''MasterAccount'', ''Merchant'', ''TestAccount'')) AS dim_account_f',
+    'table-name' = '(SELECT id::text AS id, verified_name, display_id, "type" AS account_category, status, system_type, CURRENT_TIMESTAMP AS create_time, CURRENT_TIMESTAMP AS update_time, CAST(NULL AS TIMESTAMP(6)) AS delete_time FROM dim.dim_account WHERE "type" IN (''ApiClient'', ''MasterAccount'', ''Merchant'', ''TestAccount'', ''Business'')) AS dim_account_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -60,7 +60,7 @@ CREATE TEMPORARY TABLE source_api_account_relation (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
-    'table-name' = '(SELECT account_id::text AS account_id, root_id::text AS root_id, delete_time FROM ods.ods_api_account_relation WHERE delete_time IS NULL) AS api_account_relation_f',
+    'table-name' = '(SELECT account_id::text AS account_id, root_id::text AS root_id, delete_time FROM public.api_account_relation WHERE delete_time IS NULL) AS api_account_relation_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

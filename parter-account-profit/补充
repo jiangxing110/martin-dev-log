@@ -1,0 +1,4 @@
+1.合伙人客户的交易里同一个交易id可能会记录两笔
+SELECT * from partner_commission_fee_transaction  WHERE status = 'Closed' and direction ='debit';
+SELECT * from partner_commission_fee_transaction  WHERE status = 'Closed' and direction ='credit'
+所以我们的计算逻辑得处理一下因为一个是加一个是减

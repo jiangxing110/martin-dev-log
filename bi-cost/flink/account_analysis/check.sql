@@ -15,7 +15,7 @@ SELECT
     MAX("createTime") AS max_create_time,
     MAX(COALESCE("updateTime", "createTime")) AS max_update_time
 FROM public.account
-WHERE "type" IN ('ApiClient', 'MasterAccount', 'Merchant', 'TestAccount')
+WHERE "type" IN ('ApiClient', 'MasterAccount', 'Merchant', 'TestAccount', 'Business')
 GROUP BY GROUPING SETS (("type"), ())
 ORDER BY category;
 

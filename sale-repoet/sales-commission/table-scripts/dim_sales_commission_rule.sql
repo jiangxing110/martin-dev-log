@@ -1,5 +1,6 @@
 -- 销售佣金返佣规则维表
 -- 规则重建版本：2026-09-14
+-- Updated Time: 2026-09-23 18:30:00
 -- 口径：按当前部门 ID 精确匹配；所有有销售人员归属的业务部门均可承接加密业务。
 -- 说明：product/provider/item 为空表示通配；start_time/end_time 使用左闭右开区间。
 
@@ -224,7 +225,8 @@ WITH departments(department_id, department_name) AS (
     ('2097614575010123778', '销售一组'), ('2097614680696270850', '销售二组'),
     ('2097614776689037313', '销售三组'), ('2097614875836264450', '销售四组'),
     ('2097615094967676929', '销售一组'), ('2097615188473221122', '销售二组'),
-    ('2097615280722743297', '销售三组'), ('2028709205416460290', '大客户销售部')
+    ('2097615280722743297', '销售三组'), ('2028709205416460290', '大客户销售部'),
+    ('1851130772357509121', '海外业务销售部 - 2')
   ) AS x(department_id, department_name)
 ),
 generated_rules AS (
@@ -236,7 +238,8 @@ generated_rules AS (
     'actual_fee' AS commission_base_type, NULL::int4 AS active_days_min, NULL::int4 AS active_days_max,
     0.150000::numeric AS commission_rate, 'all' AS invite_type,
     timestamp '2026-01-01' AS start_time, timestamp '2099-01-01' AS end_time,
-    100 AS priority, true AS enabled, 'OpenAPI一次性费用按实际收费15%计佣' AS remarks
+    CASE WHEN d.department_id = '1851130772357509121' THEN 1 ELSE 100 END AS priority,
+    true AS enabled, 'OpenAPI一次性费用按实际收费15%计佣，所有邀约类型统一' AS remarks
   FROM departments d
 )
 INSERT INTO "dim"."dim_sales_commission_rule" (
@@ -252,7 +255,7 @@ ON CONFLICT ("id") DO UPDATE SET
   "commission_rate" = EXCLUDED."commission_rate", "invite_type" = EXCLUDED."invite_type", "start_time" = EXCLUDED."start_time", "end_time" = EXCLUDED."end_time",
   "priority" = EXCLUDED."priority", "enabled" = EXCLUDED."enabled", "remarks" = EXCLUDED."remarks", "update_time" = now(), "delete_time" = NULL;
 
--- OpenAPI月费：0-365天10%，366-1095天0%，按实际收费计佣。
+-- OpenAPI月费：0-180天10%，181-365天10%，366-1095天0%，按实际收费计佣。
 WITH departments(department_id, department_name) AS (
   SELECT * FROM (VALUES
     ('1740319905791647746', '销售一部'), ('1740319923059597313', '销售二部'), ('2066369412858433538', '销售三部'),
@@ -260,11 +263,15 @@ WITH departments(department_id, department_name) AS (
     ('1762301052057112578', '其他'), ('1760576792068489218', '创新业务部'), ('2097614575010123778', '销售一组'),
     ('2097614680696270850', '销售二组'), ('2097614776689037313', '销售三组'), ('2097614875836264450', '销售四组'),
     ('2097615094967676929', '销售一组'), ('2097615188473221122', '销售二组'), ('2097615280722743297', '销售三组'),
-    ('2028709205416460290', '大客户销售部')
+    ('2028709205416460290', '大客户销售部'),
+    ('1851130772357509121', '海外业务销售部 - 2')
   ) AS x(department_id, department_name)
 ),
 ranges(active_days_min, active_days_max, range_code, rate) AS (
-  VALUES (0, 365, '0_365', 0.100000::numeric), (366, 1095, '366_1095', 0.000000::numeric)
+  VALUES
+    (0, 180, '0_180', 0.100000::numeric),
+    (181, 365, '181_365', 0.100000::numeric),
+    (366, 1095, '366_1095', 0.000000::numeric)
 ),
 generated_rules AS (
   SELECT
@@ -273,8 +280,10 @@ generated_rules AS (
     concat(d.department_name, '-OpenAPI月费-', r.range_code) AS rule_name,
     d.department_id, 'open_api' AS product, NULL::varchar AS provider, 'api_monthly_fee' AS item,
     'actual_fee' AS commission_base_type, r.active_days_min, r.active_days_max, r.rate AS commission_rate, 'all' AS invite_type,
-    timestamp '2026-01-01' AS start_time, timestamp '2099-01-01' AS end_time, 100 AS priority, true AS enabled,
-    'OpenAPI月费按实际收费和活跃天数计佣' AS remarks
+    timestamp '2026-01-01' AS start_time, timestamp '2099-01-01' AS end_time,
+    CASE WHEN d.department_id = '1851130772357509121' THEN 1 ELSE 100 END AS priority,
+    true AS enabled,
+    'OpenAPI月费按实际收费和活跃天数计佣，所有邀约类型统一' AS remarks
   FROM departments d CROSS JOIN ranges r
 )
 INSERT INTO "dim"."dim_sales_commission_rule" (
