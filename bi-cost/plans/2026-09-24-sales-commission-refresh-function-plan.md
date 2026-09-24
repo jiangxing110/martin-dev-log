@@ -4,7 +4,7 @@
 
 **Goal:** 修复 Flink CDC 刷新任务读取 `void` 函数结果导致的失败。
 
-**Architecture:** 数据库刷新函数返回文本状态，Flink JDBC source 继续读取单行单列结果并交给 blackhole sink；物化视图刷新逻辑和 advisory lock 逻辑保持不变。
+**Architecture:** 数据库刷新函数保留 `void` 返回值，Flink JDBC source 在调用函数的 PostgreSQL 子查询外层返回固定 `affected_rows BIGINT`，再交给 blackhole sink；物化视图刷新逻辑和 advisory lock 逻辑保持不变。
 
 **Tech Stack:** PostgreSQL/ADBPG PL/pgSQL、Flink SQL JDBC connector。
 
@@ -21,7 +21,7 @@
 ### Task 1: 修复函数返回类型
 
 - [x] 删除旧的 `void` 函数定义。
-- [x] 创建返回 `text` 的同名函数。
+- [x] 保留返回 `void` 的同名函数。
 - [x] 保留并发锁和异常释放逻辑。
 
 ### Task 2: 验证
