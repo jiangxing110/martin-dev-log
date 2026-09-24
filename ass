@@ -1,12 +1,2 @@
-crypto			real_time_processing_fee	current_payout	0.0000	0.0000	0.0000	0.0000	0.0000
-open_api	BB	api_monthly_settlement_fee	billing_decline_fee	current_payout	78.4000	0.0000	78.4000	78.4000	7.8400
-open_api	IQ	api_monthly_settlement_fee	billing_decline_fee	current_payout	330.3200	0.0000	330.3200	330.3200	33.0320
-open_api		api_monthly_fee	api_monthly_billing	future_payout	450.5600	0.0000	450.5600	450.5600	45.0560
-open_api		api_monthly_fee	billing_decline_fee	current_payout	0.0000	0.0000	0.0000	0.0000	0.0000
-qbit_card	BB		real_time_processing_fee	current_payout	595.3709	50.3487	545.0222	545.0222	54.5022
-qbit_card	IQ		real_time_processing_fee	current_payout	40998.8739	7223.8335	33775.0404	33775.0404	3377.5040
-合计					42453.5248	7274.1822	35179.3426	35179.3426	3517.9342
-
-
-sql2
-2026-08-01	16966.397617470000	4691.231497260000	551.563450000000	2791.382044000000	768.371589000000	0.762082400000	1.143123600000	471.603024970000	1752.4167	27994.871128700000
+'0853608e-f7de-4749-9fcf-84f877a27fdb',
+'cfd2fd77-9ebc-4b28-8e08-01116f7a3241'

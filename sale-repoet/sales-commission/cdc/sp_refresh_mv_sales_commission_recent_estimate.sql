@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-13 00:00:00
+-- Updated Time:   2026-09-24 00:00:00
 -- Description:    销售佣金8号前预估物化视图刷新函数
 -- 作业元信息：
 --   作业类型：ADBPG刷新函数脚本
@@ -9,13 +10,16 @@
 -- Notes:
 --   1. 保留 dws.mv_sales_commission_recent_estimate 普通物化视图。
 --   2. 本脚本不注册数据库内置定时任务。
---   3. 外部调度执行 SELECT "dws"."sp_refresh_mv_sales_commission_recent_estimate"(); 即可刷新。
+--   3. 外部调度执行 SELECT "dws"."sp_refresh_mv_sales_commission_recent_estimate"(); 即可刷新并返回状态文本。
 --   4. 使用 advisory lock 避免重复调度并发刷新同一个物化视图。
 --   5. 本脚本是 ADBPG/PostgreSQL 脚本，不能提交到 Flink SQL Gateway。
 --********************************************************************--
 
-CREATE OR REPLACE FUNCTION "dws"."sp_refresh_mv_sales_commission_recent_estimate"()
-RETURNS void
+-- 返回类型从 void 改为 text，供 Flink JDBC source 读取结果。
+DROP FUNCTION IF EXISTS "dws"."sp_refresh_mv_sales_commission_recent_estimate"();
+
+CREATE FUNCTION "dws"."sp_refresh_mv_sales_commission_recent_estimate"()
+RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
@@ -27,7 +31,7 @@ BEGIN
 
     IF NOT v_locked THEN
         RAISE NOTICE 'dws.mv_sales_commission_recent_estimate refresh is already running, skip this call.';
-        RETURN;
+        RETURN 'SKIPPED_ALREADY_RUNNING';
     END IF;
 
     BEGIN
@@ -38,6 +42,7 @@ BEGIN
     END;
 
     PERFORM pg_advisory_unlock(v_lock_key);
+    RETURN 'OK';
 END;
 $$;
 

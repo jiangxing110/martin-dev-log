@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-20
--- Updated Time:   2026-09-23 01:00:00
+-- Updated Time:   2026-09-24 00:00:00
 -- Description:    销售佣金8号前预估物化视图 v2
 -- Notes:
 --   1. 基于 v1，新增结汇成本、线下退款、收入调整、返现调整、线下实体卡制卡费的支持；
@@ -461,12 +461,13 @@ revenue_base AS (
     collection_month,
     payable_settlement_month
 ),
+-- 全球账户收入不带 provider；BZ/CL 成本按客户月度汇总为未分渠道成本，统一分摊到 group_account。
 global_account_channel_cost AS (
   SELECT
     source_month AS settlement_month,
     COALESCE(aar.root_id, c.account_id) AS root_account_id,
     'group_account' AS product,
-    c.provider,
+    NULL::varchar AS provider,
     SUM(COALESCE(c.cost_amount, 0))::numeric(20,4) AS cogs
   FROM "dwm"."dwm_finance_channel_cost_p" c
   LEFT JOIN account_root_relation aar
@@ -475,15 +476,15 @@ global_account_channel_cost AS (
     AND c.source_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     AND c.product_line = 'GLOBAL_ACCOUNT'
     AND c.provider IN ('BZ', 'CL')
-  GROUP BY c.source_month, COALESCE(aar.root_id, c.account_id), c.provider
+  GROUP BY c.source_month, COALESCE(aar.root_id, c.account_id)
 ),
--- v2: 结汇成本 SETTLEMENT_COST（从 dwm_finance_channel_cost_p 读取分摊后的成本）
+-- v2: 全球账户结汇成本同样作为未分渠道成本，避免与无 provider 的收入匹配失败。
 global_account_settlement_cost AS (
   SELECT
     source_month AS settlement_month,
     COALESCE(aar.root_id, c.account_id) AS root_account_id,
     'group_account' AS product,
-    c.provider,
+    NULL::varchar AS provider,
     SUM(COALESCE(c.cost_amount, 0))::numeric(20,4) AS cogs
   FROM "dwm"."dwm_finance_channel_cost_p" c
   LEFT JOIN account_root_relation aar
@@ -492,7 +493,7 @@ global_account_settlement_cost AS (
     AND c.source_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     AND c.product_line = 'GLOBAL_ACCOUNT'
     AND c.cost_type = 'SETTLEMENT_COST'
-  GROUP BY c.source_month, COALESCE(aar.root_id, c.account_id), c.provider
+  GROUP BY c.source_month, COALESCE(aar.root_id, c.account_id)
 ),
 qbit_card_bb_month_net_amount AS (
   SELECT
@@ -657,7 +658,7 @@ global_account_offline_fee_cost AS (
     date_trunc('month', ptr.submit_time)::date AS settlement_month,
     COALESCE(aar.root_id, ptr.account_id) AS root_account_id,
     'group_account' AS product,
-    'OFFLINE' AS provider,
+    NULL::varchar AS provider,
     SUM(
       COALESCE(
         NULLIF(
@@ -698,7 +699,10 @@ offline_refund_cost AS (
       WHEN 'QUANTUM_CARD' THEN 'qbit_card'
       WHEN 'CRYPTO_ASSET' THEN 'crypto'
     END AS product,
-    'OFFLINE_REFUND' AS provider,
+    CASE
+      WHEN t.product_line = 'GLOBAL_ACCOUNT' THEN NULL::varchar
+      ELSE 'OFFLINE_REFUND'
+    END AS provider,
     SUM(COALESCE(t.amount, 0))::numeric(20,4) AS cogs
   FROM ods.ods_bi_month_tag t
   LEFT JOIN account_root_relation aar ON aar.account_id = t.account_id

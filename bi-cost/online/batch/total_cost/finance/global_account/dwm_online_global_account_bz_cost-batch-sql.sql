@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-06-23
--- Updated Time:   2026-07-30 15:36:57
+-- Updated Time:   2026-09-24 00:00:00
 -- 历史名称：sp_init_global_account_bz_cost.sql
 -- Description:    金融渠道成本 DWM 批量初始化 - GLOBAL_ACCOUNT / BZ
 -- 作业元信息：
@@ -86,6 +86,8 @@ FROM (
     FROM source_bi_month_tag t
     CROSS JOIN v_runtime r
     WHERE t.delete_time IS NULL
+      AND t.product_line = 'GLOBAL_ACCOUNT'
+      AND t.provider = 'BZ'
       AND t.statistics_time >= r.start_time
       AND t.statistics_time < r.end_time
 ) p;
@@ -123,6 +125,24 @@ CREATE TEMPORARY TABLE source_payment_transaction_record (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
     'table-name' = '(SELECT id, account_id, channel, payout_direction_type, status, settle_amount, extra, submit_time, delete_time FROM ods.ods_payment_transaction_record WHERE delete_time IS NULL) AS payment_transaction_record_f',
+    'username' = '${secret_values.ADB_PG_USERNAME}',
+    'password' = '${secret_values.ADB_PG_PASSWORD}',
+    'driver' = 'org.postgresql.Driver',
+    'scan.fetch-size' = '1000'
+);
+
+CREATE TEMPORARY TABLE source_global_sub_account (
+    id          STRING,
+    account_id  STRING,
+    provider    STRING,
+    status      STRING,
+    create_time TIMESTAMP(6),
+    delete_time TIMESTAMP(6),
+    PRIMARY KEY (id) NOT ENFORCED
+) WITH (
+    'connector' = 'jdbc',
+    'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}?stringtype=unspecified',
+    'table-name' = '(SELECT DISTINCT ON (id) id, account_id, provider, status, create_time, delete_time FROM ods.ods_global_sub_account WHERE delete_time IS NULL ORDER BY id, dt DESC) AS global_sub_account_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -180,30 +200,27 @@ CREATE TEMPORARY TABLE source_dim_account (
 );
 
 -- ====================================================================
--- 3. 分摊基础明细 - BZ: Payout 金额
+-- 3. 分摊基础明细 - BZ: 按 Active ZB 客户数等额分摊
 -- ====================================================================
 
 CREATE TEMPORARY VIEW v_bz_basis AS
 SELECT
     p.source_month,
-    CAST(ptr.submit_time AS DATE) AS report_date,
-    ptr.account_id,
+    p.source_month AS report_date,
+    g.account_id,
     'GLOBAL_ACCOUNT' AS product_line,
     'BZ' AS provider,
     'PAYOUT_FEE' AS cost_type,
-    CAST(0 AS DECIMAL(20, 4)) AS basis_count,
-    CAST(SUM(COALESCE(ptr.settle_amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) AS basis_amount,
+    CAST(1 AS DECIMAL(20, 4)) AS basis_count,
+    CAST(0 AS DECIMAL(20, 4)) AS basis_amount,
     CAST(0 AS INT) AS month_day_count
-FROM source_payment_transaction_record ptr
+FROM source_global_sub_account g
 INNER JOIN v_param p
-    ON ptr.submit_time >= CAST(p.source_month AS TIMESTAMP(6))
-   AND ptr.submit_time < CAST(p.next_month AS TIMESTAMP(6))
-WHERE ptr.channel = 'ZB'
-  AND ptr.payout_direction_type = 'SubToPayee'
-  AND ptr.status = 'Closed'
-  AND ptr.delete_time IS NULL
-GROUP BY p.source_month, ptr.account_id, CAST(ptr.submit_time AS DATE)
-HAVING CAST(SUM(COALESCE(ptr.settle_amount, CAST(0 AS DECIMAL(20, 4)))) AS DECIMAL(20, 4)) <> CAST(0 AS DECIMAL(20, 4));
+    ON g.create_time < CAST(p.next_month AS TIMESTAMP(6))
+WHERE g.provider = 'ZB'
+  AND g.status = 'Active'
+  AND g.delete_time IS NULL
+GROUP BY p.source_month, g.account_id;
 
 -- ====================================================================
 -- 4. 合并分摊明细 + 月汇总
