@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-08-20
--- Updated Time:   2026-10-12 15:59:27
+-- Updated Time:   2026-10-12 17:51:45
 -- Description:    销售佣金8号前预估物化视图 v3
 -- Notes:
 --   1. 基于 v1，新增结汇成本、线下退款、收入调整、返现调整、线下实体卡制卡费的支持；
@@ -852,25 +852,39 @@ v_cost_by_account_product AS (
 revenue_cost_allocated AS (
   SELECT
     x.*,
-    GREATEST((
-      x.effective_revenue
-      + CASE
-          WHEN x.product = 'qbit_card'
-           AND x.cost_allocation_rn = 1
-            THEN x.total_channel_rebate
-          ELSE 0
-        END
-      - CASE
-          WHEN x.product_effective_revenue <> 0
-            THEN x.provider_metric_deduction * x.effective_revenue / x.product_effective_revenue
-          ELSE 0
-        END
-      - CASE
-          WHEN x.all_product_effective_revenue <> 0
-            THEN x.unscoped_metric_deduction * x.effective_revenue / x.all_product_effective_revenue
-          ELSE 0
-        END
-    ), 0)::numeric(20,4) AS allocated_effective_revenue,
+    CASE
+      -- Qbit 行级保留正负收入，负数需参与客户/渠道净额；其他产品维持原逐行截零口径。
+      WHEN x.product = 'qbit_card' THEN (
+        x.effective_revenue
+        + CASE
+            WHEN x.cost_allocation_rn = 1 THEN x.total_channel_rebate
+            ELSE 0
+          END
+        - CASE
+            WHEN x.product_effective_revenue <> 0
+              THEN x.provider_metric_deduction * x.effective_revenue / x.product_effective_revenue
+            ELSE 0
+          END
+        - CASE
+            WHEN x.all_product_effective_revenue <> 0
+              THEN x.unscoped_metric_deduction * x.effective_revenue / x.all_product_effective_revenue
+            ELSE 0
+          END
+      )::numeric(20,4)
+      ELSE GREATEST((
+        x.effective_revenue
+        - CASE
+            WHEN x.product_effective_revenue <> 0
+              THEN x.provider_metric_deduction * x.effective_revenue / x.product_effective_revenue
+            ELSE 0
+          END
+        - CASE
+            WHEN x.all_product_effective_revenue <> 0
+              THEN x.unscoped_metric_deduction * x.effective_revenue / x.all_product_effective_revenue
+            ELSE 0
+          END
+      ), 0)::numeric(20,4)
+    END AS allocated_effective_revenue,
     (
       CASE
         WHEN x.product_effective_revenue <> 0
@@ -901,11 +915,37 @@ revenue_cost_allocated AS (
       )::numeric(20,4) AS all_product_effective_revenue,
       ROW_NUMBER() OVER (
         PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, '')
-        ORDER BY CASE WHEN b.effective_revenue <> 0 THEN 0 ELSE 1 END, b.sale_id NULLS LAST, b.department_id NULLS LAST
+        ORDER BY
+          CASE WHEN b.effective_revenue <> 0 THEN 0 ELSE 1 END,
+          b.effective_revenue DESC,
+          b.sale_id NULLS LAST,
+          b.department_id NULLS LAST,
+          b.am_id NULLS LAST,
+          b.provider NULLS LAST,
+          b.source_type NULLS LAST,
+          b.item NULLS LAST,
+          b.commission_stage NULLS LAST,
+          b.activity_month NULLS LAST,
+          b.collection_month NULLS LAST,
+          b.payable_settlement_month NULLS LAST,
+          b.report_date NULLS LAST
       ) AS cost_allocation_rn,
       ROW_NUMBER() OVER (
         PARTITION BY b.settlement_month, b.root_account_id, b.product
-        ORDER BY CASE WHEN b.effective_revenue <> 0 THEN 0 ELSE 1 END, b.sale_id NULLS LAST, b.department_id NULLS LAST
+        ORDER BY
+          CASE WHEN b.effective_revenue <> 0 THEN 0 ELSE 1 END,
+          b.effective_revenue DESC,
+          b.sale_id NULLS LAST,
+          b.department_id NULLS LAST,
+          b.am_id NULLS LAST,
+          b.provider NULLS LAST,
+          b.source_type NULLS LAST,
+          b.item NULLS LAST,
+          b.commission_stage NULLS LAST,
+          b.activity_month NULLS LAST,
+          b.collection_month NULLS LAST,
+          b.payable_settlement_month NULLS LAST,
+          b.report_date NULLS LAST
       ) AS all_cost_allocation_rn
     FROM revenue_base b
     LEFT JOIN LATERAL (
