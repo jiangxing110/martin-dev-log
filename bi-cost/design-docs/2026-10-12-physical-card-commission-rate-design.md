@@ -23,6 +23,8 @@
 
 实体卡毛利继续沿用物化视图现有来源、汇总粒度和挂载行选择逻辑；不重算 `physical_card_gp` 的上游业务公式。`gp` 继续展示包含实体卡毛利的总毛利，`commission_base` 调整为适用常规规则的基数，不包含单独按 100%/0% 计佣的实体卡毛利。`commission_rate` 仍表示命中的常规量子卡规则费率。
 
+实体卡只计算 `provider = 'IQ'`。其他 provider 的实体卡毛利、费率和佣金均为 0。
+
 ## 4. 部门范围
 
 按仓库中的 `当前部门组织.xlsx` 的“国内海外”列，以 `department_id` 明确分类。
@@ -56,6 +58,7 @@
 - 物化视图名称、原有列和记录粒度保持不变；新增 `physical_card_gp`、`physical_card_commission_rate`、`physical_card_commission` 三列。
 - 不修改 CDC、快照批处理或上游成本/收入任务。
 - 实体卡佣金等于实体卡毛利乘部门费率，并计入 `estimated_commission` 总值。`commission_base` 只表示适用常规返佣率的基数；调用方不能再用 `commission_base * commission_rate` 推导整行 `estimated_commission`。
+- 实体卡毛利来源和视图挂载均限定 `provider = 'IQ'`。
 
 ## 6. 验收标准
 
@@ -63,5 +66,6 @@
 - 海外及未识别部门实体卡毛利对佣金贡献为 0。
 - 普通量子卡佣金计算继续使用现有 `commission_rate`，不因实体卡规则改变。
 - 视图输出实体卡毛利、实体卡费率和实体卡佣金；实体卡佣金计入 `estimated_commission`。
+- 只有 `provider = 'IQ'` 的量子卡明细会带实体卡毛利或佣金。
 - `gp` 包含实体卡毛利；`commission_base` 不包含实体卡毛利。
 - 视图原有列和行粒度保持不变，CDC 接口不变。

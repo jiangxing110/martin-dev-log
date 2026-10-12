@@ -13,6 +13,7 @@
 - [x] 按方案将 `commission_base` 定义为不含实体卡毛利的常规返佣基数。
 - [x] 将 `estimated_commission` 改为“常规返佣基数 × 现有返佣率 + 实体卡毛利 × 部门实体卡费率”。
 - [x] 在视图中输出 `physical_card_gp`、`physical_card_commission_rate`、`physical_card_commission`，并将实体卡佣金计入总额。
+- [x] 限制实体卡毛利来源、挂载和佣金计算仅适用于 `provider = 'IQ'`。
 - [x] 国内 department_id 使用方案中的显式名单，海外及未知部门实体卡费率为 0。
 - [x] 静态核对 `gp`、`commission_base`、`commission_rate` 和 `estimated_commission` 的关系，确认普通量子卡公式未变。
 - [x] 确认物化视图名称、原有字段和记录粒度保留；CDC 仍读取原有显式字段清单。
