@@ -39,3 +39,6 @@ BD：销售名称
 Pref_Rev：总收入（实时收取的各项收入+月账单应收「本月月账单」）
 Rebate：客户返现+代收返现+毛利返现
 Pref_Rev_effective：Pref_Rev-RebateCost：总成本Pref_GP：Pref_Rev-CostCashflow_Rev：总收入（实时收取的各项收入+月账单实收「历史月账单」）Cashflow_Rev_effective：Cashflow_Rev-RebateCashflow_GP：Cashflow_Rev-CostCashflow_Rev_sale：总收入（销售维度的收入，剔除了部分的收入）Cashflow_Rev_sale_effective：Cashflow_Rev_sale - RebateCashflow_GP_sale：Cashflow_Rev_sale-Cost
+
+我们现在有一个自动化打标任务
+/Users/martinjiang/VsCodeProjects/martin-dev-log/qbit-assets/sprint-18/自动化打标/自动化打标.md
