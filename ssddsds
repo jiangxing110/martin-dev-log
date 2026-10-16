@@ -1,0 +1,4 @@
+UPDATE api_client_bill SET delete_time = CURRENT_TIMESTAMP
+WHERE id = '2110328269771980802' AND delete_time IS NULL;
+  
+SELECT * from api_client_bill where id='2110328269771980802'
