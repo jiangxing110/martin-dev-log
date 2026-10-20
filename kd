@@ -1,44 +1,125 @@
-odd账户年审问题
-1.还有这个已通知30个自然日客户未提交材料也会被冻结，
-30天Processing 和十天request 使用的状态是不一样的
-
-2.odd年审下kyc 驳回的商户端待办显示您的kyc已拒绝
-
-3.然后确定一下为什么会出现两条这个odd 下的提交kyb 的日志
-INSERT INTO public."operationLog" (id, remarks, "createTime", "updateTime", "deleteTime", version, "userId", "businessType", "recordId", type, data, "occurrenceTime", "accountId", "previousStatus", "currentStatus", comment, "userComment", message, "operationAccountType") VALUES ('d8582d63-7caf-4b18-883b-9b0d459d5da6', null, '2026-09-10 04:01:24.569000 +00:00', '2026-09-10 04:01:24.454326 +00:00', null, 1, '7365c7b1-0e80-436d-b184-224db3670c7e', 'CddReview', '76a6860c-fa6d-4fbc-bfbc-b341c2a6a4ab', 'C', '{"operationType":"CreateKyb","businessType":"MultiCurrencyAccountOdd","attachments":[],"data":{"accountId":"9b2d5f0d-c475-46bd-8a9c-57789049ff56","cddKybDetails":[{"key":"mainBusiness","value":"ECommerceSeller","type":"String"},{"key":"industryCategory","value":"Fashion Clothing and Accessories","type":"String"},{"key":"marketCountry","value":"US","type":"String"},{"key":"estimatedGlobalAccountVolume","value":"0-10万美金","type":"String"},{"key":"accountType","value":"UsdBankAccount","type":"String"},{"key":"currency","value":"USD","type":"String"},{"key":"verifiedNameEn","value":"Deep InnoMat LLC","type":"String"},{"key":"accountPurpose","value":"ReceiveMethod,InSelfCorp,Settlement","type":"String"},{"key":"businessType","value":"TangiblesGoods","type":"String"},{"key":"hasShop","value":"true","type":"String"},{"key":"shopType","value":"STATION","type":"String"},{"key":"mainBusiness","value":"ECommerceSeller","type":"String"},{"key":"industryCategory","value":"Fashion Clothing and Accessories","type":"String"},{"key":"marketCountry","value":"US","type":"String"},{"key":"estimatedGlobalAccountVolume","value":"0-10万美金","type":"String"},{"key":"accountType","value":"UsdBankAccount","type":"String"},{"key":"currency","value":"USD","type":"String"},{"key":"businessType","value":"TangiblesGoods","type":"String"},{"key":"version","value":"20230831","type":"String"}],"cddKybBusinessType":"MultiCurrencyAccountOdd","businessTypeDetail":"Na","kybId":"50c8a5ae-3c8e-4813-8501-50a65f475504","kyCaseId":"76a6860c-fa6d-4fbc-bfbc-b341c2a6a4ab"},"associatedId":"3cb2d20b-bcf5-44c1-9387-70afa08e5ed7"}', '2026-09-10 04:01:24.569000 +00:00', '9b2d5f0d-c475-46bd-8a9c-57789049ff56', 'Na', 'Pending', null, null, null, 'Merchant');
-INSERT INTO public."operationLog" (id, remarks, "createTime", "updateTime", "deleteTime", version, "userId", "businessType", "recordId", type, data, "occurrenceTime", "accountId", "previousStatus", "currentStatus", comment, "userComment", message, "operationAccountType") VALUES ('6b69d415-4aa3-4a73-9ab9-4f838eefdc8f', null, '2026-09-10 04:01:24.331000 +00:00', '2026-09-10 04:01:24.285724 +00:00', null, 1, '7365c7b1-0e80-436d-b184-224db3670c7e', 'CddReview', '76a6860c-fa6d-4fbc-bfbc-b341c2a6a4ab', 'C', '{"operationType":"CreateKyb","businessType":"MultiCurrencyAccountOdd","attachments":[],"data":{"accountId":"9b2d5f0d-c475-46bd-8a9c-57789049ff56","cddKybDetails":[{"key":"mainBusiness","value":"ECommerceSeller","type":"String"},{"key":"industryCategory","value":"Fashion Clothing and Accessories","type":"String"},{"key":"marketCountry","value":"US","type":"String"},{"key":"estimatedGlobalAccountVolume","value":"0-10万美金","type":"String"},{"key":"accountType","value":"UsdBankAccount","type":"String"},{"key":"currency","value":"USD","type":"String"},{"key":"verifiedNameEn","value":"Deep InnoMat LLC","type":"String"},{"key":"accountPurpose","value":"ReceiveMethod,InSelfCorp,Settlement","type":"String"},{"key":"businessType","value":"TangiblesGoods","type":"String"},{"key":"hasShop","value":"true","type":"String"},{"key":"shopType","value":"STATION","type":"String"},{"key":"version","value":"20230831","type":"String"}],"cddKybBusinessType":"MultiCurrencyAccountOdd","businessTypeDetail":"Na","kybId":"50c8a5ae-3c8e-4813-8501-50a65f475504","kyCaseId":"76a6860c-fa6d-4fbc-bfbc-b341c2a6a4ab"},"associatedId":"b18bf57a-84f2-4e3b-b7a1-b647d54ac956"}', '2026-09-10 04:01:24.331000 +00:00', '9b2d5f0d-c475-46bd-8a9c-57789049ff56', 'Na', 'Pending', null, null, null, 'Merchant');
-
-
-INSERT INTO public."cddKyb" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kyCaseId", "accountId", "isLatest", status, "businessType", "closeTime", "parentKybId", "businessTypeDetail", "submitTime", "associatedId") VALUES ('50c8a5ae-3c8e-4813-8501-50a65f475504', '', '2026-09-09 17:02:31.941190 +00:00', '2026-09-10 04:01:24.285724 +00:00', null, 2, '76a6860c-fa6d-4fbc-bfbc-b341c2a6a4ab', '9b2d5f0d-c475-46bd-8a9c-57789049ff56', false, 'Na', 'MultiCurrencyAccountOdd', null, '90b87066-da09-4700-9b6a-4eef3a7a3c03', 'Na', '2026-09-10 01:02:32.096000', 'b18bf57a-84f2-4e3b-b7a1-b647d54ac956');
-INSERT INTO public."cddKyb" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kyCaseId", "accountId", "isLatest", status, "businessType", "closeTime", "parentKybId", "businessTypeDetail", "submitTime", "associatedId") VALUES ('cee35905-2813-4431-81b5-9533b02c3781', '', '2026-09-10 04:01:24.285724 +00:00', '2026-09-10 04:01:24.285724 +00:00', null, 1, '76a6860c-fa6d-4fbc-bfbc-b341c2a6a4ab', '9b2d5f0d-c475-46bd-8a9c-57789049ff56', false, 'Pending', 'MultiCurrencyAccountOdd', null, '50c8a5ae-3c8e-4813-8501-50a65f475504', 'Na', '2026-09-10 01:02:32.096000', 'b18bf57a-84f2-4e3b-b7a1-b647d54ac956');
-INSERT INTO public."cddKyb" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kyCaseId", "accountId", "isLatest", status, "businessType", "closeTime", "parentKybId", "businessTypeDetail", "submitTime", "associatedId") VALUES ('a90a8140-fa8e-4ce7-b747-2377491f49ad', '', '2026-09-10 04:01:24.454326 +00:00', '2026-09-10 04:01:24.454326 +00:00', null, 1, '76a6860c-fa6d-4fbc-bfbc-b341c2a6a4ab', '9b2d5f0d-c475-46bd-8a9c-57789049ff56', true, 'Pending', 'MultiCurrencyAccountOdd', null, '50c8a5ae-3c8e-4813-8501-50a65f475504', 'Na', '2026-09-10 12:01:24.487000', '3cb2d20b-bcf5-44c1-9387-70afa08e5ed7');
-
-
-https://github.com/PalmDrive/qbit-assets/pull/7687
-https://github.com/PalmDrive/qbitpay_service/pull/10254
-
+跨境电商：
+采购商:
+- 关联 KYB 业务与字段：
+  - 全球账户 KYB / 新增业务场景 $$\rightarrow$$ 主营业务 (Main business)、全球账户主要用途 (Main purpose of the global account)
+- 触发规则(1 & 2 &3)：
+1. 全球账户KYB审核通过
+2. 主营业务 选择 B2B业务；且
+3. 全球账户主要用途 包含 付款-至供货商或经销商
+每日0点轮询
+外贸工厂:
+- 关联 KYB 业务与字段：
+  - 全球账户 KYB / 新增业务场景 $$\rightarrow$$ 主营业务 (Main business)、行业类别 (Industry category)、全球账户主要用途
+- 触发规则(1 & 2 & 3 &4)：
+1. 全球账户KYB审核通过
+2. 主营业务 选择 B2B业务；且
+3. 行业类别 属于 货物贸易 (Tangible goods)（如 服装和配饰、电子产品、金属及其制品、机器、机器器具、零件 等）；且
+4. 全球账户主要用途 包含 收款-资金来自海外客户
 
 
+数娱与服务：软件出海:
+- 触发规则（1 & 2 & 3）：
+1. KYC通过
+2. KYC 主营业务 = 出海服务
+3. KYC 行业类别 = 软件和技术服务 / 软件销售
+
+Fintech & Web3：
+交易所:
+- 关联 KYB 业务与字段：
+  - 客户的KYC企业信息 $$\rightarrow$$ 主营业务、业务描述
+  - 新增业务场景 $$\rightarrow$$ 业务描述
+- 触发规则（1 & 2）： 
+1. KYC 通过 且 KYC 主营业务 = Web3/数字货币相关; 
+2. 在【KYC】或【新增业务场景】的 业务描述中，检索包含以下任一关键词（不区分大小写）：
+- Exchange、CEX、DEX、交易所、撮合交易、Order Book、Trading Platform
+
+Wallet Provider:
+- 关联 KYB 业务与字段：
+  - 客户的KYC企业信息 $$\rightarrow$$ 主营业务、业务描述
+  - 新增业务场景 $$\rightarrow$$ 业务描述
+- 触发规则（1 & 2）： 
+1. KYC 通过 且 KYC 主营业务 = Web3/数字货币相关; 
+2. 在【KYC】或【新增业务场景】的 业务描述中，检索包含以下任一关键词（不区分大小写）：
+- Wallet、MPC、AA Wallet、Custodial、Non-Custodial、Self-custody、Web3 Wallet、加密钱包、数字钱包、托管钱包。
+每日0点轮询
+
+DeFi:
+- 关联 KYC 业务与字段：
+  - 客户的KYC企业信息 $$\rightarrow$$ 主营业务、业务描述
+  - 新增业务场景 $$\rightarrow$$ 业务描述
+- 触发规则（1 & 2）： 
+1. KYC通过 且 KYC 主营业务 = Web3/数字货币相关
+2. 业务描述包含 DeFi / Staking / Yield / Protocol / 质押等。 
+每日0点轮询
+
+PSP:
+1. KYC通过 且 KYC【主营业务】= 出海服务 / 其他
+2. 海外版 KYC通过 且【主营业务】= 金融投资
+3. 业务描述包含：
+-  PSP 
+-  Payment Service Provider 
+-  第三方支付 
+-  支付结算 
+-  Payment Gateway 
+-  支付服务商 
+-  收单代理
+每日0点轮询
+
+投资机构:
+场景 A：【全球账户 KYB】或【量子卡 KYB】中，主营业务 选择 控股公司 (Holding Company)；
+场景 B：【新增业务场景】中，主营业务 / 业务性质 选择 金融投资；
+场景 C（关键词匹配）：在  业务描述 中包含以下任一关键词：
+VC、PE、Venture Capital、Private Equity、Family Office、家族办公室、Web3 基金、Web3 Fund、风险投资、私募股权。
+银行:
+1. KYC通过 且 KYC 主营业务 = 金融投资/  出海服务 / 其他
+2. 业务描述包含：
+-  Bank 
+-  Commercial Bank 
+-  Digital Bank 
+-  Neo Bank 
+-  商业银行 
+-  数字银行 
+-  Trust Company 
+-  持牌信托
+
+平台型企业：
+自由职业者平台:
+1. KYC通过 且 KYC 主营业务 = 出海服务 / 其他
+2. 业务描述包含：
+-  Upwork 
+-  Fiverr 
+-  Freelance 
+-  Outsourcing Platform 
+-  Freelancer 
+-  零工撮合 
+-  兼职分发 
+-  自由职业者平台
+分销平台:
+- 关联 KYB 业务与字段：
+  - 全球账户 KYB  $$\rightarrow$$业务描述
+  - 新增业务场景 $$\rightarrow$$业务描述
+  - 交易$$\rightarrow$$备注
+- 触发规则(1 or 2)：
+1. 静态 KYB 条件：在【全球账户 KYB】或【新增业务场景】的 业务描述 中包含分销特征关键词（如 分销、代理商分账、Distributor Network、佣金结算、多级分销）；
+2. 动态交易条件：系统检测到客户调用批量出款 API 或 分账 API 频次高于设定阈值（如月均大于等于 $$N$$ 笔），且交易附言/备注包含 分销、佣金、Commission、Affiliate
+
+
+产品类型：
+法币 FX:
+触发规则 (1 & 2)：
+1. 币种类型：交易涉及 法币与 法币之间的双向兑换（如 USD/EUR/HKD/SGD 等，排查加密货币与稳定币）；；
+2. 动作校验：客户产生累计成功出入金兑换交易笔数 $$\ge 1$$ 笔（交易状态 == Success）。
+select *
+from transfer order by "createTime" limit 10
+
+On/Off Ramp:
+触发规则 (1 & 2)：
+1. 币种类型：交易涉及 法币（包含加密 USD 钱包等法币余额账户）与 Stablecoin（如 USDT/USDC）之间的双向兑换；
+2. 动作校验：客户产生累计成功出入金兑换交易笔数 $$\ge 1$$ 笔（交易状态 == Success）。
+select *
+from crypto_assets_transfers where action='sell';
 
 
 
 
-INSERT INTO public."user" (id, remarks, "createTime", "updateTime", "deleteTime", version, phone, password, nickname, email, status, "userType", "phonePrefix", "lastName", "firstName", "googleSecret", "systemType", "updatePwdTime", "tenantId", avatar, job, "isReceiveEmail", telegram) 
-VALUES ('23ee0e7e-b913-43f8-b12e-03ac22c0416a', null, '2026-10-15 06:01:06.164999 +00:00', '2026-10-15 06:14:58.196824 +00:00', null, 3, null, 'H1WZCkZwygBC2H20XnhECsr5OOv+OrQpAQ1xX4zQvCNjQJhS9yJqczWYKEvgTKCZ', 'appreview', 'appreview@interlace.money', 'Active', 'Employee', '852', 'appreview', 'interlace', null, 'QbitInternational', '2026-05-15 06:14:54.995000 +00:00', null, 'https://global-assets.oss-cn-hangzhou.aliyuncs.com/default-avatar.jpg', '', true, null);
-
-INSERT INTO public."accountUser" (id, remarks, "createTime", "updateTime", "deleteTime", version, "roleId", "accountId", "userId", status, "paymentPassword", "paymentTime", "noticeDuplicate") 
-VALUES ('bd3432a9-a5fe-4c4f-9617-b18b11c6985a', null, '2026-05-15 06:01:06.164999 +00:00', '2026-05-15 06:01:06.164999 +00:00', null, 1, '6a4dc51b-6693-41d6-8218-fde0aaf13e2e', '23b131c1-b7f7-4855-8711-24e57dcce510', '23ee0e7e-b913-43f8-b12e-03ac22c0416a', 'Pending', null, 0, false);
-
-INSERT INTO public."userExtend" (id, remarks, "createTime", "updateTime", "deleteTime", version, "userId", "guideStepMeta", "lastLoginTime", "inviteStatus", "verifiedName", "idCardNo", "expiryTime", roles, department, language, "diffRoles", "idType", country, "googleSecretStatus", label, "idCardExpirationDate", "idCardStartDate", "contactPhonePrefix", "contactPhone", "weChatNo", dob, "dataPermissionType") 
-VALUES ('2f55cb54-a8b6-4a84-9239-ef4d4c2119ea', '', '2026-05-15 06:01:06.164999 +00:00', '2026-10-14 05:43:09.818786 +00:00', null, 31, '23ee0e7e-b913-43f8-b12e-03ac22c0416a', '{"guideStepDeposit": false, "guideStepBudgetCard": false, "guideStepPrepaidCard": false, "guideStepTransaction": false}', '2026-10-14 05:43:09.800000 +00:00', 'Active', '汪俊杰', '420104199510200054', '2026-05-16 06:01:06.176000 +00:00', '["5b56d34b-0acd-46ea-b41f-8b30a859d8cf"]', '[]', 'CN', '[]', 'IDCard', 'CN', 'Active', '公司支出', '2028-06-27', '2018-06-27', null, null, null, '1995-10-20', 'Na');
-
-
-39edc935-b797-4dc2-b0b8-2de74269d367
-
-BD：销售名称
-Pref_Rev：总收入（实时收取的各项收入+月账单应收「本月月账单」）
-Rebate：客户返现+代收返现+毛利返现
-Pref_Rev_effective：Pref_Rev-RebateCost：总成本Pref_GP：Pref_Rev-CostCashflow_Rev：总收入（实时收取的各项收入+月账单实收「历史月账单」）Cashflow_Rev_effective：Cashflow_Rev-RebateCashflow_GP：Cashflow_Rev-CostCashflow_Rev_sale：总收入（销售维度的收入，剔除了部分的收入）Cashflow_Rev_sale_effective：Cashflow_Rev_sale - RebateCashflow_GP_sale：Cashflow_Rev_sale-Cost
-
-我们现在有一个自动化打标任务
-/Users/martinjiang/VsCodeProjects/martin-dev-log/qbit-assets/sprint-18/自动化打标/自动化打标.md
+sel

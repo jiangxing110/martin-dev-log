@@ -1,0 +1,813 @@
+{
+  "types": [
+    {
+      "id": "1909577647815987202",
+      "name": "common",
+      "parentId": "1909577572209463298",
+      "code": 101,
+      "fullCode": "110101"
+    }
+  ],
+  "codes": [
+    {
+      "id": "2094330593739894790",
+      "code": "11010101014",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule ID is required",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894791",
+      "code": "11010101014",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule ID is required",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894792",
+      "code": "11010101014",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则ID不能为空",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894793",
+      "code": "11010101014",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则ID不能为空",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894794",
+      "code": "11010101015",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule does not exist",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894795",
+      "code": "11010101015",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule does not exist",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894796",
+      "code": "11010101015",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则不存在",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894797",
+      "code": "11010101015",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则不存在",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894798",
+      "code": "11010101016",
+      "typeId": "1909577647815987202",
+      "message": "Failed to save the auto tagging rule",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894799",
+      "code": "11010101016",
+      "typeId": "1909577647815987202",
+      "message": "Failed to save the auto tagging rule",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894800",
+      "code": "11010101016",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则保存失败",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894801",
+      "code": "11010101016",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则保存失败",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894802",
+      "code": "11010101017",
+      "typeId": "1909577647815987202",
+      "message": "Failed to update the auto tagging rule",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894803",
+      "code": "11010101017",
+      "typeId": "1909577647815987202",
+      "message": "Failed to update the auto tagging rule",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894804",
+      "code": "11010101017",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则更新失败",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894805",
+      "code": "11010101017",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则更新失败",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894806",
+      "code": "11010101018",
+      "typeId": "1909577647815987202",
+      "message": "Active auto tagging rules cannot be deleted",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894807",
+      "code": "11010101018",
+      "typeId": "1909577647815987202",
+      "message": "Active auto tagging rules cannot be deleted",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894808",
+      "code": "11010101018",
+      "typeId": "1909577647815987202",
+      "message": "启用中的自动打标规则不允许删除",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894809",
+      "code": "11010101018",
+      "typeId": "1909577647815987202",
+      "message": "启用中的自动打标规则不允许删除",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894810",
+      "code": "11010101019",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule status is unsupported",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894811",
+      "code": "11010101019",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule status is unsupported",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894812",
+      "code": "11010101019",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则状态不支持",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894813",
+      "code": "11010101019",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则状态不支持",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894814",
+      "code": "11010101020",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging target tag is required",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894815",
+      "code": "11010101020",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging target tag is required",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894816",
+      "code": "11010101020",
+      "typeId": "1909577647815987202",
+      "message": "自动打标目标标签不能为空",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894817",
+      "code": "11010101020",
+      "typeId": "1909577647815987202",
+      "message": "自动打标目标标签不能为空",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894818",
+      "code": "11010101021",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule logic tree is required",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894819",
+      "code": "11010101021",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule logic tree is required",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894820",
+      "code": "11010101021",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则详情不能为空",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894821",
+      "code": "11010101021",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则详情不能为空",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894822",
+      "code": "11010101022",
+      "typeId": "1909577647815987202",
+      "message": "Active auto tagging rules cannot be edited",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894823",
+      "code": "11010101022",
+      "typeId": "1909577647815987202",
+      "message": "Active auto tagging rules cannot be edited",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894824",
+      "code": "11010101022",
+      "typeId": "1909577647815987202",
+      "message": "启用中的自动打标规则不允许编辑",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894825",
+      "code": "11010101022",
+      "typeId": "1909577647815987202",
+      "message": "启用中的自动打标规则不允许编辑",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894826",
+      "code": "11010101023",
+      "typeId": "1909577647815987202",
+      "message": "System preset rules cannot be edited or deleted",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894827",
+      "code": "11010101023",
+      "typeId": "1909577647815987202",
+      "message": "System preset rules cannot be edited or deleted",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894828",
+      "code": "11010101023",
+      "typeId": "1909577647815987202",
+      "message": "系统预置规则不允许编辑或删除",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894829",
+      "code": "11010101023",
+      "typeId": "1909577647815987202",
+      "message": "系统预置规则不允许编辑或删除",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894830",
+      "code": "11010101024",
+      "typeId": "1909577647815987202",
+      "message": "The system preset rule has no executable strategy yet",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894831",
+      "code": "11010101024",
+      "typeId": "1909577647815987202",
+      "message": "The system preset rule has no executable strategy yet",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894832",
+      "code": "11010101024",
+      "typeId": "1909577647815987202",
+      "message": "系统预置规则尚未接入可执行策略",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894833",
+      "code": "11010101024",
+      "typeId": "1909577647815987202",
+      "message": "系统预置规则尚未接入可执行策略",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894834",
+      "code": "11010101025",
+      "typeId": "1909577647815987202",
+      "message": "The system preset rule code does not match its logic tree",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894835",
+      "code": "11010101025",
+      "typeId": "1909577647815987202",
+      "message": "The system preset rule code does not match its logic tree",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894836",
+      "code": "11010101025",
+      "typeId": "1909577647815987202",
+      "message": "系统预置规则编码与逻辑树不匹配",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894837",
+      "code": "11010101025",
+      "typeId": "1909577647815987202",
+      "message": "系统预置规则编码与逻辑树不匹配",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894838",
+      "code": "11010101026",
+      "typeId": "1909577647815987202",
+      "message": "Only leaf tags can be selected as auto tagging targets",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894839",
+      "code": "11010101026",
+      "typeId": "1909577647815987202",
+      "message": "Only leaf tags can be selected as auto tagging targets",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894840",
+      "code": "11010101026",
+      "typeId": "1909577647815987202",
+      "message": "自动打标目标只能选择末级标签",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894841",
+      "code": "11010101026",
+      "typeId": "1909577647815987202",
+      "message": "自动打标目标只能选择末级标签",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894842",
+      "code": "11010101027",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule node is required",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894843",
+      "code": "11010101027",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule node is required",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894844",
+      "code": "11010101027",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则节点不能为空",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894845",
+      "code": "11010101027",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则节点不能为空",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894846",
+      "code": "11010101028",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule logic type is unsupported",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894847",
+      "code": "11010101028",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule logic type is unsupported",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894848",
+      "code": "11010101028",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则逻辑类型不支持",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894849",
+      "code": "11010101028",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则逻辑类型不支持",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894850",
+      "code": "11010101029",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging logic groups must contain child nodes",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894851",
+      "code": "11010101029",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging logic groups must contain child nodes",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894852",
+      "code": "11010101029",
+      "typeId": "1909577647815987202",
+      "message": "自动打标逻辑组必须包含子节点",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894853",
+      "code": "11010101029",
+      "typeId": "1909577647815987202",
+      "message": "自动打标逻辑组必须包含子节点",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894854",
+      "code": "11010101030",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule field is unsupported",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894855",
+      "code": "11010101030",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule field is unsupported",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894856",
+      "code": "11010101030",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则字段不支持",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894857",
+      "code": "11010101030",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则字段不支持",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894858",
+      "code": "11010101031",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule operator is unsupported",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894859",
+      "code": "11010101031",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule operator is unsupported",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894860",
+      "code": "11010101031",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则操作符不支持",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894861",
+      "code": "11010101031",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则操作符不支持",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894862",
+      "code": "11010101032",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule condition value is required",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894863",
+      "code": "11010101032",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule condition value is required",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894864",
+      "code": "11010101032",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则条件值不能为空",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894865",
+      "code": "11010101032",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则条件值不能为空",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894866",
+      "code": "11010101033",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging job parameter format is invalid",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894867",
+      "code": "11010101033",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging job parameter format is invalid",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894868",
+      "code": "11010101033",
+      "typeId": "1909577647815987202",
+      "message": "自动打标任务参数格式无效",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894869",
+      "code": "11010101033",
+      "typeId": "1909577647815987202",
+      "message": "自动打标任务参数格式无效",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894870",
+      "code": "11010101034",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule code is invalid",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894871",
+      "code": "11010101034",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule code is invalid",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894872",
+      "code": "11010101034",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则编码无效",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894873",
+      "code": "11010101034",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则编码无效",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894874",
+      "code": "11010101035",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule type does not match the rule code",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894875",
+      "code": "11010101035",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging rule type does not match the rule code",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894876",
+      "code": "11010101035",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则类型与规则编码不匹配",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894877",
+      "code": "11010101035",
+      "typeId": "1909577647815987202",
+      "message": "自动打标规则类型与规则编码不匹配",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894878",
+      "code": "11010101036",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging target tag does not exist, is inactive, or is not a leaf tag",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894879",
+      "code": "11010101036",
+      "typeId": "1909577647815987202",
+      "message": "Auto tagging target tag does not exist, is inactive, or is not a leaf tag",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894880",
+      "code": "11010101036",
+      "typeId": "1909577647815987202",
+      "message": "自动打标目标标签不存在、未启用或不是末级标签",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894881",
+      "code": "11010101036",
+      "typeId": "1909577647815987202",
+      "message": "自动打标目标标签不存在、未启用或不是末级标签",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894882",
+      "code": "11010101037",
+      "typeId": "1909577647815987202",
+      "message": "No active auto tagging rule matches the filters",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894883",
+      "code": "11010101037",
+      "typeId": "1909577647815987202",
+      "message": "No active auto tagging rule matches the filters",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894884",
+      "code": "11010101037",
+      "typeId": "1909577647815987202",
+      "message": "没有符合筛选条件的启用自动打标规则",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894885",
+      "code": "11010101037",
+      "typeId": "1909577647815987202",
+      "message": "没有符合筛选条件的启用自动打标规则",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894886",
+      "code": "11010101038",
+      "typeId": "1909577647815987202",
+      "message": "An account ID is required to execute auto tagging with filters",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894887",
+      "code": "11010101038",
+      "typeId": "1909577647815987202",
+      "message": "An account ID is required to execute auto tagging with filters",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": "2094330593739894888",
+      "code": "11010101038",
+      "typeId": "1909577647815987202",
+      "message": "按条件实际执行自动打标时必须提供账户ID",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": "2094330593739894889",
+      "code": "11010101038",
+      "typeId": "1909577647815987202",
+      "message": "按条件实际执行自动打标时必须提供账户ID",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    }
+  ]
+}

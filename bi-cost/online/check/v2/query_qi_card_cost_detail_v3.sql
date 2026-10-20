@@ -74,3 +74,4 @@ SELECT
     CAST(COALESCE(incentive_income, 0) AS NUMERIC(20, 4)) AS incentive_income
 FROM qi_total
 ORDER BY month;
+

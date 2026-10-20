@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1720" viewBox="0 0 1500 1720">
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth"><path d="M1,1 L11,6 L1,11 Z" fill="#52657a"/></marker>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #172b4d; }
+      .title { font-size: 34px; font-weight: 700; }
+      .subtitle { font-size: 17px; fill: #52657a; }
+      .box-title { font-size: 20px; font-weight: 700; }
+      .body { font-size: 16px; }
+      .small { font-size: 14px; fill: #52657a; }
+      .arrow { stroke: #52657a; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .box { fill: #fff; stroke: #9aabc0; stroke-width: 2; rx: 15; }
+      .blue { fill: #eaf3ff; stroke: #5794df; }
+      .green { fill: #eaf8f0; stroke: #53a878; }
+      .gold { fill: #fff5db; stroke: #d7a63b; }
+      .purple { fill: #f4edff; stroke: #9270ce; }
+      .red { fill: #fff0ef; stroke: #d87870; }
+      .decision { fill: #fff8e8; stroke: #d7a63b; stroke-width: 2; }
+      .pill { fill: #f1f4f8; stroke: #c5cfdb; stroke-width: 1.5; rx: 12; }
+    </style>
+  </defs>
+  <rect width="1500" height="1720" fill="#f7f9fc"/>
+  <text x="750" y="60" text-anchor="middle" class="title">自动打标规则匹配与写入流程</text>
+  <text x="750" y="92" text-anchor="middle" class="subtitle">按规则和账户筛选 → 准备上下文 → 规则判断 → 写入末级标签与命中日志</text>
+
+  <!-- task input -->
+  <rect x="400" y="125" width="700" height="110" class="box blue"/>
+  <text x="750" y="163" text-anchor="middle" class="box-title">1. XXL-JOB 定时任务入口</text>
+  <text x="750" y="194" text-anchor="middle" class="body">参数可指定 ruleType / ruleCode / ruleId / 标签 / accountIds</text>
+  <text x="750" y="218" text-anchor="middle" class="small">筛选运行必须提供账户 ID 列表；命中后直接写入（不再传 mode）</text>
+  <path d="M750 235 V270" class="arrow"/>
+
+  <!-- rule lookup -->
+  <rect x="400" y="275" width="700" height="110" class="box blue"/>
+  <text x="750" y="313" text-anchor="middle" class="box-title">2. 筛选启用规则</text>
+  <text x="750" y="344" text-anchor="middle" class="body">数据库查询未删除、Active 的规则，并应用传入的规则筛选条件</text>
+  <text x="750" y="369" text-anchor="middle" class="small">示例：SYSTEM_PRESET + CUSTOMER_MODE_DIRECT</text>
+  <path d="M750 385 V420" class="arrow"/>
+
+  <!-- target validation -->
+  <rect x="400" y="425" width="700" height="115" class="box gold"/>
+  <text x="750" y="464" text-anchor="middle" class="box-title">3. 检查目标标签</text>
+  <text x="750" y="495" text-anchor="middle" class="body">标签存在、未删除、已启用，且没有子标签（必须是末级标签）</text>
+  <text x="750" y="520" text-anchor="middle" class="small">条件不满足：跳过该规则，不进入账户计算</text>
+  <path d="M750 540 V575" class="arrow"/>
+
+  <!-- accounts -->
+  <rect x="400" y="580" width="700" height="125" class="box blue"/>
+  <text x="750" y="619" text-anchor="middle" class="box-title">4. 获取待计算账户</text>
+  <text x="750" y="651" text-anchor="middle" class="body">有 accountIds：只查询这些 ID；无筛选的常规定时任务：分页扫描</text>
+  <text x="750" y="680" text-anchor="middle" class="small">排除软删除、Cleared、Inactive 账户及 ApiClientCustomer 子户</text>
+  <path d="M750 705 V740" class="arrow"/>
+
+  <!-- context -->
+  <rect x="400" y="745" width="700" height="130" class="box blue"/>
+  <text x="750" y="784" text-anchor="middle" class="box-title">5. 批量加载账户规则上下文</text>
+  <text x="750" y="816" text-anchor="middle" class="body">账户类型、系统类型、API 接入类型、行业和最新 KYB 状态</text>
+  <text x="750" y="847" text-anchor="middle" class="small">例如 Merchant 推导为 DIRECT_CUSTOMER；accessType 可叠加 Distributor / MOR / Gateway</text>
+  <path d="M750 875 V910" class="arrow"/>
+
+  <!-- strategy selection -->
+  <path d="M750 915 L1015 1000 L750 1085 L485 1000 Z" class="decision"/>
+  <text x="750" y="984" text-anchor="middle" class="box-title">6. 按规则来源选择匹配方式</text>
+  <text x="750" y="1015" text-anchor="middle" class="body">SYSTEM_PRESET 走预置策略；CUSTOM 解释 logicTree</text>
+  <text x="750" y="1045" text-anchor="middle" class="small">预置规则还校验 logicTree 中的规则编码与 ruleCode 一致</text>
+
+  <!-- two branches -->
+  <path d="M485 1000 H240 V1125" class="arrow"/>
+  <path d="M1015 1000 H1260 V1125" class="arrow"/>
+  <rect x="65" y="1130" width="350" height="150" class="box purple"/>
+  <text x="240" y="1170" text-anchor="middle" class="box-title">系统预置规则策略</text>
+  <text x="240" y="1202" text-anchor="middle" class="body">按 ruleCode 找对应 Java 策略</text>
+  <text x="240" y="1232" text-anchor="middle" class="body">输出 MATCH / NO_MATCH / UNKNOWN</text>
+  <text x="240" y="1260" text-anchor="middle" class="small">只有 MATCH 进入打标</text>
+
+  <rect x="1085" y="1130" width="350" height="150" class="box purple"/>
+  <text x="1260" y="1170" text-anchor="middle" class="box-title">自定义规则</text>
+  <text x="1260" y="1202" text-anchor="middle" class="body">根据账户上下文计算 logicTree</text>
+  <text x="1260" y="1232" text-anchor="middle" class="body">And / Or 与字段条件得到布尔结果</text>
+  <text x="1260" y="1260" text-anchor="middle" class="small">条件成立才进入打标</text>
+
+  <path d="M240 1280 V1330 H750" class="arrow"/>
+  <path d="M1260 1280 V1330 H750" class="arrow"/>
+  <path d="M750 1330 V1360" class="arrow"/>
+
+  <!-- existing relation -->
+  <rect x="400" y="1365" width="700" height="100" class="box gold"/>
+  <text x="750" y="1403" text-anchor="middle" class="box-title">7. 去重并只保留命中账户</text>
+  <text x="750" y="1435" text-anchor="middle" class="body">已拥有目标标签的账户在计算前排除；新 MATCH 账户准备写入</text>
+  <path d="M750 1465 V1500" class="arrow"/>
+
+  <!-- transaction -->
+  <rect x="400" y="1505" width="700" height="125" class="box green"/>
+  <text x="750" y="1544" text-anchor="middle" class="box-title">8. 同一事务写入标签和命中日志</text>
+  <text x="750" y="1576" text-anchor="middle" class="body">写入 tags（tagSource=AUTO_RULE）+ tag_rule_log（规则、账户、字段快照）</text>
+  <text x="750" y="1607" text-anchor="middle" class="small">任一写入失败则该批次回滚；成功后输出规则命中账户数</text>
+  <text x="750" y="1675" text-anchor="middle" class="subtitle">本次日志示例：直客规则 → 5 个账户 MATCH → 写入 5 条标签记录和 5 条规则日志</text>
+</svg>
