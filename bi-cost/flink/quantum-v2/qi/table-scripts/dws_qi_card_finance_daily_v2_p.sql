@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-15
--- Updated Time:   2026-08-23 21:40:00
+-- Updated Time:   2026-10-20 17:30:03
 -- Description:    QI v2 渠道财务汇总表
 -- Notes:
 --   1. v2 表不替换旧 dws_qi_card_finance_daily_p，先并行落地。
@@ -66,7 +66,7 @@ COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."delete_time" IS '逻�
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."sale_id" IS '销售ID，来源 DWM 销售关系';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."am_id" IS 'AM ID，来源 DWM 销售关系';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."total_net_amount" IS '净消费金额：Closed/Pending 的 Consumption 加金额，Reversal/Credit 减金额';
-COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_reimbursement_base_amt" IS 'Reimbursement 成本计费基数，非港消费金额 * 0.0135';
+COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_reimbursement_base_amt" IS 'Reimbursement 成本计费基数，QBIT 非港 Closed/Pending 净消费（Consumption - Reversal - Credit）* 0.0135';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_service_base_amt" IS 'Card Service 成本计费基数，非港 Consumption/Reversal/Credit 按金额阶梯计算';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_acs_regular_base_amt" IS 'ACS 普通成本计费基数，非港消费按金额阶梯计算';
 COMMENT ON COLUMN "dws"."dws_qi_card_finance_daily_v2_p"."cost_acs_vip_base_amt" IS 'ACS VIP 成本计费基数，非港消费且排除特殊码后按金额阶梯计算';

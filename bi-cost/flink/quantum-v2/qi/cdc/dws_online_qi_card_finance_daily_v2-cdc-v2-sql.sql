@@ -5,7 +5,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-12
--- Updated Time:   2026-09-08 12:22:00
+-- Updated Time:   2026-10-20 17:30:03
 -- Description:    Quantum QI v2 DWS CDC 按月重算写入 v2
 -- 作业元信息：
 --   作业类型：批式 CDC 修复任务
@@ -15,6 +15,7 @@
 --   1. 主链路: DWM v2 -> DWS v2
 --   2. 主干事实变化和 ods_bi_month_tag 配置变化都会进入 affected months
 --   3. 只记录成本/返现计费基数和对应 rate，结果金额由下游按 base * rate 计算
+--   4. Reimbursement 基数按 QBIT 非港 Closed/Pending 净消费 × 1.35% 计算
 --********************************************************************--
 
 SET 'parallelism.default' = '4';
@@ -141,6 +142,7 @@ SELECT
     s.system_type,
     s.status,
     s.billing_amount,
+    s.is_qbit_provision,
     s.is_hk_region,
     s.business_type,
     s.has_special_code,
@@ -169,7 +171,16 @@ SELECT
             THEN s.billing_amount * CASE WHEN s.business_type = 'Consumption' THEN 1 ELSE -1 END
         ELSE CAST(0 AS DECIMAL(20, 4))
     END) AS DECIMAL(20, 4)) AS total_net_amount,
-    CAST(SUM(CASE WHEN s.is_hk_region = FALSE AND s.business_type = 'Consumption' AND s.status IN ('Closed', 'Pending') THEN s.billing_amount * CAST(0.0135 AS DECIMAL(20, 4)) ELSE CAST(0 AS DECIMAL(20, 4)) END) AS DECIMAL(20, 4)) AS cost_reimbursement_base_amt,
+    CAST(SUM(CASE
+        WHEN s.is_qbit_provision = TRUE
+         AND s.is_hk_region = FALSE
+         AND s.status IN ('Closed', 'Pending')
+         AND s.business_type IN ('Consumption', 'Reversal', 'Credit')
+            THEN s.billing_amount
+                 * CASE WHEN s.business_type = 'Consumption' THEN 1 ELSE -1 END
+                 * CAST(0.0135 AS DECIMAL(20, 4))
+        ELSE CAST(0 AS DECIMAL(20, 4))
+    END) AS DECIMAL(20, 4)) AS cost_reimbursement_base_amt,
     CAST(SUM(CASE WHEN s.is_hk_region = FALSE AND s.status IN ('Closed', 'Pending') AND s.business_type IN ('Consumption', 'Reversal', 'Credit') THEN
         CASE
             WHEN ABS(s.billing_amount) < 5 THEN s.billing_amount * CAST(0.00095 AS DECIMAL(20, 4))
