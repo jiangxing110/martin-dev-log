@@ -1,125 +1,58 @@
-跨境电商：
-采购商:
-- 关联 KYB 业务与字段：
-  - 全球账户 KYB / 新增业务场景 $$\rightarrow$$ 主营业务 (Main business)、全球账户主要用途 (Main purpose of the global account)
-- 触发规则(1 & 2 &3)：
-1. 全球账户KYB审核通过
-2. 主营业务 选择 B2B业务；且
-3. 全球账户主要用途 包含 付款-至供货商或经销商
-每日0点轮询
-外贸工厂:
-- 关联 KYB 业务与字段：
-  - 全球账户 KYB / 新增业务场景 $$\rightarrow$$ 主营业务 (Main business)、行业类别 (Industry category)、全球账户主要用途
-- 触发规则(1 & 2 & 3 &4)：
-1. 全球账户KYB审核通过
-2. 主营业务 选择 B2B业务；且
-3. 行业类别 属于 货物贸易 (Tangible goods)（如 服装和配饰、电子产品、金属及其制品、机器、机器器具、零件 等）；且
-4. 全球账户主要用途 包含 收款-资金来自海外客户
-
-
-数娱与服务：软件出海:
-- 触发规则（1 & 2 & 3）：
-1. KYC通过
-2. KYC 主营业务 = 出海服务
-3. KYC 行业类别 = 软件和技术服务 / 软件销售
-
-Fintech & Web3：
-交易所:
-- 关联 KYB 业务与字段：
-  - 客户的KYC企业信息 $$\rightarrow$$ 主营业务、业务描述
-  - 新增业务场景 $$\rightarrow$$ 业务描述
-- 触发规则（1 & 2）： 
-1. KYC 通过 且 KYC 主营业务 = Web3/数字货币相关; 
-2. 在【KYC】或【新增业务场景】的 业务描述中，检索包含以下任一关键词（不区分大小写）：
-- Exchange、CEX、DEX、交易所、撮合交易、Order Book、Trading Platform
-
-Wallet Provider:
-- 关联 KYB 业务与字段：
-  - 客户的KYC企业信息 $$\rightarrow$$ 主营业务、业务描述
-  - 新增业务场景 $$\rightarrow$$ 业务描述
-- 触发规则（1 & 2）： 
-1. KYC 通过 且 KYC 主营业务 = Web3/数字货币相关; 
-2. 在【KYC】或【新增业务场景】的 业务描述中，检索包含以下任一关键词（不区分大小写）：
-- Wallet、MPC、AA Wallet、Custodial、Non-Custodial、Self-custody、Web3 Wallet、加密钱包、数字钱包、托管钱包。
-每日0点轮询
-
-DeFi:
-- 关联 KYC 业务与字段：
-  - 客户的KYC企业信息 $$\rightarrow$$ 主营业务、业务描述
-  - 新增业务场景 $$\rightarrow$$ 业务描述
-- 触发规则（1 & 2）： 
-1. KYC通过 且 KYC 主营业务 = Web3/数字货币相关
-2. 业务描述包含 DeFi / Staking / Yield / Protocol / 质押等。 
-每日0点轮询
-
-PSP:
-1. KYC通过 且 KYC【主营业务】= 出海服务 / 其他
-2. 海外版 KYC通过 且【主营业务】= 金融投资
-3. 业务描述包含：
--  PSP 
--  Payment Service Provider 
--  第三方支付 
--  支付结算 
--  Payment Gateway 
--  支付服务商 
--  收单代理
-每日0点轮询
-
-投资机构:
-场景 A：【全球账户 KYB】或【量子卡 KYB】中，主营业务 选择 控股公司 (Holding Company)；
-场景 B：【新增业务场景】中，主营业务 / 业务性质 选择 金融投资；
-场景 C（关键词匹配）：在  业务描述 中包含以下任一关键词：
-VC、PE、Venture Capital、Private Equity、Family Office、家族办公室、Web3 基金、Web3 Fund、风险投资、私募股权。
-银行:
-1. KYC通过 且 KYC 主营业务 = 金融投资/  出海服务 / 其他
-2. 业务描述包含：
--  Bank 
--  Commercial Bank 
--  Digital Bank 
--  Neo Bank 
--  商业银行 
--  数字银行 
--  Trust Company 
--  持牌信托
-
-平台型企业：
-自由职业者平台:
-1. KYC通过 且 KYC 主营业务 = 出海服务 / 其他
-2. 业务描述包含：
--  Upwork 
--  Fiverr 
--  Freelance 
--  Outsourcing Platform 
--  Freelancer 
--  零工撮合 
--  兼职分发 
--  自由职业者平台
-分销平台:
-- 关联 KYB 业务与字段：
-  - 全球账户 KYB  $$\rightarrow$$业务描述
-  - 新增业务场景 $$\rightarrow$$业务描述
-  - 交易$$\rightarrow$$备注
-- 触发规则(1 or 2)：
-1. 静态 KYB 条件：在【全球账户 KYB】或【新增业务场景】的 业务描述 中包含分销特征关键词（如 分销、代理商分账、Distributor Network、佣金结算、多级分销）；
-2. 动态交易条件：系统检测到客户调用批量出款 API 或 分账 API 频次高于设定阈值（如月均大于等于 $$N$$ 笔），且交易附言/备注包含 分销、佣金、Commission、Affiliate
-
-
-产品类型：
-法币 FX:
-触发规则 (1 & 2)：
-1. 币种类型：交易涉及 法币与 法币之间的双向兑换（如 USD/EUR/HKD/SGD 等，排查加密货币与稳定币）；；
-2. 动作校验：客户产生累计成功出入金兑换交易笔数 $$\ge 1$$ 笔（交易状态 == Success）。
+SELECT DISTINCT
+       a.id AS account_id,
+       kyb.status AS kyb_status,
+       main_business.value AS main_business,
+       purpose.token AS matched_purpose
+FROM account a
+JOIN "cddKyb" kyb
+  ON kyb."accountId"::uuid = a.id
+ AND kyb."deleteTime" IS NULL
+ AND kyb."isLatest" = TRUE
+ AND kyb."businessType" = 'MultiCurrencyAccount'
+ AND kyb.status = 'Passed'
+JOIN "cddKybDetail" main_business
+  ON main_business."kybId" = kyb.id
+ AND main_business."deleteTime" IS NULL
+ AND main_business.key = 'mainBusiness'
+ AND main_business.value = 'B2B'
+JOIN "cddKybDetail" purpose_detail
+  ON purpose_detail."kybId" = kyb.id
+ AND purpose_detail."deleteTime" IS NULL
+ AND purpose_detail.key = 'accountPurpose'
+CROSS JOIN LATERAL regexp_split_to_table(purpose_detail.value, '[,，;；]')
+    AS purpose(token)
+WHERE a."deleteTime" IS NULL
+  AND a.status NOT IN ('Cleared', 'Inactive')
+  AND a.type NOT IN ('ApiClientCustomer')
+  AND LOWER(BTRIM(purpose.token)) IN (
+      'paytosupplier',
+      'paytodistributor',
+      'supplier',
+      'distributor',
+      '付款-至供货商或经销商'
+  )
+ORDER BY a.id;
 select *
-from transfer order by "createTime" limit 10
+from "cddKybDetail" where key='accountPurpose';
 
-On/Off Ramp:
-触发规则 (1 & 2)：
-1. 币种类型：交易涉及 法币（包含加密 USD 钱包等法币余额账户）与 Stablecoin（如 USDT/USDC）之间的双向兑换；
-2. 动作校验：客户产生累计成功出入金兑换交易笔数 $$\ge 1$$ 笔（交易状态 == Success）。
-select *
-from crypto_assets_transfers where action='sell';
+INSERT INTO "MY_TABLE"(account_id) VALUES ('00e4481f-a3e2-42c2-8da6-1ea7058f8cac');
+INSERT INTO "MY_TABLE"(account_id) VALUES ('02432348-7d20-48a2-a77a-1dda9f8ab7fe');
+INSERT INTO "MY_TABLE"(account_id) VALUES ('055967e1-9d43-45bc-9d5a-6ecca5789745');
 
 
+要求
+1.整份ppt播放顺序 （查房目标 ->病史摘要 ->疾病相关知识 ->护理诊断 ->护理措施 ）按此顺序修改
+2.文字内容过多是否可以适当删减
+3.ppt上的病史摘要内容通过时间轴的方式呈现
+
+INSERT INTO public."cddKyb" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kyCaseId", "accountId", "parentKybId", "isLatest", status, "businessType", "businessTypeDetail", "closeTime", "submitTime", "associatedId") VALUES ('e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'd23d0560-28fa-41e1-b5e4-de88b4cdf024', 'd24d3e19-b17b-4afc-a914-9e5566db6d16', '', true, 'Passed', 'AdditionMultiCurrencyAccount', 'FinanceAndInvest', null, '2026-10-22 10:20:14.421000', '79e128e9-c902-4b77-bd7c-8e2c01f2ad73');
 
 
-sel
+INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('90a34997-aa57-4cf7-a07e-727b05b35e4c', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'mainBusiness', 'FinanceAndInvest', '"String"');
+INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('809f3c9c-36d4-455d-b51a-0741e4c4f284', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'industryCategory', 'Luggage', '"String"');
+INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('a0249977-5e6f-4a60-a6a2-c0882deae974', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'marketCountry', 'IT', '"String"');
+INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('bdbcf394-7fa3-4685-86b5-7e1d79cc7087', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'depositAmount', '100', '"String"');
+INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('6da5e8fe-9105-4c1d-8c2f-6ffa31fe2318', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'withdrawalAmount', '100', '"String"');
+INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('7241af5c-d9bc-46a9-a010-af0fd4897ac0', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'hasWebsite', 'false', '"String"');
+INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('7f90c3ce-b64f-40fc-90e8-6a4e3d51540c', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'serviceContent', 'Payment Gateway', '"String"');
+INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('7ee1f202-2b9c-4021-8993-877aed4c37e4', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'businessCertificate', 'https://qbit-develop.oss-accelerate.aliyuncs.com/open-api/f4df8eee-9d2a-4302-84e8-4b871f4e398a/1792635594115/20220920-182903.png', '"String"');
