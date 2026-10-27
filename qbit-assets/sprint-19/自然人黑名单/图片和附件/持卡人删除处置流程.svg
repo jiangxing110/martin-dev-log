@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 260" role="img" aria-labelledby="title desc">
+  <title id="title">删除持卡人处理流程</title>
+  <desc id="desc">删除持卡人时先检查是否存在 Pending 卡。不存在时删除持卡人及全部卡片，并可选同步加入黑名单；存在时管控 Pending 卡片、删除其余卡片，Pending 订单结束后由每周任务重试删卡。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#667085"/>
+    </marker>
+    <style>
+      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 12px; fill: #1f2937; }
+      .line { stroke: #667085; fill: none; marker-end: url(#arrow); }
+      .box { stroke-width: 1.5; }
+    </style>
+  </defs>
+  <g class="box">
+    <rect x="8" y="98" width="132" height="42" rx="5" fill="#e7f0fd" stroke="#1668e3"/>
+    <text x="74" y="124" text-anchor="middle">发起删除持卡人</text>
+    <path class="line" d="M142 119 H186"/>
+
+    <path d="M258 79 L330 119 L258 159 L186 119 Z" fill="#fdf0da" stroke="#9a6100"/>
+    <text x="258" y="123" text-anchor="middle">是否存在 Pending</text>
+
+    <path class="line" d="M300 96 L392 62"/>
+    <text x="330" y="72" fill="#0f7a44" font-size="11">否</text>
+    <rect x="398" y="40" width="188" height="42" rx="5" fill="#e4f5eb" stroke="#0f7a44"/>
+    <text x="492" y="66" text-anchor="middle">删除持卡人 + 全部卡片</text>
+    <path class="line" d="M586 61 H646"/>
+    <rect x="652" y="40" width="188" height="42" rx="5" fill="#fdeceb" stroke="#c62f28"/>
+    <text x="746" y="60" text-anchor="middle">可选：身份要素</text>
+    <text x="746" y="74" text-anchor="middle">同步加入黑名单库</text>
+
+    <path class="line" d="M300 142 L392 176"/>
+    <text x="326" y="176" fill="#9a6100" font-size="11">是</text>
+    <rect x="398" y="156" width="188" height="42" rx="5" fill="#fdf0da" stroke="#9a6100"/>
+    <text x="492" y="175" text-anchor="middle">管控 Pending 卡片，</text>
+    <text x="492" y="190" text-anchor="middle">删除其余卡片</text>
+    <path class="line" d="M586 177 H646"/>
+    <rect x="652" y="156" width="150" height="42" rx="5" fill="#f3f4f6" stroke="#98a2b3"/>
+    <text x="727" y="175" text-anchor="middle">Pending 订单结束，</text>
+    <text x="727" y="190" text-anchor="middle">卡片维持管控</text>
+    <path class="line" d="M727 202 V228 H492"/>
+    <rect x="286" y="210" width="200" height="34" rx="5" fill="#e7f0fd" stroke="#1668e3"/>
+    <text x="386" y="232" text-anchor="middle">每周定时任务：批量重试删卡</text>
+  </g>
+</svg>

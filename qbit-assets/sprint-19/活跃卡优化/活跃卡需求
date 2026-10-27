@@ -1,0 +1,17 @@
+1.现在直客和API账单都有活跃卡fee收费项目,还有账单详情zip有活跃卡明细,如果分开两个方法查询不利于维护
+我想搞一个service 统一处理
+2.对于API月账单有一个拒付率
+api_client_bill bill_history_config 
+{"conCount": 6, "effectDate": "2025-10-16 00:00:00", "onlineDate": "2025-10-16 00:00:00", "otherAmounts": [{"amount": 11, "itemName": "test1", "isShareEqually": true}, {"amount": 22, "itemName": "特2", "isShareEqually": true}],
+ "rejectPayFine": 1.5, "rejectPayCount": 3, "discountPercent": 1, "discountDuration": 1, "rejectPayRateCount": 50.00}
+ conCount这个是
+   /**
+     * 拒付数量
+     */
+    private BigDecimal rejectPayCount;
+
+    /**
+     * 无验证消费数量
+     */
+    private BigDecimal conCount;
+    我们这里只记了拒付数量相关没有记录拒付金额相关的东西看看这个怎么补

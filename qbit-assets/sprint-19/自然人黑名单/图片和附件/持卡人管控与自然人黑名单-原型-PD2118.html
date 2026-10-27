@@ -1,0 +1,1137 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<style>
+html{color-scheme:light}
+body{margin:0;font:14px/1.5 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#fafaf9}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<title>持卡人管控与自然人黑名单</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#eef1f5; --panel:#ffffff; --panel-2:#f7f9fb; --panel-3:#eff3f8;
+  --line:#e1e7ef; --line-2:#cfd8e3;
+  --ink:#1b2431; --ink-2:#57626f; --ink-3:#8a939f;
+  --brand:#1668e3; --brand-2:#0f4fae; --brand-weak:#e7f0fd;
+  --ok:#0f7a44; --ok-weak:#e4f5eb;
+  --warn:#9a6100; --warn-weak:#fdf0da;
+  --danger:#c62f28; --danger-weak:#fdeceb;
+  --purple:#6339c4; --purple-weak:#efeafc;
+  --nav:#1e2938; --nav-2:#161f2b; --nav-ink:#a7b3c3; --nav-line:#2a3648;
+  --shadow:0 1px 2px rgba(20,32,48,.06), 0 8px 24px rgba(20,32,48,.08);
+  --radius:6px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e141c; --panel:#161e28; --panel-2:#1b242f; --panel-3:#202b38;
+    --line:#27323f; --line-2:#364454;
+    --ink:#e5ecf4; --ink-2:#a2afbf; --ink-3:#788595;
+    --brand:#5a9bff; --brand-2:#8cbcff; --brand-weak:#12243e;
+    --ok:#4fca82; --ok-weak:#11301f;
+    --warn:#e2a750; --warn-weak:#33260f;
+    --danger:#ff6f64; --danger-weak:#3b1b18;
+    --purple:#a189f0; --purple-weak:#241b3d;
+    --nav:#111922; --nav-2:#0b1219; --nav-ink:#94a2b3; --nav-line:#1e2733;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.45);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e141c; --panel:#161e28; --panel-2:#1b242f; --panel-3:#202b38;
+  --line:#27323f; --line-2:#364454;
+  --ink:#e5ecf4; --ink-2:#a2afbf; --ink-3:#788595;
+  --brand:#5a9bff; --brand-2:#8cbcff; --brand-weak:#12243e;
+  --ok:#4fca82; --ok-weak:#11301f;
+  --warn:#e2a750; --warn-weak:#33260f;
+  --danger:#ff6f64; --danger-weak:#3b1b18;
+  --purple:#a189f0; --purple-weak:#241b3d;
+  --nav:#111922; --nav-2:#0b1219; --nav-ink:#94a2b3; --nav-line:#1e2733;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:Inter,-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  font-size:13px; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+button{font:inherit;color:inherit}
+::selection{background:var(--brand-weak)}
+:focus-visible{outline:2px solid var(--brand); outline-offset:2px; border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- shell ---------- */
+.app{display:grid; grid-template-columns:216px 1fr; min-height:100vh}
+.side{background:var(--nav); border-right:1px solid var(--nav-line); display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow-y:auto}
+.brand{display:flex; align-items:center; gap:9px; padding:16px 16px 14px; border-bottom:1px solid var(--nav-line)}
+.brand .mark{width:24px;height:24px;border-radius:6px;background:linear-gradient(145deg,#3d8bfd,#1450b5);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;flex:none}
+.brand b{color:#fff;font-size:13.5px;font-weight:600;letter-spacing:.2px}
+.brand small{display:block;color:var(--nav-ink);font-size:10.5px;letter-spacing:.6px;text-transform:uppercase}
+.navgroup{padding:12px 0 4px}
+.navgroup>span{display:block;padding:0 16px 6px;color:#5f6f83;font-size:10.5px;letter-spacing:1.1px;text-transform:uppercase}
+.navitem{display:flex;align-items:center;gap:8px;width:100%;padding:8px 16px;background:none;border:0;color:var(--nav-ink);cursor:pointer;text-align:left;font-size:12.5px;border-left:2px solid transparent}
+.navitem:hover{background:var(--nav-2);color:#fff}
+.navitem[aria-current="page"]{background:var(--nav-2);color:#fff;border-left-color:var(--brand);font-weight:500}
+.navitem .dot{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.45;flex:none}
+.navitem .tagnew{margin-left:auto;font-size:9.5px;padding:1px 5px;border-radius:3px;background:rgba(255,120,90,.18);color:#ff9b86;letter-spacing:.3px}
+.side footer{margin-top:auto;padding:12px 16px;border-top:1px solid var(--nav-line);color:#5f6f83;font-size:10.5px}
+
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;gap:12px;padding:0 20px;height:46px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+.crumb{display:flex;align-items:center;gap:6px;color:var(--ink-3);font-size:12px;min-width:0}
+.crumb b{color:var(--ink);font-weight:600}
+.crumb i{font-style:normal;opacity:.5}
+.topbar .spacer{margin-left:auto}
+.ghosttoggle{display:flex;align-items:center;gap:7px;padding:4px 10px;border:1px solid var(--line-2);background:var(--panel);border-radius:20px;cursor:pointer;font-size:11.5px;color:var(--ink-2)}
+.ghosttoggle[aria-pressed="true"]{background:var(--warn-weak);border-color:var(--warn);color:var(--warn);font-weight:500}
+.ghosttoggle .sw{width:22px;height:12px;border-radius:7px;background:var(--line-2);position:relative;flex:none;transition:background .15s}
+.ghosttoggle .sw::after{content:"";position:absolute;top:2px;left:2px;width:8px;height:8px;border-radius:50%;background:#fff;transition:transform .15s}
+.ghosttoggle[aria-pressed="true"] .sw{background:var(--warn)}
+.ghosttoggle[aria-pressed="true"] .sw::after{transform:translateX(10px)}
+.wrap{padding:16px 20px 56px;display:grid;gap:12px;max-width:1560px;width:100%}
+
+/* ---------- primitives ---------- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+.card>.hd{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--line)}
+.card>.hd h2{margin:0;font-size:13.5px;font-weight:600;letter-spacing:.1px}
+.card>.hd .sub{color:var(--ink-3);font-size:11.5px}
+.card>.bd{padding:14px}
+.tabs{display:flex;gap:2px;padding:0 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+.tab{padding:10px 12px;background:none;border:0;border-bottom:2px solid transparent;color:var(--ink-2);cursor:pointer;font-size:13px}
+.tab[aria-selected="true"]{color:var(--brand);border-bottom-color:var(--brand);font-weight:600}
+.notice{display:flex;align-items:flex-start;gap:9px;padding:10px 12px;border-radius:var(--radius);background:var(--brand-weak);border:1px solid color-mix(in srgb,var(--brand) 25%,transparent);color:var(--ink);font-size:12.5px}
+.notice.warn{background:var(--warn-weak);border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
+.notice.danger{background:var(--danger-weak);border-color:color-mix(in srgb,var(--danger) 32%,transparent)}
+.notice .ic{flex:none;width:16px;height:16px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;color:#fff;background:var(--brand);margin-top:1px}
+.notice.warn .ic{background:var(--warn)} .notice.danger .ic{background:var(--danger)}
+
+.btn{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:4px;border:1px solid var(--line-2);background:var(--panel);color:var(--ink);cursor:pointer;font-size:12.5px;white-space:nowrap}
+.btn:hover{border-color:var(--brand);color:var(--brand)}
+.btn.pri{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.pri:hover{background:var(--brand-2);border-color:var(--brand-2);color:#fff}
+.btn.danger{border-color:color-mix(in srgb,var(--danger) 55%,transparent);color:var(--danger);background:var(--danger-weak)}
+.btn.danger:hover{background:var(--danger);color:#fff;border-color:var(--danger)}
+.btn.solid-danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.btn.ok{border-color:color-mix(in srgb,var(--ok) 50%,transparent);color:var(--ok);background:var(--ok-weak)}
+.btn.warn{border-color:color-mix(in srgb,var(--warn) 50%,transparent);color:var(--warn);background:var(--warn-weak)}
+.btn.sm{height:24px;padding:0 9px;font-size:12px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn[disabled]:hover{border-color:var(--line-2);color:var(--ink)}
+.lnk{background:none;border:0;padding:0;color:var(--brand);cursor:pointer;font-size:12.5px}
+.lnk:hover{text-decoration:underline}
+.lnk.d{color:var(--danger)}
+.lnk.m{color:var(--ink-3);cursor:default}
+.lnk.m:hover{text-decoration:none}
+
+.filters{display:grid;grid-template-columns:repeat(auto-fill,minmax(184px,1fr));gap:9px}
+.f{display:grid;gap:4px}
+.f label{font-size:11.5px;color:var(--ink-2)}
+.f label em{font-style:normal;color:var(--brand);font-weight:600}
+input,select{height:29px;padding:0 9px;border:1px solid var(--line-2);border-radius:4px;background:var(--panel);color:var(--ink);font:inherit;font-size:12.5px;width:100%;min-width:0}
+textarea{padding:7px 9px;border:1px solid var(--line-2);border-radius:4px;background:var(--panel);color:var(--ink);font:inherit;font-size:12.5px;width:100%;resize:vertical}
+input::placeholder,textarea::placeholder{color:var(--ink-3)}
+input:focus,select:focus,textarea:focus{border-color:var(--brand);outline:none;box-shadow:0 0 0 3px var(--brand-weak)}
+.actionbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel-2)}
+.selinfo{font-size:12px;color:var(--ink-2)}
+.selinfo b{color:var(--brand);font-variant-numeric:tabular-nums}
+
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:920px}
+th{text-align:left;font-weight:600;color:var(--ink-2);background:var(--panel-2);padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap;font-size:12px}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr:hover{background:var(--panel-2)}
+tbody tr.sel{background:var(--brand-weak)}
+td.num,th.num{font-variant-numeric:tabular-nums}
+td.ops{white-space:nowrap}
+td.ops .lnk+.lnk{margin-left:9px}
+.mono{font-variant-numeric:tabular-nums;letter-spacing:.1px}
+.sub2{color:var(--ink-3);font-size:11.5px}
+.chk{width:14px;height:14px;accent-color:var(--brand);cursor:pointer;margin:2px 0 0}
+.tfoot{display:flex;align-items:center;gap:10px;padding:10px 14px;color:var(--ink-2);font-size:12px}
+.tfoot .spacer{margin-left:auto}
+.pager{display:flex;gap:4px}
+.pager button{width:24px;height:24px;border:1px solid var(--line-2);background:var(--panel);border-radius:4px;cursor:pointer;font-size:12px;color:var(--ink-2)}
+.pager button.on{background:var(--brand);border-color:var(--brand);color:#fff}
+
+.tag{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:3px;font-size:11.5px;line-height:1.6;white-space:nowrap;border:1px solid transparent}
+.t-ok{background:var(--ok-weak);color:var(--ok);border-color:color-mix(in srgb,var(--ok) 25%,transparent)}
+.t-warn{background:var(--warn-weak);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 30%,transparent)}
+.t-danger{background:var(--danger-weak);color:var(--danger);border-color:color-mix(in srgb,var(--danger) 30%,transparent)}
+.t-info{background:var(--brand-weak);color:var(--brand);border-color:color-mix(in srgb,var(--brand) 25%,transparent)}
+.t-purple{background:var(--purple-weak);color:var(--purple);border-color:color-mix(in srgb,var(--purple) 25%,transparent)}
+.t-mute{background:var(--panel-3);color:var(--ink-3);border-color:var(--line)}
+.t-dot::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+
+/* ---------- annotation ---------- */
+.pin{display:none;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--warn);color:#fff;font-size:10px;font-weight:700;cursor:pointer;vertical-align:middle;margin-left:5px;border:0;font-variant-numeric:tabular-nums}
+body.anno .pin{display:inline-flex}
+body.anno .pin:hover{background:var(--danger)}
+.annopanel{display:none;position:fixed;right:0;top:46px;bottom:0;width:310px;background:var(--panel);border-left:1px solid var(--line);z-index:30;overflow-y:auto;box-shadow:-8px 0 24px rgba(20,32,48,.07)}
+body.anno .annopanel{display:block}
+body.anno .wrap{padding-right:330px}
+.annopanel h3{margin:0;padding:12px 14px;font-size:12.5px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:7px}
+.annopanel h3 span{margin-left:auto;color:var(--ink-3);font-weight:400;font-size:11px}
+.annolist{padding:10px 14px 40px;display:grid;gap:9px}
+.annoitem{display:grid;grid-template-columns:20px 1fr;gap:9px;padding:9px;border:1px solid var(--line);border-radius:5px;background:var(--panel-2);font-size:12px;line-height:1.5}
+.annoitem.hot{border-color:var(--warn);background:var(--warn-weak)}
+.annoitem .n{width:18px;height:18px;border-radius:9px;background:var(--warn);color:#fff;display:grid;place-items:center;font-size:10px;font-weight:700}
+.annoitem b{display:block;font-size:11.5px;color:var(--ink-3);font-weight:600;letter-spacing:.2px;margin-bottom:2px}
+
+/* ---------- modal ---------- */
+.scrim{position:fixed;inset:0;background:rgba(16,24,36,.45);display:grid;place-items:center;z-index:80;padding:24px;overflow-y:auto}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);width:min(720px,100%);max-height:calc(100vh - 48px);display:flex;flex-direction:column;animation:pop .16s ease-out}
+.modal.wide{width:min(940px,100%)}
+.modal.narrow{width:min(470px,100%)}
+@keyframes pop{from{opacity:0;transform:translateY(6px) scale(.99)}to{opacity:1;transform:none}}
+.modal>header{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid var(--line)}
+.modal>header h3{margin:0;font-size:14px;font-weight:600}
+.modal>header .x{margin-left:auto;background:none;border:0;color:var(--ink-3);cursor:pointer;font-size:17px;line-height:1;padding:2px 4px}
+.modal>.body{padding:16px;overflow-y:auto;display:grid;gap:12px}
+.modal>footer{display:flex;align-items:center;gap:8px;padding:12px 16px;border-top:1px solid var(--line);background:var(--panel-2);border-radius:0 0 8px 8px}
+.modal>footer .spacer{margin-left:auto}
+
+.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.kv div{background:var(--panel);padding:8px 11px}
+.kv dt{margin:0;font-size:11px;color:var(--ink-3)}
+.kv dd{margin:1px 0 0;font-size:12.5px}
+.checkline{display:flex;gap:9px;align-items:flex-start;padding:11px 12px;border:1px solid var(--line-2);border-radius:5px;background:var(--panel-2);cursor:pointer}
+.checkline.armed{border-color:var(--danger);background:var(--danger-weak)}
+.checkline input{width:15px;height:15px;accent-color:var(--danger);margin:2px 0 0;flex:none}
+.checkline b{display:block;font-size:12.5px}
+.checkline p{margin:3px 0 0;font-size:11.5px;color:var(--ink-2)}
+.req::after{content:"*";color:var(--danger);margin-left:3px}
+.steps{display:flex;align-items:center;gap:0;font-size:12px}
+.steps div{display:flex;align-items:center;gap:7px;color:var(--ink-3)}
+.steps div.on{color:var(--brand);font-weight:600}
+.steps div.done{color:var(--ok)}
+.steps i{width:18px;height:18px;border-radius:50%;border:1px solid currentColor;display:grid;place-items:center;font-style:normal;font-size:10.5px;font-weight:700}
+.steps div.on i{background:var(--brand);border-color:var(--brand);color:#fff}
+.steps div.done i{background:var(--ok);border-color:var(--ok);color:#fff}
+.steps hr{flex:1;border:0;border-top:1px solid var(--line-2);margin:0 10px;min-width:22px}
+.dropzone{border:1px dashed var(--line-2);border-radius:6px;padding:22px;text-align:center;color:var(--ink-2);background:var(--panel-2)}
+.dropzone b{display:block;color:var(--ink);font-size:13px;margin-bottom:3px}
+.stat{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.stat div{background:var(--panel);padding:10px 12px}
+.stat span{display:block;font-size:11px;color:var(--ink-3)}
+.stat strong{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
+.stat .g strong{color:var(--ok)} .stat .r strong{color:var(--danger)} .stat .b strong{color:var(--brand)}
+.toast{position:fixed;left:50%;top:60px;transform:translateX(-50%);z-index:120;display:grid;gap:7px;justify-items:center;pointer-events:none}
+.toast div{background:var(--ink);color:var(--panel);padding:8px 15px;border-radius:5px;font-size:12.5px;box-shadow:var(--shadow);animation:pop .16s}
+.toast div.ok{background:var(--ok);color:#fff} .toast div.err{background:var(--danger);color:#fff}
+
+.flowcard{padding:16px;overflow-x:auto}
+.flowcard svg{display:block;min-width:820px}
+.matrix td:first-child{font-weight:600;white-space:nowrap}
+.matrix tr.hot td{background:color-mix(in srgb,var(--danger-weak) 60%,transparent)}
+.matrix tr.hot td:first-child{color:var(--danger)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.hide{display:none!important}
+.rowgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.full{grid-column:1/-1}
+@media (max-width:960px){
+  .app{grid-template-columns:1fr}
+  .side{position:static;height:auto;flex-direction:row;overflow-x:auto;align-items:center}
+  .side .brand,.side footer,.navgroup>span{display:none}
+  .navgroup{display:flex;padding:0}
+  .navitem{border-left:0;border-bottom:2px solid transparent;white-space:nowrap}
+  .navitem[aria-current="page"]{border-left:0;border-bottom-color:var(--brand)}
+  body.anno .wrap{padding-right:20px}
+  .annopanel{top:auto;width:100%;left:0;height:44vh;border-left:0;border-top:1px solid var(--line)}
+}
+</style>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <div class="mark">Q</div>
+      <div><b>Qbit Admin</b><small>Compliance Console</small></div>
+    </div>
+    <nav class="navgroup" id="nav">
+      <span>API 客户业务</span>
+      <button class="navitem" data-view="master"><i class="dot"></i>API 母户删卡<em class="tagnew">改</em></button>
+      <button class="navitem" data-view="sub"><i class="dot"></i>API 子户批量删卡<em class="tagnew">改</em></button>
+      <span style="margin-top:8px">量子卡</span>
+      <button class="navitem" data-view="cardholder" aria-current="page"><i class="dot"></i>Cardholder 列表<em class="tagnew">改</em></button>
+      <button class="navitem" data-view="detail"><i class="dot"></i>持卡人详情</button>
+      <span style="margin-top:8px">合规风控</span>
+      <button class="navitem" data-view="blacklist"><i class="dot"></i>自然人黑名单库<em class="tagnew">新</em></button>
+      <button class="navitem" data-view="hits"><i class="dot"></i>黑名单命中明细<em class="tagnew">新</em></button>
+      <span style="margin-top:8px">说明</span>
+      <button class="navitem" data-view="spec"><i class="dot"></i>状态与流程说明</button>
+    </nav>
+    <footer>PD-2118 · V1.0 · 2026-09-07<br>原型稿，非线上页面</footer>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="crumb" id="crumb"></div>
+      <div class="spacer"></div>
+      <button class="ghosttoggle" id="annoBtn" aria-pressed="false"><i class="sw"></i>需求批注</button>
+      <button class="ghosttoggle" id="themeBtn" aria-pressed="false" title="切换深浅色"><i class="sw"></i>深色</button>
+    </header>
+    <div class="wrap" id="wrap"></div>
+  </div>
+</div>
+
+<aside class="annopanel">
+  <h3>需求批注 <span id="annoCount"></span></h3>
+  <div class="annolist" id="annoList"></div>
+</aside>
+<div id="modalRoot"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const $ = (s,r=document)=>r.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ============ 数据 ============ */
+const CH = [
+  {id:"h_123456", name:"Chang Fang",  nat:"SG", idt:"PASSPORT", idn:"S1234567A", email:"changfang88@tempmail.io", acc:"acc_7890", accName:"杭州雷军全球账户CC", cards:3, pend:0, kyc:"同意准入", st:"active"},
+  {id:"h_123902", name:"San Zhang",   nat:"SG", idt:"PASSPORT", idn:"S8842301B", email:"az90119@tempmail.io",    acc:"acc_8123", accName:"杭州雷军全球账户CC", cards:2, pend:1, kyc:"同意准入", st:"active"},
+  {id:"h_124117", name:"Yongming Dai",nat:"MY", idt:"ID_CARD",  idn:"MY8842301B",email:"ym.dai@tempmail.io",     acc:"acc_8123", accName:"杭州雷军全球账户CC", cards:1, pend:0, kyc:"同意准入", st:"active"},
+  {id:"h_124560", name:"HEI NIN KAM", nat:"HK", idt:"PASSPORT", idn:"HK5561902C",email:"ydanc01@tempmail.io",    acc:"acc_9021", accName:"Scan to pay Company", cards:4, pend:2, kyc:"同意准入", st:"active"},
+  {id:"h_124773", name:"xu mingru",   nat:"CN", idt:"PASSPORT", idn:"E5541273D", email:"343412167750@qq.com",    acc:"acc_9021", accName:"Scan to pay Company", cards:2, pend:0, kyc:"同意准入", st:"controlled"},
+  {id:"h_125014", name:"YUANFENG LI", nat:"MY", idt:"ID_CARD",  idn:"MY7719340E", email:"test00004@tempmail.io", acc:"acc_9188", accName:"杭州总根式众网络有限公司", cards:1, pend:0, kyc:"待审核", st:"review"},
+  {id:"h_125220", name:"Sbxtest Two", nat:"US", idt:"PASSPORT", idn:"U2210398F", email:"test00@tempmail.io",     acc:"acc_9188", accName:"杭州总根式众网络有限公司", cards:0, pend:0, kyc:"拒绝准入", st:"rejected"},
+  {id:"h_125781", name:"Wei Zhao",    nat:"SG", idt:"PASSPORT", idn:"S9930112G", email:"wz.trade@tempmail.io",   acc:"acc_7890", accName:"杭州雷军全球账户CC", cards:2, pend:0, kyc:"同意准入", st:"deleted"},
+];
+const ST = {
+  active:{t:"正常 / 活跃",c:"t-ok"}, controlled:{t:"已管控",c:"t-warn"}, deleted:{t:"已删除",c:"t-danger"},
+  review:{t:"待审核",c:"t-info"}, rejected:{t:"审核拒绝",c:"t-mute"}, expired:{t:"持卡人过期",c:"t-mute"}
+};
+const BL = [
+  {id:"bl_9988", dim:"国籍+证件ID", val:"S1234567A", nat:"SG", idt:"PASSPORT", src:"处置自动同步", reason:"删除持卡人｜涉风险注册行为拦截", opr:"risk_op_007", ord:"DP-20260903-0142", at:"2026-09-03 14:22:41", st:"live", hits:3},
+  {id:"bl_9991", dim:"邮箱", val:"az90119@tempmail.io", nat:"—", idt:"—", src:"批量导入", reason:"一次性邮箱域批量加黑｜风控名单 0903 批次", opr:"risk_op_002", ord:"IMP-20260903-0007", at:"2026-09-03 11:08:20", st:"live", hits:5},
+  {id:"bl_9974", dim:"国籍+证件ID", val:"MY8842301B", nat:"MY", idt:"ID_CARD", src:"人工录入", reason:"调单确认买卖证件｜证据单号 EV-8871", opr:"risk_op_011", ord:"EV-8871", at:"2026-09-02 17:45:03", st:"live", hits:1},
+  {id:"bl_9960", dim:"邮箱", val:"ydanc01@tempmail.io", nat:"—", idt:"—", src:"人工录入", reason:"团伙注册聚集邮箱｜证据单号 EV-8802", opr:"risk_op_007", ord:"EV-8802", at:"2026-08-29 09:31:55", st:"live", hits:0},
+  {id:"bl_9931", dim:"国籍+证件ID", val:"HK5561902C", nat:"HK", idt:"PASSPORT", src:"处置自动同步", reason:"删除持卡人｜盗刷争议集中", opr:"risk_op_003", ord:"DP-20260826-0031", at:"2026-08-26 20:12:09", st:"released", hits:2, rel:"2026-09-01 10:04 · risk_lead_01 · 客户申诉材料通过复核"},
+  {id:"bl_9902", dim:"邮箱", val:"wz.trade@tempmail.io", nat:"—", idt:"—", src:"批量导入", reason:"外部风控情报名单 0821 批次", opr:"risk_op_002", ord:"IMP-20260821-0003", at:"2026-08-21 15:50:12", st:"released", hits:0, rel:"2026-08-30 16:20 · risk_lead_01 · 情报误报，已加白"},
+];
+const HITS = [
+  {id:"hit_001", at:"2026-09-03 14:23:12.123", dim:"国籍+证件ID+类型", val:"S1234567A", ch:"h_123456", acc:"acc_7890", accName:"杭州雷军全球账户CC", bl:"bl_9988", scene:"KYC 认证（SumSub 前置校验）", res:"已拦截"},
+  {id:"hit_002", at:"2026-09-03 16:41:07.882", dim:"邮箱", val:"az90119@tempmail.io", ch:"h_123902", acc:"acc_8123", accName:"杭州雷军全球账户CC", bl:"bl_9991", scene:"KYC 认证（SumSub 前置校验）", res:"已拦截"},
+  {id:"hit_003", at:"2026-09-04 09:02:55.410", dim:"邮箱", val:"az9110@tempmail.io", ch:"h_126001", acc:"acc_9021", accName:"Scan to pay Company", bl:"bl_9991", scene:"KYC 认证（SumSub 前置校验）", res:"已拦截"},
+  {id:"hit_004", at:"2026-09-05 21:17:30.006", dim:"国籍+证件ID+类型", val:"MY8842301B", ch:"h_124117", acc:"acc_8123", accName:"杭州雷军全球账户CC", bl:"bl_9974", scene:"KYC 认证（SumSub 前置校验）", res:"已拦截"},
+  {id:"hit_005", at:"2026-09-06 08:44:19.775", dim:"国籍+证件ID+类型", val:"HK5561902C", ch:"h_124560", acc:"acc_9021", accName:"Scan to pay Company", bl:"bl_9931", scene:"KYC 认证（SumSub 前置校验）", res:"已拦截"},
+];
+const LOGS = {
+  bl_9988:[
+    {at:"2026-09-03 14:22:41", who:"risk_op_007", act:"加黑", detail:"来源：删除持卡人处置单 DP-20260903-0142 自动同步；备注：涉风险注册行为拦截"},
+    {at:"2026-09-03 14:23:12", who:"system", act:"命中", detail:"KYC 认证命中，已拦截（hit_001）"},
+  ],
+  bl_9931:[
+    {at:"2026-08-26 20:12:09", who:"risk_op_003", act:"加黑", detail:"来源：删除持卡人处置单 DP-20260826-0031；备注：盗刷争议集中"},
+    {at:"2026-09-06 08:44:19", who:"system", act:"命中", detail:"KYC 认证命中，已拦截（hit_005）"},
+    {at:"2026-09-01 10:04:33", who:"risk_lead_01", act:"解除", detail:"客户申诉材料通过复核，解除黑名单（加白）"},
+  ]
+};
+const state = {view:"cardholder", sel:new Set(), blSel:new Set(), masked:true, page:1};
+
+/* ============ 批注 ============ */
+const NOTES = {
+  cardholder:[
+    ["3.1","多维度筛选模块","持卡人ID、国籍、证件类型+证件ID、邮箱、持卡人状态、所属账户 ID 组合检索。"],
+    ["3.1","邮箱模糊匹配","仅填域名（如 tempmail.io）即可筛出该域下全量持卡人，用于批量处置。"],
+    ["3.1","列表新增展示字段","持卡人ID、国籍、证件类型/证件ID、邮箱、名下卡数量、pending 卡数量，与筛选联动。"],
+    ["3.2","单条 / 批量管控","支持多选、跨页全选后批量管控；管控生效后名下所有卡片同步转为管控状态。"],
+    ["3.2","解除管控","可逆操作，支持单条 / 批量；解除后持卡人及名下卡片恢复正常。"],
+    ["3.3","删除持卡人入口","不可逆。点击进入二次确认弹窗，展示身份要素与卡片影响面。"],
+    ["3.2","管控状态打标","列表与详情页展示「已管控」标；状态同步异常时刷新页面重新拉取。"],
+  ],
+  master:[
+    ["3.1","母户删卡页新增入口","「批量自动删卡」页操作区新增【删除持卡人】【管控持卡人】按钮，与原批量删卡并列。"],
+    ["3.1","卡片列表新增字段","持卡人ID / 国籍 / 邮箱三列，支持从卡维度反查持卡人并直接发起持卡人级处置。"],
+    ["3.3","失败重试","批量处置部分失败时明细展示失败卡ID、持卡人信息与报错原因，支持单条/批量重试。"],
+  ],
+  sub:[
+    ["3.1","子户页同构","子户批量删卡页与母户页入口、字段、交互保持一致，master / sub 两个维度均适用。"],
+    ["3.3","Pending 联动","存在 pending 交易的卡仅管控不删除，报错明细中回显未删除原因。"],
+  ],
+  blacklist:[
+    ["3.4.2","筛选区","黑名单维度 / 国籍 / 名单状态 / 数据来源 / 添加时间 + 维度值模糊搜索。"],
+    ["3.4.1","操作按钮","新增黑名单、批量导入、批量解除、导出。"],
+    ["3.4.1","加黑原因备注必填","所有来源新增的记录均须填写，列表与详情完整展示，供解除时追溯依据。"],
+    ["3.4.2","操作栏规则","已解除的数据隐藏【解除】按钮，始终保留「操作日志」「命中记录」入口。"],
+    ["3.4.1","批量导入","提供标准模板；导入前校验格式、国籍合法性、重复性，冲突实时提示；完成后生成成功/失败回执。"],
+    ["3.4.1","操作日志","全量留痕：操作人、操作时间、加黑/解黑对象，支持按单条名单全程回溯。"],
+  ],
+  hits:[
+    ["3.4.2C","命中明细只读","每次 KYC 前置校验命中自动落库，不支持人工新增、修改、删除。"],
+    ["3.4.2C","脱敏规则","列表脱敏展示，点击行/详情弹窗可查看原始完整维度值；导出 CSV 含完整明文。"],
+    ["3.4.2C","黑名单记录 ID 跳转","点击 bl_xxxx 回跳黑名单库列表并定位对应主记录。"],
+    ["3.4.3","拦截结果枚举","当前业务场景固定为「已拦截」，预留扩展字段。"],
+  ],
+  detail:[
+    ["3.2","详情页状态打标","持卡人详情页头部展示当前状态标签与管控/删除操作入口。"],
+    ["3.3","卡片联动视图","名下卡片列表按 pending 状态区分处置结果预期。"],
+  ],
+  spec:[
+    ["2.2","状态边界","持卡人是主体、卡片是载体；持卡人状态影响名下全部卡片。红色为本次范围。"],
+    ["3.3.4","处理流程","删除持卡人 → 判断 pending → 分支处置 → 每周定时任务批量重试删卡。"],
+  ]
+};
+
+/* ============ 工具 ============ */
+function toast(msg,kind=""){
+  const d=document.createElement("div"); d.className=kind; d.textContent=msg;
+  $("#toast").appendChild(d); setTimeout(()=>d.remove(),2600);
+}
+function maskVal(v,dim){
+  if(!state.masked) return v;
+  if(v.includes("@")){const [a,b]=v.split("@");return a.slice(0,1)+"***"+a.slice(-1)+"@"+b;}
+  return "***-"+v.slice(-8);
+}
+function stTag(st){const s=ST[st];return `<span class="tag ${s.c} t-dot">${s.t}</span>`;}
+let pinSeq=0;
+function pin(){ return `<button class="pin" data-pin="${++pinSeq}" title="查看需求批注">${pinSeq}</button>`; }
+
+function closeModal(){ $("#modalRoot").innerHTML=""; }
+function openModal(html,cls=""){
+  $("#modalRoot").innerHTML = `<div class="scrim" data-scrim><div class="modal ${cls}">${html}</div></div>`;
+  const scrim=$("[data-scrim]");
+  scrim.addEventListener("mousedown",e=>{ if(e.target===scrim) closeModal(); });
+  $("#modalRoot").querySelectorAll("[data-close]").forEach(b=>b.onclick=closeModal);
+}
+document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeModal(); });
+
+/* ============ 视图：持卡人列表 ============ */
+function viewCardholder(){
+  return `
+  <div class="card">
+    <div class="hd"><h2>持卡人筛选${pin()}</h2><span class="sub">支持持卡人ID、国籍、证件、邮箱域名模糊匹配${pin()}</span></div>
+    <div class="bd" style="display:grid;gap:11px">
+      <div class="filters">
+        <div class="f"><label>持卡人 ID</label><input placeholder="h_123456"></div>
+        <div class="f"><label>国籍</label><select><option>全部</option><option>SG 新加坡</option><option>MY 马来西亚</option><option>HK 中国香港</option><option>CN 中国大陆</option><option>US 美国</option></select></div>
+        <div class="f"><label>证件类型</label><select><option>全部</option><option>PASSPORT</option><option>ID_CARD</option></select></div>
+        <div class="f"><label>证件 ID</label><input placeholder="S1234567A"></div>
+        <div class="f"><label>邮箱 <em>支持仅填域名模糊匹配</em></label><input id="fEmail" placeholder="tempmail.io"></div>
+        <div class="f"><label>持卡人状态</label><select id="fSt"><option value="">全部</option><option value="active">正常 / 活跃</option><option value="controlled">已管控</option><option value="deleted">已删除</option><option value="review">待审核</option></select></div>
+        <div class="f"><label>所属账户 ID</label><input placeholder="acc_7890"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn pri" id="doSearch">搜索</button>
+        <button class="btn" id="doReset">清空</button>
+        <span style="margin-left:auto;align-self:center" class="sub2">示例：邮箱填 <code>tempmail.io</code> 可筛出该域名下全量持卡人</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="actionbar">
+      <button class="btn warn" data-bulk="control">批量管控持卡人${pin()}</button>
+      <button class="btn ok" data-bulk="release">批量解除管控${pin()}</button>
+      <button class="btn danger" data-bulk="delete">删除持卡人${pin()}</button>
+      <span style="width:1px;height:18px;background:var(--line)"></span>
+      <button class="btn" data-bulk="retry">批量重试</button>
+      <button class="btn">导出</button>
+      <span class="spacer" style="margin-left:auto"></span>
+      <span class="selinfo">已选 <b id="selN">0</b> / ${CH.length} 条</span>
+    </div>
+    <div class="tablewrap">
+      <table id="chTable">
+        <thead><tr>
+          <th style="width:32px"><input type="checkbox" class="chk" id="chAll"></th>
+          <th>持卡人 ID</th><th>姓名</th><th>国籍</th><th>证件类型 / 证件 ID</th><th>邮箱</th>
+          <th class="num">名下卡 / pending</th><th>所属账户</th><th>持卡人状态${pin()}</th><th style="width:186px">操作</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="tfoot"><span>共 ${CH.length} 条</span><span class="spacer"></span>
+      <div class="pager"><button>‹</button><button class="on">1</button><button>2</button><button>3</button><button>›</button></div>
+    </div>
+  </div>`;
+}
+function renderCH(){
+  const tb=$("#chTable tbody"); if(!tb) return;
+  const q=($("#fEmail")?.value||"").trim().toLowerCase();
+  const st=$("#fSt")?.value||"";
+  const rows=CH.filter(c=>(!q||c.email.toLowerCase().includes(q))&&(!st||c.st===st));
+  tb.innerHTML = rows.map(c=>{
+    const on=state.sel.has(c.id), gone=c.st==="deleted";
+    const ops = gone
+      ? `<button class="lnk m">已删除</button>`
+      : (c.st==="controlled"
+        ? `<button class="lnk" data-act="release" data-id="${c.id}">解除管控</button><button class="lnk d" data-act="delete" data-id="${c.id}">删除持卡人</button><button class="lnk" data-act="cards" data-id="${c.id}">名下卡片</button>`
+        : `<button class="lnk" data-act="control" data-id="${c.id}">管控</button><button class="lnk d" data-act="delete" data-id="${c.id}">删除持卡人</button><button class="lnk" data-act="cards" data-id="${c.id}">名下卡片</button>`);
+    return `<tr class="${on?'sel':''}">
+      <td><input type="checkbox" class="chk" data-pick="${c.id}" ${on?"checked":""} ${gone?"disabled":""}></td>
+      <td class="mono">${c.id}</td>
+      <td>${esc(c.name)}</td>
+      <td>${c.nat}</td>
+      <td><span class="tag t-mute">${c.idt}</span><div class="mono" style="margin-top:3px">${c.idn}</div></td>
+      <td>${esc(c.email)}</td>
+      <td class="num">${c.cards} 张${c.pend?` <span class="tag t-warn">pending ${c.pend}</span>`:""}</td>
+      <td><div class="mono">${c.acc}</div><div class="sub2">${esc(c.accName)}</div></td>
+      <td>${stTag(c.st)}</td>
+      <td class="ops">${ops}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="10" style="text-align:center;color:var(--ink-3);padding:34px">无匹配数据</td></tr>`;
+  $("#selN").textContent = state.sel.size;
+}
+
+/* ============ 视图：母户 / 子户删卡页 ============ */
+function viewCards(kind){
+  const isSub = kind==="sub";
+  const cards=[
+    {i:1,t:"2026-07-24 15:20",token:"tk_88***21",last4:"4417",ch:"h_123456",name:"Chang Fang",nat:"SG",email:"changfang88@tempmail.io",type:"储值卡",st:"使用中",del:"待删除",pend:false},
+    {i:2,t:"2026-07-24 15:20",token:"tk_31***07",last4:"9902",ch:"h_123902",name:"San Zhang",nat:"SG",email:"az90119@tempmail.io",type:"额度卡",st:"使用中",del:"待删除",pend:true},
+    {i:3,t:"2026-07-24 15:20",token:"tk_55***63",last4:"1180",ch:"h_124117",name:"Yongming Dai",nat:"MY",email:"ym.dai@tempmail.io",type:"储值卡",st:"使用中",del:"待删除",pend:false},
+    {i:4,t:"2026-07-25 09:02",token:"tk_67***12",last4:"7734",ch:"h_124560",name:"HEI NIN KAM",nat:"HK",email:"ydanc01@tempmail.io",type:"储值卡",st:"已管控",del:"删除失败",pend:true},
+  ];
+  return `
+  <div class="card">
+    <div class="tabs">
+      <button class="tab" aria-selected="true">批量自动删卡</button>
+      <button class="tab" aria-selected="false">批量管控卡片</button>
+    </div>
+    <div class="bd" style="display:grid;gap:12px">
+      <div class="notice"><i class="ic">i</i><div>账户 <b>${isSub?"Scan to pay Company（ID: 648119840382）":"杭州雷军全球账户CC（ID: 192705）"}</b> 名下共 <b>4</b> 张${isSub?"子户":"量"}卡。勾选卡片后可批量删卡；对删除失败的卡片可批量重试。<br><span class="sub2">本次需求在此页新增持卡人维度处置入口：删除持卡人 / 管控持卡人。</span></div></div>
+      <div class="filters">
+        <div class="f"><label>账户 ID</label><input value="${isSub?"648119840382":"192705"}"></div>
+        <div class="f"><label>主体名称</label><input placeholder="主体名称"></div>
+        <div class="f"><label>卡号后四位</label><input placeholder="4417"></div>
+        <div class="f"><label>持卡人 ID</label><input placeholder="h_123456"></div>
+        <div class="f"><label>国籍</label><select><option>全部</option><option>SG</option><option>MY</option><option>HK</option></select></div>
+        <div class="f"><label>邮箱 <em>支持域名模糊</em></label><input placeholder="tempmail.io"></div>
+        <div class="f"><label>卡状态</label><select><option>全部</option><option>使用中</option><option>已管控</option></select></div>
+        <div class="f"><label>删卡状态</label><select><option>全部</option><option>待删除</option><option>删除失败</option></select></div>
+      </div>
+      <div style="display:flex;gap:8px"><button class="btn pri">搜索</button><button class="btn">清空</button></div>
+    </div>
+    <div class="actionbar">
+      <button class="btn">批量删卡</button>
+      <button class="btn">批量重试删卡</button>
+      <span style="width:1px;height:18px;background:var(--line)"></span>
+      <button class="btn danger" data-bulk="delete">删除持卡人${pin()}</button>
+      <button class="btn warn" data-bulk="control">管控持卡人</button>
+      <span class="spacer" style="margin-left:auto"></span>
+      <span class="selinfo">已选 <b>2</b> / 4 条</span>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th style="width:32px"><input type="checkbox" class="chk"></th><th class="num">序号</th><th>触发时间</th><th>卡token</th><th class="num">后四位</th>
+        <th>持卡人 ID${pin()}</th><th>持卡人姓名</th><th>国籍</th><th>邮箱</th><th>卡类型</th><th>卡状态</th><th>删卡状态</th><th>失败原因</th></tr></thead>
+        <tbody>${cards.map(c=>`<tr class="${c.i<3?'sel':''}">
+          <td><input type="checkbox" class="chk" ${c.i<3?"checked":""}></td>
+          <td class="num">${c.i}</td><td class="mono">${c.t}</td><td class="mono">${c.token}</td><td class="num mono">${c.last4}</td>
+          <td class="mono">${c.ch}</td><td>${esc(c.name)}</td><td>${c.nat}</td><td>${esc(c.email)}</td><td>${c.type}</td>
+          <td>${c.st==="已管控"?'<span class="tag t-warn t-dot">已管控</span>':'<span class="tag t-ok t-dot">使用中</span>'}</td>
+          <td>${c.del==="删除失败"?'<span class="tag t-danger">删除失败</span>':'<span class="tag t-mute">待删除</span>'}</td>
+          <td class="sub2">${c.pend&&c.del==="删除失败"?"存在 pending 交易，卡片已转管控、未删除":"—"}</td>
+        </tr>`).join("")}</tbody>
+      </table>
+    </div>
+    <div class="tfoot"><span>共 4 条</span><span class="spacer"></span><div class="pager"><button>‹</button><button class="on">1</button><button>›</button></div></div>
+  </div>`;
+}
+
+/* ============ 视图：持卡人详情 ============ */
+function viewDetail(){
+  const c=CH[1];
+  return `
+  <div class="card">
+    <div class="hd">
+      <h2>${esc(c.name)}</h2>
+      <span class="mono sub">${c.id}</span>
+      ${stTag(c.st)}${pin()}
+      <span class="spacer" style="margin-left:auto"></span>
+      <button class="btn warn" data-act="control" data-id="${c.id}">管控持卡人</button>
+      <button class="btn danger" data-act="delete" data-id="${c.id}">删除持卡人</button>
+    </div>
+    <div class="bd">
+      <div class="kv">
+        <div><dt>持卡人 ID</dt><dd class="mono">${c.id}</dd></div>
+        <div><dt>姓名</dt><dd>${esc(c.name)}</dd></div>
+        <div><dt>国籍</dt><dd>${c.nat}</dd></div>
+        <div><dt>证件类型</dt><dd>${c.idt}</dd></div>
+        <div><dt>证件 ID</dt><dd class="mono">${c.idn}</dd></div>
+        <div><dt>邮箱</dt><dd>${esc(c.email)}</dd></div>
+        <div><dt>所属账户</dt><dd class="mono">${c.acc} · ${esc(c.accName)}</dd></div>
+        <div><dt>KYC 状态</dt><dd>${c.kyc}</dd></div>
+        <div><dt>黑名单状态</dt><dd><span class="tag t-mute">未加黑</span></dd></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="hd"><h2>名下卡片</h2><span class="sub">共 ${c.cards} 张，其中 ${c.pend} 张存在 pending 交易${pin()}</span></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>卡 ID</th><th class="num">后四位</th><th>卡类型</th><th>卡状态</th><th>pending 交易</th><th>删除持卡人后预期</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">card_77120</td><td class="num mono">9902</td><td>额度卡</td><td><span class="tag t-ok t-dot">使用中</span></td><td><span class="tag t-warn">1 笔</span></td><td class="sub2">仅管控、不删除；pending 结束后维持管控，由每周定时任务重试删除</td></tr>
+        <tr><td class="mono">card_77121</td><td class="num mono">3318</td><td>储值卡</td><td><span class="tag t-ok t-dot">使用中</span></td><td>—</td><td class="sub2">随持卡人一并删除</td></tr>
+      </tbody>
+    </table></div>
+  </div>`;
+}
+
+/* ============ 视图：黑名单库 ============ */
+function viewBlacklist(){
+  return `
+  <div class="card">
+    <div class="hd"><h2>自然人黑名单库</h2><span class="sub">加黑后实时生效（命中即拦截），历史已开卡不回溯</span></div>
+    <div class="bd" style="display:grid;gap:11px">
+      <div class="filters">
+        <div class="f"><label>黑名单维度</label><select id="bDim"><option value="">全部</option><option>国籍+证件ID</option><option>邮箱</option></select></div>
+        <div class="f"><label>国籍</label><select><option>全部</option><option>SG</option><option>MY</option><option>HK</option></select></div>
+        <div class="f"><label>名单状态</label><select id="bSt"><option value="">全部</option><option value="live">生效</option><option value="released">已解除</option></select></div>
+        <div class="f"><label>数据来源</label><select id="bSrc"><option value="">全部</option><option>人工录入</option><option>批量导入</option><option>处置自动同步</option></select></div>
+        <div class="f"><label>添加时间</label><input type="date" value="2026-08-01"></div>
+        <div class="f"><label>维度值 <em>模糊搜索</em></label><input id="bQ" placeholder="证件号 / 邮箱"></div>
+      </div>
+      <div style="display:flex;gap:8px"><button class="btn pri" id="bSearch">查询</button><button class="btn" id="bReset">重置</button>${pin()}</div>
+    </div>
+    <div class="actionbar">
+      <button class="btn pri" data-open="addBl">新增黑名单</button>
+      <button class="btn" data-open="import">批量导入</button>
+      <button class="btn ok" data-open="batchRelease">批量解除</button>
+      <button class="btn">导出</button>${pin()}
+      <span class="spacer" style="margin-left:auto"></span>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);cursor:pointer">
+        <input type="checkbox" class="chk" id="maskTgl" ${state.masked?"checked":""}> 脱敏展示
+      </label>
+      <span class="selinfo">已选 <b id="blN">0</b> 条</span>
+    </div>
+    <div class="tablewrap"><table id="blTable">
+      <thead><tr><th style="width:32px"><input type="checkbox" class="chk" id="blAll"></th>
+      <th>黑名单 ID</th><th>维度</th><th>内容（脱敏）</th><th>国籍</th><th>证件类型</th><th>来源</th>
+      <th style="min-width:230px">加黑原因备注${pin()}</th><th>操作人</th><th>加入时间</th><th class="num">命中</th><th>状态</th><th style="width:170px">操作${pin()}</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="tfoot"><span id="blCount"></span><span class="spacer"></span><div class="pager"><button>‹</button><button class="on">1</button><button>›</button></div></div>
+  </div>`;
+}
+function renderBL(){
+  const tb=$("#blTable tbody"); if(!tb) return;
+  const q=($("#bQ")?.value||"").trim().toLowerCase();
+  const dim=$("#bDim")?.value||"", st=$("#bSt")?.value||"", src=$("#bSrc")?.value||"";
+  const rows=BL.filter(b=>(!q||b.val.toLowerCase().includes(q))&&(!dim||b.dim===dim)&&(!st||b.st===st)&&(!src||b.src===src));
+  tb.innerHTML=rows.map(b=>{
+    const on=state.blSel.has(b.id), live=b.st==="live";
+    return `<tr class="${on?'sel':''}" id="row-${b.id}">
+      <td><input type="checkbox" class="chk" data-blpick="${b.id}" ${on?"checked":""} ${live?"":"disabled"}></td>
+      <td class="mono">${b.id}</td>
+      <td>${b.dim}</td>
+      <td class="mono">${esc(maskVal(b.val,b.dim))}</td>
+      <td>${b.nat}</td><td>${b.idt}</td>
+      <td><span class="tag ${b.src==="处置自动同步"?"t-purple":b.src==="批量导入"?"t-info":"t-mute"}">${b.src}</span></td>
+      <td>${esc(b.reason)}<div class="sub2">单号 ${b.ord}</div></td>
+      <td class="mono">${b.opr}</td>
+      <td class="mono">${b.at}</td>
+      <td class="num">${b.hits}</td>
+      <td>${live?'<span class="tag t-danger t-dot">生效</span>':'<span class="tag t-mute t-dot">已解除</span>'}</td>
+      <td class="ops">
+        ${live?`<button class="lnk" data-act="release-bl" data-id="${b.id}">解除</button>`:""}
+        <button class="lnk" data-act="log" data-id="${b.id}">操作日志</button>
+        <button class="lnk" data-act="hitsof" data-id="${b.id}">命中记录</button>
+      </td>
+    </tr>`;
+  }).join("")||`<tr><td colspan="13" style="text-align:center;color:var(--ink-3);padding:34px">无匹配数据</td></tr>`;
+  $("#blCount").textContent=`共 ${rows.length} 条`; $("#blN").textContent=state.blSel.size;
+}
+
+/* ============ 视图：命中明细 ============ */
+function viewHits(){
+  return `
+  <div class="card">
+    <div class="hd"><h2>黑名单命中明细</h2><span class="sub">KYC 前置校验命中自动落库，只读不可篡改${pin()}</span></div>
+    <div class="bd" style="display:grid;gap:11px">
+      <div class="filters">
+        <div class="f"><label>命中时间（起，精确到毫秒）</label><input value="2026-09-01 00:00:00.000"></div>
+        <div class="f"><label>命中时间（止）</label><input value="2026-09-07 23:59:59.999"></div>
+        <div class="f"><label>命中维度</label><select id="hDim"><option value="">全部</option><option>国籍+证件ID+类型</option><option>邮箱</option></select></div>
+        <div class="f"><label>维度值 <em>模糊搜索</em></label><input id="hQ" placeholder="证件号 / 邮箱"></div>
+        <div class="f"><label>持卡人 / 账户 ID</label><input placeholder="h_123456 或 acc_7890"></div>
+        <div class="f"><label>拦截结果</label><select><option>全部</option><option>已拦截</option></select></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn pri" id="hSearch">查询</button><button class="btn" id="hReset">重置</button>
+        <button class="btn" id="hExport">导出 CSV</button>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);cursor:pointer;margin-left:auto">
+          <input type="checkbox" class="chk" id="maskTgl2" ${state.masked?"checked":""}> 脱敏展示
+        </label>
+      </div>
+    </div>
+    <div class="tablewrap"><table id="hitTable">
+      <thead><tr><th>命中 ID</th><th>命中时间</th><th>命中维度</th><th>维度值（脱敏）${pin()}</th><th>持卡人 ID</th><th>账户 ID / 主体名称</th><th>黑名单记录 ID${pin()}</th><th>命中场景</th><th>拦截结果${pin()}</th><th>操作</th></tr></thead>
+      <tbody></tbody>
+    </table></div>
+    <div class="tfoot"><span id="hitCount"></span><span class="spacer"></span><div class="pager"><button>‹</button><button class="on">1</button><button>›</button></div></div>
+  </div>
+  <div class="notice"><i class="ic">i</i><div><b>对客话术</b>：认证未通过，证件存在风险，如有疑问请联系客服。<span class="sub2">（不暴露风控细节）</span></div></div>`;
+}
+function renderHits(){
+  const tb=$("#hitTable tbody"); if(!tb) return;
+  const q=($("#hQ")?.value||"").trim().toLowerCase(), dim=$("#hDim")?.value||"";
+  const rows=HITS.filter(h=>(!q||h.val.toLowerCase().includes(q))&&(!dim||h.dim===dim));
+  tb.innerHTML=rows.map(h=>`<tr>
+    <td class="mono">${h.id}</td><td class="mono">${h.at}</td><td>${h.dim}</td>
+    <td class="mono">${esc(maskVal(h.val,h.dim))}</td>
+    <td class="mono">${h.ch}</td>
+    <td><div class="mono">${h.acc}</div><div class="sub2">${esc(h.accName)}</div></td>
+    <td><button class="lnk mono" data-act="jump" data-id="${h.bl}">${h.bl}</button></td>
+    <td class="sub2">${h.scene}</td>
+    <td><span class="tag t-danger">${h.res}</span></td>
+    <td class="ops"><button class="lnk" data-act="hitdetail" data-id="${h.id}">详情</button></td>
+  </tr>`).join("")||`<tr><td colspan="10" style="text-align:center;color:var(--ink-3);padding:34px">无匹配数据</td></tr>`;
+  $("#hitCount").textContent=`共 ${rows.length} 条`;
+}
+
+/* ============ 视图：状态与流程 ============ */
+function viewSpec(){
+  const rows=[
+    ["待审核","已提交资料，KYC/KYB 审核中","通常无法用卡",0],
+    ["正常 / 活跃","身份核验通过，可正常用卡","名下卡片可正常交易",0],
+    ["审核拒绝","身份 / 资质未通过审核","无法开卡",0],
+    ["管控持卡人（不用审核）","临时限制（风险触发、违规、欠费等）","名下所有卡片转管控；可逆，支持解除管控",1],
+    ["删除持卡人（不用审核）","主动或被动终止合作关系","名下所有卡片一并删除；不可逆，可选同步加黑",1],
+    ["持卡人过期","身份资料过期未更新","可能限制交易",0],
+    ["持卡人加入黑名单（实时生效）","触发反欺诈或合规规则加入黑名单","认证 / 注册 / 开卡环节命中即拦截；历史已开卡不回溯",1],
+  ];
+  return `
+  <div class="card">
+    <div class="hd"><h2>持卡人状态汇总${pin()}</h2><span class="sub">持卡人是主体、卡片是载体；持卡人状态影响名下全部卡片</span></div>
+    <div class="tablewrap"><table class="matrix">
+      <thead><tr><th style="width:230px">状态</th><th style="width:300px">说明</th><th>对卡片的影响</th><th style="width:96px">本次范围</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr class="${r[3]?"hot":""}"><td>${r[0]}</td><td>${r[1]}</td><td class="sub2">${r[2]}</td><td>${r[3]?'<span class="tag t-danger">本次</span>':'<span class="tag t-mute">不涉及</span>'}</td></tr>`).join("")}</tbody>
+    </table></div>
+    <div class="tfoot"><div class="legend"><span><i style="background:var(--danger)"></i>本次需求范围</span><span><i style="background:var(--line-2)"></i>不涉及</span></div></div>
+  </div>
+
+  <div class="card">
+    <div class="hd"><h2>删除持卡人处理流程${pin()}</h2><span class="sub">3.3.4</span></div>
+    <div class="flowcard">
+      <svg viewBox="0 0 980 250" width="100%" height="250" role="img" aria-label="删除持卡人流程图">
+        <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="var(--ink-3)"/></marker></defs>
+        <g font-size="12" font-family="inherit">
+          <rect x="8" y="98" width="132" height="42" rx="5" fill="var(--brand-weak)" stroke="var(--brand)"/>
+          <text x="74" y="124" text-anchor="middle" fill="var(--ink)">发起删除持卡人</text>
+          <path d="M142 119 H186" stroke="var(--ink-3)" fill="none" marker-end="url(#ar)"/>
+          <path d="M258 79 L330 119 L258 159 L186 119 Z" fill="var(--warn-weak)" stroke="var(--warn)"/>
+          <text x="258" y="123" text-anchor="middle" fill="var(--ink)">是否存在 pending</text>
+          <path d="M300 96 L392 62" stroke="var(--ink-3)" fill="none" marker-end="url(#ar)"/>
+          <text x="330" y="72" fill="var(--ok)" font-size="11">否</text>
+          <rect x="398" y="40" width="188" height="42" rx="5" fill="var(--ok-weak)" stroke="var(--ok)"/>
+          <text x="492" y="66" text-anchor="middle" fill="var(--ink)">删除持卡人 + 全部卡片</text>
+          <path d="M586 61 H646" stroke="var(--ink-3)" fill="none" marker-end="url(#ar)"/>
+          <rect x="652" y="40" width="188" height="42" rx="5" fill="var(--danger-weak)" stroke="var(--danger)"/>
+          <text x="746" y="60" text-anchor="middle" fill="var(--ink)">可选：身份要素</text>
+          <text x="746" y="74" text-anchor="middle" fill="var(--ink)">同步加入黑名单库</text>
+          <path d="M300 142 L392 176" stroke="var(--ink-3)" fill="none" marker-end="url(#ar)"/>
+          <text x="326" y="176" fill="var(--warn)" font-size="11">是</text>
+          <rect x="398" y="156" width="188" height="42" rx="5" fill="var(--warn-weak)" stroke="var(--warn)"/>
+          <text x="492" y="175" text-anchor="middle" fill="var(--ink)">管控 pending 卡片，</text>
+          <text x="492" y="190" text-anchor="middle" fill="var(--ink)">删除其余卡片</text>
+          <path d="M586 177 H646" stroke="var(--ink-3)" fill="none" marker-end="url(#ar)"/>
+          <rect x="652" y="156" width="150" height="42" rx="5" fill="var(--panel-3)" stroke="var(--line-2)"/>
+          <text x="727" y="175" text-anchor="middle" fill="var(--ink)">pending 订单结束，</text>
+          <text x="727" y="190" text-anchor="middle" fill="var(--ink)">卡片维持管控</text>
+          <path d="M727 202 V228 H492" stroke="var(--ink-3)" fill="none" marker-end="url(#ar)"/>
+          <rect x="286" y="210" width="200" height="34" rx="5" fill="var(--brand-weak)" stroke="var(--brand)"/>
+          <text x="386" y="232" text-anchor="middle" fill="var(--ink)">每周定时任务：批量重试删卡</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="hd"><h2>黑名单来源与命中规则</h2></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th style="width:150px">来源</th><th>触发方式</th><th>备注要求</th></tr></thead>
+      <tbody>
+        <tr><td>人工单个加入</td><td>后台录入</td><td class="sub2">调单确认买卖证件后人工加黑；必填加黑原因备注与证据单号</td></tr>
+        <tr><td>批量导入</td><td>CSV / Excel 导入</td><td class="sub2">支持邮箱、国籍+证件ID、加黑原因备注等列；备注必填；导入前校验去重、预览确认</td></tr>
+        <tr><td>处置联动自动加黑</td><td>删除持卡人处置完成</td><td class="sub2">处置单勾选「同步加入黑名单」，默认不勾选；备注自动带入处置单号与处置原因，可人工补充</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tablewrap" style="border-top:1px solid var(--line)"><table>
+      <thead><tr><th style="width:150px">匹配维度</th><th style="width:200px">匹配方式</th><th>拦截强度</th></tr></thead>
+      <tbody>
+        <tr><td>邮箱</td><td>归一化后精确匹配</td><td><span class="tag t-danger">硬拦截</span></td></tr>
+        <tr><td>国籍 + 证件类型 + 证件 ID</td><td>精确匹配</td><td><span class="tag t-danger">硬拦截</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>`;
+}
+
+/* ============ 弹窗 ============ */
+function modalDelete(ids){
+  const list=ids.map(i=>CH.find(c=>c.id===i)).filter(Boolean);
+  const totalCards=list.reduce((a,c)=>a+c.cards,0), totalPend=list.reduce((a,c)=>a+c.pend,0);
+  const one=list.length===1?list[0]:null;
+  openModal(`
+    <header><h3>删除持卡人确认</h3><button class="x" data-close>×</button></header>
+    <div class="body">
+      <div class="notice danger"><i class="ic">!</i><div><b>不可逆操作。</b>删除后持卡人及名下卡片同步删除，无法恢复。存在 pending 交易的卡片仅转为管控、不删除。</div></div>
+      ${one?`<div class="kv">
+        <div><dt>持卡人 ID</dt><dd class="mono">${one.id}</dd></div>
+        <div><dt>姓名</dt><dd>${esc(one.name)}</dd></div>
+        <div><dt>国籍</dt><dd>${one.nat}</dd></div>
+        <div><dt>证件类型 / 证件 ID</dt><dd class="mono">${one.idt} · ${one.idn}</dd></div>
+        <div><dt>邮箱</dt><dd>${esc(one.email)}</dd></div>
+        <div><dt>名下卡片</dt><dd>${one.cards} 张${one.pend?`（其中 ${one.pend} 张存在 pending）`:""}</dd></div>
+      </div>`:`
+      <div class="stat">
+        <div class="b"><span>选中持卡人</span><strong>${list.length}</strong></div>
+        <div><span>影响卡片</span><strong>${totalCards}</strong></div>
+        <div class="r"><span>含 pending 卡片</span><strong>${totalPend}</strong></div>
+      </div>
+      <div class="tablewrap" style="border:1px solid var(--line);border-radius:5px;max-height:180px;overflow-y:auto"><table style="min-width:640px">
+        <thead><tr><th>持卡人 ID</th><th>姓名</th><th>国籍</th><th>证件 ID</th><th>邮箱</th><th class="num">卡 / pending</th></tr></thead>
+        <tbody>${list.map(c=>`<tr><td class="mono">${c.id}</td><td>${esc(c.name)}</td><td>${c.nat}</td><td class="mono">${c.idn}</td><td>${esc(c.email)}</td><td class="num">${c.cards} / ${c.pend}</td></tr>`).join("")}</tbody>
+      </table></div>`}
+      <label class="checkline" id="blLine">
+        <input type="checkbox" id="blChk">
+        <span><b>同步将该持卡人的身份要素加入自然人黑名单库</b>
+        <p>默认不勾选。勾选后，处置完成将按「邮箱」与「国籍 + 证件类型 + 证件 ID」两个维度写入黑名单，加黑后实时生效，后续认证 / 注册 / 开卡命中即拦截；历史已开卡不回溯。</p></span>
+      </label>
+      <div id="blFields" class="hide" style="display:grid;gap:9px">
+        <div class="rowgrid">
+          <div class="f"><label>处置账号 ID</label><input value="risk_op_007" readonly></div>
+          <div class="f"><label>处置类型</label><input value="删除持卡人" readonly></div>
+          <div class="f"><label>处置单号</label><input value="DP-20260907-0231" readonly></div>
+        </div>
+        <div class="f full"><label class="req">加黑原因备注（系统自动带入，可人工补充）</label>
+          <textarea rows="2" id="blReason">删除持卡人｜涉风险注册行为拦截</textarea></div>
+      </div>
+      <div class="f"><label class="req">处置原因备注</label><textarea rows="2" placeholder="请填写本次删除的处置依据与证据单号">涉风险注册行为拦截｜证据单号 EV-8871</textarea></div>
+    </div>
+    <footer><span class="sub2">操作人 risk_op_007 · ${new Date().toLocaleString("zh-CN",{hour12:false})}</span>
+      <span class="spacer"></span><button class="btn" data-close>取消</button>
+      <button class="btn solid-danger" id="okDel">确认删除${list.length>1?`（${list.length} 条）`:""}</button></footer>
+  `,"");
+  const chk=$("#blChk");
+  chk.onchange=()=>{ $("#blFields").classList.toggle("hide",!chk.checked); $("#blLine").classList.toggle("armed",chk.checked); };
+  $("#okDel").onclick=()=>{ closeModal(); modalResult(list, chk.checked); };
+}
+
+function modalResult(list, toBlack){
+  const fail=list.filter(c=>c.pend>0);
+  const ok=list.filter(c=>c.pend===0);
+  ok.forEach(c=>c.st="deleted"); fail.forEach(c=>c.st="controlled");
+  if(toBlack) ok.forEach(c=>{
+    if(!BL.some(b=>b.val===c.idn)) BL.unshift({id:"bl_"+(9990+BL.length),dim:"国籍+证件ID",val:c.idn,nat:c.nat,idt:c.idt,src:"处置自动同步",reason:"删除持卡人｜涉风险注册行为拦截",opr:"risk_op_007",ord:"DP-20260907-0231",at:"2026-09-07 10:12:04",st:"live",hits:0});
+    if(!BL.some(b=>b.val===c.email)) BL.unshift({id:"bl_"+(9991+BL.length),dim:"邮箱",val:c.email,nat:"—",idt:"—",src:"处置自动同步",reason:"删除持卡人｜涉风险注册行为拦截",opr:"risk_op_007",ord:"DP-20260907-0231",at:"2026-09-07 10:12:04",st:"live",hits:0});
+  });
+  state.sel.clear();
+  openModal(`
+    <header><h3>处置结果</h3><button class="x" data-close>×</button></header>
+    <div class="body">
+      <div class="stat">
+        <div class="g"><span>删除成功</span><strong>${ok.length}</strong></div>
+        <div class="r"><span>部分失败</span><strong>${fail.length}</strong></div>
+        <div class="b"><span>同步加黑</span><strong>${toBlack?ok.length*2:0}</strong></div>
+      </div>
+      ${fail.length?`<div class="notice warn"><i class="ic">!</i><div>${fail.length} 位持卡人名下存在 pending 交易的卡片，该部分卡片<b>仅转为管控、未删除</b>。pending 订单结束后卡片维持管控，由每周定时任务批量重试删卡，也可在下方手动重试。</div></div>`:""}
+      <div class="tablewrap" style="border:1px solid var(--line);border-radius:5px"><table style="min-width:700px">
+        <thead><tr><th>持卡人 ID</th><th>姓名</th><th>卡 ID</th><th>结果</th><th>失败原因</th><th style="width:80px">操作</th></tr></thead>
+        <tbody>
+          ${ok.map(c=>`<tr><td class="mono">${c.id}</td><td>${esc(c.name)}</td><td class="sub2">全部（${c.cards} 张）</td><td><span class="tag t-ok">删除成功</span></td><td class="sub2">—</td><td class="sub2">—</td></tr>`).join("")}
+          ${fail.map(c=>`<tr><td class="mono">${c.id}</td><td>${esc(c.name)}</td><td class="mono">card_77120${c.pend>1?" 等 "+c.pend+" 张":""}</td><td><span class="tag t-danger">未删除</span></td><td class="sub2">存在 pending 交易，卡片已转管控</td><td><button class="lnk" data-act="retry-one">重试</button></td></tr>`).join("")}
+        </tbody>
+      </table></div>
+      ${toBlack&&ok.length?`<div class="notice"><i class="ic">i</i><div>已按邮箱、国籍+证件ID 两个维度写入黑名单库并<b>实时生效</b>；加黑原因备注已带入处置单号 DP-20260907-0231。<button class="lnk" data-act="goblack">前往黑名单库查看</button></div></div>`:""}
+    </div>
+    <footer><span class="sub2">处置单号 DP-20260907-0231</span><span class="spacer"></span>
+      ${fail.length?`<button class="btn" id="retryAll">批量重试（${fail.length}）</button>`:""}
+      <button class="btn pri" data-close>知道了</button></footer>
+  `,"wide");
+  const r=$("#retryAll"); if(r) r.onclick=()=>toast("已重新发起删除，处理中…","ok");
+  render();
+}
+
+function modalControl(ids,mode){
+  const list=ids.map(i=>CH.find(c=>c.id===i)).filter(Boolean);
+  const isRel = mode==="release";
+  openModal(`
+    <header><h3>${isRel?"解除管控确认":"管控持卡人确认"}</h3><button class="x" data-close>×</button></header>
+    <div class="body">
+      <div class="notice ${isRel?"":"warn"}"><i class="ic">${isRel?"i":"!"}</i><div>${isRel
+        ? "解除后，持卡人及名下所有卡片恢复正常使用状态。本操作不影响黑名单库记录。"
+        : "管控生效后，该持卡人名下<b>所有卡片</b>均转为管控状态。管控为<b>可逆</b>操作，不联动黑名单库，可随时解除。"}</div></div>
+      <div class="stat">
+        <div class="b"><span>选中持卡人</span><strong>${list.length}</strong></div>
+        <div><span>影响卡片</span><strong>${list.reduce((a,c)=>a+c.cards,0)}</strong></div>
+      </div>
+      <div class="tablewrap" style="border:1px solid var(--line);border-radius:5px;max-height:200px;overflow-y:auto"><table style="min-width:560px">
+        <thead><tr><th>持卡人 ID</th><th>姓名</th><th>国籍</th><th>邮箱</th><th class="num">卡片</th><th>当前状态</th></tr></thead>
+        <tbody>${list.map(c=>`<tr><td class="mono">${c.id}</td><td>${esc(c.name)}</td><td>${c.nat}</td><td>${esc(c.email)}</td><td class="num">${c.cards}</td><td>${stTag(c.st)}</td></tr>`).join("")}</tbody>
+      </table></div>
+      <div class="f"><label class="req">${isRel?"解除原因":"管控原因"}</label><textarea rows="2">${isRel?"客户申诉材料通过复核，恢复正常用卡":"风险触发｜批量注册行为聚集"}</textarea></div>
+    </div>
+    <footer><span class="spacer"></span><button class="btn" data-close>取消</button>
+      <button class="btn ${isRel?"pri":"warn"}" id="okCtl">确认${isRel?"解除管控":"管控"}</button></footer>
+  `);
+  $("#okCtl").onclick=()=>{
+    list.forEach(c=>{ if(c.st!=="deleted") c.st = isRel?"active":"controlled"; });
+    state.sel.clear(); closeModal(); render();
+    toast(isRel?`已解除 ${list.length} 位持卡人的管控`:`已管控 ${list.length} 位持卡人及名下卡片`,"ok");
+  };
+}
+
+function modalAddBl(){
+  openModal(`
+    <header><h3>新增黑名单</h3><button class="x" data-close>×</button></header>
+    <div class="body">
+      <div class="rowgrid">
+        <div class="f"><label class="req">黑名单维度</label><select id="nDim"><option>国籍+证件ID</option><option>邮箱</option></select></div>
+        <div class="f" data-idonly><label class="req">国籍</label><select><option>SG 新加坡</option><option>MY 马来西亚</option><option>HK 中国香港</option><option>CN 中国大陆</option></select></div>
+        <div class="f" data-idonly><label class="req">证件类型</label><select><option>PASSPORT</option><option>ID_CARD</option></select></div>
+        <div class="f full"><label class="req" id="valLbl">证件 ID</label><input id="nVal" placeholder="S1234567A"></div>
+        <div class="f full"><label class="req">加黑原因备注</label><textarea rows="2" id="nReason" placeholder="例：调单确认买卖证件；证据单号 EV-8871"></textarea></div>
+        <div class="f"><label>证据单号</label><input placeholder="EV-8871"></div>
+        <div class="f"><label>操作人</label><input value="risk_op_007" readonly></div>
+      </div>
+      <div class="notice warn"><i class="ic">!</i><div>加黑后<b>实时生效</b>：该自然人在认证、注册、开卡环节命中即被拦截；<b>历史已开卡不回溯</b>。备注为解除（加白）时的追溯依据，必填。</div></div>
+    </div>
+    <footer><span class="spacer"></span><button class="btn" data-close>取消</button><button class="btn pri" id="okAdd">确认加黑</button></footer>
+  `);
+  const dim=$("#nDim");
+  const sync=()=>{ const isEmail=dim.value==="邮箱";
+    document.querySelectorAll("[data-idonly]").forEach(e=>e.classList.toggle("hide",isEmail));
+    $("#valLbl").textContent=isEmail?"邮箱":"证件 ID"; $("#nVal").placeholder=isEmail?"user@tempmail.io":"S1234567A"; };
+  dim.onchange=sync; sync();
+  $("#okAdd").onclick=()=>{
+    const v=$("#nVal").value.trim(), r=$("#nReason").value.trim();
+    if(!v) return toast("请填写维度值","err");
+    if(!r) return toast("加黑原因备注为必填项","err");
+    BL.unshift({id:"bl_"+(10000+BL.length),dim:dim.value,val:v,nat:dim.value==="邮箱"?"—":"SG",idt:dim.value==="邮箱"?"—":"PASSPORT",src:"人工录入",reason:r,opr:"risk_op_007",ord:"EV-8871",at:"2026-09-07 10:35:12",st:"live",hits:0});
+    closeModal(); render(); toast("已加入黑名单，实时生效","ok");
+  };
+}
+
+function modalImport(){
+  let step=1;
+  const draw=()=>{
+    openModal(`
+      <header><h3>批量导入黑名单</h3><button class="x" data-close>×</button></header>
+      <div class="body">
+        <div class="steps">
+          <div class="${step>1?"done":"on"}"><i>${step>1?"✓":"1"}</i>上传文件</div><hr>
+          <div class="${step>2?"done":step===2?"on":""}"><i>${step>2?"✓":"2"}</i>校验预览</div><hr>
+          <div class="${step===3?"on":""}"><i>3</i>导入回执</div>
+        </div>
+        ${step===1?`
+          <div class="dropzone"><b>拖拽 CSV / Excel 文件到此处，或点击选择</b>支持 .csv .xlsx，单次上限 5000 行</div>
+          <div class="notice"><i class="ic">i</i><div>模板列：<code>维度类型</code> / <code>国籍</code> / <code>证件类型</code> / <code>维度值</code> / <code>加黑原因备注（必填）</code> / <code>证据单号</code>。<button class="lnk">下载标准模板</button></div></div>
+        `:step===2?`
+          <div class="stat">
+            <div class="b"><span>解析总行数</span><strong>128</strong></div>
+            <div class="g"><span>校验通过</span><strong>124</strong></div>
+            <div class="r"><span>冲突 / 异常</span><strong>4</strong></div>
+          </div>
+          <div class="tablewrap" style="border:1px solid var(--line);border-radius:5px"><table style="min-width:700px">
+            <thead><tr><th class="num">行号</th><th>维度</th><th>维度值</th><th>国籍</th><th>加黑原因备注</th><th>校验结果</th></tr></thead>
+            <tbody>
+              <tr><td class="num">7</td><td>邮箱</td><td class="mono">bulk01@tempmail.io</td><td>—</td><td class="sub2">外部风控情报名单 0907 批次</td><td><span class="tag t-ok">通过</span></td></tr>
+              <tr><td class="num">18</td><td>国籍+证件ID</td><td class="mono">S1234567A</td><td>SG</td><td class="sub2">外部风控情报名单 0907 批次</td><td><span class="tag t-warn">已存在，将跳过</span></td></tr>
+              <tr><td class="num">42</td><td>国籍+证件ID</td><td class="mono">XX9900112</td><td class="mono">ZZ</td><td class="sub2">外部风控情报名单 0907 批次</td><td><span class="tag t-danger">国籍代码非法</span></td></tr>
+              <tr><td class="num">63</td><td>邮箱</td><td class="mono">bad-email@</td><td>—</td><td class="sub2">外部风控情报名单 0907 批次</td><td><span class="tag t-danger">邮箱格式错误</span></td></tr>
+              <tr><td class="num">88</td><td>邮箱</td><td class="mono">dup@tempmail.io</td><td>—</td><td class="sub2">（空）</td><td><span class="tag t-danger">加黑原因备注为必填</span></td></tr>
+            </tbody>
+          </table></div>
+          <div class="notice warn"><i class="ic">!</i><div>异常行将不被导入。可修正后重新上传，或先导入通过的 124 条。</div></div>
+        `:`
+          <div class="stat">
+            <div class="g"><span>导入成功</span><strong>124</strong></div>
+            <div class="r"><span>导入失败</span><strong>4</strong></div>
+            <div class="b"><span>批次号</span><strong style="font-size:14px">IMP-20260907-0012</strong></div>
+          </div>
+          <div class="notice"><i class="ic">i</i><div>成功记录已实时生效，来源标记为「批量导入」，加黑原因备注已按文件写入。失败明细可导出核对。</div></div>
+        `}
+      </div>
+      <footer><span class="spacer"></span>
+        ${step===3?`<button class="btn">导出失败明细</button><button class="btn pri" data-close>完成</button>`
+          :`<button class="btn" data-close>取消</button><button class="btn pri" id="nextStep">${step===1?"上传并校验":"确认导入 124 条"}</button>`}
+      </footer>
+    `,"wide");
+    const n=$("#nextStep"); if(n) n.onclick=()=>{ step++; draw(); if(step===3) toast("导入完成，124 条已生效","ok"); };
+  };
+  draw();
+}
+
+function modalBatchRelease(){
+  const list=[...state.blSel].map(i=>BL.find(b=>b.id===i)).filter(Boolean);
+  if(!list.length) return toast("请先勾选需要解除的黑名单记录","err");
+  openModal(`
+    <header><h3>批量解除黑名单</h3><button class="x" data-close>×</button></header>
+    <div class="body">
+      <div class="notice"><i class="ic">i</i><div>解除（加白）后，该身份要素恢复正常认证、开卡权限。解除动作全量留痕，可在操作日志中回溯。</div></div>
+      <div class="tablewrap" style="border:1px solid var(--line);border-radius:5px;max-height:200px;overflow-y:auto"><table style="min-width:620px">
+        <thead><tr><th>黑名单 ID</th><th>维度</th><th>内容</th><th>加黑原因备注</th></tr></thead>
+        <tbody>${list.map(b=>`<tr><td class="mono">${b.id}</td><td>${b.dim}</td><td class="mono">${esc(maskVal(b.val,b.dim))}</td><td class="sub2">${esc(b.reason)}</td></tr>`).join("")}</tbody>
+      </table></div>
+      <div class="f"><label class="req">解除原因</label><textarea rows="2" placeholder="请填写解除依据，如申诉复核结论、证据单号">客户申诉材料通过复核，情报误报</textarea></div>
+    </div>
+    <footer><span class="spacer"></span><button class="btn" data-close>取消</button><button class="btn pri" id="okRel">确认解除（${list.length}）</button></footer>
+  `);
+  $("#okRel").onclick=()=>{
+    list.forEach(b=>{b.st="released"; b.rel="2026-09-07 10:40 · risk_op_007 · 客户申诉材料通过复核";});
+    state.blSel.clear(); closeModal(); render(); toast(`已解除 ${list.length} 条黑名单`,"ok");
+  };
+}
+
+function modalLog(id){
+  const b=BL.find(x=>x.id===id);
+  const logs=LOGS[id]||[{at:b.at,who:b.opr,act:"加黑",detail:`来源：${b.src}；备注：${b.reason}`}];
+  openModal(`
+    <header><h3>操作日志 · <span class="mono">${id}</span></h3><button class="x" data-close>×</button></header>
+    <div class="body">
+      <div class="kv">
+        <div><dt>维度</dt><dd>${b.dim}</dd></div>
+        <div><dt>内容</dt><dd class="mono">${esc(maskVal(b.val,b.dim))}</dd></div>
+        <div><dt>当前状态</dt><dd>${b.st==="live"?'<span class="tag t-danger t-dot">生效</span>':'<span class="tag t-mute t-dot">已解除</span>'}</dd></div>
+      </div>
+      <div class="tablewrap" style="border:1px solid var(--line);border-radius:5px"><table style="min-width:600px">
+        <thead><tr><th style="width:160px">操作时间</th><th style="width:120px">操作人</th><th style="width:80px">动作</th><th>明细</th></tr></thead>
+        <tbody>${logs.sort((a,c)=>a.at<c.at?-1:1).map(l=>`<tr><td class="mono">${l.at}</td><td class="mono">${l.who}</td><td>${
+          l.act==="加黑"?'<span class="tag t-danger">加黑</span>':l.act==="解除"?'<span class="tag t-ok">解除</span>':'<span class="tag t-info">命中</span>'}</td><td class="sub2">${esc(l.detail)}</td></tr>`).join("")}</tbody>
+      </table></div>
+    </div>
+    <footer><span class="sub2">全量留痕，支持按单条名单全程回溯</span><span class="spacer"></span><button class="btn pri" data-close>关闭</button></footer>
+  `,"wide");
+}
+
+function modalHitDetail(id){
+  const h=HITS.find(x=>x.id===id);
+  openModal(`
+    <header><h3>命中明细 · <span class="mono">${h.id}</span></h3><button class="x" data-close>×</button></header>
+    <div class="body">
+      <div class="kv">
+        <div><dt>命中时间</dt><dd class="mono">${h.at}</dd></div>
+        <div><dt>命中维度</dt><dd>${h.dim}</dd></div>
+        <div><dt>维度值（原始明文）</dt><dd class="mono">${esc(h.val)}</dd></div>
+        <div><dt>持卡人 ID</dt><dd class="mono">${h.ch}</dd></div>
+        <div><dt>账户 ID</dt><dd class="mono">${h.acc}</dd></div>
+        <div><dt>账户主体名称</dt><dd>${esc(h.accName)}</dd></div>
+        <div><dt>命中黑名单记录</dt><dd><button class="lnk mono" data-act="jump" data-id="${h.bl}">${h.bl}</button></dd></div>
+        <div><dt>命中场景</dt><dd>${h.scene}</dd></div>
+        <div><dt>拦截结果</dt><dd><span class="tag t-danger">${h.res}</span></dd></div>
+      </div>
+      <div class="notice"><i class="ic">i</i><div><b>对客返回话术</b>：认证未通过，证件存在风险，如有疑问请联系客服。<div class="sub2" style="margin-top:3px">不暴露风控细节；本条明细为系统自动落库，只读不可修改、不可删除。</div></div></div>
+    </div>
+    <footer><span class="spacer"></span><button class="btn" data-close>关闭</button></footer>
+  `);
+}
+
+/* ============ 渲染 / 路由 ============ */
+const VIEWS={
+  cardholder:{crumb:["支付与收单","量子卡","Cardholder 列表"], render:viewCardholder, after:renderCH},
+  master:{crumb:["API 客户业务","卡片管控","API 母户删卡"], render:()=>viewCards("master")},
+  sub:{crumb:["API 客户业务","API 客户管理","API 子户批量删卡"], render:()=>viewCards("sub")},
+  detail:{crumb:["支付与收单","量子卡","持卡人详情"], render:viewDetail},
+  blacklist:{crumb:["合规风控","自然人黑名单库"], render:viewBlacklist, after:renderBL},
+  hits:{crumb:["合规风控","黑名单命中明细"], render:viewHits, after:renderHits},
+  spec:{crumb:["说明","状态与流程说明"], render:viewSpec},
+};
+function render(){
+  const v=VIEWS[state.view]; pinSeq=0;
+  $("#crumb").innerHTML = v.crumb.map((s,i)=> i===v.crumb.length-1?`<b>${s}</b>`:`${s}<i>/</i>`).join("");
+  $("#wrap").innerHTML = v.render();
+  if(v.after) v.after();
+  renderNotes();
+  document.querySelectorAll("#nav .navitem").forEach(b=>{
+    if(b.dataset.view===state.view) b.setAttribute("aria-current","page"); else b.removeAttribute("aria-current");
+  });
+}
+function renderNotes(){
+  const list=NOTES[state.view]||[];
+  $("#annoCount").textContent = list.length+" 条";
+  $("#annoList").innerHTML = list.map((n,i)=>`<div class="annoitem" data-note="${i+1}"><div class="n">${i+1}</div><div><b>PRD ${n[0]} · ${n[1]}</b>${esc(n[2])}</div></div>`).join("")
+    || `<div class="sub2" style="padding:6px">本页暂无批注。</div>`;
+}
+
+/* ============ 事件 ============ */
+$("#nav").addEventListener("click",e=>{
+  const b=e.target.closest(".navitem"); if(!b) return;
+  state.view=b.dataset.view; state.sel.clear(); state.blSel.clear(); render(); window.scrollTo(0,0);
+});
+$("#annoBtn").onclick=e=>{
+  const on=e.currentTarget.getAttribute("aria-pressed")==="true";
+  e.currentTarget.setAttribute("aria-pressed",String(!on));
+  document.body.classList.toggle("anno",!on);
+};
+$("#themeBtn").onclick=e=>{
+  const on=e.currentTarget.getAttribute("aria-pressed")==="true";
+  e.currentTarget.setAttribute("aria-pressed",String(!on));
+  document.documentElement.setAttribute("data-theme", on?"light":"dark");
+};
+
+document.addEventListener("change",e=>{
+  const t=e.target;
+  if(t.id==="chAll"){ CH.forEach(c=>{ if(c.st!=="deleted"){ t.checked?state.sel.add(c.id):state.sel.delete(c.id); } }); renderCH(); }
+  if(t.dataset.pick){ t.checked?state.sel.add(t.dataset.pick):state.sel.delete(t.dataset.pick); renderCH(); }
+  if(t.id==="blAll"){ BL.forEach(b=>{ if(b.st==="live"){ t.checked?state.blSel.add(b.id):state.blSel.delete(b.id); } }); renderBL(); }
+  if(t.dataset.blpick){ t.checked?state.blSel.add(t.dataset.blpick):state.blSel.delete(t.dataset.blpick); renderBL(); }
+  if(t.id==="maskTgl"){ state.masked=t.checked; renderBL(); }
+  if(t.id==="maskTgl2"){ state.masked=t.checked; renderHits(); }
+  if(t.id==="fEmail"||t.id==="fSt") renderCH();
+});
+document.addEventListener("input",e=>{ if(e.target.id==="fEmail") renderCH(); if(e.target.id==="bQ") renderBL(); if(e.target.id==="hQ") renderHits(); });
+
+document.addEventListener("click",e=>{
+  const t=e.target.closest("button"); if(!t) return;
+
+  if(t.classList.contains("pin")){
+    const n=t.dataset.pin;
+    if(!document.body.classList.contains("anno")) $("#annoBtn").click();
+    const item=$(`.annoitem[data-note="${n}"]`);
+    document.querySelectorAll(".annoitem").forEach(a=>a.classList.remove("hot"));
+    if(item){ item.classList.add("hot"); item.scrollIntoView({block:"center",behavior:"smooth"}); }
+    return;
+  }
+  if(t.id==="doSearch"){ renderCH(); toast("已按筛选条件查询"); return; }
+  if(t.id==="doReset"){ $("#fEmail").value=""; $("#fSt").value=""; renderCH(); return; }
+  if(t.id==="bSearch"){ renderBL(); toast("已按筛选条件查询"); return; }
+  if(t.id==="bReset"){ $("#bQ").value=""; $("#bDim").value=""; $("#bSt").value=""; $("#bSrc").value=""; renderBL(); return; }
+  if(t.id==="hSearch"){ renderHits(); toast("已按筛选条件查询"); return; }
+  if(t.id==="hReset"){ $("#hQ").value=""; $("#hDim").value=""; renderHits(); return; }
+  if(t.id==="hExport"){ toast("导出中，文件含完整原始明文数据","ok"); return; }
+
+  const open=t.dataset.open;
+  if(open==="addBl") return modalAddBl();
+  if(open==="import") return modalImport();
+  if(open==="batchRelease") return modalBatchRelease();
+
+  const bulk=t.dataset.bulk;
+  if(bulk){
+    let ids=[...state.sel];
+    if(state.view!=="cardholder") ids=["h_123456","h_123902"];
+    if(!ids.length) return toast("请先勾选持卡人","err");
+    if(bulk==="delete") return modalDelete(ids);
+    if(bulk==="control") return modalControl(ids,"control");
+    if(bulk==="release") return modalControl(ids,"release");
+    if(bulk==="retry") return toast("已重新发起处置，处理中…","ok");
+  }
+  const act=t.dataset.act, id=t.dataset.id;
+  if(act==="delete") return modalDelete([id]);
+  if(act==="control") return modalControl([id],"control");
+  if(act==="release") return modalControl([id],"release");
+  if(act==="cards"){ state.view="detail"; render(); return; }
+  if(act==="release-bl"){ state.blSel=new Set([id]); return modalBatchRelease(); }
+  if(act==="log") return modalLog(id);
+  if(act==="hitsof"){ closeModal(); state.view="hits"; render(); $("#hQ").value=BL.find(b=>b.id===id).val; renderHits(); toast("已按该名单记录过滤命中明细"); return; }
+  if(act==="hitdetail") return modalHitDetail(id);
+  if(act==="jump"){ closeModal(); state.view="blacklist"; render();
+    const row=$("#row-"+id); if(row){ row.classList.add("sel"); row.scrollIntoView({block:"center",behavior:"smooth"}); }
+    toast("已定位到黑名单主记录 "+id); return; }
+  if(act==="goblack"){ closeModal(); state.view="blacklist"; render(); return; }
+  if(act==="retry-one") return toast("已重新发起删除，处理中…","ok");
+});
+
+render();
+</script>
+
+</body>
+</html>

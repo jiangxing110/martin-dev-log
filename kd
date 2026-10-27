@@ -1,58 +1,18 @@
-SELECT DISTINCT
-       a.id AS account_id,
-       kyb.status AS kyb_status,
-       main_business.value AS main_business,
-       purpose.token AS matched_purpose
-FROM account a
-JOIN "cddKyb" kyb
-  ON kyb."accountId"::uuid = a.id
- AND kyb."deleteTime" IS NULL
- AND kyb."isLatest" = TRUE
- AND kyb."businessType" = 'MultiCurrencyAccount'
- AND kyb.status = 'Passed'
-JOIN "cddKybDetail" main_business
-  ON main_business."kybId" = kyb.id
- AND main_business."deleteTime" IS NULL
- AND main_business.key = 'mainBusiness'
- AND main_business.value = 'B2B'
-JOIN "cddKybDetail" purpose_detail
-  ON purpose_detail."kybId" = kyb.id
- AND purpose_detail."deleteTime" IS NULL
- AND purpose_detail.key = 'accountPurpose'
-CROSS JOIN LATERAL regexp_split_to_table(purpose_detail.value, '[,，;；]')
-    AS purpose(token)
-WHERE a."deleteTime" IS NULL
-  AND a.status NOT IN ('Cleared', 'Inactive')
-  AND a.type NOT IN ('ApiClientCustomer')
-  AND LOWER(BTRIM(purpose.token)) IN (
-      'paytosupplier',
-      'paytodistributor',
-      'supplier',
-      'distributor',
-      '付款-至供货商或经销商'
-  )
-ORDER BY a.id;
-select *
-from "cddKybDetail" where key='accountPurpose';
+1.拒绝率字段补充
+2.整体活跃卡优化
+3.
 
-INSERT INTO "MY_TABLE"(account_id) VALUES ('00e4481f-a3e2-42c2-8da6-1ea7058f8cac');
-INSERT INTO "MY_TABLE"(account_id) VALUES ('02432348-7d20-48a2-a77a-1dda9f8ab7fe');
-INSERT INTO "MY_TABLE"(account_id) VALUES ('055967e1-9d43-45bc-9d5a-6ecca5789745');
+created_user_id
+released_user_id
 
+  /** 账户 ID。 */
+  @Column({ type: 'varchar', length: 64, nullable: true, name: 'account_id' })
+  accountId?: string | null;
 
-要求
-1.整份ppt播放顺序 （查房目标 ->病史摘要 ->疾病相关知识 ->护理诊断 ->护理措施 ）按此顺序修改
-2.文字内容过多是否可以适当删减
-3.ppt上的病史摘要内容通过时间轴的方式呈现
+  /** 商户 ID。 */
+  @Column({ type: 'varchar', length: 64, nullable: true, name: 'merchant_id' })
+  merchantId?: string | null;
 
-INSERT INTO public."cddKyb" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kyCaseId", "accountId", "parentKybId", "isLatest", status, "businessType", "businessTypeDetail", "closeTime", "submitTime", "associatedId") VALUES ('e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'd23d0560-28fa-41e1-b5e4-de88b4cdf024', 'd24d3e19-b17b-4afc-a914-9e5566db6d16', '', true, 'Passed', 'AdditionMultiCurrencyAccount', 'FinanceAndInvest', null, '2026-10-22 10:20:14.421000', '79e128e9-c902-4b77-bd7c-8e2c01f2ad73');
-
-
-INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('90a34997-aa57-4cf7-a07e-727b05b35e4c', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'mainBusiness', 'FinanceAndInvest', '"String"');
-INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('809f3c9c-36d4-455d-b51a-0741e4c4f284', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'industryCategory', 'Luggage', '"String"');
-INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('a0249977-5e6f-4a60-a6a2-c0882deae974', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'marketCountry', 'IT', '"String"');
-INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('bdbcf394-7fa3-4685-86b5-7e1d79cc7087', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'depositAmount', '100', '"String"');
-INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('6da5e8fe-9105-4c1d-8c2f-6ffa31fe2318', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'withdrawalAmount', '100', '"String"');
-INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('7241af5c-d9bc-46a9-a010-af0fd4897ac0', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'hasWebsite', 'false', '"String"');
-INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('7f90c3ce-b64f-40fc-90e8-6a4e3d51540c', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'serviceContent', 'Payment Gateway', '"String"');
-INSERT INTO public."cddKybDetail" (id, remarks, "createTime", "updateTime", "deleteTime", version, "kybId", "enumName", key, value, type) VALUES ('7ee1f202-2b9c-4021-8993-877aed4c37e4', '', '2026-10-22 02:20:14.156222 +00:00', '2026-10-22 02:20:14.156222 +00:00', null, 1, 'e3ea2a53-d5f7-45f8-8d3b-e965b9bcf9fd', '', 'businessCertificate', 'https://qbit-develop.oss-accelerate.aliyuncs.com/open-api/f4df8eee-9d2a-4302-84e8-4b871f4e398a/1792635594115/20220920-182903.png', '"String"');
+    /** 命中业务发生时间。 */
+  @Column({ type: 'timestamptz', name: 'occurred_at' })
+  occurredTime: Date;

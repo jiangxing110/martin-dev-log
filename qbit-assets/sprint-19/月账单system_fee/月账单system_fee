@@ -1,0 +1,52 @@
+jx/26/sprint-19/PD-2934/api_bill_system_fee
+查看API月账单ZIP里的交易明细
+public List<String> getCardTransactionStatistics(CardTransactionStaticsDTO dto) {
+    对system_fee 增加 原始交易id 可以和transactionId
+    2607012342442013这个对印上了
+
+jx/26/sprint-19/PD-2783/cash_bill_transaction_display_id
+返现明细需要增加"26"开头的trx 数字交易ID字段
+目前我们看到的 TransactionId 是uuid  e0284bd8-5dbb-4e19-9e2c-acc53ab908bd 
+我们要添加一个 交易数字ID
+2602281952390238
+
+jx/26/sprint-19/PD-2928/bill_search
+直客账单和API月账单,扎差账单 支持分页筛选
+
+jx/26/sprint-19/PD-2943/odd_operation_log
+ODD日志
+- 客户每提交一次ODD内的CDD信息需要生成一条【客户提交信息】记录
+- 合规每审核一次ODD内的CDD信息也需要生成一条【合规审核】记录
+- 后端根据ODD状态流转判断：即ODD状态流转到【待审核】，生成一条客户提交信息记录，从【待审核】流转到其他状态，生成一条合规审核记录
+
+jx/26/sprint-19/PD-2927/singapore-cdd
+用户功能配置新加坡主体开户-后端
+需求背景：
+理论上合规不支持新加坡主体注册账号，但老板又有很多特批新加坡主体客户，目前都要提任务给技术单独改代码，很麻烦而且要提测发布时效比较慢，所以需要做一个开关让合规自己直接针对某个客户放开新加坡限制
+需求详情：
+用户功能增加一个【新加坡主体开户】配置项，默认【禁用】状态（按钮为【启用】），商户端KYC注册国家选【其他】时不能输入Singapore
+点击【启用】，状态变更为启用，商户端KYC注册国家选【其他】时可以输入Singapore，不区分大小写
+我们需要在accountExtend 添加字段
+  public async openSpecialRole(data: OpenSpecialRoleInput, user: User) {
+参考这个方法 
+curl --url 'https://global.service.test.qbitnetwork.com/graphql' \
+  -H 'Connection: keep-alive' \
+  -H 'Origin: https://test-web.qbitnetwork.com:26794' \
+  -H 'Referer: https://test-web.qbitnetwork.com:26794/' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: same-site' \
+  -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36' \
+  -H 'accept: */*' \
+  -H 'accept-language: zh' \
+  -H 'authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImE4ZGI3NjRhLWE1NzgtNGQ3Yy1iNThjLTkyZTk3MzZlZjM4OSIsImFjY291bnQiOiIrODYxODEyNTE2MjY4NiIsInJvbGUiOiJBZG1pbiIsImFjY291bnRJZCI6IjU2NmUwZmE4LWU3NTYtNGIzNS1hOGNmLThjZDRhMGE4NmEzYiIsInBob25lIjoiKzg2MTgxMjUxNjI2ODYiLCJpc01vcmUiOmZhbHNlLCJpYXQiOjE3OTI5OTcxODMsImV4cCI6MTc5MzA4MzU4M30.pGGxbnJ_AQ1FgGAFT5_mmWmt5-H2RBgM0xKFT6USlhU' \
+  -H 'content-type: application/json' \
+  -H 'fingerprint: 55ff0dc8a405d75eabba6b342e4ba136' \
+  -H 'lang: zh_CN' \
+  -H 'sec-ch-ua: "Google Chrome";v="155", "Chromium";v="155", "Not(A:Brand";v="24"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'systemtype: QBIT' \
+  -H 'website-version: qbit,business' \
+  --data-raw $'{"operationName":"accountModule","variables":{"accountId":"566e0fa8-e756-4b35-a8cf-8cd4a0a86a3b","userId":"a8db764a-a578-4d7c-b58c-92e9736ef389"},
+  accountModule这个返回把新加到的字段返回 前端根据这个判断 默认不开启 
