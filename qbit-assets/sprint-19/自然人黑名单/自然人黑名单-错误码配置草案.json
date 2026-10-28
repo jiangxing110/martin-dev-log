@@ -11,7 +11,7 @@
   "codes": [
     {
       "id": null,
-      "code": "11010101014",
+      "code": "11010101039",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_HIT",
       "message": "认证未通过，证件存在风险",
@@ -20,7 +20,7 @@
     },
     {
       "id": null,
-      "code": "11010101014",
+      "code": "11010101039",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_HIT",
       "message": "认证未通过，证件存在风险",
@@ -29,7 +29,7 @@
     },
     {
       "id": null,
-      "code": "11010101014",
+      "code": "11010101039",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_HIT",
       "message": "Your verification was unsuccessful due to an identity risk.",
@@ -38,7 +38,7 @@
     },
     {
       "id": null,
-      "code": "11010101014",
+      "code": "11010101039",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_HIT",
       "message": "Your verification was unsuccessful due to an identity risk.",
@@ -47,7 +47,7 @@
     },
     {
       "id": null,
-      "code": "11010101015",
+      "code": "11010101040",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_CHECK_UNAVAILABLE",
       "message": "认证暂不可用，请稍后重试",
@@ -56,7 +56,7 @@
     },
     {
       "id": null,
-      "code": "11010101015",
+      "code": "11010101040",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_CHECK_UNAVAILABLE",
       "message": "认证暂不可用，请稍后重试",
@@ -65,7 +65,7 @@
     },
     {
       "id": null,
-      "code": "11010101015",
+      "code": "11010101040",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_CHECK_UNAVAILABLE",
       "message": "Verification is temporarily unavailable. Please try again later.",
@@ -74,7 +74,7 @@
     },
     {
       "id": null,
-      "code": "11010101015",
+      "code": "11010101040",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_CHECK_UNAVAILABLE",
       "message": "Verification is temporarily unavailable. Please try again later.",
@@ -83,7 +83,7 @@
     },
     {
       "id": null,
-      "code": "11010101016",
+      "code": "11010101041",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_IDENTITY_CONFLICT",
       "message": "身份信息已存在于黑名单",
@@ -92,7 +92,7 @@
     },
     {
       "id": null,
-      "code": "11010101016",
+      "code": "11010101041",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_IDENTITY_CONFLICT",
       "message": "身份信息已存在于黑名单",
@@ -101,7 +101,7 @@
     },
     {
       "id": null,
-      "code": "11010101016",
+      "code": "11010101041",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_IDENTITY_CONFLICT",
       "message": "This identity information already exists in the blacklist.",
@@ -110,7 +110,7 @@
     },
     {
       "id": null,
-      "code": "11010101016",
+      "code": "11010101041",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_IDENTITY_CONFLICT",
       "message": "This identity information already exists in the blacklist.",
@@ -119,7 +119,7 @@
     },
     {
       "id": null,
-      "code": "11010101017",
+      "code": "11010101042",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_IDENTITY_INVALID",
       "message": "身份信息格式不正确，请检查后重试",
@@ -128,7 +128,7 @@
     },
     {
       "id": null,
-      "code": "11010101017",
+      "code": "11010101042",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_IDENTITY_INVALID",
       "message": "身份信息格式不正确，请检查后重试",
@@ -137,7 +137,7 @@
     },
     {
       "id": null,
-      "code": "11010101017",
+      "code": "11010101042",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_IDENTITY_INVALID",
       "message": "Invalid identity information. Please review and try again.",
@@ -146,7 +146,7 @@
     },
     {
       "id": null,
-      "code": "11010101017",
+      "code": "11010101042",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_IDENTITY_INVALID",
       "message": "Invalid identity information. Please review and try again.",
@@ -155,7 +155,7 @@
     },
     {
       "id": null,
-      "code": "11010101018",
+      "code": "11010101043",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_IMPORT_FILE_INVALID",
       "message": "导入文件格式不正确，请检查模板和文件内容",
@@ -164,7 +164,7 @@
     },
     {
       "id": null,
-      "code": "11010101018",
+      "code": "11010101043",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_IMPORT_FILE_INVALID",
       "message": "导入文件格式不正确，请检查模板和文件内容",
@@ -173,7 +173,7 @@
     },
     {
       "id": null,
-      "code": "11010101018",
+      "code": "11010101043",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_IMPORT_FILE_INVALID",
       "message": "The import file is invalid. Please check the template and file contents.",
@@ -182,7 +182,7 @@
     },
     {
       "id": null,
-      "code": "11010101018",
+      "code": "11010101043",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_IMPORT_FILE_INVALID",
       "message": "The import file is invalid. Please check the template and file contents.",
@@ -191,7 +191,7 @@
     },
     {
       "id": null,
-      "code": "11010101019",
+      "code": "11010101044",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_RECORD_NOT_FOUND",
       "message": "黑名单记录不存在",
@@ -200,7 +200,7 @@
     },
     {
       "id": null,
-      "code": "11010101019",
+      "code": "11010101044",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_RECORD_NOT_FOUND",
       "message": "黑名单记录不存在",
@@ -209,7 +209,7 @@
     },
     {
       "id": null,
-      "code": "11010101019",
+      "code": "11010101044",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_RECORD_NOT_FOUND",
       "message": "The blacklist record does not exist.",
@@ -218,18 +218,12 @@
     },
     {
       "id": null,
-      "code": "11010101019",
+      "code": "11010101044",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_RECORD_NOT_FOUND",
       "message": "The blacklist record does not exist.",
       "language": "en_US",
       "brandName": "Interlace"
     }
-  ],
-  "notes": [
-    "本文件为配置草案；错误码数字值已按要求从 11010101014 连续分配至 11010101019。",
-    "数据库记录 id 由错误码平台生成后补齐；本文件中 id 为 null，不能直接导入。",
-    "typeId 和 common 类型结构按格式样例引用；导入前核对目标环境类型 ID。",
-    "semanticName 和 notes 为评审辅助字段，正式导入前按错误码平台 schema 调整或移除。"
   ]
 }

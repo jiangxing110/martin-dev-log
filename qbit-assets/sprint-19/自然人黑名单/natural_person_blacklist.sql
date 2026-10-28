@@ -100,11 +100,8 @@ CREATE TABLE IF NOT EXISTS public.natural_person_blacklist_hit (
     scene varchar(64) NOT NULL,
     source_type varchar(64),
     account_id varchar(64),
-    merchant_id varchar(64),
     cardholder_id varchar(64),
     matched_details jsonb NOT NULL DEFAULT '[]'::jsonb,
-    result_code varchar(32) NOT NULL,
-    occurred_at timestamptz NOT NULL,
     CONSTRAINT uk_natural_person_blacklist_hit_request UNIQUE (source_system, request_id)
 );
 
@@ -120,16 +117,19 @@ COMMENT ON COLUMN public.natural_person_blacklist_hit.request_id IS '来源系�
 COMMENT ON COLUMN public.natural_person_blacklist_hit.scene IS '命中业务场景';
 COMMENT ON COLUMN public.natural_person_blacklist_hit.source_type IS 'KYC 来源类型';
 COMMENT ON COLUMN public.natural_person_blacklist_hit.account_id IS '账户 ID';
-COMMENT ON COLUMN public.natural_person_blacklist_hit.merchant_id IS '商户 ID';
 COMMENT ON COLUMN public.natural_person_blacklist_hit.cardholder_id IS '持卡人 ID';
 COMMENT ON COLUMN public.natural_person_blacklist_hit.matched_details IS '命中名单和维度的脱敏快照';
-COMMENT ON COLUMN public.natural_person_blacklist_hit.result_code IS '命中处置结果码';
-COMMENT ON COLUMN public.natural_person_blacklist_hit.occurred_at IS '命中业务发生时间';
 
-CREATE INDEX IF NOT EXISTS idx_natural_person_blacklist_hit_occurred_at
-    ON public.natural_person_blacklist_hit (occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_natural_person_blacklist_hit_create_time
+    ON public.natural_person_blacklist_hit (create_time DESC);
 CREATE INDEX IF NOT EXISTS idx_natural_person_blacklist_hit_account
-    ON public.natural_person_blacklist_hit (account_id, occurred_at DESC)
+    ON public.natural_person_blacklist_hit (account_id, create_time DESC)
     WHERE account_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_natural_person_blacklist_hit_details
     ON public.natural_person_blacklist_hit USING gin (matched_details);
+
+-- 清除旧版本命中表中已废弃的状态码、商户 ID 和业务发生时间列；命中时间统一使用 create_time。
+ALTER TABLE IF EXISTS public.natural_person_blacklist_hit
+    DROP COLUMN IF EXISTS result_code,
+    DROP COLUMN IF EXISTS merchant_id,
+    DROP COLUMN IF EXISTS occurred_at;
