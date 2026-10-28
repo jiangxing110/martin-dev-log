@@ -25,3 +25,12 @@ BB实际返现：-340,422
 BB:2026-08
 BB成本：472,402
 BB渠道返现：332,071
+
+
+select detail_url
+from api_client_bill
+where delete_time is null and customer_type='API'
+  and bill_month='2026-08' and type='MonthlyStatement'
+这个文件是一个zip 文件里面包含活跃卡的列表但是现在产品说不能显示provider字段 
+所以我们要修一下这个，生产都已经生成了有上万个数据所以我想说
+怎么修这个数据最快
