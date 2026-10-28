@@ -1,6 +1,6 @@
 --********************************************************************--
 -- Author: Codex
--- Updated Time: 2026-09-08 12:25:00
+-- Updated Time: 2026-10-28 10:38:57
 -- Description: BB V5 成本与渠道实际成本按月差值对比
 -- 说明：calculated_cost 不包含 cashback，cost_diff = actual_channel_cost - calculated_cost。
 --       calculated_cashback = 月度 cashback base * cashback_rate。
@@ -10,7 +10,7 @@
 WITH params AS (
     SELECT
         DATE '2026-01-01' AS start_date,
-        DATE '2026-09-01' AS end_date
+        DATE '2026-10-01' AS end_date
 ),
 bb_actual_cost AS (
     SELECT *
@@ -23,7 +23,8 @@ bb_actual_cost AS (
             ('2026-05', 458271.00::NUMERIC),
             ('2026-06', 413824.00::NUMERIC),
             ('2026-07', 432056.00::NUMERIC),
-            ('2026-08', 465253.00::NUMERIC)
+            ('2026-08', 467100.00::NUMERIC),
+            ('2026-09', 472402.00::NUMERIC)
     ) AS t(month, actual_channel_cost)
 ),
 bb_actual_cashback AS (
@@ -37,7 +38,8 @@ bb_actual_cashback AS (
             ('2026-05', 352991.00::NUMERIC),
             ('2026-06', 332480.00::NUMERIC),
             ('2026-07', 359663.00::NUMERIC),
-            ('2026-08', 340422.00::NUMERIC)
+            ('2026-08', 345893.00::NUMERIC),
+            ('2026-09', 332071.00::NUMERIC)
     ) AS t(month, actual_cashback)
 ),
 bb_base AS (

@@ -16,3 +16,16 @@ released_user_id
     /** 命中业务发生时间。 */
   @Column({ type: 'timestamptz', name: 'occurred_at' })
   occurredTime: Date;
+
+
+  在当前分支
+  /Users/martinjiang/VsCodeProjects/martin-dev-log/qbit-assets/sprint-19/清退优化
+  我们本次只是7. “注销”与“清退”的边界处理逻辑
+1. 注销本质上是“非合规风险发起的清退”（只是在发起的时候不涉及清退冻结资金及拉黑CDD等），流程状态与资金处置期逻辑应与清退完全一致。
+注销按照现有的新清退流程去处理，跟新清退的流程保持一致即可。注销=全量清退、注意一下注销的邮件
+2. 注意：对于 未完成 KYC/KYB 或 total 余额为 0 的用户发起注销/清退，系统对账完成后直接跳过清退处置期，变更状态为“清退完成”，无需展示 Banner 或发处置期邮件。
+发注销邮件模版👇
+其余阶段和上述9.1保持一致，仅发起阶段的邮件模版不同这个通知模版
+开发方案输出到
+/Users/martinjiang/VsCodeProjects/martin-dev-log/qbit-assets/sprint-19/清退优化
+
