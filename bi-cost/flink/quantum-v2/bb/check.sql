@@ -18,8 +18,8 @@
 
 WITH params AS (
     SELECT
-        DATE '2026-05-01' AS start_date,
-        DATE '2026-06-01' AS end_date
+        DATE '2026-07-01' AS start_date,
+        DATE '2026-08-01' AS end_date
 ),
 bb_base AS (
     SELECT

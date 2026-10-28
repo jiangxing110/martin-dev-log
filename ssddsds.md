@@ -16,9 +16,12 @@ INSERT INTO "MY_TABLE"(month, calculated_cost, actual_channel_cost, cost_diff, c
 
 给我更新一下/Users/martinjiang/VsCodeProjects/martin-dev-log/bi-cost/online/check/v2/query_bb_card_cost_detail_v5.sql
 BB:2026-08
-成本：467100
-渠道返现：345893
+成本：465,253
+渠道返现：340,422
 
-BB:2026-09
+BB:总成本：465,253
+BB实际返现：-340,422
+
+BB:2026-08
 BB成本：472,402
 BB渠道返现：332,071
