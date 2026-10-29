@@ -23,3 +23,24 @@ ALTER TABLE public.open_api_compliance_extend
 
 COMMENT ON COLUMN public.open_api_compliance_extend.request_reason
     IS '驳回原因';    
+
+
+     "act"."transaction_id" AS "transactionId",
+        "act"."transaction_id" AS "qbitCardTransactionId",
+        ("feeItem"->>'amount')::NUMERIC AS "fee",
+        'USD' AS "transactionCurrency",
+        "feeItem"->>'type' AS "type",
+        'Closed' AS "status"
+        FROM api_client_transaction "act"
+        CROSS JOIN LATERAL jsonb_array_elements("act"."fees"::jsonb) AS "feeItem"
+
+     "qct"."detail" AS "detail",
+        "qct"."transactionCurrency" AS "transactionCurrency",
+        "qct"."transactionId" AS "transactionId",
+        "qct"."id" AS "qbitCardTransactionId",
+        "qct"."businessType" AS "type",
+        "qct"."status" AS "status"
+        FROM "qbit_card_transaction" "qct"
+
+        维护一个表格 接口名称 模块 优化后admin 优化后web 备注
+        

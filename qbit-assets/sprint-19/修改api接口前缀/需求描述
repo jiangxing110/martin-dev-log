@@ -1,0 +1,132 @@
+admin白名单 / 改前缀 · BI board 统计 6 条
+父故事 PD-3026。未走 /api/admin 无法做 IP 白名单。清单以故事附件 Excel 为准，按当前声明行作者分配；Raffaello 引入的按声明行并入江星/周丞。梁伟仅余的 GET /api/core/google/getQrcode 并入江星拆接口，避免 GA 拆散。
+【改前缀】仅 admin 使用的单路径。后端改为 /api/admin/... ，对应 admin 前端一起改调用。不改行为、不拆给 qbit-web。
+接口 6 条：
+POST /api/bi/board/getAuthenticationRate web=未发现静态引用 前端=qbit-admin
+POST /api/bi/board/getCustomerSourceStatistics web=未发现静态引用 前端=qbit-admin
+POST /api/bi/board/getNumberCustomersReceived web=未发现静态引用 前端=qbit-admin
+POST /api/bi/board/quantumCardConsumptionSuccessRate web=未发现静态引用 前端=qbit-admin
+POST /api/bi/board/successRateEachSegment web=未发现静态引用 前端=qbit-admin
+POST /api/bi/board/sumAllScenesBlock web=未发现静态引用 前端=qbit-admin
+不在范围：其他人名下的接口。Excel「仅发现请求封装」的先复核调用方再改。
+
+
+admin白名单 / 拆接口 · 滑块验证码、GA、对账单、CaaS onboarding
+父故事 PD-3026。未走 /api/admin 无法做 IP 白名单。清单以故事附件 Excel 为准，按当前声明行作者分配；Raffaello 引入的按声明行并入江星/周丞。梁伟仅余的 GET /api/core/google/getQrcode 并入江星拆接口，避免 GA 拆散。
+含梁伟声明行的 GET /api/core/google/getQrcode，GA 三个一起拆。
+【拆接口】qbit-web 也在用。admin 走 /api/admin/... + IP 白名单；商户端保留非 admin URL。两条 URL 不能共用管理员上下文。交付前写明纵向（商户能否打到 admin 能力）和横向（能否打到他人数据）结论。
+接口 7 条：
+GET /api/core/google/checkCode web=仅发现请求封装，未找到业务调用 前端=qbit-admin
+GET /api/core/google/getSecretKey web=发现业务引用 前端=qbit-admin
+GET /api/statement/customer-settle web=发现业务引用 前端=qbit-admin; qbit-admin-v3
+POST /ajCaptcha/check web=发现业务引用 前端=qbit-admin; qbit-admin-v3
+POST /ajCaptcha/get web=发现业务引用 前端=qbit-admin; qbit-admin-v3
+POST /api/merchant/apiClient/caas-onboarding/card-bin web=发现业务引用 前端=qbit-admin-v3
+GET /api/core/google/getQrcode web=发现业务引用 前端=qbit-admin; qbit-admin-v3
+不在范围：其他人名下的接口。Excel「仅发现请求封装」的先复核调用方再改。
+admin白名单 / 改前缀 · BI看板 + drools + quantum-card（含下掉 convert internal 2 条）
+父故事 PD-3026。未走 /api/admin 无法做 IP 白名单。清单以故事附件 Excel 为准，按当前声明行作者分配；Raffaello 引入的按声明行并入江星/周丞。梁伟仅余的 GET /api/core/google/getQrcode 并入江星拆接口，避免 GA 拆散。
+
+含已是 /api/admin 的 employees/sales、employees/ams，需核对是否还要动。含 Raffaello 分给江星的 5 条 quantum-card。
+
+【下掉 internal】已是双路径。WAF 已拦 /api/assets/internal/... 。后端去掉 internal mapping，只留已有 /api/admin/... 。qbit-web 无引用。
+
+接口 2 条：
+
+POST /api/assets/internal/convert/api-customer/sub/card-bin/parent-list 另一路径 /api/admin/apiClient/convert/api-customer/sub/card-bin/parent-list web=未发现静态引用 前端=qbit-admin-v3
+
+POST /api/assets/internal/convert/issue-key 另一路径 /api/admin/apiClient/convert/issue-key web=未发现静态引用 前端=未标注
+
+【改前缀】仅 admin 使用的单路径。后端改为 /api/admin/... ，对应 admin 前端一起改调用。不改行为、不拆给 qbit-web。
+
+接口 71 条：
+
+GET /api/bi/baas/retention/baas web=未发现静态引用 前端=qbit-admin
+GET /api/bi/baas/retention/dashBoard web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/accountKyb web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/accountKyc web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/activate-conversion web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/businessData web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/businessDataAssets web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/businessDataCard web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/businessDataCardEarning web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/businessDataCardProvider web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/businessDataGlobal web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/businessQuantumByProvider web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/cardTransferInfo web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/globalInComes web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/globalTransfer web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/globalUser web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/qbitCardActive web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/qbitCardBalance web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/qbitCardStatics/{cardType} web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/qbitCardTransactionStatics/{cardType} web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/qbitCardTransfer web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/registration-conversion web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/subjectRegister web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/{accountLabel}/connexTransactionStatistics web=未发现静态引用 前端=qbit-admin
+GET /api/bi/board/{accountLabel}/connexTransactionTrend web=未发现静态引用 前端=qbit-admin
+GET /api/bi/customer/retention/{retentionProvider}/export web=未发现静态引用 前端=qbit-admin
+GET /api/bi/dashBoard/qbitCard web=未发现静态引用 前端=qbit-admin
+GET /api/bi/globalAccountFirstDeposit/list web=未发现静态引用 前端=qbit-admin
+GET /api/bi/globalAccountFirstDepositChart web=未发现静态引用 前端=qbit-admin
+GET /api/bi/globalAccountFirstDepositCountChart web=未发现静态引用 前端=qbit-admin
+GET /api/bi/qbitCardWalletFirstDeposit/list web=未发现静态引用 前端=qbit-admin
+GET /api/bi/qbitCardWalletFirstDepositChart web=未发现静态引用 前端=qbit-admin
+GET /api/bi/qbitCardWalletFirstDepositCountChart web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/earning/assetsInCome web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/earning/assetsInComes web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/earning/globalAccountInCome web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/earning/globalAccountInComes web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/earning/qbitCardInCome web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/earning/qbitCardInComes web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/earning/quantumEffectiveInComes web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/qbitCard/customer/consumption web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/qbitCard/customer/{accountLabel}/consumption-credit web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/qbitCard/customer/{accountLabel}/credit-rate web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/qbitCard/customer/{accountLabel}/fail-rate web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/qbitCard/health/consumption web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/qbitCard/health/consumption-count web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/qbitCard/health/credit-rate web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/qbitCard/health/credit-rate-count web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/qbitCard/health/fail-consumption-count-rate web=未发现静态引用 前端=qbit-admin
+GET /api/bi/sales/qbitCard/health/fail-consumption-rate web=未发现静态引用 前端=qbit-admin
+POST /api/bi/board/channel/card/cost web=未发现静态引用 前端=qbit-admin
+POST /api/bi/board/channel/card/trends web=未发现静态引用 前端=qbit-admin
+POST /api/bi/board/channel/global-account/cost web=未发现静态引用 前端=qbit-admin
+POST /api/bi/board/qbit-channel/record/upload web=未发现静态引用 前端=qbit-admin
+POST /api/core/translate web=未发现静态引用 前端=qbit-admin-v3
+POST /api/drools/control-warning/active web=未发现静态引用 前端=qbit-admin-v3
+POST /api/drools/control-warning/add web=未发现静态引用 前端=qbit-admin-v3
+POST /api/drools/control-warning/edit web=未发现静态引用 前端=qbit-admin-v3
+POST /api/drools/control-warning/findById web=未发现静态引用 前端=qbit-admin-v3
+POST /api/drools/control-warning/rule/logs web=未发现静态引用 前端=qbit-admin-v3
+POST /api/drools/control-warning/rule/pages web=未发现静态引用 前端=qbit-admin-v3
+POST /api/drools/risk-rating/info web=未发现静态引用 前端=qbit-admin-v3
+POST /api/drools/risk-rating/page web=未发现静态引用 前端=qbit-admin-v3
+POST /api/drools/risk-rating/save web=未发现静态引用 前端=qbit-admin-v3
+POST /api/quantum-card/customer/cycleFailRate web=未发现静态引用 前端=qbit-admin
+POST /api/quantum-card/customer/cycleRefundCount web=未发现静态引用 前端=qbit-admin
+POST /api/quantum-card/customer/cycleRefundRate web=未发现静态引用 前端=qbit-admin
+POST /api/quantum-card/customer/cycleRefundSum web=未发现静态引用 前端=qbit-admin
+POST /api/quantum-card/customer/refundAndFail web=未发现静态引用 前端=qbit-admin
+POST /api/admin/employees/sales web=未发现静态引用 前端=admin-dashboard-web
+POST /api/admin/employees/ams web=未发现静态引用 前端=admin-dashboard-web
+不在范围：其他人名下的接口。Excel「仅发现请求封装」的先复核调用方再改。
+
+给我看看
+
+当前有一些接口是双路径 or 提供给 admin 使用， 但是并没有加follow 规范， api/admin 这种格式， 导致没办法做 ip 白名单的校验，需要整改
+api/assets/internal/convert/add
+/api/assets/internal/convert/issue-key
+完整列表，包括了是否被 qbit-web 引用
+/Users/martinjiang/VsCodeProjects/martin-dev-log/qbit-assets/sprint-19/修改api接口前缀/全部接口开发人员.xlsx 
+当前的 action
+多路径的接口， api/asset/internal 的地址都在 waf 上拦截， 代码里直接把这个路径下掉就可以了
+单路径的， 如果只有 admin 引用的， 直接改地址， 然后前端配合一起修改
+如果 qbit-web 也用到（有一列标注的），让对应的开发人员拆接口
+
+那我们也要看看接口使用情况
+/Users/martinjiang/WebstormProjects/qbit_web
+/Users/martinjiang/WebstormProjects/qbit-admin-v3
+/Users/martinjiang/WebstormProjects/qbit_admin
