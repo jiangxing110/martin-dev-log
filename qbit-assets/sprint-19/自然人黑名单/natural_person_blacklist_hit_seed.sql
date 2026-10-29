@@ -1,15 +1,49 @@
 -- 自然人黑名单命中记录测试数据，共 30 条独立事件，拆成 3 组 INSERT（每组 10 条）。
 -- 数据来自黑名单分页接口返回的 8 条名单；脱敏快照匹配接口展示值。
 -- RELEASED 名单的命中时间均早于对应 released_time，用于模拟历史命中。
--- 请先确认这些名单记录已存在。本脚本只插入命中事件，不修改名单/身份表。
+-- 请先确认这些名单记录已存在。本脚本会创建命中表（若不存在）并插入命中事件，不修改名单/身份表。
 -- create_time 由脚本指定；update_time/version/delete_time 使用表默认值。
 -- 本脚本是一次性测试数据，成功执行后不要重复执行（事件 ID 和 request_id 固定）。
 
--- 旧测试表遗留了已决定移除的字段；命中时间统一使用 create_time，账户标识只保留 account_id。
-ALTER TABLE IF EXISTS public.natural_person_blacklist_hit
-    DROP COLUMN IF EXISTS result_code,
-    DROP COLUMN IF EXISTS merchant_id,
-    DROP COLUMN IF EXISTS occurred_at;
+CREATE TABLE IF NOT EXISTS public.natural_person_blacklist_hit (
+    id bigint PRIMARY KEY NOT NULL,
+    remarks varchar(255),
+    create_time timestamptz NOT NULL DEFAULT now(),
+    update_time timestamptz NOT NULL DEFAULT now(),
+    delete_time timestamptz,
+    version integer NOT NULL DEFAULT 0,
+    source_system varchar(64) NOT NULL,
+    request_id varchar(128),
+    scene varchar(64) NOT NULL,
+    source_type varchar(64),
+    account_id varchar(64),
+    cardholder_id varchar(64),
+    matched_details jsonb NOT NULL DEFAULT '[]'::jsonb,
+    CONSTRAINT uk_natural_person_blacklist_hit_request UNIQUE (source_system, request_id)
+);
+
+COMMENT ON TABLE public.natural_person_blacklist_hit IS '自然人黑名单命中事件，永久保留';
+COMMENT ON COLUMN public.natural_person_blacklist_hit.id IS '命中事件 ID';
+COMMENT ON COLUMN public.natural_person_blacklist_hit.remarks IS '命中事件备注';
+COMMENT ON COLUMN public.natural_person_blacklist_hit.create_time IS '创建时间';
+COMMENT ON COLUMN public.natural_person_blacklist_hit.update_time IS '更新时间';
+COMMENT ON COLUMN public.natural_person_blacklist_hit.delete_time IS '软删除时间';
+COMMENT ON COLUMN public.natural_person_blacklist_hit.version IS '乐观锁版本号';
+COMMENT ON COLUMN public.natural_person_blacklist_hit.source_system IS '命中请求来源系统';
+COMMENT ON COLUMN public.natural_person_blacklist_hit.request_id IS '来源系统请求 ID；预校验阶段可能为空';
+COMMENT ON COLUMN public.natural_person_blacklist_hit.scene IS '命中业务场景';
+COMMENT ON COLUMN public.natural_person_blacklist_hit.source_type IS 'KYC 来源类型';
+COMMENT ON COLUMN public.natural_person_blacklist_hit.account_id IS '账户 ID';
+COMMENT ON COLUMN public.natural_person_blacklist_hit.cardholder_id IS '持卡人 ID';
+COMMENT ON COLUMN public.natural_person_blacklist_hit.matched_details IS '命中名单和维度的脱敏快照';
+
+CREATE INDEX IF NOT EXISTS idx_natural_person_blacklist_hit_create_time
+    ON public.natural_person_blacklist_hit (create_time DESC);
+CREATE INDEX IF NOT EXISTS idx_natural_person_blacklist_hit_account
+    ON public.natural_person_blacklist_hit (account_id, create_time DESC)
+    WHERE account_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_natural_person_blacklist_hit_details
+    ON public.natural_person_blacklist_hit USING gin (matched_details);
 
 INSERT INTO public.natural_person_blacklist_hit (id, create_time, source_system, request_id, scene, source_type, account_id, cardholder_id, matched_details)
 VALUES

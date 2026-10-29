@@ -9,3 +9,17 @@ CardholderBlackListService 持卡人kyc sumsub 部分
 我现在要你把上面两个分支合并到
 jx/26/sprint-19/PD-2321/natural-person-blacklists
 然后在上面两处代码加上我们想要的黑名单处理
+
+-- 扩大 CaaS Top5 消费场景字段容量。
+ALTER TABLE public.open_api_compliance_extend
+    ALTER COLUMN top_consume TYPE text;
+
+COMMENT ON COLUMN public.open_api_compliance_extend.top_consume
+    IS 'Top5消费场景';
+
+-- 扩大 CaaS 合规驳回原因字段容量。
+ALTER TABLE public.open_api_compliance_extend
+    ALTER COLUMN request_reason TYPE text;
+
+COMMENT ON COLUMN public.open_api_compliance_extend.request_reason
+    IS '驳回原因';    

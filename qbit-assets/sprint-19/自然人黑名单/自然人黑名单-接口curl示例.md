@@ -125,34 +125,39 @@ curl --location "https://global.service.test.qbitnetwork.com/api/admin/natural-p
   }'
 ```
 
-## 8. 查询命中明细原文
+## 8. 按命中 ID 查询命中详情原文
 
 `POST /api/admin/natural-person-blacklists/hits/details`
 
 ```bash
-curl --location "https://global.service.test.qbitnetwork.com/api/admin/natural-person-blacklists/hits/details" \
-  --header "Content-Type: application/json" \
-  --header "Authorization: Bearer YOUR_ADMIN_TOKEN" \
-  --header "fingerprint: YOUR_FINGERPRINT" \
+curl --location "https://global.service.test.qbitnetwork.com/api/admin/natural-person-blacklists/hits/details" \\
+  --header "Content-Type: application/json" \\
+  --header "Authorization: Bearer YOUR_ADMIN_TOKEN" \\
+  --header "fingerprint: YOUR_FINGERPRINT" \\
   --data-raw '{
-    "hitId": 50001,
-    "blacklistId": 9988,
-    "identityType": "NATIONALITY_ID"
+    "hitId": 2115363300000000027
   }'
 ```
 
-## 9. 上传 Excel 并检查导入文件
+只需传命中事件 `hitId`。响应包含该事件的 `matchedDetails` 数组，每个维度中的 `identityValue` 为原文、`maskedValue` 为脱敏快照，并包含账户信息。
+
+## 9. 通过 Excel 链接检查导入文件
+
+[下载自然人黑名单导入模板](https://qbit-develop.oss-accelerate.aliyuncs.com/open-api/4c5ee705-1db8-4729-8954-2bcb866b6fdd/1793183512590/自然人黑名单-导入模版.xlsx)
 
 `POST /api/admin/natural-person-blacklists/imports/check`
 
 ```bash
 curl --location "https://global.service.test.qbitnetwork.com/api/admin/natural-person-blacklists/imports/check" \
+  --header "Content-Type: application/json" \
   --header "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   --header "fingerprint: YOUR_FINGERPRINT" \
-  --form "file=@/absolute/path/natural-person-blacklist.xlsx"
+  --data-raw '{
+    "fileUrl": "https://qbit-develop.oss-accelerate.aliyuncs.com/open-api/4c5ee705-1db8-4729-8954-2bcb866b6fdd/1793183512590/自然人黑名单-导入模版.xlsx"
+  }'
 ```
 
-将文件路径换成待检查的 `.xls` 或 `.xlsx` 文件。该接口使用 `multipart/form-data`，不是 JSON 请求体。
+`fileUrl` 需要是可访问的 `.xls` 或 `.xlsx` 文件 HTTPS 链接。后端目前仅允许 `qbit-develop.oss-accelerate.aliyuncs.com` 域名，文件大小上限 20 MB，数据行上限 5000。原 multipart 文件上传方式仍可用。
 
 ## 10. 确认批量导入
 
@@ -186,27 +191,46 @@ curl --location "https://global.service.test.qbitnetwork.com/api/admin/natural-p
 
 将检查接口返回的 `importBatchNo` 和需要提交的行数据原样带入。确认接口允许逐行部分成功。
 
-## 11. 异步导出黑名单
+## 11. 根据 Excel 链接直接导入黑名单
 
-`POST /api/admin/natural-person-blacklists/export`
+`POST /api/admin/natural-person-blacklists/imports/confirm`
 
 ```bash
-curl --location "https://global.service.test.qbitnetwork.com/api/admin/natural-person-blacklists/export" \
+curl --location "https://global.service.test.qbitnetwork.com/api/admin/natural-person-blacklists/imports/confirm" \
   --header "Content-Type: application/json" \
   --header "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   --header "fingerprint: YOUR_FINGERPRINT" \
   --data-raw '{
-    "status": "ACTIVE",
-    "source": "IMPORT",
     "importBatchNo": "IMP-20261028-123456789",
-    "createTimeFrom": "2026-10-01T00:00:00+08:00",
-    "createTimeTo": "2026-10-28T23:59:59+08:00"
+    "fileUrl": "https://qbit-develop.oss-accelerate.aliyuncs.com/open-api/4c5ee705-1db8-4729-8954-2bcb866b6fdd/1793183512590/自然人黑名单-导入模版.xlsx"
   }'
 ```
 
-接口异步受理导出任务；文件通过现有导出通知流程获取。
+链接模式直接检查并导入 Excel；使用请求中的批次号并在回执中返回，省略时服务端生成，逐行处理且支持部分成功。文件链接限制、大小和行数与链接检查接口相同。
 
-## 12. 查询统一操作日志
+## 12. 异步导出命中记录
+
+`POST /api/admin/natural-person-blacklists/hits/export`
+
+```bash
+curl --location "https://global.service.test.qbitnetwork.com/api/admin/natural-person-blacklists/hits/export" \\
+  --header "Content-Type: application/json" \\
+  --header "Authorization: Bearer YOUR_ADMIN_TOKEN" \\
+  --header "fingerprint: YOUR_FINGERPRINT" \\
+  --data-raw '{
+    "current": 1,
+    "size": 10,
+    "hitTimeFrom": "2026-10-01T00:00:00+08:00",
+    "hitTimeTo": "2026-10-28T23:59:59+08:00",
+    "identityType": "NATIONALITY_ID",
+    "identityValue": "1234567",
+    "holderOrAccountId": "acc_7890"
+  }'
+```
+
+请求筛选条件与命中分页一致；导出全部匹配结果，不受 `current`、`size` 限制。导出身份值为脱敏值，任务完成后通过现有异步导出通知流程获取文件。
+
+## 13. 查询统一操作日志
 
 黑名单操作日志复用 `admin-graphql` 的 `adminOperationLogs`，按名单 ID 过滤。下面的请求体使用 `recordId` 字符串；token 和 fingerprint 沿用后台登录态。
 

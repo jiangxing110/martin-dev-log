@@ -96,7 +96,7 @@ CREATE TABLE IF NOT EXISTS public.natural_person_blacklist_hit (
     delete_time timestamptz,
     version integer NOT NULL DEFAULT 0,
     source_system varchar(64) NOT NULL,
-    request_id varchar(128) NOT NULL,
+    request_id varchar(128),
     scene varchar(64) NOT NULL,
     source_type varchar(64),
     account_id varchar(64),
@@ -113,7 +113,7 @@ COMMENT ON COLUMN public.natural_person_blacklist_hit.update_time IS '更新时�
 COMMENT ON COLUMN public.natural_person_blacklist_hit.delete_time IS '软删除时间';
 COMMENT ON COLUMN public.natural_person_blacklist_hit.version IS '乐观锁版本号';
 COMMENT ON COLUMN public.natural_person_blacklist_hit.source_system IS '命中请求来源系统';
-COMMENT ON COLUMN public.natural_person_blacklist_hit.request_id IS '来源系统稳定请求 ID';
+COMMENT ON COLUMN public.natural_person_blacklist_hit.request_id IS '来源系统请求 ID；预校验阶段可能为空';
 COMMENT ON COLUMN public.natural_person_blacklist_hit.scene IS '命中业务场景';
 COMMENT ON COLUMN public.natural_person_blacklist_hit.source_type IS 'KYC 来源类型';
 COMMENT ON COLUMN public.natural_person_blacklist_hit.account_id IS '账户 ID';
@@ -133,3 +133,7 @@ ALTER TABLE IF EXISTS public.natural_person_blacklist_hit
     DROP COLUMN IF EXISTS result_code,
     DROP COLUMN IF EXISTS merchant_id,
     DROP COLUMN IF EXISTS occurred_at;
+
+-- 创建持卡人记录前也可能写入命中事件，因此来源请求 ID 允许为空。
+ALTER TABLE IF EXISTS public.natural_person_blacklist_hit
+    ALTER COLUMN request_id DROP NOT NULL;
