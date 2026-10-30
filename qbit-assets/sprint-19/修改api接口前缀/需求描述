@@ -130,3 +130,17 @@ api/assets/internal/convert/add
 /Users/martinjiang/WebstormProjects/qbit_web
 /Users/martinjiang/WebstormProjects/qbit-admin-v3
 /Users/martinjiang/WebstormProjects/qbit_admin
+
+admin白名单 / 改前缀 · BI board 统计 6 条
+admin白名单 / 拆接口 · 滑块验证码、GA、对账单、CaaS onboarding
+admin白名单 / 改前缀 · BI看板 + drools + quantum-card（含下掉 convert internal 2 条）
+
+商户端入口已下线（PD-2804），但 GraphQL 写接口仍开放。displayId 389522 于 2026-10-29 直接调用 createVendor、payAccountCharging(type=Vendor) 成功建单（附件为 webhook.site，非页面提交）。
+
+请关闭商户侧写接口，Admin 查询/审批保持不动：
+1. createVendor
+2. resubmitVendor
+3. updateVendor
+4. payAccountCharging 仅 type=Vendor（该接口还用于全球账户/海外版开户费，不可整条关掉）
+
+进行中订单：displayId 317764（Boxneo）自 7 月仍为 AwaitingPayment，付款接口一并关则该单也无法交费，请产品确认是否留口。
