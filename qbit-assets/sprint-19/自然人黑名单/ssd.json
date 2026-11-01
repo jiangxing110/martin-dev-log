@@ -1,0 +1,85 @@
+{
+  "types": [
+    {
+      "id": "1909577647815987202",
+      "name": "common",
+      "parentId": "1909577572209463298",
+      "code": 101,
+      "fullCode": "110101"
+    }
+  ],
+  "codes": [
+    {
+      "id": null,
+      "code": "11010101039",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_HIT",
+      "message": "认证未通过，证件存在风险，如有疑问请联系客服",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101039",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_HIT",
+      "message": "认证未通过，证件存在风险，如有疑问请联系客服",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101039",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_HIT",
+      "message": "Verification unsuccessful. Your identity document presents risk. Kindly reach out to customer support if you have any questions.",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101039",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_HIT",
+      "message": "Verification unsuccessful. Your identity document presents risk. Kindly reach out to customer support if you have any questions.",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101040",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_CHECK_UNAVAILABLE",
+      "message": "认证暂不可用，请稍后重试",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101040",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_CHECK_UNAVAILABLE",
+      "message": "认证暂不可用，请稍后重试",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101040",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_CHECK_UNAVAILABLE",
+      "message": "Verification is temporarily unavailable. Please try again later.",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101040",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_CHECK_UNAVAILABLE",
+      "message": "Verification is temporarily unavailable. Please try again later.",
+      "language": "en_US",
+      "brandName": "Interlace"
+    }
+  ]
+}

@@ -14,7 +14,7 @@
       "code": "11010101039",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_HIT",
-      "message": "认证未通过，证件存在风险",
+      "message": "认证未通过，证件存在风险，如有疑问请联系客服",
       "language": "zh_CN",
       "brandName": "QBIT"
     },
@@ -23,7 +23,7 @@
       "code": "11010101039",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_HIT",
-      "message": "认证未通过，证件存在风险",
+      "message": "认证未通过，证件存在风险，如有疑问请联系客服",
       "language": "zh_CN",
       "brandName": "Interlace"
     },
@@ -32,7 +32,7 @@
       "code": "11010101039",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_HIT",
-      "message": "Your verification was unsuccessful due to an identity risk.",
+      "message": "Verification unsuccessful. Your identity document presents risk. Kindly reach out to customer support if you have any questions.",
       "language": "en_US",
       "brandName": "QBIT"
     },
@@ -41,7 +41,7 @@
       "code": "11010101039",
       "typeId": "1909577647815987202",
       "semanticName": "NATURAL_PERSON_BLACKLIST_HIT",
-      "message": "Your verification was unsuccessful due to an identity risk.",
+      "message": "Verification unsuccessful. Your identity document presents risk. Kindly reach out to customer support if you have any questions.",
       "language": "en_US",
       "brandName": "Interlace"
     },
