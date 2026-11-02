@@ -8,6 +8,8 @@
 --   3. 金额保留正负号，不做归零、截断或非负约束。
 --********************************************************************--
 
+DROP TABLE IF EXISTS "dws"."dws_sales_gross_profit_snapshot_detail_p";
+
 CREATE TABLE "dws"."dws_sales_gross_profit_snapshot_detail_p" (
   "id" int8 NOT NULL,
   "snapshot_date" date NOT NULL,
@@ -49,11 +51,8 @@ CREATE INDEX "idx_sales_gross_profit_snapshot_detail_query"
 CREATE INDEX "idx_sales_gross_profit_snapshot_detail_product"
   ON "dws"."dws_sales_gross_profit_snapshot_detail_p" USING btree ("settlement_month", "sale_id", "product");
 
-CREATE TABLE "dws"."dws_sales_gross_profit_snapshot_detail_2026" PARTITION OF "dws"."dws_sales_gross_profit_snapshot_detail_p"
-  FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
+CREATE TABLE "dws"."dws_sales_gross_profit_snapshot_detail_2026" PARTITION OF "dws"."dws_sales_gross_profit_snapshot_detail_p" FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
 
-CREATE TABLE "dws"."dws_sales_gross_profit_snapshot_detail_2027" PARTITION OF "dws"."dws_sales_gross_profit_snapshot_detail_p"
-  FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');
+CREATE TABLE "dws"."dws_sales_gross_profit_snapshot_detail_2027" PARTITION OF "dws"."dws_sales_gross_profit_snapshot_detail_p" FOR VALUES FROM ('2027-01-01') TO ('2028-01-01');
 
-CREATE TABLE "dws"."dws_sales_gross_profit_snapshot_detail_2028" PARTITION OF "dws"."dws_sales_gross_profit_snapshot_detail_p"
-  FOR VALUES FROM ('2028-01-01') TO ('2029-01-01');
+CREATE TABLE "dws"."dws_sales_gross_profit_snapshot_detail_2028" PARTITION OF "dws"."dws_sales_gross_profit_snapshot_detail_p" FOR VALUES FROM ('2028-01-01') TO ('2029-01-01');
