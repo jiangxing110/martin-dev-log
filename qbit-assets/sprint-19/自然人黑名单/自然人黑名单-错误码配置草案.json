@@ -224,6 +224,294 @@
       "message": "The blacklist record does not exist.",
       "language": "en_US",
       "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101045",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_EMAIL_FORMAT_INVALID",
+      "message": "邮箱格式不正确",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101045",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_EMAIL_FORMAT_INVALID",
+      "message": "邮箱格式不正确",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101045",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_EMAIL_FORMAT_INVALID",
+      "message": "Invalid email format.",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101045",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_EMAIL_FORMAT_INVALID",
+      "message": "Invalid email format.",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101046",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_COUNTRY_CODE_INVALID",
+      "message": "国籍代码无效，请使用有效的 ISO 3166-1 alpha-2 代码",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101046",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_COUNTRY_CODE_INVALID",
+      "message": "国籍代码无效，请使用有效的 ISO 3166-1 alpha-2 代码",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101046",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_COUNTRY_CODE_INVALID",
+      "message": "Invalid nationality code. Use a valid ISO 3166-1 alpha-2 code.",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101046",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_COUNTRY_CODE_INVALID",
+      "message": "Invalid nationality code. Use a valid ISO 3166-1 alpha-2 code.",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101047",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_ID_TYPE_UNSUPPORTED",
+      "message": "证件类型不受支持",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101047",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_ID_TYPE_UNSUPPORTED",
+      "message": "证件类型不受支持",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101047",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_ID_TYPE_UNSUPPORTED",
+      "message": "Unsupported identity document type.",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101047",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_ID_TYPE_UNSUPPORTED",
+      "message": "Unsupported identity document type.",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101048",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_DOCUMENT_FIELDS_INCOMPLETE",
+      "message": "证件信息不完整，国籍、证件类型和证件号必须填写完整",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101048",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_DOCUMENT_FIELDS_INCOMPLETE",
+      "message": "证件信息不完整，国籍、证件类型和证件号必须填写完整",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101048",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_DOCUMENT_FIELDS_INCOMPLETE",
+      "message": "Document information is incomplete. Nationality, document type, and document number are all required.",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101048",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_DOCUMENT_FIELDS_INCOMPLETE",
+      "message": "Document information is incomplete. Nationality, document type, and document number are all required.",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101049",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_EMAIL_CONFLICT",
+      "message": "邮箱已存在于黑名单",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101049",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_EMAIL_CONFLICT",
+      "message": "邮箱已存在于黑名单",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101049",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_EMAIL_CONFLICT",
+      "message": "Email already exists in the blacklist.",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101049",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_EMAIL_CONFLICT",
+      "message": "Email already exists in the blacklist.",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101050",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_DOCUMENT_CONFLICT",
+      "message": "证件已存在于黑名单（国籍、证件类型和证件号）",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101050",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_DOCUMENT_CONFLICT",
+      "message": "证件已存在于黑名单（国籍、证件类型和证件号）",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101050",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_DOCUMENT_CONFLICT",
+      "message": "Document already exists in the blacklist (nationality, document type, and document number).",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101050",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_DOCUMENT_CONFLICT",
+      "message": "Document already exists in the blacklist (nationality, document type, and document number).",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101051",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_REMARKS_INVALID",
+      "message": "加黑原因不能为空且不能超过255个字符",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101051",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_REMARKS_INVALID",
+      "message": "加黑原因不能为空且不能超过255个字符",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101051",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_REMARKS_INVALID",
+      "message": "Blacklist reason is required and must not exceed 255 characters.",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101051",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_REMARKS_INVALID",
+      "message": "Blacklist reason is required and must not exceed 255 characters.",
+      "language": "en_US",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101052",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_IMPORT_ROW_FAILED",
+      "message": "导入失败，请稍后重试",
+      "language": "zh_CN",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101052",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_IMPORT_ROW_FAILED",
+      "message": "导入失败，请稍后重试",
+      "language": "zh_CN",
+      "brandName": "Interlace"
+    },
+    {
+      "id": null,
+      "code": "11010101052",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_IMPORT_ROW_FAILED",
+      "message": "The import failed. Please try again later.",
+      "language": "en_US",
+      "brandName": "QBIT"
+    },
+    {
+      "id": null,
+      "code": "11010101052",
+      "typeId": "1909577647815987202",
+      "semanticName": "NATURAL_PERSON_BLACKLIST_IMPORT_ROW_FAILED",
+      "message": "The import failed. Please try again later.",
+      "language": "en_US",
+      "brandName": "Interlace"
     }
   ]
 }

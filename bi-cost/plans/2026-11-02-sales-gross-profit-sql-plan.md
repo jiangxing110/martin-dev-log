@@ -40,3 +40,11 @@
 - [x] 添加估算视图与快照按销售对账 SQL。
 - [x] 检查金额列没有 GREATEST/ABS 截断及脚本无行尾空格。
 - [ ] 在目标 ADBPG/Flink 环境执行 DDL 与 CDC 作业验证。
+
+### Task 4: Manual batch scripts
+
+**Files:** `qbit-assets/sprint-19/销售毛利报表/sql/batch/`
+
+- [x] Add direct ADBPG estimate-view refresh and monthly source summary script.
+- [x] Add parameterized Flink snapshot rebuild script using `snapshot_date` and `settlement_month`, writing summary/detail in one Statement Set.
+- [x] Verify the batch script contains no commission-only fields and preserves signed amounts.
