@@ -87,11 +87,11 @@
 - [ ] **POST `/api/drools/risk-rating/info`** → **/api/admin/drools/risk-rating/info**；模块：Drools；qbit-web：—（未发现 qbit-web 静态引用）；状态：后端 Admin 路径已按清单处理。改映射并更新前端；前端：qbit-admin-v3
 - [ ] **POST `/api/drools/risk-rating/page`** → **/api/admin/drools/risk-rating/page**；模块：Drools；qbit-web：—（未发现 qbit-web 静态引用）；状态：后端 Admin 路径已按清单处理。改映射并更新前端；前端：qbit-admin-v3
 - [ ] **POST `/api/drools/risk-rating/save`** → **/api/admin/drools/risk-rating/save**；模块：Drools；qbit-web：—（未发现 qbit-web 静态引用）；状态：后端 Admin 路径已按清单处理。改映射并更新前端；前端：qbit-admin-v3
-- [ ] **POST `/api/quantum-card/customer/cycleFailRate`** → **/api/admin/quantum-card/customer/cycleFailRate**；模块：quantum-card；qbit-web：—（未发现 qbit-web 静态引用）；状态：后端 Admin 路径已按清单处理。qbit_admin 已找到请求封装；按清单改 Admin 路径并更新封装，不以页面调用为前置
-- [ ] **POST `/api/quantum-card/customer/cycleRefundCount`** → **/api/admin/quantum-card/customer/cycleRefundCount**；模块：quantum-card；qbit-web：—（未发现 qbit-web 静态引用）；状态：后端 Admin 路径已按清单处理。qbit_admin 已找到请求封装；按清单改 Admin 路径并更新封装，不以页面调用为前置
-- [ ] **POST `/api/quantum-card/customer/cycleRefundRate`** → **/api/admin/quantum-card/customer/cycleRefundRate**；模块：quantum-card；qbit-web：—（未发现 qbit-web 静态引用）；状态：后端 Admin 路径已按清单处理。qbit_admin 已找到请求封装；按清单改 Admin 路径并更新封装，不以页面调用为前置
-- [ ] **POST `/api/quantum-card/customer/cycleRefundSum`** → **/api/admin/quantum-card/customer/cycleRefundSum**；模块：quantum-card；qbit-web：—（未发现 qbit-web 静态引用）；状态：后端 Admin 路径已按清单处理。qbit_admin 已找到请求封装；按清单改 Admin 路径并更新封装，不以页面调用为前置
-- [ ] **POST `/api/quantum-card/customer/refundAndFail`** → **/api/admin/quantum-card/customer/refundAndFail**；模块：quantum-card；qbit-web：—（未发现 qbit-web 静态引用）；状态：后端 Admin 路径已按清单处理。qbit_admin 已找到请求封装；按清单改 Admin 路径并更新封装，不以页面调用为前置
+- [ ] **POST `/api/quantum-card/customer/cycleFailRate`** → **/api/admin/quantum-card/customer/cycle-fail-rate**；模块：quantum-card；qbit-web：—（未发现 qbit-web 静态引用）；状态：后端 Admin 路径已按清单处理。qbit_admin 已找到请求封装；按清单改 Admin 路径并更新封装，不以页面调用为前置
+- [ ] **POST `/api/quantum-card/customer/cycleRefundCount`** → **/api/admin/quantum-card/customer/cycle-refund-count**；模块：quantum-card；qbit-web：—（未发现 qbit-web 静态引用）；状态：后端 Admin 路径已按清单处理。qbit_admin 已找到请求封装；按清单改 Admin 路径并更新封装，不以页面调用为前置
+- [ ] **POST `/api/quantum-card/customer/cycleRefundRate`** → **/api/admin/quantum-card/customer/cycle-refund-rate**；模块：quantum-card；qbit-web：—（未发现 qbit-web 静态引用）；状态：后端 Admin 路径已按清单处理。qbit_admin 已找到请求封装；按清单改 Admin 路径并更新封装，不以页面调用为前置
+- [ ] **POST `/api/quantum-card/customer/cycleRefundSum`** → **/api/admin/quantum-card/customer/cycle-refund-sum**；模块：quantum-card；qbit-web：—（未发现 qbit-web 静态引用）；状态：后端 Admin 路径已按清单处理。qbit_admin 已找到请求封装；按清单改 Admin 路径并更新封装，不以页面调用为前置
+- [ ] **POST `/api/quantum-card/customer/refundAndFail`** → **/api/admin/quantum-card/customer/refund-and-fail**；模块：quantum-card；qbit-web：—（未发现 qbit-web 静态引用）；状态：后端 Admin 路径已按清单处理。qbit_admin 已找到请求封装；按清单改 Admin 路径并更新封装，不以页面调用为前置
 - [ ] **POST `/api/admin/employees/sales`** → **/api/admin/employees/sales**；模块：employees；qbit-web：—（未发现 qbit-web 静态引用）；状态：现有 Admin 路径，复核。路径已符合规范，只复核白名单与故事要求；前端：admin-dashboard-web
 - [ ] **POST `/api/admin/employees/ams`** → **/api/admin/employees/ams**；模块：employees；qbit-web：—（未发现 qbit-web 静态引用）；状态：现有 Admin 路径，复核。路径已符合规范，只复核白名单与故事要求；前端：admin-dashboard-web
 - [ ] **POST `/api/assets/internal/convert/api-customer/sub/card-bin/parent-list`** → **保留：`/api/admin/apiClient/convert/api-customer/sub/card-bin/parent-list`**；模块：API Convert；qbit-web：—；状态：待复核/定位。删除该 internal 映射；当前源码未定位到完整映射，先确认定义位置。
@@ -115,12 +115,12 @@
 - 滑块验证码：商户 `POST /ajCaptcha/get`、`/check`；Admin `POST /api/admin/ajCaptcha/get`、`/check`。Admin 登录前流程保留免登录要求，并由网关/WAF 管理 IP 白名单。
 - CaaS card-bin：商户继续使用 `POST /api/merchant/apiClient/caas-onboarding/card-bin`；Admin 使用已存在的 `POST /api/admin/apiClient/lable/caas-onboarding/card-bin`。
 - 量子卡五项：
-  - `POST /api/quantum-card/customer/refundAndFail` → Admin `POST /api/admin/quantum-card/customer/refundAndFail`
-  - `POST /api/quantum-card/customer/cycleRefundCount` → Admin `POST /api/admin/quantum-card/customer/cycleRefundCount`
-  - `POST /api/quantum-card/customer/cycleRefundSum` → Admin `POST /api/admin/quantum-card/customer/cycleRefundSum`
-  - `POST /api/quantum-card/customer/cycleFailRate` → Admin `POST /api/admin/quantum-card/customer/cycleFailRate`
-  - `POST /api/quantum-card/customer/cycleRefundRate` → Admin `POST /api/admin/quantum-card/customer/cycleRefundRate`
-  - 两侧都保留 `@NoAuth(NoAuth.LOGIN)`，即校验登录 token。Admin Controller 同时保留其既有 kebab-case 路由。
+  - `POST /api/quantum-card/customer/refundAndFail` → Admin `POST /api/admin/quantum-card/customer/refund-and-fail`
+  - `POST /api/quantum-card/customer/cycleRefundCount` → Admin `POST /api/admin/quantum-card/customer/cycle-refund-count`
+  - `POST /api/quantum-card/customer/cycleRefundSum` → Admin `POST /api/admin/quantum-card/customer/cycle-refund-sum`
+  - `POST /api/quantum-card/customer/cycleFailRate` → Admin `POST /api/admin/quantum-card/customer/cycle-fail-rate`
+  - `POST /api/quantum-card/customer/cycleRefundRate` → Admin `POST /api/admin/quantum-card/customer/cycle-refund-rate`
+  - 两侧都保留 `@NoAuth(NoAuth.LOGIN)`，即校验登录 token。Admin Controller 每项只保留一条短横线（kebab-case）路由，避免生成重名 API。
 - 翻译：商户 `POST /api/core/translate` 保留；Admin `POST /api/admin/core/translate` 新增。商户 `POST /api/core/translate/translate-form` 不变。
 
 ### 前端对接清单
@@ -135,3 +135,13 @@
 - 员工 `POST /api/admin/employees/sales` 与 `POST /api/admin/employees/ams` 已使用 Admin 前缀，本次只复核，不需要改路径。
 - 清单中的两条 `/api/assets/internal/convert/...` 完整映射在当前 Assets 源码中未找到，未据此删除其它路由；需要提供运行时路由/网关定义后再确认。
 - 本次只编译 Assets（`mvn -pl qbit-core -am -DskipTests test-compile`）；未运行业务测试，也未做前端构建或联调。当前编译通过，`git diff --check` 通过。
+
+### 量子卡路由去重决议
+
+Admin 端五项统计只保留清单对应的短横线路径（如 `/api/admin/quantum-card/customer/refund-and-fail`），删除同一方法上的 camelCase 别名，避免 OpenAPI 生成同名 API 并追加 `2`。商户旧路径仍保留。
+
+### 开卡周期路径命名统一
+
+- 商户继续使用 `POST /api/quantum-card/customer/cycleOpenCard`。
+- Admin 使用 `POST /api/admin/quantum-card/customer/cycle-open-card`，短横线风格且只注册这一条映射。
+- 请求体和响应保持不变，接口保留登录校验。

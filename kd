@@ -48,3 +48,10 @@ COMMENT ON COLUMN public.open_api_compliance_extend.request_reason
 1.第一次kyc kyb 全部提交完 有一条（客户提交）
 2.假设同事驳回kyc kyb客户先填kyc这个时候odd 状态先变成待审批 那这个时候也会有一条
   再提交kyb 这个时候因为odd 还是待审核 那这个时候不会有记录       
+
+
+  1.建表 建物化视图（增量）
+  2.快照脚本
+  3./Users/martinjiang/IdeaProjects/qbit-assets 接口
+  controller写在com/qbit/admin/analysis/controller/reportform/v2 
+  

@@ -17,7 +17,7 @@
 
 ### 量子卡统计
 
-- 修改已有 `AdminQbitCardStatisticsController`，为退款失败、退款笔数、退款金额、失败率、退款率五项接口增加清单所需的 camelCase Admin 路由，同时保留 Controller 原有 kebab-case Admin 路由。
+- 修改已有 `AdminQbitCardStatisticsController`，为退款失败、退款笔数、退款金额、失败率、退款率五项接口只保留截图中的短横线 Admin 路由，移除造成前端生成方法重名的 camelCase 别名。
 - 商户 `QbitCardStatisticsController` 保留五项方法的原 `@PostMapping` 与登录校验；既有 Admin Controller 同时提供五项新 Admin URL。
 
 - 五个商户 URL 与五个 Admin URL 均注册；Admin 调用方仍需在后续前端任务切换到新 Admin URL。
@@ -76,7 +76,7 @@ Controller 跨目录移动在未暂存状态下由 Git 显示为旧路径删除�
 
 ### 修改文件
 
-1. `qbit-core/src/main/java/com/qbit/admin/analysis/controller/statistics/AdminQbitCardStatisticsController.java`：为五个既有 Admin 统计方法增加清单要求的 camelCase 路由别名（`refundAndFail`、`cycleRefundCount`、`cycleRefundSum`、`cycleFailRate`、`cycleRefundRate`）；原 Admin kebab-case 路由保留。
+1. `qbit-core/src/main/java/com/qbit/admin/analysis/controller/statistics/AdminQbitCardStatisticsController.java`：五项 Admin 路由只保留短横线形式（`refund-and-fail`、`cycle-refund-count`、`cycle-refund-sum`、`cycle-fail-rate`、`cycle-refund-rate`），每项仅注册一次。
 2. `qbit-core/src/main/java/com/qbit/merchant/analysis/controller/statistics/QbitCardStatisticsController.java`：五个统计方法保留商户 `@PostMapping` 和 `@NoAuth(NoAuth.LOGIN)`；Admin 新路由由既有 Admin Controller 提供。
 
 3. `qbit-core/src/main/java/com/qbit/merchant/analysis/controller/statistics/QbitStatementController.java`：商户 customer-settle 入口改为显式注入 `@CurrentUser User` 并调用 `CustomerSettleExportService`；删除 Controller 内重复的队列入队逻辑，商户 URL 保留。
@@ -94,7 +94,7 @@ Controller 跨目录移动在未暂存状态下由 Git 显示为旧路径删除�
 
 ## 路由保留修正（后续澄清）
 
-更正前文量子卡统计相关的“旧商户 URL 已移除/不再注册”描述：用户未要求下线这些接口。当前代码已恢复 `QbitCardStatisticsController` 五个方法的原商户 `@PostMapping`，并保留 `@NoAuth(NoAuth.LOGIN)` 登录校验；`AdminQbitCardStatisticsController` 的五个 Admin 新路由及相同登录校验也保留。因此商户旧 URL 和 Admin 新 URL 均可用。前端仓库没有修改，Admin 调用方后续仍需切换到新 Admin URL。
+更正前文量子卡统计相关的“旧商户 URL 已移除/不再注册”描述：用户未要求下线这些接口。当前代码已恢复 `QbitCardStatisticsController` 五个方法的原商户 `@PostMapping`，并保留 `@NoAuth(NoAuth.LOGIN)` 登录校验；`AdminQbitCardStatisticsController` 的五个 Admin 短横线新路由及相同登录校验也保留。因此商户旧 URL 和 Admin 新 URL 均可用。前端仓库没有修改，Admin 调用方后续仍需切换到新 Admin URL。
 
 ## 翻译接口路由保留修正（后续澄清）
 
@@ -105,3 +105,11 @@ Controller 跨目录移动在未暂存状态下由 Git 显示为旧路径删除�
 本次按 PD-3026 86 项范围记录：BI board 6 项；共享接口 7 项；BI/Drools/quantum-card 等 71 项（其中 employees/sales、employees/ams 已符合 Admin 前缀）；internal convert 待定位 2 项。五个量子卡统计接口保留商户路由并提供 Admin 新路由；翻译接口也保留商户根 POST 路由并提供 Admin 新路由。Google、客户对账单、滑块验证码按商户/Admin 双入口处理；CaaS Admin 路由原已存在。
 
 接口级旧/新路径、HTTP 方法、qbit-web 使用情况、待前端切换项已逐条列在 `2026-10-29-api-prefix-integration.md`。本次没有修改任何前端仓库。
+
+## 量子卡重复路由去重
+
+根据前端 OpenAPI/Swagger 代码生成结果，同一方法同时声明 kebab-case 与 camelCase 两个 URL 会生成同名 API，并被自动重命名为带 `2` 的方法。Admin 端五项量子卡统计只保留短横线路由；商户端原 camelCase 路由仍保留。新旧入口仍要求登录。
+
+## 开卡周期路由命名统一
+
+按用户澄清，开卡周期 Admin 路由使用短横线风格：`POST /api/admin/quantum-card/customer/cycle-open-card`。Admin 端只保留这一条映射；商户旧路径仍为 `POST /api/quantum-card/customer/cycleOpenCard`。
