@@ -1,1 +1,98 @@
 admin新增销售维度的毛利看板
+其实和之前销售返佣那个差不多
+按月维度汇总每一个销售的收入：
+
+客户返现（现有：客户返现+代收返现）
+
+有效收入（现有：收入-客户返现-代收返现）
+
+毛利-应收（现有：按照应收维度算毛利）
+
+毛利-实收（新增：按照实收维度算毛利，优先级稍后，暂时可以先不做）
+
+销售毛利（现有）
+
+BD：销售名称 Pref_Rev：总收入（实时收取的各项收入+月账单应收「本月月账单」） Rebate：客户返现+代收返现+毛利返现 Pref_Rev_effective：Pref_Rev-Rebate Cost：总成本 Pref_GP：Pref_Rev-Cost Cashflow_Rev：总收入（实时收取的各项收入+月账单实收「历史月账单」） Cashflow_Rev_effective：Cashflow_Rev-Rebate Cashflow_GP：Cashflow_Rev-Cost Cashflow_Rev_sale：总收入（销售维度的收入，剔除了部分的收入） Cashflow_Rev_sale_effective：Cashflow_Rev_sale - Rebate Cashflow_GP_sale：Cashflow_Rev_sale-Cost
+
+
+create table dws_sales_metric_daily
+(
+    row_id          text           not null
+        primary key,
+    root_account_id text           not null
+        constraint dws_sales_metric_daily_root_account_id_check
+            check (btrim(root_account_id) <> ''::text),
+    product         text           not null,
+    report_date     date           not null,
+    metric_code     text           not null,
+    provider        text
+        constraint dws_sales_metric_daily_provider_check
+            check ((provider IS NULL) OR (btrim(provider) <> ''::text)),
+    sale_id         text
+        constraint dws_sales_metric_daily_sale_id_check
+            check ((sale_id IS NULL) OR (btrim(sale_id) <> ''::text)),
+    metric_type     text           not null,
+    metric_value    numeric(20, 3) not null,
+    create_time     timestamp(6)   not null,
+    update_time     timestamp(6)   not null,
+    delete_time     timestamp(6)
+)
+    distributed by (row_id);
+
+comment on table dws_sales_metric_daily is 'root×product×来源业务日×code×渠道×销售；仅三指标；月度来源记月初；物理清理；销售仅sale_id';
+
+comment on column dws_sales_metric_daily.row_id is 'sales_metric_daily_v1:与六维长度编码的MD5，NULL独立编码，type为code属性';
+
+comment on column dws_sales_metric_daily.metric_value is 'main未扣返现收入；两类成本保留来源符号；原业务键先round3；真实0/负数保留';
+
+comment on column dws_sales_metric_daily.create_time is 'Flink本次写入时间，重算与upsert时重写，不代表首次创建';
+
+comment on column dws_sales_metric_daily.update_time is 'Flink本次写入时间，不代表源就绪或业务日期';
+
+comment on column dws_sales_metric_daily.delete_time is '与销售月作业字段一致，当前Flink写NULL；清理使用物理删除';
+
+alter table dws_sales_metric_daily
+    owner to flink_cdc_user;
+
+create index idx_dws_sales_metric_daily_root_product_date
+    on dws_sales_metric_daily (root_account_id, report_date, metric_code, product);
+
+grant select on dws_sales_metric_daily to qbit_read;
+
+grant select on dws_sales_metric_daily to qbit_read_20250302;
+
+grant select on dws_sales_metric_daily to dashboard;
+
+grant select on dws_sales_metric_daily to qbit_aml_read;
+
+
+
+
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'client_collection_rebate', 'LS', 'cost');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('crypto_connect', 'client_collection_rebate', null, 'cost');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'main', 'LS', 'income');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('crypto_connect', 'main', null, 'income');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'main', null, 'income');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('global_account', 'main', 'QB', 'income');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'main', 'RP', 'income');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'client_rebate', 'SL', 'cost');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'client_collection_rebate', null, 'cost');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'main', 'BZ', 'income');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'main', 'IQ', 'income');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('global_account', 'main', 'ZB', 'income');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('crypto_connect', 'client_rebate', null, 'cost');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'main', 'NM', 'income');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'main', 'BB', 'income');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('global_account', 'client_rebate', null, 'cost');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'client_rebate', 'BB', 'cost');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'client_rebate', 'IQ', 'cost');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('global_account', 'main', 'Column', 'income');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'client_collection_rebate', 'IQ', 'cost');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'main', 'PC', 'income');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('global_account', 'main', 'CurrencyCloud', 'income');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('global_account', 'main', 'RD', 'income');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'client_collection_rebate', 'BB', 'cost');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'client_rebate', 'BZ', 'cost');
+INSERT INTO dws.dws_sales_metric_daily (product, metric_code, provider, metric_type) VALUES ('qbit_card', 'client_collection_rebate', 'BZ', 'cost');
+
+
