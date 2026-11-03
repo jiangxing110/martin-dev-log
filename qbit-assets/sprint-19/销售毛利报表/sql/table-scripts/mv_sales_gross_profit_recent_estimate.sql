@@ -1,15 +1,15 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
--- Updated Time:   2026-11-03 12:32:00
--- Description:    销售毛利本年日粒度估算物化视图
+-- Updated Time:   2026-11-03 14:12:53
+-- Description:    销售毛利近6个月日粒度估算物化视图
 -- Notes:
 --   1. 结构/刷新方式参考 sale-repoet/sales-commission/table-scripts/mv_sales_commission_recent_estimate_v3.sql。
---   2. 收入及客户返现保留 dws.dws_sales_metric_daily.report_date，不在视图中先归月。
---   3. API账单应收保留 dws.dws_metrics_sales_revenue_monthly.report_date。
---   4. 成本直接从销售佣金预估视图使用的原始成本源表取数；按源 report_date 和销售归属记录，不读取佣金视图的 cogs/gp/commission，也不按收入权重二次分摊。
---   5. QI/BZ RS毛利返现已并入 dws_sales_metric_daily.client_rebate；不单独读取 gross_profit_rebate 指标，避免重复计入。
---   6. gross_profit_rebate 输出列为兼容旧结构保留，当前置0；返现总额由 client_rebate + client_collection_rebate 计算。
+--   2. 收入及客户返现保留 dws.dws_sales_metric_daily.report_date，不在视图中先归月；来源窗口与销售返佣视图一致，取近6个月。
+--   3. 实时收入/实收、月账单应收、Crypto成本、实体卡毛利及返现统一从 dws.dws_sales_metric_daily 读取。
+--   4. 实体卡毛利从日指标读取并单独加到毛利；不计入 Cost，实体卡真实成本仍按 BB/QI/SL/BZ 成本源公式计算。
+--   5. Cost 仍汇总 DWM 成本、卡成本、Crypto 日成本、支付手续费及月度调账；不读取佣金视图 cogs/gp/commission，也不按收入权重二次分摊。
+--   6. QI/BZ RS毛利返现已并入 dws_sales_metric_daily.client_rebate；Pref_GP = Pref_Rev - Cost + physical_card_gp。
 --   7. 不使用 GREATEST/ABS 限制金额；收入、返现、成本、毛利均保留负数。
 --********************************************************************--
 
@@ -22,28 +22,6 @@ WITH account_root_relation AS (
     root_id::varchar AS root_id
   FROM public.api_account_relation
   WHERE delete_time IS NULL
-),crypto_rule_departments AS (
-  SELECT DISTINCT department_id
-  FROM "dim"."dim_sales_commission_rule"
-  WHERE enabled = true
-    AND delete_time IS NULL
-    AND (product = 'crypto' OR product IS NULL)
-),crypto_sale_department_mapping AS (
-  SELECT sale_id, department_id
-  FROM (
-    SELECT
-      sud.user_id::text AS sale_id,
-      sud.department_id::text AS department_id,
-      ROW_NUMBER() OVER (
-        PARTITION BY sud.user_id::text
-        ORDER BY sud.update_time DESC, sud.id DESC
-      ) AS rn
-    FROM "public"."system_user_department" sud
-    JOIN crypto_rule_departments crd
-      ON crd.department_id = sud.department_id::text
-    WHERE sud.delete_time IS NULL
-  ) ranked
-  WHERE rn = 1
 ),recent_sales_metric AS (
   SELECT
     m.report_date::date AS report_date,
@@ -59,6 +37,15 @@ WITH account_root_relation AS (
     m.sale_id,
     SUM(CASE WHEN m.metric_code = 'main' AND m.metric_type = 'income'
              THEN m.metric_value ELSE 0 END)::numeric(20,4) AS main_revenue,
+    SUM(CASE WHEN m.metric_code = 'month_receivable' AND m.metric_type = 'income'
+             THEN m.metric_value ELSE 0 END)::numeric(20,4) AS month_receivable,
+    SUM(CASE WHEN m.metric_code = 'physical_card_gp'
+                  AND m.product = 'qbit_card'
+                  AND NULLIF(TRIM(m.provider), '') = 'IQ'
+             THEN m.metric_value ELSE 0 END)::numeric(20,4) AS physical_card_gp,
+    SUM(CASE WHEN m.metric_code IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero')
+                  AND m.metric_type = 'cost'
+             THEN m.metric_value ELSE 0 END)::numeric(20,4) AS crypto_acceptance_cost,
     SUM(CASE WHEN m.metric_code = 'client_rebate' AND m.metric_type = 'cost'
              THEN m.metric_value ELSE 0 END)::numeric(20,4) AS client_rebate,
     SUM(CASE WHEN m.metric_code = 'client_collection_rebate' AND m.metric_type = 'cost'
@@ -66,8 +53,16 @@ WITH account_root_relation AS (
     0::numeric(20,4) AS gross_profit_rebate
   FROM "dws"."dws_sales_metric_daily" m
   WHERE m.delete_time IS NULL
-    AND m.report_date >= date_trunc('year', CURRENT_DATE)::date
-    AND m.sale_id IS NOT NULL
+    AND m.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    AND m.metric_code IN (
+      'main',
+      'month_receivable',
+      'physical_card_gp',
+      'assets_acceptance_fee_gt_zero',
+      'assets_acceptance_fee_eq_zero',
+      'client_rebate',
+      'client_collection_rebate'
+    )
   GROUP BY
     m.report_date::date,
     date_trunc('month', m.report_date)::date,
@@ -80,31 +75,13 @@ WITH account_root_relation AS (
     NULLIF(TRIM(m.provider), ''),
     m.sale_id
 ),
-api_month_receivable AS (
-  SELECT
-    r.report_date::date AS report_date,
-    r.settlement_month,
-    date_trunc('month', r.report_date)::date AS report_month,
-    r.root_account_id,
-    'open_api'::varchar AS product,
-    NULLIF(TRIM(r.provider), '') AS provider,
-    r.sale_id,
-    SUM(COALESCE(r.income_value, 0))::numeric(20,4) AS pref_rev
-  FROM "dws"."dws_metrics_sales_revenue_monthly" r
-  WHERE r.delete_time IS NULL
-    AND r.product = 'open_api'
-    AND r.metric_code = 'month_receivable'
-    AND r.report_date >= date_trunc('year', CURRENT_DATE)::date
-  GROUP BY r.report_date::date, r.settlement_month, date_trunc('month', r.report_date)::date,
-           r.root_account_id, NULLIF(TRIM(r.provider), ''), r.sale_id
-),
 bb_month_net_amount AS (
   SELECT
     date_trunc('month', report_date)::date AS report_month,
     SUM(COALESCE(total_net_amount, 0))::numeric(20,4) AS month_total_net_amount
   FROM "dws"."dws_bb_card_finance_daily_v2_p"
   WHERE delete_time IS NULL
-    AND report_date >= date_trunc('year', CURRENT_DATE)::date
+    AND report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY date_trunc('month', report_date)::date
 ),raw_cost_rows AS (
   -- DWM 已经按客户和日期分摊，直接读取 cost_amount，并沿用源表 sale_id。
@@ -126,7 +103,7 @@ bb_month_net_amount AS (
   LEFT JOIN account_root_relation aar
     ON aar.account_id = c.account_id::varchar
   WHERE c.delete_time IS NULL
-    AND c.report_date >= date_trunc('year', CURRENT_DATE)::date
+    AND c.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     AND (
       (c.product_line = 'GLOBAL_ACCOUNT'
        AND (c.provider IN ('BZ', 'CL') OR c.cost_type = 'SETTLEMENT_COST'))
@@ -149,7 +126,7 @@ bb_month_net_amount AS (
     COALESCE(aar.root_id, b.account_id)::varchar,
     'qbit_card'::varchar,
     'BB'::varchar,
-    NULL::varchar,
+    b.sale_id::varchar,
     SUM(
         COALESCE(b.m_dom_auth_count, 0) * 0.1090
       + COALESCE(b.m_int_auth_count, 0) * 0.4845
@@ -193,8 +170,8 @@ bb_month_net_amount AS (
   LEFT JOIN bb_month_net_amount mn
     ON mn.report_month = date_trunc('month', b.report_date)::date
   WHERE b.delete_time IS NULL
-    AND b.report_date >= date_trunc('year', CURRENT_DATE)::date
-  GROUP BY b.report_date::date, COALESCE(aar.root_id, b.account_id)
+    AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+  GROUP BY b.report_date::date, COALESCE(aar.root_id, b.account_id), b.sale_id
 
   UNION ALL
 
@@ -203,7 +180,7 @@ bb_month_net_amount AS (
     COALESCE(aar.root_id::varchar, q.account_id::varchar),
     'qbit_card'::varchar,
     'IQ'::varchar,
-    NULL::varchar,
+    q.sale_id::varchar,
     SUM(
         COALESCE(q.cost_reimbursement_base_amt, 0) * COALESCE(q.cost_reimbursement_rate, 1)
       + COALESCE(q.cost_service_base_amt, 0) * COALESCE(q.cost_service_rate, 1)
@@ -218,8 +195,8 @@ bb_month_net_amount AS (
   FROM "dws"."dws_qi_card_finance_daily_v2_p" q
   LEFT JOIN account_root_relation aar ON aar.account_id = q.account_id::varchar
   WHERE q.delete_time IS NULL
-    AND q.report_date >= date_trunc('year', CURRENT_DATE)::date
-  GROUP BY q.report_date::date, COALESCE(aar.root_id::varchar, q.account_id::varchar)
+    AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+  GROUP BY q.report_date::date, COALESCE(aar.root_id::varchar, q.account_id::varchar), q.sale_id
 
   UNION ALL
 
@@ -228,13 +205,14 @@ bb_month_net_amount AS (
     COALESCE(aar.root_id, s.account_id)::varchar,
     'qbit_card'::varchar,
     'SL'::varchar,
-    NULL::varchar,
+    s.sale_id::varchar,
     SUM(COALESCE(s.cost_fixed_fee, 0))::numeric(20,4)
+  -- SL v2 CDC/Batch 链路写入该表名，保留源 sale_id 与 report_date。
   FROM "dws"."dws_sl_card_finance_daily_p" s
   LEFT JOIN account_root_relation aar ON aar.account_id = s.account_id::varchar
   WHERE s.delete_time IS NULL
-    AND s.report_date >= date_trunc('year', CURRENT_DATE)::date
-  GROUP BY s.report_date::date, COALESCE(aar.root_id, s.account_id)
+    AND s.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+  GROUP BY s.report_date::date, COALESCE(aar.root_id, s.account_id), s.sale_id
 
   UNION ALL
 
@@ -243,7 +221,7 @@ bb_month_net_amount AS (
     COALESCE(aar.root_id, z.account_id)::varchar,
     'qbit_card'::varchar,
     'BZ'::varchar,
-    NULL::varchar,
+    z.sale_id::varchar,
     SUM(
         COALESCE(z.refund_base_amt, 0) * COALESCE(z.reimbursement_rate, 0)
       + COALESCE(z.visa_charges_base_amt, 0) * COALESCE(z.visa_charges_rate, 0)
@@ -261,8 +239,8 @@ bb_month_net_amount AS (
   FROM "dws"."dws_bz_card_finance_daily_v2_p" z
   LEFT JOIN account_root_relation aar ON aar.account_id = z.account_id::varchar
   WHERE z.delete_time IS NULL
-    AND z.report_date >= date_trunc('year', CURRENT_DATE)::date
-  GROUP BY z.report_date::date, COALESCE(aar.root_id, z.account_id)
+    AND z.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+  GROUP BY z.report_date::date, COALESCE(aar.root_id, z.account_id), z.sale_id
 
   UNION ALL
 
@@ -277,11 +255,9 @@ bb_month_net_amount AS (
   FROM ods.ods_payment_transaction_record ptr
   LEFT JOIN account_root_relation aar ON aar.account_id = ptr.account_id::varchar
   WHERE ptr.delete_time IS NULL
-    AND ptr.dt >= date_trunc('year', CURRENT_DATE)::date
+    AND ptr.dt >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     AND ptr.status = 'Closed'
-    AND COALESCE(NULLIF((regexp_match(ptr.extra,
-      '"fee_cost"[[:space:]]*:[[:space:]]*"?([-+]?[0-9]+([.][0-9]+)?)"?'))[1], '')::numeric, 0) > 0
-    AND ptr.submit_time >= date_trunc('year', CURRENT_DATE)::date
+    AND ptr.submit_time >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY ptr.submit_time::date, COALESCE(aar.root_id, ptr.account_id)
 
   UNION ALL
@@ -304,36 +280,22 @@ bb_month_net_amount AS (
     AND t.account_id IS NOT NULL
     AND t.tag = 'OFFLINE_REFUND'
     AND date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date
-        >= date_trunc('year', CURRENT_DATE)::date
+        >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date,
            COALESCE(aar.root_id, t.account_id), t.product_line
 
   UNION ALL
 
+  -- Crypto acceptance fee 已清洗到日指标，按日指标有符号金额直接计入成本。
   SELECT
-    r.report_date::date,
-    r.root_account_id::varchar,
-    'crypto'::varchar,
-    NULLIF(TRIM(r.provider), '')::varchar,
-    r.sale_id::varchar,
-    SUM(CASE
-      WHEN csdm.department_id = '1851130772357509121'
-       AND r.metric_code IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero')
-        THEN COALESCE(r.income_value, 0) * 0.0009
-      WHEN COALESCE(csdm.department_id, '') <> '1851130772357509121'
-       AND r.metric_code = 'assets_acceptance_fee_gt_zero'
-        THEN COALESCE(r.income_value, 0) * 0.0009
-      ELSE 0
-    END)::numeric(20,4)
-  FROM "dws"."dws_metrics_sales_revenue_monthly" r
-  LEFT JOIN crypto_sale_department_mapping csdm
-    ON csdm.sale_id = COALESCE(r.sale_id, r.am_id)
-  WHERE r.delete_time IS NULL
-    AND r.product = 'crypto_connect'
-    AND r.metric_code IN ('assets_acceptance_fee_gt_zero', 'assets_acceptance_fee_eq_zero')
-    AND r.report_date >= date_trunc('year', CURRENT_DATE)::date
-  GROUP BY r.report_date::date, r.root_account_id,
-           NULLIF(TRIM(r.provider), ''), r.sale_id
+    m.report_date,
+    m.root_account_id::varchar,
+    m.product::varchar,
+    m.provider::varchar,
+    m.sale_id::varchar,
+    m.crypto_acceptance_cost::numeric(20,4) AS source_cost
+  FROM recent_sales_metric m
+  WHERE m.crypto_acceptance_cost <> 0
 ),cost_account_dates AS (
   -- 多个成本来源会落在同一账户和业务日；销售归属只需按账户/日期查一次。
   SELECT DISTINCT report_date, root_account_id
@@ -394,13 +356,14 @@ sales_rows AS (
     m.sale_id,
     'main'::varchar AS metric_code,
     'sales_metric_daily'::varchar AS source_type,
-    m.main_revenue AS pref_rev,
+    m.main_revenue::numeric(20,4) AS pref_rev,
     m.client_rebate,
     m.client_collection_rebate,
     0::numeric(20,4) AS gross_profit_rebate,
-    -- Cost 只包含成本来源；返现单独进入 Rebate，不能重复计入成本。
+    CASE WHEN m.product = 'qbit_card' AND m.provider = 'IQ' THEN m.physical_card_gp ELSE 0 END::numeric(20,4) AS physical_card_gp,
+    -- Cost 只包含真实成本来源；实体卡毛利单独参与 GP，不进入 Cost 或 Rebate。
     COALESCE(c.source_cost, 0)::numeric(20,4) AS cost,
-    m.main_revenue AS cashflow_rev_sale
+    m.main_revenue::numeric(20,4) AS cashflow_rev_sale
   FROM recent_sales_metric m
   LEFT JOIN cost_by_sale_dimension c
     ON c.report_date = m.report_date
@@ -408,24 +371,27 @@ sales_rows AS (
    AND c.product = m.product
    AND c.provider IS NOT DISTINCT FROM m.provider
    AND c.sale_id = m.sale_id
-),api_receivable_rows AS (
+),month_receivable_rows AS (
+  -- 本月月账单应收与实时收入分行保留，便于按原 metric_code 追溯。
   SELECT
-    a.report_date,
-    a.report_month,
-    a.settlement_month,
-    a.root_account_id,
-    a.product,
-    a.provider,
-    a.sale_id,
+    m.report_date,
+    m.report_month,
+    m.settlement_month,
+    m.root_account_id,
+    m.product,
+    m.provider,
+    m.sale_id,
     'month_receivable'::varchar AS metric_code,
-    'api_month_receivable'::varchar AS source_type,
-    a.pref_rev,
+    'sales_metric_daily'::varchar AS source_type,
+    m.month_receivable::numeric(20,4) AS pref_rev,
     0::numeric(20,4) AS client_rebate,
     0::numeric(20,4) AS client_collection_rebate,
     0::numeric(20,4) AS gross_profit_rebate,
+    0::numeric(20,4) AS physical_card_gp,
     0::numeric(20,4) AS cost,
     0::numeric(20,4) AS cashflow_rev_sale
-  FROM api_month_receivable a
+  FROM recent_sales_metric m
+  WHERE m.month_receivable <> 0
 ),cost_only_rows AS (
   SELECT
     c.report_date,
@@ -441,6 +407,7 @@ sales_rows AS (
     0::numeric(20,4) AS client_rebate,
     0::numeric(20,4) AS client_collection_rebate,
     0::numeric(20,4) AS gross_profit_rebate,
+    0::numeric(20,4) AS physical_card_gp,
     c.source_cost AS cost,
     0::numeric(20,4) AS cashflow_rev_sale
   FROM cost_by_sale_dimension c
@@ -455,7 +422,7 @@ sales_rows AS (
   )
 ),all_rows AS (
   SELECT * FROM sales_rows
-  UNION ALL SELECT * FROM api_receivable_rows
+  UNION ALL SELECT * FROM month_receivable_rows
   UNION ALL SELECT * FROM cost_only_rows
 ),calculated AS (
   SELECT
@@ -472,13 +439,14 @@ sales_rows AS (
     client_rebate::numeric(20,4) AS client_rebate,
     client_collection_rebate::numeric(20,4) AS client_collection_rebate,
     gross_profit_rebate::numeric(20,4) AS gross_profit_rebate,
+    physical_card_gp::numeric(20,4) AS physical_card_gp,
     (client_rebate + client_collection_rebate + gross_profit_rebate)::numeric(20,4) AS rebate,
     (pref_rev - client_rebate - client_collection_rebate - gross_profit_rebate)::numeric(20,4) AS pref_rev_effective,
     cost::numeric(20,4) AS cost,
-    (pref_rev - cost)::numeric(20,4) AS pref_gp,
+    (pref_rev - cost + physical_card_gp)::numeric(20,4) AS pref_gp,
     cashflow_rev_sale::numeric(20,4) AS cashflow_rev_sale,
     (cashflow_rev_sale - client_rebate - client_collection_rebate - gross_profit_rebate)::numeric(20,4) AS cashflow_rev_sale_effective,
-    (cashflow_rev_sale - cost)::numeric(20,4) AS cashflow_gp_sale
+    (cashflow_rev_sale - cost + physical_card_gp)::numeric(20,4) AS cashflow_gp_sale
   FROM all_rows
 )
 SELECT
@@ -513,7 +481,7 @@ WITH DATA
 DISTRIBUTED BY (id);
 
 ALTER MATERIALIZED VIEW "dws"."mv_sales_gross_profit_recent_estimate" OWNER TO "flink_cdc_user";
-COMMENT ON MATERIALIZED VIEW "dws"."mv_sales_gross_profit_recent_estimate" IS '销售毛利本年日粒度估算视图；report_date 保留业务日期，负数原样保留';
+COMMENT ON MATERIALIZED VIEW "dws"."mv_sales_gross_profit_recent_estimate" IS '销售毛利近6个月日粒度估算视图；report_date 保留业务日期，负数原样保留';
 CREATE INDEX IF NOT EXISTS "idx_mv_sales_gross_profit_recent_estimate_query"
   ON "dws"."mv_sales_gross_profit_recent_estimate" ("report_date", "sale_id", "root_account_id");
 CREATE INDEX IF NOT EXISTS "idx_mv_sales_gross_profit_recent_estimate_detail"
