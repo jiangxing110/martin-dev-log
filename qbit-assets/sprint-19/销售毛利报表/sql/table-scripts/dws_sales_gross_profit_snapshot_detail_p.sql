@@ -1,10 +1,11 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
--- Description:    销售毛利月度快照明细表
+-- Updated Time:   2026-11-03 11:54:00
+-- Description:    销售毛利日粒度快照明细表
 -- Notes:
 --   1. 结构参考 sale-repoet/sales-commission/table-scripts/dws_sales_commission_snapshot_detail_p.sql。
---   2. 明细粒度：快照日、结算月、报告月、销售、客户、产品、渠道和来源类型。
+--   2. 明细粒度：快照版本日、业务日、结算月、销售、客户、产品、渠道和来源类型。
 --   3. 金额保留正负号，不做归零、截断或非负约束。
 --********************************************************************--
 
@@ -13,6 +14,7 @@ DROP TABLE IF EXISTS "dws"."dws_sales_gross_profit_snapshot_detail_p";
 CREATE TABLE "dws"."dws_sales_gross_profit_snapshot_detail_p" (
   "id" int8 NOT NULL,
   "snapshot_date" date NOT NULL,
+  "report_date" date NOT NULL,
   "settlement_month" date NOT NULL,
   "report_month" date NOT NULL,
   "sale_id" varchar(64),
@@ -41,15 +43,18 @@ CREATE TABLE "dws"."dws_sales_gross_profit_snapshot_detail_p" (
 ) PARTITION BY RANGE ("snapshot_date");
 
 ALTER TABLE "dws"."dws_sales_gross_profit_snapshot_detail_p" OWNER TO "flink_cdc_user";
-COMMENT ON TABLE "dws"."dws_sales_gross_profit_snapshot_detail_p" IS '销售毛利月度快照明细，保存收入、返现、成本和毛利来源';
+COMMENT ON TABLE "dws"."dws_sales_gross_profit_snapshot_detail_p" IS '销售毛利日粒度快照明细，保存收入、返现、成本和毛利来源';
+COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."snapshot_date" IS '快照版本日期；不代表业务发生日或每日运行频率';
+COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."report_date" IS '业务发生日期；日期区间查询按此字段过滤';
+COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."settlement_month" IS '报表归属月份，由 report_date 所属月确定';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."provider" IS '渠道/服务商；NULL单独保留';
-COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."gross_profit_rebate" IS 'QI/BZ RS毛利返现等毛利返现来源，保留来源符号';
+COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."gross_profit_rebate" IS '兼容字段；毛利返现已并入client_rebate，本字段当前为0';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."pref_gp" IS '应收毛利=pref_rev-cost，可为负数';
 
 CREATE INDEX "idx_sales_gross_profit_snapshot_detail_query"
-  ON "dws"."dws_sales_gross_profit_snapshot_detail_p" USING btree ("settlement_month", "sale_id", "root_account_id");
+  ON "dws"."dws_sales_gross_profit_snapshot_detail_p" USING btree ("report_date", "sale_id", "root_account_id");
 CREATE INDEX "idx_sales_gross_profit_snapshot_detail_product"
-  ON "dws"."dws_sales_gross_profit_snapshot_detail_p" USING btree ("settlement_month", "sale_id", "product");
+  ON "dws"."dws_sales_gross_profit_snapshot_detail_p" USING btree ("report_date", "sale_id", "product");
 
 CREATE TABLE "dws"."dws_sales_gross_profit_snapshot_detail_2026" PARTITION OF "dws"."dws_sales_gross_profit_snapshot_detail_p" FOR VALUES FROM ('2026-01-01') TO ('2027-01-01');
 

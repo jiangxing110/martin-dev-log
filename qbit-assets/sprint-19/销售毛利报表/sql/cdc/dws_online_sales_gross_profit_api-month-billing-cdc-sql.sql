@@ -1,13 +1,14 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
+-- Updated Time:   2026-11-03 11:48:51
 -- Description:    销售毛利每月20号后API月账单补入任务
 -- 作业元信息：
 --   作业类型：月度批式CDC固化任务
 --   运行方式：每月20号账单生成后调度；补跑仍写入本月8号快照分区
 --   运行参数：无
 -- Notes:
---   1. 读取当前日期上个月结算月，等API月账单同步并刷新预估视图后执行。
+--   1. 读取当前日期上个月 report_month 的全部日行；等待API账单同步并刷新估算视图后执行。
 --   2. snapshot_date 固定为当前月份8号，与8号首份快照相同。
 --   3. 按完整月视图重算并upsert汇总、明细；不是将API金额累加到旧快照。
 --   4. 汇总表和明细表在同一个 Statement Set 内 upsert。
@@ -22,6 +23,7 @@ SET 'table.dml-sync' = 'true';
 
 CREATE TEMPORARY TABLE source_recent_estimate (
     id BIGINT,
+    report_date DATE,
     report_month DATE,
     settlement_month DATE,
     root_account_id STRING,
@@ -46,7 +48,7 @@ CREATE TEMPORARY TABLE source_recent_estimate (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, report_month, settlement_month, root_account_id, product, provider, sale_id, metric_code, source_type, pref_rev, client_rebate, client_collection_rebate, gross_profit_rebate, rebate, pref_rev_effective, cost, pref_gp, cashflow_rev_sale, cashflow_rev_sale_effective, cashflow_gp_sale, refreshed_at FROM dws.mv_sales_gross_profit_recent_estimate WHERE settlement_month = date_trunc(''month'', CURRENT_DATE - interval ''1 month'')::date) AS gross_profit_estimate_f',
+    'table-name' = '(SELECT id, report_date, report_month, settlement_month, root_account_id, product, provider, sale_id, metric_code, source_type, pref_rev, client_rebate, client_collection_rebate, gross_profit_rebate, rebate, pref_rev_effective, cost, pref_gp, cashflow_rev_sale, cashflow_rev_sale_effective, cashflow_gp_sale, refreshed_at FROM dws.mv_sales_gross_profit_recent_estimate WHERE report_month = date_trunc(''month'', CURRENT_DATE - interval ''1 month'')::date) AS gross_profit_estimate_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -61,6 +63,7 @@ SELECT
         CAST(id AS STRING)
     )) AS BIGINT)) AS BIGINT) AS id,
     CAST(CONCAT(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM'), '-08') AS DATE) AS snapshot_date,
+    report_date,
     settlement_month,
     report_month,
     sale_id,
@@ -91,10 +94,11 @@ CREATE TEMPORARY VIEW v_snapshot AS
 SELECT
     CAST(ABS(CAST(HASH_CODE(CONCAT(
         DATE_FORMAT(CAST(CAST(CONCAT(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM'), '-08') AS DATE) AS TIMESTAMP(6)), 'yyyyMMdd'), ':',
-        DATE_FORMAT(CAST(settlement_month AS TIMESTAMP(6)), 'yyyyMM'), ':', COALESCE(sale_id, '<NULL>')
+        DATE_FORMAT(CAST(report_date AS TIMESTAMP(6)), 'yyyyMMdd'), ':', COALESCE(sale_id, '<NULL>')
     )) AS BIGINT)) AS BIGINT) AS id,
     CAST(CONCAT(DATE_FORMAT(CAST(CURRENT_DATE AS TIMESTAMP(6)), 'yyyy-MM'), '-08') AS DATE) AS snapshot_date,
-    settlement_month,
+    report_date,
+    report_month AS settlement_month,
     sale_id,
     CAST(SUM(pref_rev) AS DECIMAL(20,4)) AS pref_rev,
     CAST(SUM(client_rebate) AS DECIMAL(20,4)) AS client_rebate,
@@ -113,11 +117,12 @@ SELECT
     CAST(CURRENT_TIMESTAMP AS TIMESTAMP(6)) AS update_time,
     CAST(NULL AS TIMESTAMP(6)) AS delete_time
 FROM source_recent_estimate
-GROUP BY settlement_month, sale_id;
+GROUP BY report_date, report_month, sale_id;
 
 CREATE TEMPORARY TABLE sink_snapshot_detail (
     id BIGINT,
     snapshot_date DATE,
+    report_date DATE,
     settlement_month DATE,
     report_month DATE,
     sale_id STRING,
@@ -157,6 +162,7 @@ CREATE TEMPORARY TABLE sink_snapshot_detail (
 CREATE TEMPORARY TABLE sink_snapshot (
     id BIGINT,
     snapshot_date DATE,
+    report_date DATE,
     settlement_month DATE,
     sale_id STRING,
     pref_rev DECIMAL(20,4),
