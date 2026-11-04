@@ -2,3 +2,10 @@
 这个应收实收加密成本 实体卡毛利最后也是会到 dws.dws_sales_metric_daily 并且指标命中一样
 
 SL 成本	dws.dws_sl_card_finance_daily_p这个也是v2 的表
+
+
+我在
+node 和 asset 新建路两个分支jx/26/sprint-19/fix-BB-CB-Caas
+都是从master切出来的
+我希望你可以把node 我们之前改的代码在新分支也改一次
+然后asset 项目传给node 的那个时间我觉得要改成创建时间

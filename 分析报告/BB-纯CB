@@ -1,0 +1,149 @@
+WITH target_accounts(account_id) AS (
+  VALUES
+    ('a54fda9d-cce8-4525-b153-dbc0f45a0c6c'::uuid),
+    ('9a6e4d51-d5cf-471f-8c13-9922c1213638'::uuid),
+    ('80be1f90-8f3a-4014-875a-6f71ea40551e'::uuid),
+    ('b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7'::uuid),
+    ('e6f7db49-c103-455e-930a-acdc22f64889'::uuid),
+    ('4a3bb457-d294-4ddd-8f1c-bde22b59d3fb'::uuid),
+    ('ff22382b-df2e-4a76-b92e-bc32e3b8b089'::uuid),
+    ('e83b6e59-cd6b-4f77-9c0e-388ec2486bc4'::uuid),
+    ('f67cd913-4d76-47bf-b6f6-02c7531a2a69'::uuid),
+    ('2e48629c-9216-4841-8d38-6594e3975251'::uuid)
+),
+config_logs AS (
+  SELECT
+    l."recordId" AS account_id,
+    l."createTime" AS start_time,
+    l.data->'params'->'operationContent'->>'statementType' AS statement_type,
+    LEAD(l."createTime") OVER (
+      PARTITION BY l."recordId"
+      ORDER BY l."createTime"
+    ) AS next_time
+  FROM public."operationLog" l
+  JOIN target_accounts t
+    ON l."recordId" = t.account_id::text
+  WHERE l."operationAccountType" = 'ApiClient'
+    AND l."businessType" = 'OpenApiAdmin'
+    AND l."deleteTime" IS NULL
+    AND l.data->>'operationType' IN (
+      'OPEN_API_CLIENT_CREATION',
+      'UPDATE_CONFIG',
+      'UPDATE_DISCOUNT_CONFIG'
+    )
+    AND l.data->'params'->'operationContent'->>'statementType' IS NOT NULL
+),
+monthly_periods AS (
+  SELECT account_id, start_time, next_time
+  FROM config_logs
+  WHERE statement_type = 'Monthly'
+),
+candidate_txs AS (
+  SELECT DISTINCT ON (ac.transaction_id)
+    ac.account_id,
+    ac.transaction_id,
+    ac.fees::jsonb AS fees,
+    q."transactionTime" AS transaction_time,
+    q."transactionAmount"::numeric AS amount_usd,
+    c."firstSix" AS first_six
+  FROM target_accounts t
+  JOIN public.api_client_transaction ac
+    ON ac.account_id = t.account_id
+   AND ac.provider = 'BlueBancCardRecharge'
+   AND ac.create_time >= TIMESTAMPTZ '2026-02-11 00:00:00+00'
+   AND ac.delete_time IS NULL
+  JOIN public.qbit_card_transaction q
+    ON q.id = ac.transaction_id::uuid
+   AND q."transactionTime" >= TIMESTAMPTZ '2026-02-11 00:00:00+00'
+   AND q.status='Closed'
+   AND q."transactionCurrency" = 'USD'
+  JOIN public."qbitCard" c
+    ON c.id = q."cardId"
+  JOIN monthly_periods m
+    ON m.account_id = ac.account_id::text
+   AND q."transactionTime" >= m.start_time
+   AND (m.next_time IS NULL OR q."transactionTime" < m.next_time)
+  WHERE upper(right(COALESCE((q."specialSourceData"::jsonb)->>'country', ''), 2)) <> 'US'
+    AND EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements(COALESCE(ac.fees::jsonb, '[]'::jsonb))
+           AS fee_items(fee_item)
+      WHERE fee_item->>'type' = 'crossBorderFee'
+        AND NULLIF(fee_item->>'amount', '')::numeric = 0
+    )
+  ORDER BY ac.transaction_id, ac.create_time DESC
+),
+tx_rates AS (
+  SELECT
+    t.*,
+    COALESCE(r.markup_rate, 0) AS markup_rate,
+    COALESCE(r.cb_base_rate, 0) AS cb_base_rate
+  FROM candidate_txs t
+  LEFT JOIN LATERAL (
+    SELECT
+      max(rate) FILTER (
+        WHERE fee_type = 'QuantumCardMarkUpFeePercentage_Caas'
+      ) AS markup_rate,
+      max(rate) FILTER (
+        WHERE fee_type = 'QuantumCardCrossBorderFeeBaseRate_Caas'
+      ) AS cb_base_rate
+    FROM (
+      SELECT DISTINCT ON (af."feeType")
+        af."feeType" AS fee_type,
+        af.rate
+      FROM public."accountFee" af
+      WHERE af."feeType" IN (
+          'QuantumCardMarkUpFeePercentage_Caas',
+          'QuantumCardCrossBorderFeeBaseRate_Caas'
+        )
+        AND af."accountId" IN (
+          t.account_id,
+          '00000000-0000-0000-0000-000000000000'::uuid
+        )
+        AND (af.provider = 'BlueBanc' OR af.provider IS NULL)
+        AND (af."providerField" = t.first_six OR af."providerField" IS NULL)
+        AND (af."startTime" IS NULL OR af."startTime" <= t.transaction_time)
+        AND (af."endTime" IS NULL OR af."endTime" >= t.transaction_time)
+        AND af."createTime" <= t.transaction_time
+        AND (af."deleteTime" IS NULL OR af."deleteTime" > t.transaction_time)
+      ORDER BY
+        af."feeType",
+        COALESCE(af."accountId" = t.account_id, false) DESC,
+        COALESCE(af.provider = 'BlueBanc', false) DESC,
+        COALESCE(af."providerField" = t.first_six, false) DESC,
+        af."createTime" DESC
+    ) chosen
+  ) r ON true
+),
+estimated AS (
+  SELECT
+    account_id,
+    transaction_id,
+    amount_usd,
+    CEIL(amount_usd * (markup_rate + cb_base_rate) * 100) / 100.0 AS estimated_cb_fee
+  FROM tx_rates
+)
+SELECT
+  account_id::text AS account_id,
+  COUNT(*) AS transaction_count,
+  ROUND(SUM(amount_usd)::numeric, 2) AS total_usd_amount,
+  ROUND(SUM(estimated_cb_fee)::numeric, 2) AS estimated_cb_fee_usd
+FROM estimated
+GROUP BY account_id
+
+UNION ALL
+
+SELECT
+  '合计' AS account_id,
+  COUNT(*) AS transaction_count,
+  ROUND(SUM(amount_usd)::numeric, 2) AS total_usd_amount,
+  ROUND(SUM(estimated_cb_fee)::numeric, 2) AS estimated_cb_fee_usd
+FROM estimated;
+
+
+下面我要干
+1.设置月结客户的时间周期范围
+2.估算涉及的客户手续费金额
+3.涉及的时间范围
+在文档/Users/martinjiang/VsCodeProjects/martin-dev-log/分析报告/拒付手续费预算流水缺失分析.md 
+补这个sql 和 查询结果的表格

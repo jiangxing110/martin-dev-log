@@ -195,3 +195,416 @@ ORDER BY candidate_transactions DESC;
 这里的“分支开启”只表示代码会查询费率并计算，不保证最终金额大于 0：匹配费率为 0、月结当前交易规则、或有效费率不存在时，费用仍可能为 0。
 
 因此，如果目的是先判断 CB 月结是否异常，优先筛选 USD 且商户国家非 US 的 BB 交易，再单独核对 `crossBorderFee` 和交易时间对应的月结费率；之后再用非 USD、非 US 样例检查 CB 与 FX 同时启用时两项输出是否分别正确。
+## 七、BB API 月结 CB Fee 排查补充
+
+本节记录 BB 卡 API 月结 CB Fee 排查结果，与前文拒付预算流水差额分析分开。筛选范围为：10 个历史上设置过月结的客户；BB provider；Closed 交易；交易币种 USD；非美国商户；交易发生时为 Monthly；API fee JSON 中明确存在 `crossBorderFee = 0`。没有 `crossBorderFee` 项的记录不计入本节手续费估算。
+
+费率代码核对：BB CB Fee 按 `amount × (markup rate + CB base rate)` 计算，并逐笔向上取整到美分。月结异步费率使用 `_Caas` 费率。原 SQL 曾用 `q."transactionAmount"` 和 `transactionTime` 估算；经核对源头代码后，7.2 已改为按 `originalUSDAmount`（正数）回退 `settleAmount`，并按 `completeTime` 匹配费率和 Monthly 区间。日期下界暂用代码提交日 2026-02-11，生产影响起点仍应以实际发布日为准。
+
+### 7.1 客户月结周期
+
+以下时间来自用户提供的操作日志查询结果，均为 UTC。区间按 `[Monthly 设置时间, 后续切换 Realtime 时间)` 理解；当前状态仍为 Monthly 的客户，结束时间为持续中。
+
+| 客户账户 ID | 首次设置 Monthly（UTC） | 后续切换 Realtime（UTC） | 查询时状态 |
+|---|---|---|---|
+| `a54fda9d-cce8-4525-b153-dbc0f45a0c6c` | 2026-09-04 03:02:39.544 | — | Monthly |
+| `9a6e4d51-d5cf-471f-8c13-9922c1213638` | 2026-08-19 08:56:54.202 | 2026-08-21 07:56:53.817 | Realtime |
+| `80be1f90-8f3a-4014-875a-6f71ea40551e` | 2026-08-17 05:14:14.228 | 2026-10-20 06:49:10.993 | Realtime |
+| `b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7` | 2026-08-17 05:10:19.981 | — | Monthly |
+| `e6f7db49-c103-455e-930a-acdc22f64889` | 2026-08-17 04:56:17.376 | 2026-10-20 06:20:26.796 | Realtime |
+| `4a3bb457-d294-4ddd-8f1c-bde22b59d3fb` | 2026-07-02 08:37:02.256 | — | Monthly |
+| `ff22382b-df2e-4a76-b92e-bc32e3b8b089` | 2026-06-04 03:52:40.442 | — | Monthly |
+| `e83b6e59-cd6b-4f77-9c0e-388ec2486bc4` | 2025-10-11 12:23:23.864 | 2026-06-02 06:05:34.176 | Realtime |
+| `f67cd913-4d76-47bf-b6f6-02c7531a2a69` | 2025-08-19 07:48:55.450 | — | Monthly |
+| `2e48629c-9216-4841-8d38-6594e3975251` | 2025-08-18 08:03:39.738 | 2025-09-05 10:34:49.291 | Realtime |
+
+复现月结时间区间的 SQL：
+
+```sql
+WITH target_accounts(account_id) AS (
+  VALUES
+    ('a54fda9d-cce8-4525-b153-dbc0f45a0c6c'::uuid),
+    ('9a6e4d51-d5cf-471f-8c13-9922c1213638'::uuid),
+    ('80be1f90-8f3a-4014-875a-6f71ea40551e'::uuid),
+    ('b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7'::uuid),
+    ('e6f7db49-c103-455e-930a-acdc22f64889'::uuid),
+    ('4a3bb457-d294-4ddd-8f1c-bde22b59d3fb'::uuid),
+    ('ff22382b-df2e-4a76-b92e-bc32e3b8b089'::uuid),
+    ('e83b6e59-cd6b-4f77-9c0e-388ec2486bc4'::uuid),
+    ('f67cd913-4d76-47bf-b6f6-02c7531a2a69'::uuid),
+    ('2e48629c-9216-4841-8d38-6594e3975251'::uuid)
+), changes AS (
+  SELECT
+    l."recordId" AS account_id,
+    l."createTime" AS change_time,
+    l.data->'params'->'operationContent'->>'statementType' AS statement_type,
+    LEAD(l."createTime") OVER (
+      PARTITION BY l."recordId" ORDER BY l."createTime"
+    ) AS next_change_time
+  FROM public."operationLog" l
+  JOIN target_accounts t ON l."recordId" = t.account_id::text
+  WHERE l."operationAccountType" = 'ApiClient'
+    AND l."businessType" = 'OpenApiAdmin'
+    AND l."deleteTime" IS NULL
+    AND l.data->>'operationType' IN (
+      'OPEN_API_CLIENT_CREATION', 'UPDATE_CONFIG', 'UPDATE_DISCOUNT_CONFIG'
+    )
+    AND l.data->'params'->'operationContent'->>'statementType' IS NOT NULL
+)
+SELECT
+  account_id,
+  change_time AS monthly_start_time,
+  next_change_time AS monthly_end_time
+FROM changes
+WHERE statement_type = 'Monthly'
+ORDER BY monthly_start_time, account_id;
+```
+
+### 7.2 CB Fee 估算结果（按源头逻辑修订）
+
+经核对 `qbit-assets` 月结手续费生成代码，CB/markup 费率查询使用 `completeTime`；计费金额使用正数 `specialSourceData.originalUSDAmount`，否则回退到 `settleAmount`。本节 SQL 已按此口径修订，并以 `completeTime` 匹配 Monthly 操作日志区间和费率有效期。筛选范围仍仅包含 fee JSON 中明确存在 `crossBorderFee = 0` 的交易；没有该 fee 项的交易不计入。
+
+| 客户账户 ID | 候选交易笔数 | 交易金额（USD） | 估算 CB Fee（USD） |
+|---|---:|---:|---:|
+| `e6f7db49-c103-455e-930a-acdc22f64889` | 121 | 6,707.72 | 101.04 |
+| `e83b6e59-cd6b-4f77-9c0e-388ec2486bc4` | 289 | 45,198.63 | 1,131.33 |
+| `b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7` | 7 | 433.26 | 6.53 |
+| `9a6e4d51-d5cf-471f-8c13-9922c1213638` | 159 | 31.66 | 0.61 |
+| `a54fda9d-cce8-4525-b153-dbc0f45a0c6c` | 185 | 3,624.25 | 44.10 |
+| `80be1f90-8f3a-4014-875a-6f71ea40551e` | 1 | 0.14 | 0.01 |
+| **合计** | **762** | **55,995.66** | **1,283.62** |
+
+按这次修订 SQL 的结果，762 笔交易在 fee JSON 中明确记录的 CB Fee 均为 0，按查询到的 CaaS 费率估算 CB Fee 合计 **1,283.62 USD**。相比旧口径的 893 笔，账户 `9a6e…` 减少 131 笔；金额总和不变。`e83b…` 笔数和金额不变，估算费用增加 0.73 USD。该估算是按数据库费率重算的预算值，不是已确认的账务损失。
+
+修订后的估算 SQL：
+
+```sql
+WITH target_account_ids(account_id) AS (
+  VALUES
+    ('a54fda9d-cce8-4525-b153-dbc0f45a0c6c'::uuid),
+    ('9a6e4d51-d5cf-471f-8c13-9922c1213638'::uuid),
+    ('80be1f90-8f3a-4014-875a-6f71ea40551e'::uuid),
+    ('b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7'::uuid),
+    ('e6f7db49-c103-455e-930a-acdc22f64889'::uuid),
+    ('4a3bb457-d294-4ddd-8f1c-bde22b59d3fb'::uuid),
+    ('ff22382b-df2e-4a76-b92e-bc32e3b8b089'::uuid),
+    ('e83b6e59-cd6b-4f77-9c0e-388ec2486bc4'::uuid),
+    ('f67cd913-4d76-47bf-b6f6-02c7531a2a69'::uuid),
+    ('2e48629c-9216-4841-8d38-6594e3975251'::uuid)
+),
+target_accounts AS (
+  SELECT
+    t.account_id,
+    CASE
+      WHEN a."tenantId" IS NULL THEN NULL::uuid
+      ELSE (
+        substr(lpad(to_hex(a."tenantId"), 32, '0'), 1, 8) || '-' ||
+        substr(lpad(to_hex(a."tenantId"), 32, '0'), 9, 4) || '-' ||
+        substr(lpad(to_hex(a."tenantId"), 32, '0'), 13, 4) || '-' ||
+        substr(lpad(to_hex(a."tenantId"), 32, '0'), 17, 4) || '-' ||
+        substr(lpad(to_hex(a."tenantId"), 32, '0'), 21, 12)
+      )::uuid
+    END AS tenant_fee_id
+  FROM target_account_ids t
+  JOIN public.account a ON a.id = t.account_id
+),
+config_logs AS (
+  SELECT
+    l."recordId" AS account_id,
+    l."createTime" AS start_time,
+    l.data->'params'->'operationContent'->>'statementType' AS statement_type,
+    LEAD(l."createTime") OVER (
+      PARTITION BY l."recordId" ORDER BY l."createTime"
+    ) AS next_time
+  FROM public."operationLog" l
+  JOIN target_accounts t ON l."recordId" = t.account_id::text
+  WHERE l."operationAccountType" = 'ApiClient'
+    AND l."businessType" = 'OpenApiAdmin'
+    AND l."deleteTime" IS NULL
+    AND l.data->>'operationType' IN (
+      'OPEN_API_CLIENT_CREATION', 'UPDATE_CONFIG', 'UPDATE_DISCOUNT_CONFIG'
+    )
+    AND l.data->'params'->'operationContent'->>'statementType' IS NOT NULL
+),
+monthly_periods AS (
+  SELECT account_id, start_time, next_time
+  FROM config_logs
+  WHERE statement_type = 'Monthly'
+),
+candidate_txs AS (
+  SELECT DISTINCT ON (ac.transaction_id)
+    ac.account_id,
+    ac.transaction_id,
+    ac.fees::jsonb AS fees,
+    q."completeTime" AS fee_time,
+    CASE
+      WHEN NULLIF(q."specialSourceData"::jsonb->>'originalUSDAmount', '') IS NOT NULL
+       AND (q."specialSourceData"::jsonb->>'originalUSDAmount')::numeric > 0
+      THEN (q."specialSourceData"::jsonb->>'originalUSDAmount')::numeric
+      ELSE q."settleAmount"::numeric
+    END AS amount_usd,
+    c."firstSix" AS first_six,
+    t.tenant_fee_id
+  FROM target_accounts t
+  JOIN public.api_client_transaction ac
+    ON ac.account_id = t.account_id
+   AND (
+     ac.provider = 'BlueBancCard'
+     OR ac.provider LIKE 'BlueBancCardRecharge%'
+   )
+   AND ac.create_time >= TIMESTAMPTZ '2026-02-11 00:00:00+00'
+   AND ac.delete_time IS NULL
+   AND ac.status = 'Closed'
+  JOIN public.qbit_card_transaction q
+    ON q.id = ac.transaction_id::uuid
+   AND q."completeTime" >= TIMESTAMPTZ '2026-02-11 00:00:00+00'
+   AND q."deleteTime" IS NULL
+   AND q.status = 'Closed'
+   AND q."transactionCurrency" = 'USD'
+  JOIN public."qbitCard" c ON c.id = q."cardId"
+  JOIN monthly_periods m
+    ON m.account_id = ac.account_id::text
+   AND q."completeTime" >= m.start_time
+   AND (m.next_time IS NULL OR q."completeTime" < m.next_time)
+  WHERE upper(right(COALESCE((q."specialSourceData"::jsonb)->>'country', ''), 2)) <> 'US'
+    AND EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements(COALESCE(ac.fees::jsonb, '[]'::jsonb))
+           AS fee_items(fee_item)
+      WHERE fee_item->>'type' = 'crossBorderFee'
+        AND NULLIF(fee_item->>'amount', '')::numeric = 0
+    )
+  ORDER BY ac.transaction_id, ac.create_time DESC
+),
+tx_rates AS (
+  SELECT
+    t.*,
+    r.markup_rate,
+    r.cb_base_rate
+  FROM candidate_txs t
+  LEFT JOIN LATERAL (
+    SELECT
+      max(rate) FILTER (
+        WHERE fee_type = 'QuantumCardMarkUpFeePercentage_Caas'
+      ) AS markup_rate,
+      max(rate) FILTER (
+        WHERE fee_type = 'QuantumCardCrossBorderFeeBaseRate_Caas'
+      ) AS cb_base_rate
+    FROM (
+      SELECT DISTINCT ON (af."feeType")
+        af."feeType" AS fee_type,
+        af.rate
+      FROM public."accountFee" af
+      WHERE af."feeType" IN (
+          'QuantumCardMarkUpFeePercentage_Caas',
+          'QuantumCardCrossBorderFeeBaseRate_Caas'
+        )
+        AND af."accountId" IN (
+          t.account_id,
+          t.tenant_fee_id,
+          '00000000-0000-0000-0000-000000000000'::uuid
+        )
+        AND (af.provider = 'BlueBanc' OR af.provider IS NULL)
+        AND (af."providerField" = t.first_six OR af."providerField" IS NULL)
+        AND af."startTime" <= t.fee_time
+        AND af."endTime" >= t.fee_time
+        AND af."createTime" <= t.fee_time
+        AND (af."deleteTime" IS NULL OR t.fee_time < af."deleteTime")
+      ORDER BY
+        af."feeType",
+        CASE
+          WHEN af."accountId" = t.account_id THEN 1
+          WHEN af."accountId" = t.tenant_fee_id THEN 2
+          ELSE 3
+        END,
+        af.provider ASC NULLS LAST,
+        af."providerField" ASC NULLS LAST,
+        af."createTime" DESC
+    ) chosen
+  ) r ON true
+),
+estimated AS (
+  SELECT
+    account_id,
+    transaction_id,
+    amount_usd,
+    CASE
+      WHEN amount_usd * (COALESCE(markup_rate, 0) + COALESCE(cb_base_rate, 0)) >= 0
+      THEN CEIL(amount_usd * (COALESCE(markup_rate, 0) + COALESCE(cb_base_rate, 0)) * 100) / 100.0
+      ELSE FLOOR(amount_usd * (COALESCE(markup_rate, 0) + COALESCE(cb_base_rate, 0)) * 100) / 100.0
+    END AS estimated_cb_fee
+  FROM tx_rates
+)
+SELECT
+  account_id::text AS account_id,
+  COUNT(*) AS transaction_count,
+  ROUND(SUM(amount_usd)::numeric, 2) AS total_usd_amount,
+  ROUND(SUM(estimated_cb_fee)::numeric, 2) AS estimated_cb_fee_usd
+FROM estimated
+GROUP BY account_id
+
+UNION ALL
+
+SELECT
+  '合计' AS account_id,
+  COUNT(*) AS transaction_count,
+  ROUND(SUM(amount_usd)::numeric, 2) AS total_usd_amount,
+  ROUND(SUM(estimated_cb_fee)::numeric, 2) AS estimated_cb_fee_usd
+FROM estimated;
+```
+
+### 7.2.1 按卡交易创建时间计算的对照结果
+
+以下结果使用 `qbit_card_transaction."createTime"` 替代 7.2 SQL 中的 `"completeTime"`，金额、费率选择优先级及其它筛选条件保持不变。对应 SQL 的时间字段改动如下：
+
+```sql
+-- candidate_txs 的时间别名
+q."createTime" AS fee_time
+
+-- 2026-02-11 起始时间过滤
+q."createTime" >= TIMESTAMPTZ '2026-02-11 00:00:00+00'
+
+-- Monthly 区间匹配
+q."createTime" >= m.start_time
+AND (m.next_time IS NULL OR q."createTime" < m.next_time)
+```
+
+`accountFee` 的生效时间过滤继续使用 `t.fee_time`，因此也会随上述别名改用创建时间。`api_client_transaction.create_time` 是手续费记录的创建时间，原 SQL 中该字段的起始时间过滤保持不变。
+
+| 客户账户 ID | 候选交易笔数 | 交易金额（USD） | 估算 CB Fee（USD） |
+|---|---:|---:|---:|
+| `e6f7db49-c103-455e-930a-acdc22f64889` | 121 | 6,707.72 | 101.04 |
+| `e83b6e59-cd6b-4f77-9c0e-388ec2486bc4` | 289 | 45,198.63 | 1,130.60 |
+| `b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7` | 7 | 433.26 | 6.53 |
+| `9a6e4d51-d5cf-471f-8c13-9922c1213638` | 290 | 31.66 | 0.61 |
+| `a54fda9d-cce8-4525-b153-dbc0f45a0c6c` | 185 | 3,624.25 | 44.10 |
+| `80be1f90-8f3a-4014-875a-6f71ea40551e` | 1 | 0.14 | 0.01 |
+| **合计** | **893** | **55,995.66** | **1,282.89** |
+
+与按 `completeTime` 的结果相比，创建时间口径多 131 笔，笔数差异全部出现在账户 `9a6e…`；金额合计相同。估算费用低 0.73 USD，差额来自账户 `e83b…`（1,130.60 USD 对比 1,131.33 USD）。这是时间口径对照，不代表实际收费结果；月结手续费生成代码传入的是 `completeTime`，复现实际计算应优先采用 7.2。
+
+### 7.3 涉及交易时间与已生成手续费
+
+注意：本节的 962/893/69 及对应时间分布来自旧版按 `transactionTime` 判断月结区间的查询结果，尚未按 7.2 修订后的 `completeTime` 口径重算。它们仅作旧查询记录，不应与 7.2 最新的 762 笔候选交易直接合并或比较。
+
+
+本节分布只统计 `fees` 中**明确包含 `crossBorderFee` 项**的交易；没有该项的记录不进入统计。该范围共有 **962 笔**，其中 893 笔 CB Fee 为 0，69 笔 CB Fee 大于 0。含 CB 项的交易日期范围为 **2026-02-11 至 2026-11-03**；其中明确为 0 的 893 笔日期范围为 **2026-02-12 至 2026-11-03**。
+
+| 指标 | 查询结果 |
+|---|---:|
+| `fees` 中明确包含 `crossBorderFee` 的交易 | 962 笔 |
+| 明确 `crossBorderFee = 0` | 893 笔 |
+| 明确 `crossBorderFee > 0` | 69 笔 |
+| 已生成 CB Fee（69 笔正数记录合计） | 101.96 USD |
+| 旧口径 893 笔的估算金额（已被 7.2 修订结果替代） | 1,282.89 USD |
+
+按天查询实际 CB Fee 的 SQL（仅保留含 `crossBorderFee` 项的交易）：
+
+```sql
+WITH target_accounts(account_id) AS (
+  VALUES
+    ('a54fda9d-cce8-4525-b153-dbc0f45a0c6c'::uuid),
+    ('9a6e4d51-d5cf-471f-8c13-9922c1213638'::uuid),
+    ('80be1f90-8f3a-4014-875a-6f71ea40551e'::uuid),
+    ('b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7'::uuid),
+    ('e6f7db49-c103-455e-930a-acdc22f64889'::uuid),
+    ('4a3bb457-d294-4ddd-8f1c-bde22b59d3fb'::uuid),
+    ('ff22382b-df2e-4a76-b92e-bc32e3b8b089'::uuid),
+    ('e83b6e59-cd6b-4f77-9c0e-388ec2486bc4'::uuid),
+    ('f67cd913-4d76-47bf-b6f6-02c7531a2a69'::uuid),
+    ('2e48629c-9216-4841-8d38-6594e3975251'::uuid)
+),
+config_logs AS (
+  SELECT
+    l."recordId" AS account_id,
+    l."createTime" AS start_time,
+    l.data->'params'->'operationContent'->>'statementType' AS statement_type,
+    LEAD(l."createTime") OVER (
+      PARTITION BY l."recordId" ORDER BY l."createTime"
+    ) AS next_time
+  FROM public."operationLog" l
+  JOIN target_accounts t ON l."recordId" = t.account_id::text
+  WHERE l."operationAccountType" = 'ApiClient'
+    AND l."businessType" = 'OpenApiAdmin'
+    AND l."deleteTime" IS NULL
+    AND l.data->>'operationType' IN (
+      'OPEN_API_CLIENT_CREATION', 'UPDATE_CONFIG', 'UPDATE_DISCOUNT_CONFIG'
+    )
+    AND l.data->'params'->'operationContent'->>'statementType' IS NOT NULL
+),
+monthly_periods AS (
+  SELECT account_id, start_time, next_time
+  FROM config_logs
+  WHERE statement_type = 'Monthly'
+),
+transactions AS (
+  SELECT DISTINCT ON (ac.transaction_id)
+    ac.account_id,
+    ac.transaction_id,
+    ac.fees::jsonb AS fees,
+    q."transactionTime" AS transaction_time,
+    q."transactionAmount"::numeric AS amount_usd
+  FROM target_accounts t
+  JOIN public.api_client_transaction ac
+    ON ac.account_id = t.account_id
+   AND (ac.provider = 'BlueBancCard' OR ac.provider LIKE 'BlueBancCardRecharge%')
+   AND ac.create_time >= TIMESTAMPTZ '2026-02-11 00:00:00+00'
+   AND ac.delete_time IS NULL
+  JOIN public.qbit_card_transaction q
+    ON q.id = ac.transaction_id::uuid
+   AND q."transactionTime" >= TIMESTAMPTZ '2026-02-11 00:00:00+00'
+   AND q.status = 'Closed'
+   AND q."transactionCurrency" = 'USD'
+  JOIN public."qbitCard" c ON c.id = q."cardId"
+  JOIN monthly_periods m
+    ON m.account_id = ac.account_id::text
+   AND q."transactionTime" >= m.start_time
+   AND (m.next_time IS NULL OR q."transactionTime" < m.next_time)
+  WHERE upper(right(COALESCE((q."specialSourceData"::jsonb)->>'country', ''), 2)) <> 'US'
+  ORDER BY ac.transaction_id, ac.create_time DESC
+),
+fees AS (
+  SELECT
+    t.*,
+    (
+      SELECT NULLIF(item->>'amount', '')::numeric
+      FROM jsonb_array_elements(COALESCE(t.fees, '[]'::jsonb)) AS fee_items(item)
+      WHERE item->>'type' = 'crossBorderFee'
+      LIMIT 1
+    ) AS cb_fee
+  FROM transactions t
+)
+SELECT
+  account_id,
+  date_trunc('day', transaction_time)::date AS transaction_date,
+  COUNT(*) AS transaction_count,
+  ROUND(SUM(amount_usd), 2) AS total_usd_amount,
+  COUNT(*) FILTER (WHERE cb_fee = 0) AS zero_cb_fee_count,
+  COUNT(*) FILTER (WHERE cb_fee > 0) AS positive_cb_fee_count,
+  ROUND(SUM(cb_fee), 2) AS generated_cb_fee_usd
+FROM fees
+WHERE cb_fee IS NOT NULL
+GROUP BY account_id, date_trunc('day', transaction_time)
+ORDER BY transaction_date, account_id;
+```
+
+### 7.4 解释与边界
+
+- 1,282.89 USD 是旧版按 `transactionTime` 和 `transactionAmount` 计算的 893 笔估算值；现以 7.2 的 `completeTime` 与实际传入金额口径结果（762 笔，1,283.62 USD）为准。两者候选范围不同。
+- 69 笔正数 CB Fee 已生成合计 101.96 USD；这是另一组交易，不能直接用它抵扣 1,282.89 USD。
+- 月结操作日志按 UTC 解释。客户当前仍为 Realtime 的，其月结交易区间以日志中的切换时间结束；当前仍为 Monthly 的，区间持续中。
+- `2026-02-11` 是代码提交日期，不等于已核实的生产上线日。若实际上线晚于该日期，候选交易范围应按上线时间收窄。
+- 7.2 已按源头代码使用正数 `originalUSDAmount`，否则回退 `settleAmount`；本节所列旧查询仍按其原字段统计，不能据此替代 7.2 的估算结果。
+
+### 7.5 BB 方法中的 CB / FX 择大逻辑
+
+`blueBancCardFee()` 先分别计算 CB 候选金额和 FX 候选金额，再择大返回：
+
+- `cb = markup_fee + cross_border_fee`
+- `fx = fx_markup_fee + fx_markup_pass_through_fee`
+- 若 `cb >= fx`，返回 `{ markup_fee: 0, cross_border_fee: cb }`。
+- 若 `fx > cb`，返回 `{ markup_fee: fx, cross_border_fee: 0 }`。
+
+因此，**非 USD 交易的 `crossBorderFee = 0` 不一定代表没有收手续费**；也可能是 FX 金额更大，手续费被作为 `markup_fee` 返回。排查总收费时应同时看 CB 与 markup/FX 结果。
+
+本报告的候选范围限制为 USD + 非美国商户。方法中 USD 会关闭 FX markup 分支（`isFxMarkupFee = false`），此时 FX 候选金额为 0；只要查询里的 USD 与请求入参 `op.currency` 一致，择大逻辑就不会把正数 CB 转到 markup。因此，前述 893 笔零 CB 候选不能由“FX 较大”解释。SQL 当前以 `q."transactionCurrency" = 'USD'` 作为该条件；该字段应与月结请求的 `op.currency` 对齐。
