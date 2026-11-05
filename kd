@@ -9,3 +9,34 @@ node 和 asset 新建路两个分支jx/26/sprint-19/fix-BB-CB-Caas
 都是从master切出来的
 我希望你可以把node 我们之前改的代码在新分支也改一次
 然后asset 项目传给node 的那个时间我觉得要改成创建时间
+
+
+现在页面是
+1.外部的统计页 （统计当前时间范围销售的各项统计）
+private LocalDate settlementMonth;
+
+private List<@NotNull LocalDate> reportDateRange;
+2.详情页通过详情按钮点击进入 
+   private LocalDate settlementMonth;
+   private List<@NotNull LocalDate> reportDateRange;
+   private String saleId;
+这几个字段进入详情页
+然后详情页的话是显示销售客户纬度层面的统计
+我觉得    /**
+     * 渠道或服务商名称；筛选值需与 DWS 来源中的 provider 一致。
+     */
+    @Schema(description = "渠道或服务商")
+    private String provider;
+
+    /**
+     * 来源指标编码，用于定位形成该明细金额的原始业务指标。
+     */
+    @Schema(description = "来源指标编码")
+    private String metricCode;这两个字段可以不要
+
+
+jx/26/sprint-19/fix-BB-CB-Caas
+
+月结相关的一个fix天赐测过了
+https://github.com/PalmDrive/qbitpay_service/pull/10326
+https://github.com/PalmDrive/qbit-assets/pull/7857

@@ -125,13 +125,3 @@ CREATE INDEX IF NOT EXISTS idx_natural_person_blacklist_hit_account
 CREATE INDEX IF NOT EXISTS idx_natural_person_blacklist_hit_details
     ON public.natural_person_blacklist_hit USING gin (matched_details);
 
--- 清除旧版本命中表中已废弃的状态码、商户 ID 和业务发生时间列；命中时间统一使用 create_time。
-ALTER TABLE IF EXISTS public.natural_person_blacklist_hit
-    DROP COLUMN IF EXISTS result_code,
-    DROP COLUMN IF EXISTS merchant_id,
-    DROP COLUMN IF EXISTS occurred_at;
-
--- request_id 与 cardholder_id 重复，移除旧字段及其唯一约束。
-ALTER TABLE IF EXISTS public.natural_person_blacklist_hit
-    DROP CONSTRAINT IF EXISTS uk_natural_person_blacklist_hit_request,
-    DROP COLUMN IF EXISTS request_id;
