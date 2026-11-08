@@ -1,42 +1,514 @@
-月账单应收、Crypto 收入手续费	dws.dws_metrics_sales_revenue_monthly	Open API 月账单应收，以及 Crypto acceptance fee 成本
-这个应收实收加密成本 实体卡毛利最后也是会到 dws.dws_sales_metric_daily 并且指标命中一样
+SELECT
+    product,
+    source_type,
+    COALESCE(provider, '<NULL>') AS provider,
+    COUNT(*) AS row_count,
+    SUM(effective_revenue) AS effective_revenue,
+    SUM(cogs) AS cogs,
+    SUM(gp) AS gp,
+    SUM(commission_amount) AS commission_amount
+FROM dws.dws_sales_commission_snapshot_detail_p
+WHERE delete_time IS NULL
+  AND settlement_month = DATE '2026-09-01'
+  AND commission_stage = 'current_payout'
+  AND sale_id = 'edfc4d0a-2131-440f-87a3-f3781767fa7f'
+  AND product IN ('qbit_card', 'open_api')
+GROUP BY product, source_type, provider
+ORDER BY product, source_type, provider;
 
-SL 成本	dws.dws_sl_card_finance_daily_p这个也是v2 的表
-
-
-我在
-node 和 asset 新建路两个分支jx/26/sprint-19/fix-BB-CB-Caas
-都是从master切出来的
-我希望你可以把node 我们之前改的代码在新分支也改一次
-然后asset 项目传给node 的那个时间我觉得要改成创建时间
-
-
-现在页面是
-1.外部的统计页 （统计当前时间范围销售的各项统计）
-private LocalDate settlementMonth;
-
-private List<@NotNull LocalDate> reportDateRange;
-2.详情页通过详情按钮点击进入 
-   private LocalDate settlementMonth;
-   private List<@NotNull LocalDate> reportDateRange;
-   private String saleId;
-这几个字段进入详情页
-然后详情页的话是显示销售客户纬度层面的统计
-我觉得    /**
-     * 渠道或服务商名称；筛选值需与 DWS 来源中的 provider 一致。
-     */
-    @Schema(description = "渠道或服务商")
-    private String provider;
-
-    /**
-     * 来源指标编码，用于定位形成该明细金额的原始业务指标。
-     */
-    @Schema(description = "来源指标编码")
-    private String metricCode;这两个字段可以不要
+INSERT INTO "MY_TABLE"(product, source_type, provider, row_count, effective_revenue, cogs, gp, commission_amount) VALUES ('open_api', 'billing_decline_fee', 'BB', 5, 31033.381, 0, 5452.6121, 272.1777);
+INSERT INTO "MY_TABLE"(product, source_type, provider, row_count, effective_revenue, cogs, gp, commission_amount) VALUES ('open_api', 'billing_decline_fee', 'BZ', 4, 6028.303, 0, 1929.1972, 227.2522);
+INSERT INTO "MY_TABLE"(product, source_type, provider, row_count, effective_revenue, cogs, gp, commission_amount) VALUES ('open_api', 'billing_decline_fee', 'IQ', 5, 1954.601, 0, 108.3935, 3.9022);
+INSERT INTO "MY_TABLE"(product, source_type, provider, row_count, effective_revenue, cogs, gp, commission_amount) VALUES ('open_api', 'billing_decline_fee', 'LS', 1, 0, 0, 0, 0);
+INSERT INTO "MY_TABLE"(product, source_type, provider, row_count, effective_revenue, cogs, gp, commission_amount) VALUES ('open_api', 'billing_decline_fee', '<NULL>', 5, 0, 0, 0, 0);
+INSERT INTO "MY_TABLE"(product, source_type, provider, row_count, effective_revenue, cogs, gp, commission_amount) VALUES ('open_api', 'billing_decline_fee', 'PC', 2, 420.5, 0, 420.5, 50.46);
+INSERT INTO "MY_TABLE"(product, source_type, provider, row_count, effective_revenue, cogs, gp, commission_amount) VALUES ('open_api', 'past_due_invoice', 'BB', 1, 2.788, 0, 1.3696, 0.1644);
+INSERT INTO "MY_TABLE"(product, source_type, provider, row_count, effective_revenue, cogs, gp, commission_amount) VALUES ('open_api', 'past_due_invoice', '<NULL>', 1, 0, 0, 0, 0);
+INSERT INTO "MY_TABLE"(product, source_type, provider, row_count, effective_revenue, cogs, gp, commission_amount) VALUES ('qbit_card', 'real_time_processing_fee', 'BB', 31, 72975.1048, 202906.5177, 17810.5531, 1231.3561);
+INSERT INTO "MY_TABLE"(product, source_type, provider, row_count, effective_revenue, cogs, gp, commission_amount) VALUES ('qbit_card', 'real_time_processing_fee', 'BZ', 16, 79102.5577, 54402.0284, 28859.9019, 3397.132);
+INSERT INTO "MY_TABLE"(product, source_type, provider, row_count, effective_revenue, cogs, gp, commission_amount) VALUES ('qbit_card', 'real_time_processing_fee', 'IQ', 12, 21153.8022, -362147.5292, 1689.3174, 75.2502);
+INSERT INTO "MY_TABLE"(product, source_type, provider, row_count, effective_revenue, cogs, gp, commission_amount) VALUES ('qbit_card', 'real_time_processing_fee', '<NULL>', 15, 1534.6738, 0, 1534.6738, 114.5309);
+INSERT INTO "MY_TABLE"(product, source_type, provider, row_count, effective_revenue, cogs, gp, commission_amount) VALUES ('qbit_card', 'real_time_processing_fee', 'PC', 3, 15.74, 0, 15.74, 1.8888);
+INSERT INTO "MY_TABLE"(product, source_type, provider, row_count, effective_revenue, cogs, gp, commission_amount) VALUES ('qbit_card', 'real_time_processing_fee', 'SL', 1, -0.53, 0, 0, 0);
 
 
-jx/26/sprint-19/fix-BB-CB-Caas
 
-月结相关的一个fix天赐测过了
-https://github.com/PalmDrive/qbitpay_service/pull/10326
-https://github.com/PalmDrive/qbit-assets/pull/7857
+SELECT
+    detail.root_account_id,
+    COALESCE(
+        NULLIF(account."verifiedName", ''),
+        account."verifiedNameEn"
+    ) AS customer_name,
+    detail.product,
+    detail.source_type,
+    detail.provider,
+    detail.effective_revenue,
+    detail.cogs,
+    detail.gp,
+    detail.commission_rate,
+    detail.commission_amount
+FROM dws.dws_sales_commission_snapshot_detail_p detail
+LEFT JOIN account account
+    ON account.id::varchar = detail.root_account_id
+WHERE detail.delete_time IS NULL
+  AND detail.settlement_month = DATE '2026-09-01'
+  AND detail.commission_stage = 'current_payout'
+  AND detail.sale_id = 'edfc4d0a-2131-440f-87a3-f3781767fa7f'
+  AND detail.product IN ('qbit_card', 'open_api')
+  AND detail.provider IS NULL
+ORDER BY detail.product, detail.root_account_id;
+
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('451fb6b9-54b7-4e6b-b690-cbe4f77670ed', '香港和優貿易有限公司', 'open_api', 'billing_decline_fee', null, 0.0000, 0.0000, 0.0000, 0.100000, 0.0000);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('6e5828af-69d4-4058-9fd6-cd6fcf6039da', 'Flyingcard inc', 'open_api', 'billing_decline_fee', null, 0.0000, 0.0000, 0.0000, 0.100000, 0.0000);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('78f05d61-1d30-45e3-abdf-995c0a0cb03e', 'KRISTECH LIMITED', 'open_api', 'billing_decline_fee', null, 0.0000, 0.0000, 0.0000, 0.000000, 0.0000);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('93ad4e12-5262-477d-859b-0dad95b232de', 'Ais Trade Corporation', 'open_api', 'billing_decline_fee', null, 0.0000, 0.0000, 0.0000, 0.000000, 0.0000);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('9ad7d888-e276-428a-ba98-fb345b758960', 'EBAROTER SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ', 'open_api', 'past_due_invoice', null, 0.0000, 0.0000, 0.0000, 0.100000, 0.0000);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('f33c4143-c34a-4f68-b256-3ef7dc630695', 'Ditablan Cart LLC', 'open_api', 'billing_decline_fee', null, 0.0000, 0.0000, 0.0000, 0.100000, 0.0000);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('0049db8b-6c7d-4958-9489-9d1bc5cdaab4', '苏州易买电子商务有限公司', 'qbit_card', 'real_time_processing_fee', null, 2.0000, 0.0000, 2.0000, 0.060000, 0.1200);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('0a9ad33d-24bd-4128-a6d8-56ee31e7d284', '海口龙华厍柔丽百货商行（个体工商户）', 'qbit_card', 'real_time_processing_fee', null, 39.0000, 0.0000, 39.0000, 0.120000, 4.6800);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('316ce276-bcff-486e-8d54-63491067947c', '开平市麦斯厨卫有限公司', 'qbit_card', 'real_time_processing_fee', null, 1.0000, 0.0000, 1.0000, 0.036000, 0.0360);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('3a5238bc-7387-46c9-bcdb-4a69951bffbf', 'Supreme Durian ltd', 'qbit_card', 'real_time_processing_fee', null, 2.0000, 0.0000, 2.0000, 0.120000, 0.2400);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('451fb6b9-54b7-4e6b-b690-cbe4f77670ed', '香港和優貿易有限公司', 'qbit_card', 'real_time_processing_fee', null, 791.0000, 0.0000, 791.0000, 0.036000, 28.4760);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('6bac1b7c-9ed5-46f9-b930-49ff87e70e06', '香港始夢有限公司', 'qbit_card', 'real_time_processing_fee', null, 57.0000, 0.0000, 57.0000, 0.120000, 6.8400);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('6e5828af-69d4-4058-9fd6-cd6fcf6039da', 'Flyingcard inc', 'qbit_card', 'real_time_processing_fee', null, 6.0000, 0.0000, 6.0000, 0.036000, 0.2160);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('762e0f44-f4aa-4650-a883-040bbe6a6fd1', '深圳市橙桔数码科技有限公司', 'qbit_card', 'real_time_processing_fee', null, 1.0000, 0.0000, 1.0000, 0.036000, 0.0360);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('794182fd-08b4-4044-aeec-0c10b34add4f', '北京数选科技有限公司', 'qbit_card', 'real_time_processing_fee', null, 22.0000, 0.0000, 22.0000, 0.120000, 2.6400);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('80dd9d4b-3154-4910-948e-99c5af55ff24', '莆田市荔城区青青之火贸易有限公司', 'qbit_card', 'real_time_processing_fee', null, 16.0000, 0.0000, 16.0000, 0.036000, 0.5760);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('93ad4e12-5262-477d-859b-0dad95b232de', 'Ais Trade Corporation', 'qbit_card', 'real_time_processing_fee', null, 11.5000, 0.0000, 11.5000, 0.036000, 0.4140);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('9ad7d888-e276-428a-ba98-fb345b758960', 'EBAROTER SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ', 'qbit_card', 'real_time_processing_fee', null, 4.9738, 0.0000, 4.9738, 0.120000, 0.5969);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('e6113973-cbbb-47da-a2a6-ed48af672b97', '香港盈方貿易有限公司', 'qbit_card', 'real_time_processing_fee', null, 0.0000, 0.0000, 0.0000, 0.120000, 0.0000);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('ebb61714-baf0-446b-b384-54bf837ab9cd', 'Boten Trading Co., Limited', 'qbit_card', 'real_time_processing_fee', null, 1.0000, 0.0000, 1.0000, 0.036000, 0.0360);
+INSERT INTO "MY_TABLE"(root_account_id, customer_name, product, source_type, provider, effective_revenue, cogs, gp, commission_rate, commission_amount) VALUES ('f33c4143-c34a-4f68-b256-3ef7dc630695', 'Ditablan Cart LLC', 'qbit_card', 'real_time_processing_fee', null, 580.2000, 0.0000, 580.2000, 0.120000, 69.6240);
+
+
+SELECT
+    'view' AS object_type,
+    schemaname AS schema_name,
+    viewname AS object_name,
+    definition
+FROM pg_views
+WHERE definition ILIKE '%dws_sales_commission_snapshot_detail_p%'
+   OR definition ILIKE '%real_time_processing_fee%'
+
+UNION ALL
+
+SELECT
+    CASE p.prokind
+        WHEN 'p' THEN 'procedure'
+        ELSE 'function'
+    END AS object_type,
+    n.nspname AS schema_name,
+    p.proname AS object_name,
+    pg_get_functiondef(p.oid) AS definition
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE p.prokind IN ('f', 'p')
+  AND (
+      pg_get_functiondef(p.oid) ILIKE '%dws_sales_commission_snapshot_detail_p%'
+      OR pg_get_functiondef(p.oid) ILIKE '%real_time_processing_fee%'
+  )
+ORDER BY schema_name, object_name;
+
+INSERT INTO "MY_TABLE"(object_type, schema_name, object_name, definition) VALUES ('view', 'dws', 'v_sales_commission_recent_estimate_base', e' WITH account_root_relation AS (
+         SELECT ods_api_account_relation.account_id,
+            ods_api_account_relation.root_id
+           FROM ods.ods_api_account_relation
+          WHERE (ods_api_account_relation.delete_time IS NULL)
+        ), rule_departments AS (
+         SELECT DISTINCT dim_sales_commission_rule.department_id
+           FROM dim.dim_sales_commission_rule
+          WHERE ((dim_sales_commission_rule.enabled = true) AND (dim_sales_commission_rule.delete_time IS NULL))
+        ), sale_department_mapping AS (
+         SELECT ranked.sale_id,
+            ranked.department_id
+           FROM ( SELECT (sud.user_id)::text AS sale_id,
+                    (sud.department_id)::text AS department_id,
+                    row_number() OVER (PARTITION BY (sud.user_id)::text ORDER BY
+                        CASE
+                            WHEN (rd.department_id IS NOT NULL) THEN 0
+                            ELSE 1
+                        END, sud.update_time DESC, sud.id DESC) AS rn
+                   FROM (system_user_department sud
+                     LEFT JOIN rule_departments rd ON (((rd.department_id)::text = (sud.department_id)::text)))
+                  WHERE (sud.delete_time IS NULL)) ranked
+          WHERE (ranked.rn = 1)
+        ), revenue_base AS (
+         SELECT CURRENT_DATE AS report_date,
+            r.settlement_month,
+            r.root_account_id,
+            r.product,
+            r.provider,
+                CASE
+                    WHEN (((r.product)::text = \'open_api\'::text) AND ((r.metric_code)::text = ANY ((ARRAY[\'api_one_time_fee\'::character varying, \'api_monthly_fee\'::character varying])::text[]))) THEN r.metric_code
+                    ELSE NULL::character varying
+                END AS item,
+                CASE
+                    WHEN (((r.product)::text = \'open_api\'::text) AND ((r.metric_code)::text = \'api_monthly_fee\'::text)) THEN \'api_monthly_billing\'::text
+                    WHEN (((r.product)::text = \'open_api\'::text) AND ((r.metric_code)::text = \'month_receivable\'::text)) THEN \'billing_decline_fee\'::text
+                    WHEN (((r.product)::text = \'open_api\'::text) AND ((r.metric_code)::text = \'month_revenue\'::text)) THEN \'past_due_invoice\'::text
+                    WHEN ((r.metric_code)::text = \'past_due_invoice\'::text) THEN \'past_due_invoice\'::text
+                    WHEN ((r.metric_code)::text = \'billing_decline_fee\'::text) THEN \'billing_decline_fee\'::text
+                    ELSE \'real_time_processing_fee\'::text
+                END AS source_type,
+                CASE
+                    WHEN (((r.product)::text = \'open_api\'::text) AND ((r.metric_code)::text = \'api_monthly_fee\'::text)) THEN \'future_payout\'::text
+                    ELSE \'current_payout\'::text
+                END AS commission_stage,
+            r.sale_id,
+            COALESCE(r.sale_department, (sdm.department_id)::character varying) AS department_id,
+            r.operation_manager_id,
+            r.am_id,
+            r.settlement_month AS activity_month,
+            r.settlement_month AS collection_month,
+                CASE
+                    WHEN (((r.product)::text = \'open_api\'::text) AND ((r.metric_code)::text = \'api_monthly_fee\'::text)) THEN (date_trunc(\'month\'::text, (r.settlement_month + \'1 mon\'::interval)))::date
+                    ELSE r.settlement_month
+                END AS payable_settlement_month,
+            (sum(COALESCE(r.real_income_value, r.income_value, (0)::numeric)))::numeric(20,4) AS effective_revenue
+           FROM (dws.dws_sales_revenue_monthly r
+             LEFT JOIN sale_department_mapping sdm ON ((sdm.sale_id = (COALESCE(r.sale_id, r.am_id))::text)))
+          WHERE ((r.delete_time IS NULL) AND (r.settlement_month >= (date_trunc(\'month\'::text, (CURRENT_DATE - \'3 mons\'::interval)))::date) AND ((r.metric_code)::text <> ALL ((ARRAY[\'assets_acceptance_fee_gt_zero\'::character varying, \'assets_acceptance_fee_eq_zero\'::character varying, \'physical_card_cost\'::character varying])::text[])))
+          GROUP BY r.settlement_month, r.root_account_id, r.product, r.provider, r.metric_code, r.sale_id, COALESCE(r.sale_department, (sdm.department_id)::character varying), r.operation_manager_id, r.am_id
+        ), global_account_channel_cost AS (
+         SELECT c.source_month AS settlement_month,
+            COALESCE(aar.root_id, c.account_id) AS root_account_id,
+            \'group_account\'::text AS product,
+            c.provider,
+            (sum(COALESCE(c.cost_amount, (0)::numeric)))::numeric(20,4) AS cogs
+           FROM (dwm.dwm_finance_channel_cost_p c
+             LEFT JOIN account_root_relation aar ON (((aar.account_id)::text = (c.account_id)::text)))
+          WHERE ((c.delete_time IS NULL) AND (c.source_month >= (date_trunc(\'month\'::text, (CURRENT_DATE - \'3 mons\'::interval)))::date) AND ((c.product_line)::text = \'GLOBAL_ACCOUNT\'::text) AND ((c.provider)::text = ANY ((ARRAY[\'BZ\'::character varying, \'CL\'::character varying])::text[])))
+          GROUP BY c.source_month, COALESCE(aar.root_id, c.account_id), c.provider
+        ), qbit_card_bb_cost AS (
+         SELECT (date_trunc(\'month\'::text, (b.report_date)::timestamp with time zone))::date AS settlement_month,
+            COALESCE(aar.root_id, b.account_id) AS root_account_id,
+            \'qbit_card\'::text AS product,
+            \'BB\'::text AS provider,
+            (sum((((((((((((((((((((((((((((COALESCE(b.m_dom_auth_count, 0))::numeric * 0.1090) + ((COALESCE(b.m_int_auth_count, 0))::numeric * 0.4845)) + ((COALESCE(b.v_dom_auth_count, 0))::numeric * 0.0725)) + ((COALESCE(b.v_int_auth_count, 0))::numeric * 0.4700)) + ((COALESCE(b.m_int_decline_count, 0))::numeric * 0.3595)) + ((COALESCE(b.v_int_decline_count, 0))::numeric * 0.3570)) + ((COALESCE(b.dom_decline_count, 0))::numeric * 0.0890)) + ((COALESCE(b.m_int_reversal_count, 0))::numeric * 0.7190)) + ((COALESCE(b.v_int_reversal_count, 0))::numeric * 0.7140)) + ((COALESCE(b.dom_reversal_count, 0))::numeric * 0.1780)) + ((COALESCE(b.m_int_refund_count, 0))::numeric * 0.4845)) + ((COALESCE(b.v_int_refund_count, 0))::numeric * 0.4770)) + ((COALESCE(b.dom_refund_count, 0))::numeric * 0.1090)) + ((COALESCE(b.av_m_dom_count, 0))::numeric * 0.1090)) + ((COALESCE(b.av_m_int_count, 0))::numeric * 0.4845)) + ((COALESCE(b.av_v_dom_count, 0))::numeric * 0.0725)) + ((COALESCE(b.av_v_int_count, 0))::numeric * 0.4770)) + ((COALESCE(b.m_int_decline_count, 0))::numeric * 0.3595)) + ((COALESCE(b.v_int_decline_count, 0))::numeric * 0.3570)) + ((COALESCE(b.dom_decline_count, 0))::numeric * 0.0890)) + (COALESCE(b.m_dom_clearing_vol, (0)::numeric) * \'-0.0021\'::numeric)) + (COALESCE(b.m_int_clearing_vol, (0)::numeric) * \'-0.0111\'::numeric)) + (COALESCE(b.v_dom_clearing_vol, (0)::numeric) * \'-0.0016\'::numeric)) + (COALESCE(b.v_int_clearing_vol, (0)::numeric) * \'-0.0116\'::numeric)) + ((COALESCE(b.active_card_count, 0))::numeric * 0.1000)) + COALESCE(b.cost_fixed_fee, (0)::numeric))))::numeric(20,4) AS cogs
+           FROM (dws.dws_bb_card_finance_daily_p b
+             LEFT JOIN account_root_relation aar ON (((aar.account_id)::text = (b.account_id)::text)))
+          WHERE ((b.delete_time IS NULL) AND (b.report_date >= (date_trunc(\'month\'::text, (CURRENT_DATE - \'3 mons\'::interval)))::date))
+          GROUP BY ((date_trunc(\'month\'::text, (b.report_date)::timestamp with time zone))::date), COALESCE(aar.root_id, b.account_id)
+        ), qbit_card_qi_cost AS (
+         SELECT (date_trunc(\'month\'::text, (q.report_date)::timestamp with time zone))::date AS settlement_month,
+            COALESCE(aar.root_id, q.account_id) AS root_account_id,
+            \'qbit_card\'::text AS product,
+            \'QI\'::text AS provider,
+            (sum((((((((((COALESCE(q.cost_reimbursement_base_amt, (0)::numeric) * COALESCE(q.cost_reimbursement_rate, (0)::numeric)) + (COALESCE(q.cost_service_base_amt, (0)::numeric) * COALESCE(q.cost_service_rate, (0)::numeric))) + (COALESCE(q.cost_acs_regular_base_amt, (0)::numeric) * COALESCE(q.cost_acs_regular_rate, (0)::numeric))) + (COALESCE(q.cost_acs_vip_base_amt, (0)::numeric) * COALESCE(q.cost_acs_vip_rate, (0)::numeric))) + (COALESCE(q.cost_vrm_base_amt, (0)::numeric) * COALESCE(q.cost_vrm_rate, (0)::numeric))) + (COALESCE(q.cost_hk_regular_base_amt, (0)::numeric) * COALESCE(q.cost_hk_regular_rate, (0)::numeric))) + (COALESCE(q.cost_hk_vip_base_amt, (0)::numeric) * COALESCE(q.cost_hk_vip_rate, (0)::numeric))) + (COALESCE(q.cost_dcsf_base_amt, (0)::numeric) * COALESCE(q.cost_dcsf_rate, (0)::numeric))) + COALESCE(q.cost_fixed_fee, (0)::numeric))))::numeric(20,4) AS cogs
+           FROM (dws.dws_qi_card_finance_daily_v2_p q
+             LEFT JOIN account_root_relation aar ON (((aar.account_id)::text = (q.account_id)::text)))
+          WHERE ((q.delete_time IS NULL) AND (q.report_date >= (date_trunc(\'month\'::text, (CURRENT_DATE - \'3 mons\'::interval)))::date))
+          GROUP BY ((date_trunc(\'month\'::text, (q.report_date)::timestamp with time zone))::date), COALESCE(aar.root_id, q.account_id)
+        ), qbit_card_sl_cost AS (
+         SELECT (date_trunc(\'month\'::text, (s.report_date)::timestamp with time zone))::date AS settlement_month,
+            COALESCE(aar.root_id, s.account_id) AS root_account_id,
+            \'qbit_card\'::text AS product,
+            \'SL\'::text AS provider,
+            (sum(COALESCE(s.cost_fixed_fee, (0)::numeric)))::numeric(20,4) AS cogs
+           FROM (dws.dws_sl_card_finance_daily_p s
+             LEFT JOIN account_root_relation aar ON (((aar.account_id)::text = (s.account_id)::text)))
+          WHERE ((s.delete_time IS NULL) AND (s.report_date >= (date_trunc(\'month\'::text, (CURRENT_DATE - \'3 mons\'::interval)))::date))
+          GROUP BY ((date_trunc(\'month\'::text, (s.report_date)::timestamp with time zone))::date), COALESCE(aar.root_id, s.account_id)
+        ), qbit_card_bpc_cost AS (
+         SELECT c.source_month AS settlement_month,
+            COALESCE(aar.root_id, c.account_id) AS root_account_id,
+            \'qbit_card\'::text AS product,
+            \'QI\'::text AS provider,
+            (sum(COALESCE(c.cost_amount, (0)::numeric)))::numeric(20,4) AS cogs
+           FROM (dwm.dwm_finance_channel_cost_p c
+             LEFT JOIN account_root_relation aar ON (((aar.account_id)::text = (c.account_id)::text)))
+          WHERE ((c.delete_time IS NULL) AND (c.source_month >= (date_trunc(\'month\'::text, (CURRENT_DATE - \'3 mons\'::interval)))::date) AND ((c.product_line)::text = \'QUANTUM_CARD\'::text) AND ((c.provider)::text = \'BPC\'::text))
+          GROUP BY c.source_month, COALESCE(aar.root_id, c.account_id)
+        ), qbit_card_physical_cost AS (
+         SELECT r.settlement_month,
+            r.root_account_id,
+            \'qbit_card\'::text AS product,
+            r.provider,
+            (sum(COALESCE(r.real_income_value, r.income_value, (0)::numeric)))::numeric(20,4) AS cogs
+           FROM (dws.dws_sales_revenue_monthly r
+             LEFT JOIN sale_department_mapping sdm ON ((sdm.sale_id = (COALESCE(r.sale_id, r.am_id))::text)))
+          WHERE ((r.delete_time IS NULL) AND (r.settlement_month >= (date_trunc(\'month\'::text, (CURRENT_DATE - \'3 mons\'::interval)))::date) AND ((r.product)::text = \'qbit_card\'::text) AND ((r.provider)::text = \'QI\'::text) AND ((r.metric_code)::text = \'physical_card_cost\'::text) AND ((COALESCE(r.sale_department, (sdm.department_id)::character varying))::text = ANY ((ARRAY[\'1740319905791647746\'::character varying, \'1740319923059597313\'::character varying])::text[])))
+          GROUP BY r.settlement_month, r.root_account_id, r.provider
+        ), crypto_acceptance_cost AS (
+         SELECT r.settlement_month,
+            r.root_account_id,
+            r.product,
+            r.provider,
+            (sum(
+                CASE
+                    WHEN (((COALESCE(r.sale_department, (sdm.department_id)::character varying))::text = \'1851130772357509121\'::text) AND ((r.metric_code)::text = ANY ((ARRAY[\'assets_acceptance_fee_gt_zero\'::character varying, \'assets_acceptance_fee_eq_zero\'::character varying])::text[]))) THEN (COALESCE(r.real_income_value, r.income_value, (0)::numeric) * 0.0009)
+                    WHEN (((COALESCE(r.sale_department, (sdm.department_id)::character varying, \'\'::character varying))::text <> \'1851130772357509121\'::text) AND ((r.metric_code)::text = \'assets_acceptance_fee_gt_zero\'::text)) THEN (COALESCE(r.real_income_value, r.income_value, (0)::numeric) * 0.0009)
+                    ELSE (0)::numeric
+                END))::numeric(20,4) AS cogs
+           FROM (dws.dws_sales_revenue_monthly r
+             LEFT JOIN sale_department_mapping sdm ON ((sdm.sale_id = (COALESCE(r.sale_id, r.am_id))::text)))
+          WHERE ((r.delete_time IS NULL) AND (r.settlement_month >= (date_trunc(\'month\'::text, (CURRENT_DATE - \'3 mons\'::interval)))::date) AND ((r.product)::text = \'crypto\'::text) AND ((r.metric_code)::text = ANY ((ARRAY[\'assets_acceptance_fee_gt_zero\'::character varying, \'assets_acceptance_fee_eq_zero\'::character varying])::text[])))
+          GROUP BY r.settlement_month, r.root_account_id, r.product, r.provider
+        ), qbit_card_channel_rebate AS (
+         SELECT rebate_union.settlement_month,
+            rebate_union.root_account_id,
+            rebate_union.product,
+            rebate_union.provider,
+            (sum(rebate_union.channel_rebate))::numeric(20,4) AS channel_rebate
+           FROM ( SELECT (date_trunc(\'month\'::text, (b.report_date)::timestamp with time zone))::date AS settlement_month,
+                    COALESCE(aar.root_id, b.account_id) AS root_account_id,
+                    \'qbit_card\'::text AS product,
+                    \'BB\'::text AS provider,
+                    (sum(COALESCE(b.bb_channel_cashback_comm, (0)::numeric)))::numeric(20,4) AS channel_rebate
+                   FROM (dws.dws_bb_card_finance_daily_p b
+                     LEFT JOIN account_root_relation aar ON (((aar.account_id)::text = (b.account_id)::text)))
+                  WHERE ((b.delete_time IS NULL) AND (b.report_date >= (date_trunc(\'month\'::text, (CURRENT_DATE - \'3 mons\'::interval)))::date))
+                  GROUP BY ((date_trunc(\'month\'::text, (b.report_date)::timestamp with time zone))::date), COALESCE(aar.root_id, b.account_id)
+                UNION ALL
+                 SELECT (date_trunc(\'month\'::text, (q.report_date)::timestamp with time zone))::date AS settlement_month,
+                    COALESCE(aar.root_id, q.account_id) AS root_account_id,
+                    \'qbit_card\'::text AS product,
+                    \'QI\'::text AS provider,
+                    (sum(((COALESCE(q.rebate_interchange_base_amt, (0)::numeric) * COALESCE(q.rebate_interchange_rate, (0)::numeric)) + (COALESCE(q.rebate_incentive_base_amt, (0)::numeric) * COALESCE(q.rebate_incentive_rate, (0)::numeric)))))::numeric(20,4) AS channel_rebate
+                   FROM (dws.dws_qi_card_finance_daily_v2_p q
+                     LEFT JOIN account_root_relation aar ON (((aar.account_id)::text = (q.account_id)::text)))
+                  WHERE ((q.delete_time IS NULL) AND (q.report_date >= (date_trunc(\'month\'::text, (CURRENT_DATE - \'3 mons\'::interval)))::date))
+                  GROUP BY ((date_trunc(\'month\'::text, (q.report_date)::timestamp with time zone))::date), COALESCE(aar.root_id, q.account_id)) rebate_union
+          GROUP BY rebate_union.settlement_month, rebate_union.root_account_id, rebate_union.product, rebate_union.provider
+        ), v_cost_by_account_product AS (
+         SELECT cost_union.settlement_month,
+            cost_union.root_account_id,
+            cost_union.product,
+            cost_union.provider,
+            (sum(cost_union.cogs))::numeric(20,4) AS cogs
+           FROM ( SELECT revenue_base.settlement_month,
+                    revenue_base.root_account_id,
+                    revenue_base.product,
+                    revenue_base.provider,
+                    (0)::numeric(20,4) AS cogs
+                   FROM revenue_base
+                  GROUP BY revenue_base.settlement_month, revenue_base.root_account_id, revenue_base.product, revenue_base.provider
+                UNION ALL
+                 SELECT global_account_channel_cost.settlement_month,
+                    global_account_channel_cost.root_account_id,
+                    global_account_channel_cost.product,
+                    global_account_channel_cost.provider,
+                    global_account_channel_cost.cogs
+                   FROM global_account_channel_cost
+                UNION ALL
+                 SELECT qbit_card_bb_cost.settlement_month,
+                    qbit_card_bb_cost.root_account_id,
+                    qbit_card_bb_cost.product,
+                    qbit_card_bb_cost.provider,
+                    qbit_card_bb_cost.cogs
+                   FROM qbit_card_bb_cost
+                UNION ALL
+                 SELECT qbit_card_qi_cost.settlement_month,
+                    qbit_card_qi_cost.root_account_id,
+                    qbit_card_qi_cost.product,
+                    qbit_card_qi_cost.provider,
+                    qbit_card_qi_cost.cogs
+                   FROM qbit_card_qi_cost
+                UNION ALL
+                 SELECT qbit_card_sl_cost.settlement_month,
+                    qbit_card_sl_cost.root_account_id,
+                    qbit_card_sl_cost.product,
+                    qbit_card_sl_cost.provider,
+                    qbit_card_sl_cost.cogs
+                   FROM qbit_card_sl_cost
+                UNION ALL
+                 SELECT qbit_card_bpc_cost.settlement_month,
+                    qbit_card_bpc_cost.root_account_id,
+                    qbit_card_bpc_cost.product,
+                    qbit_card_bpc_cost.provider,
+                    qbit_card_bpc_cost.cogs
+                   FROM qbit_card_bpc_cost
+                UNION ALL
+                 SELECT qbit_card_physical_cost.settlement_month,
+                    qbit_card_physical_cost.root_account_id,
+                    qbit_card_physical_cost.product,
+                    qbit_card_physical_cost.provider,
+                    qbit_card_physical_cost.cogs
+                   FROM qbit_card_physical_cost
+                UNION ALL
+                 SELECT crypto_acceptance_cost.settlement_month,
+                    crypto_acceptance_cost.root_account_id,
+                    crypto_acceptance_cost.product,
+                    crypto_acceptance_cost.provider,
+                    crypto_acceptance_cost.cogs
+                   FROM crypto_acceptance_cost) cost_union
+          GROUP BY cost_union.settlement_month, cost_union.root_account_id, cost_union.product, cost_union.provider
+        ), revenue_cost_allocated AS (
+         SELECT x.report_date,
+            x.settlement_month,
+            x.root_account_id,
+            x.product,
+            x.provider,
+            x.item,
+            x.source_type,
+            x.commission_stage,
+            x.sale_id,
+            x.department_id,
+            x.operation_manager_id,
+            x.am_id,
+            x.activity_month,
+            x.collection_month,
+            x.payable_settlement_month,
+            x.effective_revenue,
+            x.total_cogs,
+            x.total_channel_rebate,
+            x.product_effective_revenue,
+            ((x.effective_revenue +
+                CASE
+                    WHEN (x.product_effective_revenue <> (0)::numeric) THEN ((x.total_channel_rebate * x.effective_revenue) / x.product_effective_revenue)
+                    ELSE (0)::numeric
+                END))::numeric(20,4) AS allocated_effective_revenue,
+            (
+                CASE
+                    WHEN (x.product_effective_revenue <> (0)::numeric) THEN ((x.total_cogs * x.effective_revenue) / x.product_effective_revenue)
+                    ELSE (0)::numeric
+                END)::numeric(20,4) AS allocated_cogs
+           FROM ( SELECT b.report_date,
+                    b.settlement_month,
+                    b.root_account_id,
+                    b.product,
+                    b.provider,
+                    b.item,
+                    b.source_type,
+                    b.commission_stage,
+                    b.sale_id,
+                    b.department_id,
+                    b.operation_manager_id,
+                    b.am_id,
+                    b.activity_month,
+                    b.collection_month,
+                    b.payable_settlement_month,
+                    b.effective_revenue,
+                    (COALESCE(c.cogs, (0)::numeric))::numeric(20,4) AS total_cogs,
+                    (COALESCE(r.channel_rebate, (0)::numeric))::numeric(20,4) AS total_channel_rebate,
+                    (sum(b.effective_revenue) OVER (PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, \'\'::character varying)))::numeric(20,4) AS product_effective_revenue
+                   FROM ((revenue_base b
+                     LEFT JOIN v_cost_by_account_product c ON (((c.settlement_month = b.settlement_month) AND ((c.root_account_id)::text = (b.root_account_id)::text) AND ((c.product)::text = (b.product)::text) AND ((COALESCE(c.provider, \'\'::character varying))::text = (COALESCE(b.provider, \'\'::character varying))::text))))
+                     LEFT JOIN qbit_card_channel_rebate r ON (((r.settlement_month = b.settlement_month) AND ((r.root_account_id)::text = (b.root_account_id)::text) AND (r.product = (b.product)::text) AND (COALESCE(r.provider, \'\'::text) = (COALESCE(b.provider, \'\'::character varying))::text))))) x
+        ), estimate_base AS (
+         SELECT b.report_date,
+            b.settlement_month,
+            b.root_account_id,
+            b.product,
+            b.provider,
+            b.item,
+            b.source_type,
+            b.commission_stage,
+            b.sale_id,
+            b.department_id,
+            b.operation_manager_id,
+            b.am_id,
+            b.activity_month,
+            b.collection_month,
+            b.payable_settlement_month,
+            b.allocated_effective_revenue AS effective_revenue,
+            b.allocated_cogs AS cogs,
+            (GREATEST((b.allocated_effective_revenue - b.allocated_cogs), (0)::numeric))::numeric(20,4) AS gp,
+                CASE
+                    WHEN (((b.product)::text = \'qbit_card\'::text) AND (a.card_active_time IS NOT NULL)) THEN (b.settlement_month - (a.card_active_time)::date)
+                    WHEN (((b.product)::text = \'group_account\'::text) AND (a.global_active_time IS NOT NULL)) THEN (b.settlement_month - (a.global_active_time)::date)
+                    WHEN (((b.product)::text = \'crypto\'::text) AND (a.crypto_active_time IS NOT NULL)) THEN (b.settlement_month - (a.crypto_active_time)::date)
+                    WHEN (((b.product)::text = \'open_api\'::text) AND (a.api_active_time IS NOT NULL)) THEN (b.settlement_month - (a.api_active_time)::date)
+                    WHEN (((b.product)::text = \'treasury\'::text) AND (a.treasury_active_time IS NOT NULL)) THEN (b.settlement_month - (a.treasury_active_time)::date)
+                    ELSE NULL::integer
+                END AS active_days,
+                CASE
+                    WHEN ((a.referral_user_id IS NOT NULL) AND ((a.referral_user_id)::text = (b.sale_id)::text)) THEN \'direct\'::text
+                    ELSE \'non_direct\'::text
+                END AS invite_type
+           FROM (revenue_cost_allocated b
+             LEFT JOIN dim.dim_account_analysis a ON ((((a.account_id)::text = (b.root_account_id)::text) AND (a.delete_time IS NULL))))
+        ), rule_candidates AS (
+         SELECT b.report_date,
+            b.settlement_month,
+            b.root_account_id,
+            b.product,
+            b.provider,
+            b.item,
+            b.source_type,
+            b.commission_stage,
+            b.sale_id,
+            b.department_id,
+            b.operation_manager_id,
+            b.am_id,
+            b.activity_month,
+            b.collection_month,
+            b.payable_settlement_month,
+            b.effective_revenue,
+            b.cogs,
+            b.gp,
+            b.active_days,
+            b.invite_type,
+            r.rule_code,
+            r.commission_base_type,
+            r.commission_rate,
+            row_number() OVER (PARTITION BY b.settlement_month, b.root_account_id, b.product, COALESCE(b.provider, \'\'::character varying), COALESCE(b.item, \'\'::character varying), COALESCE(b.sale_id, \'\'::character varying), b.source_type, b.commission_stage ORDER BY r.priority, r.id) AS rn
+           FROM (estimate_base b
+             JOIN dim.dim_sales_commission_rule r ON ((((r.department_id)::text = (b.department_id)::text) AND ((r.product IS NULL) OR ((r.product)::text = (b.product)::text)) AND ((r.provider IS NULL) OR ((r.provider)::text = (b.provider)::text)) AND ((r.item IS NULL) OR ((r.item)::text = (b.item)::text)) AND (((r.invite_type)::text = \'all\'::text) OR ((r.invite_type)::text = b.invite_type)) AND ((r.active_days_min IS NULL) OR (b.active_days >= r.active_days_min)) AND ((r.active_days_max IS NULL) OR (b.active_days <= r.active_days_max)) AND ((b.settlement_month)::timestamp without time zone >= r.start_time) AND ((b.settlement_month)::timestamp without time zone < r.end_time) AND (r.enabled = true) AND (r.delete_time IS NULL))))
+        )
+ SELECT (abs(hashtext(concat_ws(\':\'::text, to_char((rule_candidates.report_date)::timestamp with time zone, \'YYYYMMDD\'::text), to_char((rule_candidates.settlement_month)::timestamp with time zone, \'YYYYMM\'::text), rule_candidates.root_account_id, rule_candidates.product, COALESCE(rule_candidates.provider, \'\'::character varying), COALESCE(rule_candidates.item, \'\'::character varying), COALESCE(rule_candidates.sale_id, \'\'::character varying), rule_candidates.source_type, rule_candidates.commission_stage))))::bigint AS id,
+    rule_candidates.report_date,
+    rule_candidates.settlement_month,
+    rule_candidates.root_account_id,
+    rule_candidates.product,
+    rule_candidates.provider,
+    rule_candidates.item,
+    rule_candidates.source_type,
+    rule_candidates.commission_stage,
+    rule_candidates.sale_id,
+    rule_candidates.operation_manager_id,
+    rule_candidates.am_id,
+    rule_candidates.department_id,
+    rule_candidates.invite_type,
+    rule_candidates.activity_month,
+    rule_candidates.collection_month,
+    rule_candidates.payable_settlement_month,
+    rule_candidates.effective_revenue,
+    rule_candidates.cogs,
+    rule_candidates.gp,
+        CASE
+            WHEN ((rule_candidates.commission_base_type)::text = \'actual_fee\'::text) THEN rule_candidates.effective_revenue
+            ELSE rule_candidates.gp
+        END AS commission_base,
+    rule_candidates.commission_rate,
+    ((
+        CASE
+            WHEN ((rule_candidates.commission_base_type)::text = \'actual_fee\'::text) THEN rule_candidates.effective_revenue
+            ELSE rule_candidates.gp
+        END * rule_candidates.commission_rate))::numeric(20,4) AS estimated_commission,
+    rule_candidates.active_days,
+    rule_candidates.rule_code,
+    now() AS refreshed_at
+   FROM rule_candidates
+  WHERE (rule_candidates.rn = 1);');
+
+
+
+-- 分区列表
+SELECT
+    child.inhrelid::regclass AS partition_name,
+    pg_get_expr(part.relpartbound, part.oid) AS partition_bound
+FROM pg_inherits child
+JOIN pg_class part ON part.oid = child.inhrelid
+WHERE child.inhparent =
+    'dws.dws_sales_commission_snapshot_detail_p'::regclass
+ORDER BY partition_name;
+
+-- 表上的非系统触发器
+SELECT
+    trigger_name.tgname AS trigger_name,
+    pg_get_triggerdef(trigger_name.oid, true) AS trigger_definition
+FROM pg_trigger trigger_name
+WHERE trigger_name.tgrelid =
+    'dws.dws_sales_commission_snapshot_detail_p'::regclass
+  AND NOT trigger_name.tgisinternal;
+INSERT INTO "MY_TABLE"(partition_name, partition_bound) VALUES ('dws.dws_sales_commission_snapshot_detail_2026', 'FOR VALUES FROM (''2026-01-01'') TO (''2027-01-01'')');
+
+
+
+https://github.com/PalmDrive/qbit-assets/pull/7900 
+https://github.com/PalmDrive/qbit-admin-v3/pull/2504
+
+
+https://github.com/PalmDrive/qbit-admin-v3/pull/2493
+https://github.com/PalmDrive/qbit-assets/pull/7903

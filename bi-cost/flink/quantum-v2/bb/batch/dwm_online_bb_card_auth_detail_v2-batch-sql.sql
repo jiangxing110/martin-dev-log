@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-07-12
--- Updated Time:   2026-07-30 20:27:55
+-- Updated Time:   2026-11-06 20:20:44
 -- Description:    BB v2 Auth DWM 月表导入
 -- 作业元信息：
 --   作业类型：批处理
@@ -59,7 +59,7 @@ CREATE TEMPORARY TABLE source_bb_card_auth_detail (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT CAST(TO_TIMESTAMP("Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') AS timestamp) AS auth_time, "Trans Date / Time" AS trans_date_time, "Program GUID" AS program_guid, "Program Name" AS program_name, "Card Proxy" AS card_proxy, "Person Name" AS person_name, "Request Code" AS request_code, "Request Description" AS request_description, "Local Trans Date / Time" AS local_trans_date_time, "Auth Txn GUID" AS auth_txn_guid, "Response Code" AS response_code, "Reason Code" AS reason_code, "Txn Amount" AS txn_amount, "Settle Amount" AS settle_amount, "Txn Currency" AS txn_currency, "Merchant Country" AS merchant_country, "Transmission Date" AS transmission_date, CAST(NULL AS varchar) AS merchant_name, CAST(NULL AS varchar) AS mcc, ''public."${auth_table_name}"'' AS source_table FROM public."${auth_table_name}" WHERE TO_TIMESTAMP("Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND TO_TIMESTAMP("Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') < CAST(''${end_time}'' AS TIMESTAMP(6))) AS bb_auth_detail_f',
+    'table-name' = '(WITH auth_parsed AS ( SELECT A.*, CASE WHEN btrim(A."Trans Date / Time") ~ ''^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}'' THEN TO_TIMESTAMP(btrim(regexp_replace(replace(A."Trans Date / Time", ''T'', '' ''), ''[.][0-9]+'', '''')), ''YYYY-MM-DD HH24:MI:SS'') WHEN A."Trans Date / Time" ~* ''[[:space:]](AM|PM)[[:space:]]*$'' THEN TO_TIMESTAMP(regexp_replace(regexp_replace(btrim(A."Trans Date / Time"), ''[.][0-9]+'', ''''), ''[[:space:]]0{1,2}:'', '' 12:''), ''MM/DD/YYYY HH12:MI:SS AM'') ELSE TO_TIMESTAMP(btrim(regexp_replace(A."Trans Date / Time", ''[.][0-9]+'', '''')), ''MM/DD/YYYY HH24:MI:SS'') END AS parsed_trans_time FROM public."${auth_table_name}" A ) SELECT CAST(parsed_trans_time AS timestamp) AS auth_time, "Trans Date / Time" AS trans_date_time, "Program GUID" AS program_guid, "Program Name" AS program_name, "Card Proxy" AS card_proxy, "Person Name" AS person_name, "Request Code" AS request_code, "Request Description" AS request_description, "Local Trans Date / Time" AS local_trans_date_time, "Auth Txn GUID" AS auth_txn_guid, "Response Code" AS response_code, "Reason Code" AS reason_code, "Txn Amount" AS txn_amount, "Settle Amount" AS settle_amount, "Txn Currency" AS txn_currency, "Merchant Country" AS merchant_country, "Transmission Date" AS transmission_date, CAST(NULL AS varchar) AS merchant_name, CAST(NULL AS varchar) AS mcc, ''public."${auth_table_name}"'' AS source_table FROM auth_parsed WHERE parsed_trans_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND parsed_trans_time < CAST(''${end_time}'' AS TIMESTAMP(6))) AS bb_auth_detail_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -76,7 +76,7 @@ CREATE TEMPORARY TABLE source_qbit_card (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT c.id, c.token, c.account_id, c.type AS "type" FROM ods.ods_qbit_card c WHERE c.delete_time IS NULL AND EXISTS (SELECT 1 FROM public."${auth_table_name}" a WHERE a."Card Proxy" = c.token AND TO_TIMESTAMP(a."Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND TO_TIMESTAMP(a."Trans Date / Time", ''MM/DD/YYYY HH12:MI:SS AM'') < CAST(''${end_time}'' AS TIMESTAMP(6)))) AS ods_qbit_card_f',
+    'table-name' = '(WITH auth_parsed AS ( SELECT A."Card Proxy", CASE WHEN btrim(A."Trans Date / Time") ~ ''^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}'' THEN TO_TIMESTAMP(btrim(regexp_replace(replace(A."Trans Date / Time", ''T'', '' ''), ''[.][0-9]+'', '''')), ''YYYY-MM-DD HH24:MI:SS'') WHEN A."Trans Date / Time" ~* ''[[:space:]](AM|PM)[[:space:]]*$'' THEN TO_TIMESTAMP(regexp_replace(regexp_replace(btrim(A."Trans Date / Time"), ''[.][0-9]+'', ''''), ''[[:space:]]0{1,2}:'', '' 12:''), ''MM/DD/YYYY HH12:MI:SS AM'') ELSE TO_TIMESTAMP(btrim(regexp_replace(A."Trans Date / Time", ''[.][0-9]+'', '''')), ''MM/DD/YYYY HH24:MI:SS'') END AS parsed_trans_time FROM public."${auth_table_name}" A ), eligible_card_proxy AS ( SELECT DISTINCT "Card Proxy" FROM auth_parsed WHERE parsed_trans_time >= CAST(''${start_time}'' AS TIMESTAMP(6)) AND parsed_trans_time < CAST(''${end_time}'' AS TIMESTAMP(6)) ) SELECT c.id, c.token, c.account_id, c.type AS "type" FROM ods.ods_qbit_card c JOIN eligible_card_proxy p ON p."Card Proxy" = c.token WHERE c.delete_time IS NULL) AS ods_qbit_card_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',

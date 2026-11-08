@@ -1,0 +1,33 @@
+
+{"accountIds":["e6f7db49-c103-455e-930a-acdc22f64889","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-10-11 00:00:00","endDate":"2026-10-16 00:00:00"}
+{"accountIds":["e6f7db49-c103-455e-930a-acdc22f64889","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-10-16 00:00:00","endDate":"2026-10-21 00:00:00"}
+{"accountIds":["e6f7db49-c103-455e-930a-acdc22f64889","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-10-21 00:00:00","endDate":"2026-10-26 00:00:00"}
+{"accountIds":["e6f7db49-c103-455e-930a-acdc22f64889","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-10-26 00:00:00","endDate":"2026-10-30 00:00:00"}
+{"accountIds":["e6f7db49-c103-455e-930a-acdc22f64889","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-10-30 00:00:00","endDate":"2026-11-04 00:00:00"}
+
+
+
+
+
+
+{"accountIds":["b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7"],"startDate":"2026-11-03 00:00:00","endDate":"2026-11-04 00:00:00"}
+{"accountIds":["a54fda9d-cce8-4525-b153-dbc0f45a0c6c"],"startDate":"2026-11-03 00:00:00","endDate":"2026-11-04 00:00:00"}
+{"accountIds":["80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-11-03 00:00:00","endDate":"2026-11-04 00:00:00"}
+
+e6f7db49-c103-455e-930a-acdc22f64889
+b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7
+a54fda9d-cce8-4525-b153-dbc0f45a0c6c
+80be1f90-8f3a-4014-875a-6f71ea40551e
+
+{"accountIds":["b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-10-01 00:00:00","endDate":"2026-10-06 00:00:00"}
+{"accountIds":["e6f7db49-c103-455e-930a-acdc22f64889","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-10-06 00:00:00","endDate":"2026-10-11 00:00:00"}
+
+我要记录交易id,root_id,和api_client_transaction 的 account_id ,create_time,完成时间,fees,provider,cb的fee,qbit_card_transactoion 
+  q."transactionCurrency",
+  q."transactionAmount",
+  q."specialSourceData"::jsonb->>'country' AS merchant_country,
+  q.status, 
+后续可以跟卡这批交易id再去导出一份此类交易的记录进行对比
+这个是一种
+我还想要一种是根据
+账户ID 建一个多个shet页的 记录当前账户每一个月涉及的交易
