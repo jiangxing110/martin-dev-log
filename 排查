@@ -1,24 +1,19 @@
-1.账单取数逻辑
-API 客户月结账单
-├── 旧来源：api_client_transaction
-├── 新来源：account_fee_transaction
-└── 合并去重后生成 api_client_bill_statement
+成本比对
+QI：  
+838c5b68-4bb1-4960-880a-827399d101fd    
+451fb6b9-54b7-4e6b-b690-cbe4f77670ed
 
-直客月结账单
-├── account_fee_transaction
-├── accountToDo.ActiveCardFee
-└── 合并后生成 api_client_bill_statement
+QI这2个是我们统计的比饶谦算的多，算的少的我再看，先看这2个吧
 
 
-2.账单明细导出处理
-那我们面前的账单导明细部分
-可能目前来说还只是量子卡的交易
-        List<String> list = qbitCardTransactionStatisticService.getCardTransactionStatistics(search);
+c23e5ba5-1968-4dc5-a714-8da076a3f457  ，
+f67cd913-4d76-47bf-b6f6-02c7531a2a69
+少的看这2个吧，都是少了蛮多钱的 
 
-我想加一个账单发生时候的客户类型 以便后期区分可以吗
-这个方法是导出csv 新费率 和直客都要改一下吧 
-我们是不是可以根据 加一个账单发生时候的客户类型 这个来改造一下
-新增一个方法处理直客部分
 
-把develop分支合并到jx/26/sprint-10/PD-500/physical-card有冲突的解决冲突
-把jx/26/sprint-10/PD-500/physical-card分支合并到test有冲突的解决冲突
+BB： 046a8fc4-fa68-4746-a6e2-db2d82a1fcc5
+
+95d362d7-56fe-4f50-82cb-f97a51afc263
+e7107263-a635-4e3b-b9be-bb26d3d33e22
+93ad4e12-5262-477d-859b-0dad95b232de
+451fb6b9-54b7-4e6b-b690-cbe4f77670ed
