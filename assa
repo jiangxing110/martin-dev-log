@@ -1,33 +1,69 @@
-
-{"accountIds":["e6f7db49-c103-455e-930a-acdc22f64889","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-10-11 00:00:00","endDate":"2026-10-16 00:00:00"}
-{"accountIds":["e6f7db49-c103-455e-930a-acdc22f64889","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-10-16 00:00:00","endDate":"2026-10-21 00:00:00"}
-{"accountIds":["e6f7db49-c103-455e-930a-acdc22f64889","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-10-21 00:00:00","endDate":"2026-10-26 00:00:00"}
-{"accountIds":["e6f7db49-c103-455e-930a-acdc22f64889","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-10-26 00:00:00","endDate":"2026-10-30 00:00:00"}
-{"accountIds":["e6f7db49-c103-455e-930a-acdc22f64889","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-10-30 00:00:00","endDate":"2026-11-04 00:00:00"}
-
-
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-02-01 00:00:00","endDate":"2026-02-06 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-02-06 00:00:00","endDate":"2026-02-11 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-02-11 00:00:00","endDate":"2026-02-16 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-02-16 00:00:00","endDate":"2026-02-21 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-02-21 00:00:00","endDate":"2026-02-26 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-02-26 00:00:00","endDate":"2026-03-01 00:00:00"}
 
 
 
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-03-01 00:00:00","endDate":"2026-03-06 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-03-06 00:00:00","endDate":"2026-03-11 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-03-11 00:00:00","endDate":"2026-03-16 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-03-16 00:00:00","endDate":"2026-03-21 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-03-21 00:00:00","endDate":"2026-03-26 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-03-26 00:00:00","endDate":"2026-04-01 00:00:00"}
 
-{"accountIds":["b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7"],"startDate":"2026-11-03 00:00:00","endDate":"2026-11-04 00:00:00"}
-{"accountIds":["a54fda9d-cce8-4525-b153-dbc0f45a0c6c"],"startDate":"2026-11-03 00:00:00","endDate":"2026-11-04 00:00:00"}
-{"accountIds":["80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-11-03 00:00:00","endDate":"2026-11-04 00:00:00"}
 
-e6f7db49-c103-455e-930a-acdc22f64889
-b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7
-a54fda9d-cce8-4525-b153-dbc0f45a0c6c
-80be1f90-8f3a-4014-875a-6f71ea40551e
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-04-01 00:00:00","endDate":"2026-04-06 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-04-06 00:00:00","endDate":"2026-04-11 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-04-11 00:00:00","endDate":"2026-04-16 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-04-16 00:00:00","endDate":"2026-04-21 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-04-21 00:00:00","endDate":"2026-04-26 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-04-26 00:00:00","endDate":"2026-05-01 00:00:00"}
 
-{"accountIds":["b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-10-01 00:00:00","endDate":"2026-10-06 00:00:00"}
-{"accountIds":["e6f7db49-c103-455e-930a-acdc22f64889","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e"],"startDate":"2026-10-06 00:00:00","endDate":"2026-10-11 00:00:00"}
 
-我要记录交易id,root_id,和api_client_transaction 的 account_id ,create_time,完成时间,fees,provider,cb的fee,qbit_card_transactoion 
-  q."transactionCurrency",
-  q."transactionAmount",
-  q."specialSourceData"::jsonb->>'country' AS merchant_country,
-  q.status, 
-后续可以跟卡这批交易id再去导出一份此类交易的记录进行对比
-这个是一种
-我还想要一种是根据
-账户ID 建一个多个shet页的 记录当前账户每一个月涉及的交易
+
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-05-01 00:00:00","endDate":"2026-05-06 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-05-06 00:00:00","endDate":"2026-05-11 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-05-11 00:00:00","endDate":"2026-05-16 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-05-16 00:00:00","endDate":"2026-05-21 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-05-21 00:00:00","endDate":"2026-05-26 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-05-26 00:00:00","endDate":"2026-06-01 00:00:00"}
+
+
+
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-06-01 00:00:00","endDate":"2026-06-06 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-06-06 00:00:00","endDate":"2026-06-11 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-06-11 00:00:00","endDate":"2026-06-16 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-06-16 00:00:00","endDate":"2026-06-21 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-06-21 00:00:00","endDate":"2026-06-26 00:00:00"}
+{"accountIds":["e83b6e59-cd6b-4f77-9c0e-388ec2486bc4"],"startDate":"2026-06-26 00:00:00","endDate":"2026-07-01 00:00:00"}
+
+
+
+{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-08-01 00:00:00","endDate":"2026-08-06 00:00:00"}
+{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-08-06 00:00:00","endDate":"2026-08-11 00:00:00"}
+{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-08-11 00:00:00","endDate":"2026-08-16 00:00:00"}
+{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-08-16 00:00:00","endDate":"2026-08-21 00:00:00"}
+{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-08-21 00:00:00","endDate":"2026-08-26 00:00:00"}
+{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-08-26 00:00:00","endDate":"2026-09-01 00:00:00"}
+
+
+
+{"accountIds":["a54fda9d-cce8-4525-b153-dbc0f45a0c6c","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-09-01 00:00:00","endDate":"2026-09-06 00:00:00"}
+{"accountIds":["a54fda9d-cce8-4525-b153-dbc0f45a0c6c","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-09-06 00:00:00","endDate":"2026-09-11 00:00:00"}
+{"accountIds":["a54fda9d-cce8-4525-b153-dbc0f45a0c6c","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-09-11 00:00:00","endDate":"2026-09-16 00:00:00"}
+{"accountIds":["a54fda9d-cce8-4525-b153-dbc0f45a0c6c","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-09-16 00:00:00","endDate":"2026-09-21 00:00:00"}
+{"accountIds":["a54fda9d-cce8-4525-b153-dbc0f45a0c6c","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-09-21 00:00:00","endDate":"2026-09-26 00:00:00"}
+{"accountIds":["a54fda9d-cce8-4525-b153-dbc0f45a0c6c","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-09-26 00:00:00","endDate":"2026-10-01 00:00:00"}
+
+
+我还要一个
+我们之前那个导出一样 整理一份
+api_client_transaction 2月11号到 10月2号0点的交易 
+我们之前有一个历史原因我们之前一直用的完成时间现在改成了创建时间去拿手续费率
+所以要重跑数据的话可能有一点影响,哪些受影响和之前的导出差不多还是按我们前后两个定时任务
+然后字段的话
+交易ID	交易展示ID	API账户ID	root_id	API创建时间	API完成时间	complete_month	API fees	provider	status
+我觉得这些差不多 我们开会只算完成的状态其实
