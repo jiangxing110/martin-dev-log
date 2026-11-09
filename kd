@@ -512,3 +512,10 @@ https://github.com/PalmDrive/qbit-admin-v3/pull/2504
 
 https://github.com/PalmDrive/qbit-admin-v3/pull/2493
 https://github.com/PalmDrive/qbit-assets/pull/7903
+
+
+你的 SQL 没有 ac.create_time < 2026-10-02 上限，而且时间边界仍写 +00；代码用北京时间，并有这个上限。
+你的 SQL 在原始金额为 0 时会回退到 settleAmount，只要回退结果大于 0 就保留；代码按你之前的要求，明确排除原始金额为 0。
+你的 SQL 按 account_id 找月结日志，代码按账户树的 root_id 找日志。
+你的 SQL 加了 ac.status = 'Closed'，代码目前只筛卡交易 q0.status = 'Closed'。
+月份分组也不同：你的 SQL 按卡交易创建时间 UTC 分组；导出文件按 API 完成时间北京时间分组。
