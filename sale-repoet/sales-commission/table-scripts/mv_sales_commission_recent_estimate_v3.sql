@@ -24,7 +24,7 @@
 --   16. 渠道返现直接读取 BB/QI/BZ 日表已计算结果，计入对应 qbit_card/provider 明细；同一客户/渠道仅挂到一条明细，避免重复。
 --   17. API 月结手续费继承同账户/渠道/销售维度中收入最高 real_time 产品的活跃天数与返佣阶梯。
 --   18. 实体卡毛利、费率和佣金单独输出；实体卡佣金计入 estimated_commission 总额。
---   19. 实体卡仅取 provider = IQ，其他渠道不挂实体卡毛利或佣金。
+--   19. 实体卡毛利按 provider 渠道维度读取并挂载；各渠道沿用相同的部门费率规则。
 --********************************************************************--
 
 DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_sales_commission_recent_estimate";
@@ -652,7 +652,6 @@ qbit_card_physical_gp AS (
     AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     AND r.product = 'qbit_card'
     AND r.metric_code = 'physical_card_gp'
-    AND r.provider = 'IQ'
   GROUP BY r.settlement_month, r.root_account_id, r.provider
 ),
 -- v2: 全球账户离线 fee_cost（从 payment_transaction_record 直接查询）
@@ -1343,21 +1342,18 @@ output_final AS (
    AND p.root_account_id = o.root_account_id
    AND COALESCE(p.provider, '') = COALESCE(o.provider, '')
    AND o.product = 'qbit_card'
-   AND o.provider = 'IQ'
 ),
 output_with_physical_card_commission AS (
   SELECT
     o.*,
     CASE
       WHEN o.product = 'qbit_card'
-       AND o.provider = 'IQ'
        AND o.physical_gp_target_rn = 1
         THEN COALESCE(o.physical_card_gp, 0)
       ELSE 0
     END::numeric(20,4) AS physical_card_commission_gp,
     CASE
       WHEN o.product = 'qbit_card'
-       AND o.provider = 'IQ'
        AND o.physical_gp_target_rn = 1
         THEN CASE
           WHEN o.department_id IN (
@@ -1432,7 +1428,6 @@ SELECT
     END
     + CASE
         WHEN product = 'qbit_card'
-         AND provider = 'IQ'
          AND physical_gp_target_rn = 1
           THEN COALESCE(physical_card_gp, 0)
         ELSE 0
