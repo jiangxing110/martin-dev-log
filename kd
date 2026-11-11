@@ -1,19 +1,4 @@
-QI：  838c5b68-4bb1-4960-880a-827399d101fd    
-        451fb6b9-54b7-4e6b-b690-cbe4f77670ed
-        
-QI这2个是我们统计的比饶谦算的多，算的少的我再看，先看这2个吧
+https://github.com/PalmDrive/qbitpay_service/pull/10355
+https://github.com/PalmDrive/qbitpay_service/pull/10356
 
-
-c23e5ba5-1968-4dc5-a714-8da076a3f457  ，
-f67cd913-4d76-47bf-b6f6-02c7531a2a69
-少的看这2个吧，都是少了蛮多钱的 
-
-
-BB： 046a8fc4-fa68-4746-a6e2-db2d82a1fcc5
-BB这个是我们统计的没有这个客户，饶谦那边有，看一下什么情况
-
-95d362d7-56fe-4f50-82cb-f97a51afc263
-e7107263-a635-4e3b-b9be-bb26d3d33e22
-93ad4e12-5262-477d-859b-0dad95b232de
-451fb6b9-54b7-4e6b-b690-cbe4f77670ed
-这4个是饶谦算的比我们多
+PD-3468 因IQ卡的差额清算交易和BZ卡的冻结交易导致OriginalUSDAmount会比正常收费项略大，故修改取值为settleAmount

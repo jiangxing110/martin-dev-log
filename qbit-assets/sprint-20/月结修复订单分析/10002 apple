@@ -1,0 +1,65 @@
+select *
+from api_client_transaction
+where transaction_id='a7b33dff-ff9b-4915-be9d-09c92fed4aed';
+
+INSERT INTO public.api_client_transaction (id, create_time, update_time, delete_time, version, remarks, account_id, transaction_id, fees, business_module, complete_time, provider, status) VALUES (2051060461955829768, '2026-05-03 22:04:55.648000 +00:00', '2026-11-10 11:19:46.442530 +00:00', null, 5, '订单清算金额修正，关联原始订单编号: 2605012313680531', 'e83b6e59-cd6b-4f77-9c0e-388ec2486bc4', 'a7b33dff-ff9b-4915-be9d-09c92fed4aed', '[{"type": "crossBorderFee", "amount": "0.62", "currency": "USD"}, {"type": "applePayAuthFee", "amount": "0.09", "currency": "USD"}, {"type": "settlementFee", "amount": "0", "currency": "USD"}]', 'quantum', '2026-05-03 03:45:46.048000 +00:00', 'QbitIssuingCard49387519', 'Closed');
+修改前
+[{"type": "crossBorderFee", "amount": "0.18", "currency": "USD"}, 
+{"type": "settlementFee", "amount": "0", "currency": "USD"}, 
+{"type": "applePayAuthFee", "amount": "0.03", "currency": "USD"}]
+修改后
+[{"type": "crossBorderFee", "amount": "0.62", "currency": "USD"},
+{"type": "applePayAuthFee", "amount": "0.09", "currency": "USD"},
+{"type": "settlementFee", "amount": "0", "currency": "USD"}]
+
+
+
+select *
+from "qbit_card_transaction" where id='a7b33dff-ff9b-4915-be9d-09c92fed4aed';
+INSERT INTO public.qbit_card_transaction (id, remarks, "createTime", "updateTime", "deleteTime", version, "accountId", "cardId", currency, status, "displayStatus", provider, "settleAmount", "originalAmount", fee, detail, "businessType", "sourceId", "transactionTime", "merchantShow", "specialSourceData", "transactionId", "systemTraceAuditNumber", "authorizationCode", "statusLog", comments, "transactionCurrency", "transactionAmount", "relatedQbitTxId", "paymentLabel", "platformLabel", "secondLabel", "completeTime", released, "thirdCompleteTime", id_, "isShow")
+VALUES ('a7b33dff-ff9b-4915-be9d-09c92fed4aed', '订单清算金额修正，关联原始订单编号: 2605012313680531', '2026-05-03 03:45:46.048718 +00:00', '2026-05-03 03:45:46.418000 +00:00', null, 2, 'e83b6e59-cd6b-4f77-9c0e-388ec2486bc4', '41cf945f-000d-4fc6-a838-134672d3560d', 'USD', 'Closed', 'Closed', 'QbitIssuingCard49387519', 11.74, 11.74, 0, 'BOLT.EUO2605011513 Tallinn EE(APPLE)', 'Consumption', '2050232245284274178-Consumption', '2026-05-03 03:45:46.048000 +00:00', true, '{"billAmount":40.98,"billCurrency":"USD","transactionId":"2050232245284274178","name":"BOLT.EUO2605011513","mcc":"4111","mccCategory":"","city":"Tallinn","country":"EE","state":"","zipcode":"","mid":"","code":[1103],"originalCurrencyAmount":34.9,"originalCurrency":"EUR","thirdpartySettleAmount":40.98,"thirdpartySettleCurrency":"USD","rate":1,"originalUSDAmount":40.98,"costAfterExchange":11.74,"markupRate":0,"markupFee":0,"rpRate":0,"rpFee":0,"qbitRate":1.1743,"isSuccess":true,"markup_fee":0,"markup_fee_rate":0,"crossBorderFeeBaseRate":0,"cross_border_fee":0,"fx_markup_fee":0,"fx_markup_fee_rate":0,"rateSource":"","amountAccount":40.98,"currencyCodeAccount":"USD","atmFee":0,"settleFee":0,"settleFeeRate":0,"markupCollectionRate":0,"markupCollectionFee":0,"markup_collection_fee":0,"fx_markup_collection_fee":0,"fx_markup_collection_fee_rate":0,"markup_collection_fee_rate":0,"settleCollectionFee":0,"settleCollectionFeeRate":0,"crossBorderFeeBaseCollectionRate":0,"atmCollectionFee":0,"cross_border_collection_fee":0,"atmCollectionRate":0,"settleCollectionFeeRateV2":0,"settleFeeRateV2":0,"applePayFee":0,"fx_markup_pass_through_fee_rate":0,"fx_markup_pass_through_fee":0,"applePayCollectionFee":0,"oldExchangeRate":"{\"originalCurrencyAmount\":34.9,\"originalCurrency\":\"EUR\",\"thirdpartySettleAmount\":40.98,\"thirdpartySettleCurrency\":\"USD\",\"rate\":1,\"originalUSDAmount\":40.98,\"costAfterExchange\":40.98,\"markupRate\":0,\"markupFee\":0,\"rpRate\":0,\"rpFee\":0,\"qbitRate\":1.1743,\"isSuccess\":true,\"markup_fee\":0,\"markup_fee_rate\":0,\"crossBorderFeeBaseRate\":0,\"cross_border_fee\":0,\"fx_markup_fee\":0,\"fx_markup_fee_rate\":0,\"rateSource\":\"\",\"amountAccount\":40.98,\"currencyCodeAccount\":\"USD\",\"atmFee\":0,\"settleFee\":0,\"settleFeeRate\":0,\"markupCollectionRate\":0,\"markupCollectionFee\":0,\"markup_collection_fee\":0,\"fx_markup_collection_fee\":0,\"fx_markup_collection_fee_rate\":0,\"markup_collection_fee_rate\":0,\"settleCollectionFee\":0,\"settleCollectionFeeRate\":0,\"crossBorderFeeBaseCollectionRate\":0,\"atmCollectionFee\":0,\"cross_border_collection_fee\":0,\"atmCollectionRate\":0,\"settleCollectionFeeRateV2\":0,\"settleFeeRateV2\":0,\"applePayFee\":0,\"fx_markup_pass_through_fee_rate\":0,\"fx_markup_pass_through_fee\":0,\"applePayCollectionFee\":0}"}', '12f256b6-c08a-4c77-aca0-44ba37660ea9', null, null, '[{"status":"Pending","updatedAt":"2026-05-03T03:45:46.097Z"},{"status":"Closed","updatedAt":"2026-05-03T03:45:46.335Z"}]', '', 'USD', 11.74, 'd931df9d-e1df-4c8e-a3f4-1e6b5b1de438', '', 'Bolt', '', '2026-05-03 11:45:46.048000', false, '2026-05-03 11:45:46.048000', 2050783849288855554, true);
+
+我要做的为什么算出来0.09
+## Apple Pay fee 同步计算分析报告
+
+### 结论
+
+该笔交易同步后的 Apple Pay fee 为 **0.09 USD**。本次同步费率查询结果中，普通 Apple Pay 费率 `QuantumCardApplePayFee` 和 CAAS 月结费率 `QuantumCardApplePayFee_Caas` 均为 `0.002`（即 0.2%），因此无论历史月结判断命中普通费率还是 CAAS 费率，费率数值相同。
+
+### 交易输入
+
+- 交易 ID：`a7b33dff-ff9b-4915-be9d-09c92fed4aed`
+- 交易时间：`2026-05-03 03:45:46 UTC`
+- 原始 USD 金额：`specialSourceData.originalUSDAmount = 40.98`
+- 清算修正交易金额：`transactionAmount = 11.74 USD`
+- 交易标记：`specialSourceData.code = [1103]`；商户描述包含 `(APPLE)`
+- 修正交易原有字段：`specialSourceData.applePayFee = 0`
+- 同步后 API fee 列表：`applePayAuthFee = 0.09 USD`
+
+### 费率命中
+
+同步接口 `/bill/month/fee` 的 `QuantumCardApplePayFee` 分支调用 `getCaasApplePayFee(accountId, amount, feeType, card, time)`。该方法经 `getAccountCardFee → AccountFeeV2Service.getFee` 查询费率；查询使用交易时间、账户层级、provider 和 BIN 匹配配置。API 月结异步交易会将费率类型切换为 `_Caas`，并使用 root account；普通/实时交易使用原 feeType。
+
+本次查出的候选记录均属于全局账户默认配置（accountId 为全零 UUID），provider 为 `QbitIssuing`，`providerField` 为空：
+
+| Fee type | Rate | 生效时间 |
+|---|---:|---|
+| `QuantumCardApplePayFee` | `0.002` | 2025-11-17 16:00 UTC 起 |
+| `QuantumCardApplePayFee_Caas` | `0.002` | 2025-11-17 16:00 UTC 起 |
+
+两条配置在交易时间均已生效，且费率相同，因此月结路径不会改变本笔计算结果。
+
+### 计算
+
+```text
+40.98 × 0.002 = 0.08196 USD
+ROUND_UP 到 2 位小数 = 0.09 USD
+```
+
+`getCaasApplePayFee` 会将比例费用与 `getApplePayDefaultFee` 的默认最低费用取较大值。默认值为 0 或 0.06 USD；本笔比例费用 0.09 USD 高于两者，因此最终值为 **0.09 USD**。
+
+### 关于修正交易里的 applePayFee=0
+
+修正交易行的 `specialSourceData.applePayFee = 0` 是交易记录中保存的原字段，不等于月结同步返回的 `applePayAuthFee`。同步结果使用同步请求金额和交易时间重新查费率并计算。该结果与 API transaction 中同步后的 `applePayAuthFee = 0.09` 一致。
+
+注意：本报告按同步请求金额为 `specialSourceData.originalUSDAmount = 40.98` 计算；如果要审计 Java job 实际传给 `/bill/month/fee` 的请求，还需核对该次 job 日志中的 `body.amount` 和 `body.time`。
