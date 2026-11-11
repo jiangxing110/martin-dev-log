@@ -1,4 +1,0 @@
-https://github.com/PalmDrive/qbitpay_service/pull/10355
-https://github.com/PalmDrive/qbitpay_service/pull/10356
-
-PD-3468 因IQ卡的差额清算交易和BZ卡的冻结交易导致OriginalUSDAmount会比正常收费项略大，故修改取值为settleAmount
