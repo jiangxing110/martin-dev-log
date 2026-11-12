@@ -1,0 +1,3 @@
+客规则会排除 Distributor/MOR/Gateway
+一个API客户只会有 null Distributor/MOR/Gateway 不会同时好几个
+
