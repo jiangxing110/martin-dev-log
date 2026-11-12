@@ -246,4 +246,20 @@ WHERE src.id = '0741f6db-c989-4c05-bcca-3d928e87724e'
         AND dst."deleteTime" IS NULL
   );
 
+-- feeType=所有 *_Caas；修复前后 rate 不变；provider=全部；createTime 改为 startTime（startTime=2026-02-01 00:00:00+08）
+UPDATE public."accountFee"
+SET "createTime" = "startTime"
+WHERE "accountId" = '00000000-0000-0000-0000-000000000000'
+  AND RIGHT("feeType", 5) = '_Caas'
+  AND "startTime" = TIMESTAMPTZ '2026-02-01 00:00:00+08'
+  AND "deleteTime" IS NULL;
+
+-- feeType=所有 *_Caas；修复前后 rate 不变；provider=全部；createTime 改为 startTime（startTime=2026-03-20 00:00:00+08）
+UPDATE public."accountFee"
+SET "createTime" = "startTime"
+WHERE "accountId" = '00000000-0000-0000-0000-000000000000'
+  AND RIGHT("feeType", 5) = '_Caas'
+  AND "startTime" = TIMESTAMPTZ '2026-03-20 00:00:00+08'
+  AND "deleteTime" IS NULL;
+
 COMMIT;

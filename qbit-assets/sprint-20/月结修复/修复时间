@@ -44,31 +44,22 @@
 e6f7db49-c103-455e-930a-acdc22f64889
 
 
-{"accountIds":["e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-08-17 00:00:00","endDate":"2026-08-25 00:00:00"}
+{"accountIds":["e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-08-17 00:00:00","endDate":"2026-09-01 00:00:00"}
 {"accountIds":["e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-08-25 00:00:00","endDate":"2026-09-01 00:00:00"}
 
-{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638"],"startDate":"2026-08-17 00:00:00","endDate":"2026-08-25 00:00:00"}
 
 
-{"accountIds":["b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7"],"startDate":"2026-08-17 00:00:00","endDate":"2026-09-01 00:00:00"}
+{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638"],"startDate":"2026-08-17 00:00:00","endDate":"2026-08-19 00:00:00"}
+{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638"],"startDate":"2026-08-19 00:00:00","endDate":"2026-08-21 00:00:00"}
+{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638"],"startDate":"2026-08-21 00:00:00","endDate":"2026-08-23 00:00:00"}
+{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638"],"startDate":"2026-08-23 00:00:00","endDate":"2026-08-26 00:00:00"}
+
+
 
 {"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638"],"startDate":"2026-08-11 00:00:00","endDate":"2026-08-17 00:00:00"}
 
 
-
-{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638"],"startDate":"2026-08-18 00:00:00","endDate":"2026-08-19 00:00:00"}
-
-{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638"],"startDate":"2026-08-17 00:00:00","endDate":"2026-08-18 00:00:00"}
-
-
-{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-08-01 00:00:00","endDate":"2026-08-06 00:00:00"}
-{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-08-06 00:00:00","endDate":"2026-08-11 00:00:00"}
-{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-08-11 00:00:00","endDate":"2026-08-16 00:00:00"}
-{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-08-16 00:00:00","endDate":"2026-08-21 00:00:00"}
-{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-08-21 00:00:00","endDate":"2026-08-26 00:00:00"}
-{"accountIds":["9a6e4d51-d5cf-471f-8c13-9922c1213638","e6f7db49-c103-455e-930a-acdc22f64889"],"startDate":"2026-08-26 00:00:00","endDate":"2026-09-01 00:00:00"}
-
-
+{"accountIds":["b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7"],"startDate":"2026-08-17 00:00:00","endDate":"2026-09-01 00:00:00"}
 
 七、2026 年 9 月（6 组）
 账户：
@@ -89,7 +80,7 @@ e6f7db49-c103-455e-930a-acdc22f64889
 
 {"accountIds":["b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7"],"startDate":"2026-10-01 00:00:00","endDate":"2026-10-10 00:00:00"}
 {"accountIds":["b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7"],"startDate":"2026-10-10 00:00:00","endDate":"2026-10-21 00:00:00"}
-{"accountIds":["b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7"],"startDate":"2026-10-21 00:00:00","endDate":"2026-10-30 00:00:00"}
+{"accountIds":["b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7","a54fda9d-cce8-4525-b153-dbc0f45a0c6c","80be1f90-8f3a-4014-875a-6f71ea40551e","b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7"],"startDate":"2026-10-21 00:00:00","endDate":"2026-11-01 00:00:00"}
 
 七、2026 年 11 月（6 组）
 账户：
@@ -106,3 +97,36 @@ e6f7db49-c103-455e-930a-acdc22f64889
 a54fda9d-cce8-4525-b153-dbc0f45a0c6c
 b04da43a-0be5-44ae-a5c2-b8e8fdbeecd7
 80be1f90-8f3a-4014-875a-6f71ea40551e
+
+
+create_month_bill
+
+
+jx/26/sprint-20/PD-3455/api_bill_sql
+我新建了一个分支我想吧
+jx/26/sprint-20/PD-3455/api_bill_sql
+这个分支我们的改动在
+jx/26/sprint-20/main-api-bill-sql
+重新实现一下因为main-api-bill-sql这个是main 分支切出来的
+我们今天发布得这么处理
+
+develop
+https://github.com/PalmDrive/qbit-assets/pull/7944
+main
+https://github.com/PalmDrive/qbit-assets/pull/7946
+
+
+INSERT INTO public."openApiClient" ("accountId") VALUES ('9a6e4d51-d5cf-471f-8c13-9922c1213638');
+INSERT INTO public."openApiClient" ("accountId") VALUES ('d7723cbe-5fb8-4b9e-85e9-cf34da7ceaab');
+INSERT INTO public."openApiClient" ("accountId") VALUES ('f181196b-cb4a-43c2-a21f-9424ec3fba59');
+
+
+{"accountIds": ["f181196b-cb4a-43c2-a21f-9424ec3fba59"],"billMonths": ["2026-10"]}
+{"accountIds": ["d7723cbe-5fb8-4b9e-85e9-cf34da7ceaab"],"billMonths": ["2026-10"]}
+{"accountIds": ["9a6e4d51-d5cf-471f-8c13-9922c1213638"],"billMonths": ["2026-10"]}
+
+SELECT "oac"."id", "oacc"."sign_time", "oacc"."online_time", COALESCE("oacc"."min_amount",5000) "minAmount", "oacc"."discount_type", "verifiedName", "oacc"."discount_duration", "oacc"."discount_percent", "oacc"."other_amount" "otherAmountStr", "oacc"."debit_type", "oacc"."statement_type", "oacc"."discount_config", "oacc"."baas_discount_config", COALESCE("oacc"."baas_min_amount",5000) "baasMinAmount", "oacc"."minimum_volume_commitments_config" as "minimumVolumeCommitmentsConfig" from "openApiClient" "oac" LEFT JOIN "openApiClientConfig" "oacc" on "oac"."id" = "oacc"."id" LEFT JOIN account "ac" on ac."id" = "oac"."id" LEFT JOIN "accountExtend" "ace" ON ac."id" = "ace"."accountId"::UUID WHERE "oac"."deleteTime" IS NULL and "oacc"."deleteTime" IS null and "oac".status = 'Active' and "ac".type = 'ApiClient' and "oacc"."online_time" IS NOT NULL and "ace"."bad_debit_remarks" is null and "oacc"."online_time" <= TO_TIMESTAMP(? / 1000)
+==> Parameters: 1793462399999(Long)
+
+BigDecimal refundAmount = Optional.ofNullable(extendVO.getConsumeAmount()).orElse(BigDecimal.ZERO);
+BigDecimal reversalAmount = Optional.ofNullable(extendVO.getConsumeAmount()).orElse(BigDecimal.ZERO);能不能看看怎么把我这部分代码优化一下我想把这个事情遮掩过去
