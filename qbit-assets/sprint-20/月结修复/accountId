@@ -1,0 +1,4 @@
+INSERT INTO "MY_TABLE"(account_id) VALUES ('e83b6e59-cd6b-4f77-9c0e-388ec2486bc4'); 1,465.6965
+INSERT INTO "MY_TABLE"(account_id) VALUES ('f67cd913-4d76-47bf-b6f6-02c7531a2a69'); 4,287.088
+
+

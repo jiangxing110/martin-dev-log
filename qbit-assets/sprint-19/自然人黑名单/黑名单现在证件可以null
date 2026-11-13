@@ -1,0 +1,19 @@
+-- 放宽自然人黑名单身份维度约束，允许证件类型为空。
+BEGIN;
+
+ALTER TABLE public.natural_person_blacklist_identity
+    DROP CONSTRAINT IF EXISTS ck_natural_person_blacklist_identity_dimension;
+
+ALTER TABLE public.natural_person_blacklist_identity
+    ADD CONSTRAINT ck_natural_person_blacklist_identity_dimension
+        CHECK (
+            (identity_type = 'EMAIL' AND country_code IS NULL AND id_type IS NULL)
+                OR (identity_type = 'NATIONALITY_ID' AND country_code IS NOT NULL)
+        );
+
+COMMIT;
+
+
+https://github.com/PalmDrive/qbit-assets/pull/7960
+https://github.com/PalmDrive/qbit-admin-v3/pull/2515
+https://github.com/PalmDrive/qbit-assets/pull/7953
