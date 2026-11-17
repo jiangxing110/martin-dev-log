@@ -377,31 +377,48 @@ sales_rows AS (
     0::numeric(20,4) AS cashflow_rev_sale
   FROM recent_sales_metric m
   WHERE m.month_receivable <> 0
-),monthly_api_income_rows AS (
-  -- 对齐返佣视图的 offline_api_income_amount 来源；按结算月首日落业务日期，避免伪造日分布。
+    -- Open API月账单应收统一读取月收入汇总表；避免与日指标中的同一金额重复。
+    AND m.product <> 'open_api'
+),monthly_revenue_rows AS (
+  -- 月表数据按结算月首日入账：应收只进入 Pref_Rev，历史账单实收进入销售实收口径。
   SELECT
     r.settlement_month::date AS report_date,
     r.settlement_month::date AS report_month,
     r.settlement_month::date AS settlement_month,
     r.root_account_id::varchar AS root_account_id,
-    'open_api'::varchar AS product,
+    CASE WHEN r.product = 'bi_month_tag' THEN 'open_api' ELSE r.product END::varchar AS product,
     NULLIF(TRIM(r.provider), '')::varchar AS provider,
     r.sale_id::varchar AS sale_id,
-    'offline_api_income_amount'::varchar AS metric_code,
+    r.metric_code::varchar AS metric_code,
     'sales_revenue_monthly'::varchar AS source_type,
-    SUM(COALESCE(r.income_value, 0))::numeric(20,4) AS pref_rev,
+    SUM(CASE
+      WHEN r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount'
+        THEN COALESCE(r.income_value, 0)
+      WHEN r.product = 'open_api' AND r.metric_code = 'month_receivable'
+        THEN COALESCE(r.income_value, 0)
+      ELSE 0
+    END)::numeric(20,4) AS pref_rev,
     0::numeric(20,4) AS client_rebate,
     0::numeric(20,4) AS client_collection_rebate,
     0::numeric(20,4) AS gross_profit_rebate,
     0::numeric(20,4) AS physical_card_gp,
     0::numeric(20,4) AS cost,
-    SUM(COALESCE(r.income_value, 0))::numeric(20,4) AS cashflow_rev_sale
+    SUM(CASE
+      WHEN r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount'
+        THEN COALESCE(r.income_value, 0)
+      WHEN r.product = 'open_api' AND r.metric_code = 'month_revenue'
+        THEN COALESCE(r.income_value, 0)
+      ELSE 0
+    END)::numeric(20,4) AS cashflow_rev_sale
   FROM "dws"."dws_metrics_sales_revenue_monthly" r
   WHERE r.delete_time IS NULL
-    AND r.product = 'bi_month_tag'
-    AND r.metric_code = 'offline_api_income_amount'
     AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
-  GROUP BY r.settlement_month, r.root_account_id, NULLIF(TRIM(r.provider), ''), r.sale_id
+    AND (
+      (r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount')
+      OR (r.product = 'open_api' AND r.metric_code IN ('month_receivable', 'month_revenue'))
+    )
+  GROUP BY r.settlement_month, r.root_account_id, r.product,
+           NULLIF(TRIM(r.provider), ''), r.sale_id, r.metric_code
 ),qbit_card_channel_rebate_rows AS (
   -- 返佣视图把量子卡渠道返现作为收入加回；保留BB/QI/BZ源日和源sale_id，不做月度收入权重分摊或ABS归正。
   SELECT
@@ -580,7 +597,7 @@ sales_rows AS (
   SELECT * FROM sales_rows
   UNION ALL SELECT * FROM qbit_card_channel_rebate_rows
   UNION ALL SELECT * FROM month_receivable_rows
-  UNION ALL SELECT * FROM monthly_api_income_rows
+  UNION ALL SELECT * FROM monthly_revenue_rows
   UNION ALL SELECT * FROM bi_month_adjustment_rows
   UNION ALL SELECT * FROM cost_only_rows
 ),calculated AS (

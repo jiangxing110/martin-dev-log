@@ -1,0 +1,29 @@
+INSERT INTO dws.dws_partner_account_profit_snapshot_p (id, snapshot_date, settlement_month, root_account_referral_id, root_account_id, product, total_effective_revenue, total_cogs, total_gp, version, remarks, create_time, update_time, delete_time) VALUES (83375706, '2026-11-21', '2026-10-01', '9ae73af3-7860-43a7-8f99-8b6ae05b8722', '11150bb2-bb5e-4503-aae2-0c3b43450064', 'crypto', 0.0000, 0.0000, 0.0000, 1, 'partner account profit snapshot month cdc', '2026-11-12 20:42:57.788000', '2026-11-12 20:42:57.788000', null);
+INSERT INTO dws.dws_partner_account_profit_snapshot_p (id, snapshot_date, settlement_month, root_account_referral_id, root_account_id, product, total_effective_revenue, total_cogs, total_gp, version, remarks, create_time, update_time, delete_time) VALUES (474547438, '2026-11-21', '2026-10-01', '9ae73af3-7860-43a7-8f99-8b6ae05b8722', '17223dba-7a07-4bfd-9967-5698f9d472ce', 'qbit_card', 65.4246, 148.3202, 5.8807, 1, 'partner account profit snapshot month cdc', '2026-11-12 20:42:57.788000', '2026-11-12 20:42:57.788000', null);
+
+
+
+
+
+
+
+
+
+INSERT INTO dws.dws_partner_account_profit_snapshot_p (id, snapshot_date, settlement_month, root_account_referral_id, root_account_id, product, total_effective_revenue, total_cogs, total_gp, version, remarks, create_time, update_time, delete_time) VALUES (1515454918, '2026-11-21', '2026-10-01', '9ae73af3-7860-43a7-8f99-8b6ae05b8722', '8051d443-677e-4581-bfff-93c3d45211ea', 'qbit_card', 6.1990, 3.0014, 3.1976, 1, 'partner account profit snapshot month cdc', '2026-11-12 20:42:57.788000', '2026-11-12 20:42:57.788000', null);
+INSERT INTO dws.dws_partner_account_profit_snapshot_p (id, snapshot_date, settlement_month, root_account_referral_id, root_account_id, product, total_effective_revenue, total_cogs, total_gp, version, remarks, create_time, update_time, delete_time) VALUES (2824693, '2026-11-21', '2026-10-01', '9ae73af3-7860-43a7-8f99-8b6ae05b8722', '8051d443-677e-4581-bfff-93c3d45211ea', 'crypto', 0.0000, 0.1818, -0.1818, 1, 'partner account profit snapshot month cdc', '2026-11-12 20:42:57.788000', '2026-11-12 20:42:57.788000', null);
+INSERT INTO dws.dws_partner_account_profit_snapshot_p (id, snapshot_date, settlement_month, root_account_referral_id, root_account_id, product, total_effective_revenue, total_cogs, total_gp, version, remarks, create_time, update_time, delete_time) VALUES (1368690656, '2026-11-21', '2026-10-01', '9ae73af3-7860-43a7-8f99-8b6ae05b8722', '8051d443-677e-4581-bfff-93c3d45211ea', 'group_account', 50.0000, 0.0000, 50.0000, 1, 'partner account profit snapshot month cdc', '2026-11-12 20:42:57.788000', '2026-11-12 20:42:57.788000', null);
+
+
+main,global_account 全球账户
+month_revenue,open_api 实收
+main,qbit_card （我不确定那这个mian 是否包含实体卡fee 因为还有一个实体卡毛利字段）
+
+offline_api_income_amount,bi_month_tag （这个表的指标）
+main,crypto_connect 加密
+crypto_connect_income,crypto_connect
+assets_acceptance_fee_gt_zero,crypto_connect
+assets_acceptance_fee_eq_zero,crypto_connect
+不知道这个交易产生的fee 是否已经算到main
+
+
+
