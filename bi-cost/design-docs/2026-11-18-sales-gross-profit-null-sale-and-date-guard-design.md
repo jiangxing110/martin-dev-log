@@ -11,7 +11,7 @@
 - 生产/本地 Mapper 的快照存在性判断、汇总查询及生产估算查询过滤空销售，避免历史快照残留行进入结果或触发错误的数据源切换。
 - 回填销售名称前跳过空白 ID，避免把空字符串交给 UUID 用户表查询。
 - 服务校验 `settlementMonth` 和 `reportDateRange` 起始日不得早于 2026-09-01；校验对分页和导出接口共享。使用项目全局异常处理器识别的 `CustomException`，让参数错误返回 400，而不是被兜底处理成 500。
-- Open API 实收由 `api_client_bill_actual_received_amount`、`api_client_bill_monthly_kyc_fee_received_amount`、`api_client_bill_physical_card_fee_received_amount`、`api_client_bill_minimum_commitment_received_amount` 四个日指标合计，继续进入销售维度实收收入。
+- Open API 实收按 `api_client_bill_actual_received_amount` 减去 `api_client_bill_monthly_kyc_fee_received_amount`、`api_client_bill_physical_card_fee_received_amount`、`api_client_bill_minimum_commitment_received_amount` 计算，继续进入销售维度实收收入。
 
 ## 不在范围
 

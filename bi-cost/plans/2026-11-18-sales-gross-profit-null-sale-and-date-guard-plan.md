@@ -12,7 +12,7 @@
 - [x] 回填销售名称前跳过空白 ID，避免空字符串触发 UUID 类型转换错误。
 - [x] 在共享服务查询校验中限制 `settlementMonth` 和 `reportDateRange` 起始日不得早于 2026-09-01。
 - [x] 将参数/权限校验异常改用全局异常处理器识别的 `CustomException`，确保返回 400/403 和对应提示信息。
-- [x] 物化视图与独立指标 SQL 将 Open API 实收扩展为四个账单实收 metric_code 的合计。
+- [x] 物化视图与独立指标 SQL 将 Open API 实收改为实际实收指标减去月结 KYC、实体卡手续费和最低承诺三项实收。
 - [x] 对涉及的 SQL/Java 仓库执行 `git diff --check`；遵守用户要求，不编译、不运行测试、不执行数据库语句。
 
 ## 交付说明

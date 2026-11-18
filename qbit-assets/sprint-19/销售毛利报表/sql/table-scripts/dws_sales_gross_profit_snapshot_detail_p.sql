@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
--- Updated Time:   2026-11-18 15:23:58
+-- Updated Time:   2026-11-18 16:10:53
 -- Description:    销售毛利日粒度快照明细表
 -- Notes:
 --   1. 结构参考 sale-repoet/sales-commission/table-scripts/dws_sales_commission_snapshot_detail_p.sql。
@@ -31,6 +31,9 @@ CREATE TABLE "dws"."dws_sales_gross_profit_snapshot_detail_p" (
   "pref_rev_effective" numeric(20,4) NOT NULL DEFAULT 0,
   "cost" numeric(20,4) NOT NULL DEFAULT 0,
   "pref_gp" numeric(20,4) NOT NULL DEFAULT 0,
+  "cashflow_rev" numeric(20,4) NOT NULL DEFAULT 0,
+  "cashflow_rev_effective" numeric(20,4) NOT NULL DEFAULT 0,
+  "cashflow_gp" numeric(20,4) NOT NULL DEFAULT 0,
   "cashflow_rev_sale" numeric(20,4) NOT NULL DEFAULT 0,
   "cashflow_rev_sale_effective" numeric(20,4) NOT NULL DEFAULT 0,
   "cashflow_gp_sale" numeric(20,4) NOT NULL DEFAULT 0,
@@ -49,6 +52,9 @@ COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."report_date"
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."settlement_month" IS '报表归属月份，由 report_date 所属月确定';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."sale_id" IS '销售ID；无销售归属的数据不写入快照';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."provider" IS '渠道/服务商；NULL单独保留';
+COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."cashflow_rev" IS '整体实收收入：实时收入及历史月账单实收';
+COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."cashflow_rev_effective" IS '整体实收有效收入=cashflow_rev-rebate，可为负数';
+COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."cashflow_gp" IS '整体实收毛利=cashflow_rev-cost+physical_card_gp，可为负数';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."gross_profit_rebate" IS '兼容字段；毛利返现已并入client_rebate，本字段当前为0';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."pref_gp" IS '应收毛利=pref_rev-cost，可为负数';
 

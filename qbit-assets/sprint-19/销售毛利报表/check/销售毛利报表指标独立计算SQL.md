@@ -229,11 +229,11 @@ GROUP BY 1, 2, 3, 4, 5, 6;
 
 `Pref_Rev` 是以上来源的 `real_time_revenue + Open API month_receivable + offline_api_income_amount + channel_rebate + income_adjustment` 之和。Open API 的 `month_receivable` 是应收，不是实收。
 
-Open API 的四个账单实收日指标合计为月账单实收，不计入 `Pref_Rev`；其独立取数 SQL 见下节，并汇入第 9 节销售维度总实收。
+Open API 月账单实收不计入 `Pref_Rev`。整体实收 `Cashflow_Rev` 直接取 `api_client_bill_actual_received_amount`；销售维度实收 `Cashflow_Rev_sale` 才从该指标中扣除月结 KYC、实体卡手续费和最低承诺三项。
 
 ## API 月账单实收 / API Actual Received（独立 SQL）
 
-单独核算 Open API 月账单实收，将日指标 `api_client_bill_actual_received_amount`、`api_client_bill_monthly_kyc_fee_received_amount`、`api_client_bill_physical_card_fee_received_amount`、`api_client_bill_minimum_commitment_received_amount` 求和，按来源 `report_date`、根账户、销售和 provider 汇总。该值只作为实收收入，不计入 `Pref_Rev`；第 9 节的 `Cashflow_Rev_sale` 总额会包含此项。
+单独核算销售维度的 Open API 月账单实收：`api_client_bill_actual_received_amount` 减去 `api_client_bill_monthly_kyc_fee_received_amount`、`api_client_bill_physical_card_fee_received_amount`、`api_client_bill_minimum_commitment_received_amount`，按来源 `report_date`、根账户、销售和 provider 汇总。该值只作为实收收入，不计入 `Pref_Rev`；第 10 节的 `Cashflow_Rev_sale` 会包含此净额。
 
 ```sql
 SELECT
@@ -242,7 +242,11 @@ SELECT
     m.product,
     NULLIF(TRIM(m.provider), '') AS provider,
     m.sale_id::varchar AS sale_id,
-    SUM(COALESCE(m.metric_value, 0)) AS api_actual_received_amount
+    SUM(CASE
+        WHEN m.metric_code = 'api_client_bill_actual_received_amount'
+            THEN COALESCE(m.metric_value, 0)
+        ELSE -COALESCE(m.metric_value, 0)
+    END) AS api_actual_received_amount
 FROM dws.dws_sales_metric_daily m
 WHERE m.delete_time IS NULL
   AND m.product = 'open_api'
@@ -459,11 +463,31 @@ SELECT
 
 应收收入来源见第 1 节；Cost 来源见第 7 节；实体卡毛利源字段为 `dws_sales_metric_daily.metric_code = 'physical_card_gp'`。
 
-## 9. Cash Flow Revenue / Cashflow_Rev_sale（销售维度实收收入）
+## 9. Cash Flow Revenue / Cashflow_Rev（整体实收收入）
+
+整体口径保留 Open API 月账单的原始实际收款总额，不扣除 KYC、实体卡手续费或最低承诺实收。
+
+```sql
+SELECT
+    SUM(COALESCE(m.metric_value, 0)) AS api_actual_received_amount
+FROM dws.dws_sales_metric_daily m
+WHERE m.delete_time IS NULL
+  AND m.product = 'open_api'
+  AND m.metric_type = 'income'
+  AND m.metric_code = 'api_client_bill_actual_received_amount'
+  AND m.report_date >= DATE '2026-09-01'
+  AND m.report_date <  DATE '2026-10-01'
+  AND m.root_account_id::varchar = '95d362d7-56fe-4f6a-bfab-a44b7cb94be5'
+  AND m.sale_id::varchar = 'cfd8b2a8-af2d-474a-9923-3a5ef0335f52';
+```
+
+整体实收还包括实时收入、量子卡渠道返现收入及 BI 收入调账。`Cashflow_Rev_effective = Cashflow_Rev - Rebate`；`Cashflow_GP = Cashflow_Rev - Cost + physical_card_gp`，沿用实体卡毛利单独加入毛利的既有口径。
+
+## 10. Cash Flow Revenue / Cashflow_Rev_sale（销售维度实收收入）
 
 `Cashflow_Rev_sale` 按销售维度统计实收总额，包含实时收入、API 月账单实收、量子卡渠道返现收入及 BI 收入调账。API 月账单实收单独核算 SQL 见“API 月账单实收 / API Actual Received”章节；汇入总额时不再叠加月度汇总表的 Open API `month_revenue`。月表 `qbit_card/main` 不额外相加，避免与日表 main/返现形成重复。
 
-## 10. Cash Flow Effective Revenue / Cashflow_Rev_sale_effective（销售维度实收有效收入）
+## 11. Cash Flow Effective Revenue / Cashflow_Rev_sale_effective（销售维度实收有效收入）
 
 ```sql
 SELECT
@@ -472,9 +496,9 @@ SELECT
      - COALESCE(gross_profit_rebate, 0))::numeric(20,4) AS cashflow_rev_sale_effective;
 ```
 
-`cashflow_rev_sale` 按第 9 节来源计算；返现按第 2–5 节来源计算。
+`cashflow_rev_sale` 按第 10 节来源计算；返现按第 2–5 节来源计算。
 
-## 11. Cash Flow Gross Profit / Cashflow_GP_sale（销售维度实收毛利）
+## 12. Cash Flow Gross Profit / Cashflow_GP_sale（销售维度实收毛利）
 
 ```sql
 SELECT
@@ -482,7 +506,7 @@ SELECT
      + COALESCE(physical_card_gp, 0))::numeric(20,4) AS cashflow_gp_sale;
 ```
 
-`cashflow_rev_sale` 按第 9 节来源计算；Cost 按第 7 节计算；实体卡毛利按第 8 节来源计算。毛利不归零，负数保留。
+`cashflow_rev_sale` 按第 10 节来源计算；Cost 按第 7 节计算；实体卡毛利按第 8 节来源计算。毛利不归零，负数保留。
 
 ## Provider 筛选说明
 

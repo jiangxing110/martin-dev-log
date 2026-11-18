@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
--- Updated Time:   2026-11-18 15:23:58
+-- Updated Time:   2026-11-18 16:10:53
 -- Description:    销售毛利日粒度汇总快照主表
 -- Notes:
 --   1. 结构参考 sale-repoet/sales-commission/table-scripts/dws_sales_commission_snapshot_p.sql。
@@ -25,6 +25,9 @@ CREATE TABLE "dws"."dws_sales_gross_profit_snapshot_p" (
   "pref_rev_effective" numeric(20,4) NOT NULL DEFAULT 0,
   "cost" numeric(20,4) NOT NULL DEFAULT 0,
   "pref_gp" numeric(20,4) NOT NULL DEFAULT 0,
+  "cashflow_rev" numeric(20,4) NOT NULL DEFAULT 0,
+  "cashflow_rev_effective" numeric(20,4) NOT NULL DEFAULT 0,
+  "cashflow_gp" numeric(20,4) NOT NULL DEFAULT 0,
   "cashflow_rev_sale" numeric(20,4) NOT NULL DEFAULT 0,
   "cashflow_rev_sale_effective" numeric(20,4) NOT NULL DEFAULT 0,
   "cashflow_gp_sale" numeric(20,4) NOT NULL DEFAULT 0,
@@ -45,6 +48,9 @@ COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_p"."sale_id" IS '销售
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_p"."rebate" IS '客户返现、代收返现和毛利返现的有符号合计';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_p"."gross_profit_rebate" IS '兼容字段；毛利返现已并入client_rebate，本字段当前为0';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_p"."pref_gp" IS '应收毛利=pref_rev-cost，可为负数';
+COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_p"."cashflow_rev" IS '整体实收收入：实时收入及历史月账单实收';
+COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_p"."cashflow_rev_effective" IS '整体实收有效收入=cashflow_rev-rebate，可为负数';
+COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_p"."cashflow_gp" IS '整体实收毛利=cashflow_rev-cost+physical_card_gp，可为负数';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_p"."cashflow_gp_sale" IS '销售维度毛利=cashflow_rev_sale-cost，可为负数';
 
 CREATE INDEX "idx_sales_gross_profit_snapshot_query"

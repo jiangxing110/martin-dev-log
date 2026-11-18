@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
--- Updated Time:   2026-11-18 15:45:06
+-- Updated Time:   2026-11-18 16:10:53
 -- Description:    销售毛利近6个月日粒度估算物化视图
 -- Notes:
 --   1. 结构/刷新方式参考 sale-repoet/sales-commission/table-scripts/mv_sales_commission_recent_estimate_v3.sql。
@@ -43,6 +43,8 @@ WITH account_root_relation AS (
              THEN m.metric_value ELSE 0 END)::numeric(20,4) AS main_revenue,
     SUM(CASE WHEN m.metric_code = 'month_receivable' AND m.metric_type = 'income'
              THEN m.metric_value ELSE 0 END)::numeric(20,4) AS month_receivable,
+    SUM(CASE WHEN m.metric_code = 'api_client_bill_actual_received_amount' AND m.metric_type = 'income'
+             THEN m.metric_value ELSE 0 END)::numeric(20,4) AS api_actual_received_amount,
     SUM(CASE
       WHEN m.metric_type = 'income'
        AND m.metric_code = 'api_client_bill_actual_received_amount'
@@ -55,7 +57,7 @@ WITH account_root_relation AS (
        )
         THEN -m.metric_value
       ELSE 0
-    END)::numeric(20,4) AS api_actual_received_amount,
+    END)::numeric(20,4) AS api_actual_received_sale_amount,
     SUM(CASE WHEN m.metric_code = 'physical_card_gp'
                   AND m.product = 'qbit_card'
                   AND NULLIF(TRIM(m.provider), '') = 'IQ'
@@ -365,6 +367,7 @@ sales_rows AS (
     CASE WHEN m.product = 'qbit_card' AND m.provider = 'IQ' THEN m.physical_card_gp ELSE 0 END::numeric(20,4) AS physical_card_gp,
     -- Cost 只包含真实成本来源；实体卡毛利单独参与 GP，不进入 Cost 或 Rebate。
     COALESCE(c.source_cost, 0)::numeric(20,4) AS cost,
+    m.main_revenue::numeric(20,4) AS cashflow_rev,
     m.main_revenue::numeric(20,4) AS cashflow_rev_sale
   FROM recent_sales_metric m
   LEFT JOIN cost_by_sale_dimension c
@@ -391,10 +394,11 @@ sales_rows AS (
     0::numeric(20,4) AS gross_profit_rebate,
     0::numeric(20,4) AS physical_card_gp,
     0::numeric(20,4) AS cost,
-    m.api_actual_received_amount::numeric(20,4) AS cashflow_rev_sale
+    m.api_actual_received_amount::numeric(20,4) AS cashflow_rev,
+    m.api_actual_received_sale_amount::numeric(20,4) AS cashflow_rev_sale
   FROM recent_sales_metric m
   WHERE m.product = 'open_api'
-    AND m.api_actual_received_amount <> 0
+    AND (m.api_actual_received_amount <> 0 OR m.api_actual_received_sale_amount <> 0)
 ),month_receivable_rows AS (
   -- Open API月账单应收与实时收入分行保留，按日指标来源日期入账。
   SELECT
@@ -413,6 +417,7 @@ sales_rows AS (
     0::numeric(20,4) AS gross_profit_rebate,
     0::numeric(20,4) AS physical_card_gp,
     0::numeric(20,4) AS cost,
+    0::numeric(20,4) AS cashflow_rev,
     0::numeric(20,4) AS cashflow_rev_sale
   FROM recent_sales_metric m
   WHERE m.month_receivable <> 0
@@ -443,6 +448,11 @@ sales_rows AS (
       WHEN r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount'
         THEN COALESCE(r.income_value, 0)
       ELSE 0
+    END)::numeric(20,4) AS cashflow_rev,
+    SUM(CASE
+      WHEN r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount'
+        THEN COALESCE(r.income_value, 0)
+      ELSE 0
     END)::numeric(20,4) AS cashflow_rev_sale
   FROM "dws"."dws_metrics_sales_revenue_monthly" r
   WHERE r.delete_time IS NULL
@@ -469,6 +479,7 @@ sales_rows AS (
     0::numeric(20,4) AS gross_profit_rebate,
     0::numeric(20,4) AS physical_card_gp,
     0::numeric(20,4) AS cost,
+    channel_source.channel_rebate AS cashflow_rev,
     channel_source.channel_rebate AS cashflow_rev_sale
   FROM (
     SELECT
@@ -561,6 +572,13 @@ sales_rows AS (
       WHEN t.tag IN ('INCOME_ADJUSTMENT_DECREASE', 'API_MINIMUM_CONSUMPTION_ADJUSTMENT_DECREASE')
         THEN -COALESCE(t.amount, 0)
       ELSE 0
+    END)::numeric(20,4) AS cashflow_rev,
+    SUM(CASE
+      WHEN t.tag IN ('OFFLINE_PHYSICAL_CARD_FEE', 'INCOME_ADJUSTMENT_INCREASE')
+        THEN COALESCE(t.amount, 0)
+      WHEN t.tag IN ('INCOME_ADJUSTMENT_DECREASE', 'API_MINIMUM_CONSUMPTION_ADJUSTMENT_DECREASE')
+        THEN -COALESCE(t.amount, 0)
+      ELSE 0
     END)::numeric(20,4) AS cashflow_rev_sale
   FROM ods.ods_bi_month_tag t
   LEFT JOIN account_root_relation aar
@@ -614,6 +632,7 @@ sales_rows AS (
     0::numeric(20,4) AS gross_profit_rebate,
     0::numeric(20,4) AS physical_card_gp,
     c.source_cost AS cost,
+    0::numeric(20,4) AS cashflow_rev,
     0::numeric(20,4) AS cashflow_rev_sale
   FROM cost_by_sale_dimension c
   WHERE NOT EXISTS (
@@ -653,6 +672,9 @@ sales_rows AS (
     (pref_rev - client_rebate - client_collection_rebate - gross_profit_rebate)::numeric(20,4) AS pref_rev_effective,
     cost::numeric(20,4) AS cost,
     (pref_rev - cost + physical_card_gp)::numeric(20,4) AS pref_gp,
+    cashflow_rev::numeric(20,4) AS cashflow_rev,
+    (cashflow_rev - client_rebate - client_collection_rebate - gross_profit_rebate)::numeric(20,4) AS cashflow_rev_effective,
+    (cashflow_rev - cost + physical_card_gp)::numeric(20,4) AS cashflow_gp,
     cashflow_rev_sale::numeric(20,4) AS cashflow_rev_sale,
     (cashflow_rev_sale - client_rebate - client_collection_rebate - gross_profit_rebate)::numeric(20,4) AS cashflow_rev_sale_effective,
     (cashflow_rev_sale - cost + physical_card_gp)::numeric(20,4) AS cashflow_gp_sale
@@ -681,6 +703,9 @@ SELECT
   pref_rev_effective,
   cost,
   pref_gp,
+  cashflow_rev,
+  cashflow_rev_effective,
+  cashflow_gp,
   cashflow_rev_sale,
   cashflow_rev_sale_effective,
   cashflow_gp_sale,
