@@ -1,0 +1,100 @@
+WITH params AS (
+    SELECT DATE '2026-09-01' AS start_date,
+           DATE '2026-10-01' AS end_date_exclusive
+),
+allocation_codes(metric_code, include_in_revenue) AS (
+    VALUES
+        ('api_client_bill_monthly_fee_received_amount', TRUE),
+        ('api_client_bill_monthly_fx_fee_received_amount', TRUE),
+        ('api_client_bill_monthly_crypto_fee_received_amount', TRUE),
+        ('api_client_bill_one_time_api_fee_received_amount', TRUE),
+        ('api_client_bill_monthly_api_fee_received_amount', TRUE),
+        ('api_client_bill_revenue_adjustment_received_amount', TRUE),
+        ('api_client_bill_uncategorized_fee_received_amount', TRUE),
+        ('api_client_bill_monthly_kyc_fee_received_amount', FALSE),
+        ('api_client_bill_minimum_commitment_received_amount', FALSE),
+        ('api_client_bill_physical_card_fee_received_amount', FALSE)
+),
+revenue_detail AS (
+    SELECT
+        d.state_date AS report_date,
+        d.root_account_id,
+        d.provider,
+        NULLIF(TRIM(d.sale_id), '') AS sale_id,
+        NULLIF(TRIM(d.am_id), '') AS am_id,
+        d.metric_code,
+        d.income_value,
+        CASE
+            WHEN d.source_detail_id ~ '^DEBIT_RECORD:[0-9]+:'
+                THEN split_part(d.source_detail_id, ':', 2)::bigint
+            WHEN d.metric_source_id ~ '^RECEIVED:[0-9]+:'
+                THEN split_part(d.metric_source_id, ':', 2)::bigint
+        END AS debit_event_id
+    FROM dwm.dwm_open_api_monthly_revenue_attribution_detail d
+    CROSS JOIN params p
+    WHERE d.product = 'open_api'
+      AND d.state_date >= p.start_date
+      AND d.state_date < p.end_date_exclusive
+),
+bill_month_by_debit AS (
+    SELECT
+        ids.debit_event_id,
+        CASE WHEN LEFT(TRIM(b.bill_month), 7) ~ '^[1-9][0-9]{3}-(0[1-9]|1[0-2])$'
+             THEN (LEFT(TRIM(b.bill_month), 7) || '-01')::date
+        END AS settlement_month
+    FROM (SELECT DISTINCT debit_event_id FROM revenue_detail) ids
+    LEFT JOIN public.api_client_debit_record debit ON debit.id = ids.debit_event_id
+    LEFT JOIN public.api_client_bill b ON b.id = debit.bill_id
+),
+allocated_by_debit AS (
+    -- 排除项仍计入已分摊总额，避免从残差漏回收入。
+    SELECT d.debit_event_id, SUM(d.income_value)::numeric(38,6) AS allocated_amount
+    FROM revenue_detail d
+    JOIN allocation_codes c ON c.metric_code = d.metric_code
+    GROUP BY d.debit_event_id
+),
+contributions AS (
+    SELECT
+        d.report_date, b.settlement_month, d.root_account_id,
+        d.provider, d.sale_id, d.am_id,
+        d.income_value AS included_fee_amount,
+        0::numeric AS residual_amount
+    FROM revenue_detail d
+    JOIN allocation_codes c ON c.metric_code = d.metric_code
+    LEFT JOIN bill_month_by_debit b ON b.debit_event_id = d.debit_event_id
+    WHERE c.include_in_revenue
+
+    UNION ALL
+
+    SELECT
+        d.report_date, b.settlement_month, d.root_account_id,
+        NULL::text AS provider, d.sale_id, d.am_id,
+        0::numeric,
+        (d.income_value - COALESCE(a.allocated_amount, 0))::numeric(38,6)
+    FROM revenue_detail d
+    LEFT JOIN bill_month_by_debit b ON b.debit_event_id = d.debit_event_id
+    LEFT JOIN allocated_by_debit a ON a.debit_event_id = d.debit_event_id
+    WHERE d.metric_code = 'api_client_bill_actual_received_amount'
+)
+SELECT
+    report_date,
+    settlement_month,
+    root_account_id,
+    'open_api' AS product,
+    'month_revenue' AS metric_code,
+    provider,
+    sale_id,
+    am_id,
+    SUM(included_fee_amount) AS included_fee_amount,
+    SUM(residual_amount) AS residual_amount,
+    SUM(included_fee_amount + residual_amount)::numeric(20,3) AS month_revenue
+FROM contributions
+WHERE root_account_id IS NOT NULL
+and( sale_id='fc0f200f-5031-411f-869d-fd8cd1657cd2'
+or am_id='fc0f200f-5031-411f-869d-fd8cd1657cd2')
+GROUP BY settlement_month, root_account_id, provider, sale_id, am_id
+ORDER BY settlement_month, root_account_id, provider, sale_id, am_id;
+
+ORDER BY settlement_month, root_account_id, provider, sale_id, am_id;
+
+

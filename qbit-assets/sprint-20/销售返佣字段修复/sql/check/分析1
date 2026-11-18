@@ -1,0 +1,15 @@
+SELECT "dws"."sp_refresh_mv_sales_commission_income_partner_profit_recent"();
+
+SELECT
+sum(income_amount),
+income_type
+FROM dws.mv_sales_commission_performance_income_recent
+WHERE activity_month = TO_DATE(
+    CONCAT('2026-09'::varchar, '-01'),
+    'YYYY-MM-DD'
+)
+AND (
+    sale_id = 'fc0f200f-5031-411f-869d-fd8cd1657cd2'::varchar
+    OR am_id = 'fc0f200f-5031-411f-869d-fd8cd1657cd2'::varchar
+)
+group by income_type

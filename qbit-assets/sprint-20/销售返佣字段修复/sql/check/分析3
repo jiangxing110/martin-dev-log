@@ -1,0 +1,87 @@
+select sum(income_amount)
+from dws.mv_sales_commission_performance_income_recent
+where activity_month='2026-09-01'
+and provider='IQ'
+and income_type='qi_channel_cashback'
+
+select count(*)
+from dws.mv_sales_commission_performance_income_recent
+44483
+where activity_month='2026-09-01'
+and provider='IQ'
+and income_type='qi_channel_cashback'
+
+
+curl --url 'http://127.0.0.1:8080/api/admin/sale/commission/performance' \
+  -H 'Accept: application/json, text/plain, */*' \
+  -H 'Accept-Language: zh,en-US;q=0.9,en;q=0.8,zh-CN;q=0.7' \
+  -H 'Connection: keep-alive' \
+  -H 'Content-Type: application/json' \
+  -H 'Origin: http://localhost:8848' \
+  -H 'Referer: http://localhost:8848/' \
+  -H 'Sec-Fetch-Dest: empty' \
+  -H 'Sec-Fetch-Mode: cors' \
+  -H 'Sec-Fetch-Site: cross-site' \
+  -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36' \
+  -H 'authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjNjZWJjZmNmLTY5MjItNGZjZC05YWJjLWVjZTE3Y2IzM2YxMCIsImFjY291bnQiOiIrODYxODU1ODI0MTQ0MCIsInJvbGUiOiJBZG1pbiIsImFjY291bnRJZCI6ImMxMTBlMmFhLTMyMmItNGYzZi1hNzk1LWY0NDE5NTU4NDRlZCIsInBob25lIjoiKzg2MTg1NTgyNDE0NDAiLCJpc01vcmUiOmZhbHNlLCJpYXQiOjE3OTUwMTQ5NzIsImV4cCI6MTc5NTEwMTM3Mn0.eTAGCcY5qQ0D3uRvThJqttdId1No_euITP30N_fz_BU' \
+  -H 'fingerprint: 4a6a33cd0367e1c25722e707ea9661b2' \
+  -H 'lang: zh_CN' \
+  -H 'nonce: a99d9f553b88f4fd0cd997d7555487628889a12f2cd4ae69501ce74b1220fe98' \
+  -H 'sec-ch-ua: "Not-A.Brand";v="99", "Google Chrome";v="157", "Chromium";v="157"' \
+  -H 'sec-ch-ua-mobile: ?0' \
+  -H 'sec-ch-ua-platform: "macOS"' \
+  -H 'sign: bfa63179b70da24a833d1de7840dd11e75c48c569c879259fc8aa7be8793fbf8' \
+  -H 'timestamp: 1795015051017' \
+  --data-raw '{"saleId":"fc0f200f-5031-411f-869d-fd8cd1657cd2","settlementMonth":"2026-09"}'
+
+  {
+    "code": 200,
+    "message": "success",
+    "data": {
+        "saleId": "fc0f200f-5031-411f-869d-fd8cd1657cd2",
+        "settlementMonth": "2026-09",
+        "realTimeProcessing": 85751.0341,
+        "clientRebate": 0,
+        "effectiveRevenue": 122294.1195,
+        "cogs": 52320.0629,
+        "gp": 55390.7464,
+        "estimatedCommission": 3945.4735,
+        "payoutPipeline": [
+            {
+                "pipelineType": "next_payout",
+                "sourceType": "real_time_processing_fee",
+                "settlementMonth": "2026-09",
+                "payoutDate": "2026-10-12",
+                "effectiveRevenue": 70405.7715,
+                "gp": 21685.2480,
+                "estimatedCommission": 1027.1075,
+                "status": "paid"
+            },
+            {
+                "pipelineType": "future_payout",
+                "sourceType": "api_monthly_billing",
+                "settlementMonth": "2026-10",
+                "payoutDate": "2026-11-12",
+                "effectiveRevenue": 27076.2100,
+                "gp": 27076.2100,
+                "estimatedCommission": 2679.7090,
+                "status": "paid"
+            }
+        ]
+    }
+}
+我们要显示
+Total Generated Performance
+总收入+API实收 现在已经改对了
+但是我觉得 
+Gross Profit (GP)  毛利润（GP）
+$122,294.12
+Projected Commission  预计服役
+$3,945.47
+Effective Revenue  实际收入
+应该是payoutPipeline.real_time_processing_fee 的
+   "effectiveRevenue": 70405.7715,
+                "gp": 21685.2480,
+                "estimatedCommission": 1027.1075,
+
+这才是对的
