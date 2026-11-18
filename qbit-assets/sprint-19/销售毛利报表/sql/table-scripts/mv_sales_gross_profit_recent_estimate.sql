@@ -1,18 +1,18 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
--- Updated Time:   2026-11-16 19:15:56
+-- Updated Time:   2026-11-18 15:45:06
 -- Description:    销售毛利近6个月日粒度估算物化视图
 -- Notes:
 --   1. 结构/刷新方式参考 sale-repoet/sales-commission/table-scripts/mv_sales_commission_recent_estimate_v3.sql。
 --   2. 收入及客户返现保留 dws.dws_sales_metric_daily.report_date，不在视图中先归月；来源窗口与销售返佣视图一致，取近6个月。
---   3. 实时收入/实收、月账单应收、Crypto成本、实体卡毛利及返现统一从 dws.dws_sales_metric_daily 读取。
+--   3. 实时收入、Open API月账单应收/实收及返现等日指标从 dws.dws_sales_metric_daily 读取；BI离线API收入调整从月度汇总表读取。
 --   4. 实体卡毛利从日指标读取并单独加到毛利；不计入 Cost，实体卡真实成本仍按 BB/QI/SL/BZ 成本源公式计算。
 --   5. Cost 仍汇总 DWM 成本、卡成本、Crypto 日成本、支付手续费及月度调账；不读取佣金视图 cogs/gp/commission，也不按收入权重二次分摊。
 --   6. QI/BZ RS毛利返现已并入 dws_sales_metric_daily.client_rebate；Pref_GP = Pref_Rev - Cost + physical_card_gp。
 --   7. 不使用 GREATEST/ABS 限制金额；收入、返现、成本、毛利均保留负数。
 --   8. 补入 Open API offline_api_income_amount、量子卡渠道返现及 BI 月度收入/返现调账来源。
---   9. 月账单收入及 ods_bi_month_tag 调账按业务月份首日记录；日返现保留来源日和 sale_id。
+--   9. BI月度收入及 ods_bi_month_tag 调账按业务月份首日记录；日指标应收/实收及返现保留来源日和 sale_id。
 --  10. IQ/其他成本沿用本视图已有日成本来源与归属，不读取返佣视图 cogs、不进行收入权重二次分摊。
 --  11. BB volume_fee_cost 已在上游按日分摊，视图直接读取该字段，不重复计算月度阶梯费。
 --********************************************************************--
@@ -43,6 +43,19 @@ WITH account_root_relation AS (
              THEN m.metric_value ELSE 0 END)::numeric(20,4) AS main_revenue,
     SUM(CASE WHEN m.metric_code = 'month_receivable' AND m.metric_type = 'income'
              THEN m.metric_value ELSE 0 END)::numeric(20,4) AS month_receivable,
+    SUM(CASE
+      WHEN m.metric_type = 'income'
+       AND m.metric_code = 'api_client_bill_actual_received_amount'
+        THEN m.metric_value
+      WHEN m.metric_type = 'income'
+       AND m.metric_code IN (
+         'api_client_bill_monthly_kyc_fee_received_amount',
+         'api_client_bill_physical_card_fee_received_amount',
+         'api_client_bill_minimum_commitment_received_amount'
+       )
+        THEN -m.metric_value
+      ELSE 0
+    END)::numeric(20,4) AS api_actual_received_amount,
     SUM(CASE WHEN m.metric_code = 'physical_card_gp'
                   AND m.product = 'qbit_card'
                   AND NULLIF(TRIM(m.provider), '') = 'IQ'
@@ -61,6 +74,10 @@ WITH account_root_relation AS (
     AND m.metric_code IN (
       'main',
       'month_receivable',
+      'api_client_bill_actual_received_amount',
+      'api_client_bill_monthly_kyc_fee_received_amount',
+      'api_client_bill_physical_card_fee_received_amount',
+      'api_client_bill_minimum_commitment_received_amount',
       'physical_card_gp',
       'assets_acceptance_fee_gt_zero',
       'assets_acceptance_fee_eq_zero',
@@ -356,8 +373,30 @@ sales_rows AS (
    AND c.product = m.product
    AND c.provider IS NOT DISTINCT FROM m.provider
    AND c.sale_id = m.sale_id
+),api_actual_received_rows AS (
+  -- Open API账单实收按日指标记录，进入销售实收口径，不重复读取月度 month_revenue。
+  SELECT
+    m.report_date,
+    m.report_month,
+    m.settlement_month,
+    m.root_account_id,
+    m.product,
+    m.provider,
+    m.sale_id,
+    'api_client_bill_actual_received_amount'::varchar AS metric_code,
+    'sales_metric_daily'::varchar AS source_type,
+    0::numeric(20,4) AS pref_rev,
+    0::numeric(20,4) AS client_rebate,
+    0::numeric(20,4) AS client_collection_rebate,
+    0::numeric(20,4) AS gross_profit_rebate,
+    0::numeric(20,4) AS physical_card_gp,
+    0::numeric(20,4) AS cost,
+    m.api_actual_received_amount::numeric(20,4) AS cashflow_rev_sale
+  FROM recent_sales_metric m
+  WHERE m.product = 'open_api'
+    AND m.api_actual_received_amount <> 0
 ),month_receivable_rows AS (
-  -- 本月月账单应收与实时收入分行保留，便于按原 metric_code 追溯。
+  -- Open API月账单应收与实时收入分行保留，按日指标来源日期入账。
   SELECT
     m.report_date,
     m.report_month,
@@ -377,10 +416,9 @@ sales_rows AS (
     0::numeric(20,4) AS cashflow_rev_sale
   FROM recent_sales_metric m
   WHERE m.month_receivable <> 0
-    -- Open API月账单应收统一读取月收入汇总表；避免与日指标中的同一金额重复。
-    AND m.product <> 'open_api'
+    AND m.product = 'open_api'
 ),monthly_revenue_rows AS (
-  -- 月表数据按结算月首日入账：应收只进入 Pref_Rev，历史账单实收进入销售实收口径。
+  -- BI离线API收入调整按结算月首日入账；Open API月账单应收来自 dws_sales_metric_daily。
   SELECT
     r.settlement_month::date AS report_date,
     r.settlement_month::date AS report_month,
@@ -394,8 +432,6 @@ sales_rows AS (
     SUM(CASE
       WHEN r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount'
         THEN COALESCE(r.income_value, 0)
-      WHEN r.product = 'open_api' AND r.metric_code = 'month_receivable'
-        THEN COALESCE(r.income_value, 0)
       ELSE 0
     END)::numeric(20,4) AS pref_rev,
     0::numeric(20,4) AS client_rebate,
@@ -406,17 +442,13 @@ sales_rows AS (
     SUM(CASE
       WHEN r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount'
         THEN COALESCE(r.income_value, 0)
-      WHEN r.product = 'open_api' AND r.metric_code = 'month_revenue'
-        THEN COALESCE(r.income_value, 0)
       ELSE 0
     END)::numeric(20,4) AS cashflow_rev_sale
   FROM "dws"."dws_metrics_sales_revenue_monthly" r
   WHERE r.delete_time IS NULL
     AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
-    AND (
-      (r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount')
-      OR (r.product = 'open_api' AND r.metric_code IN ('month_receivable', 'month_revenue'))
-    )
+    AND r.product = 'bi_month_tag'
+    AND r.metric_code = 'offline_api_income_amount'
   GROUP BY r.settlement_month, r.root_account_id, r.product,
            NULLIF(TRIM(r.provider), ''), r.sale_id, r.metric_code
 ),qbit_card_channel_rebate_rows AS (
@@ -596,6 +628,7 @@ sales_rows AS (
 ),all_rows AS (
   SELECT * FROM sales_rows
   UNION ALL SELECT * FROM qbit_card_channel_rebate_rows
+  UNION ALL SELECT * FROM api_actual_received_rows
   UNION ALL SELECT * FROM month_receivable_rows
   UNION ALL SELECT * FROM monthly_revenue_rows
   UNION ALL SELECT * FROM bi_month_adjustment_rows
@@ -653,6 +686,7 @@ SELECT
   cashflow_gp_sale,
   now() AS refreshed_at
 FROM calculated
+WHERE NULLIF(BTRIM(sale_id), '') IS NOT NULL
 WITH DATA
 DISTRIBUTED BY (id);
 

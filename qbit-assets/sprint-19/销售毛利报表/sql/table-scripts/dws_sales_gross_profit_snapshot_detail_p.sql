@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
--- Updated Time:   2026-11-03 11:54:00
+-- Updated Time:   2026-11-18 15:23:58
 -- Description:    销售毛利日粒度快照明细表
 -- Notes:
 --   1. 结构参考 sale-repoet/sales-commission/table-scripts/dws_sales_commission_snapshot_detail_p.sql。
@@ -17,7 +17,7 @@ CREATE TABLE "dws"."dws_sales_gross_profit_snapshot_detail_p" (
   "report_date" date NOT NULL,
   "settlement_month" date NOT NULL,
   "report_month" date NOT NULL,
-  "sale_id" varchar(64),
+  "sale_id" varchar(64) NOT NULL CHECK (BTRIM("sale_id") <> ''),
   "root_account_id" varchar(64) NOT NULL,
   "product" varchar(64) NOT NULL,
   "provider" varchar(255),
@@ -47,6 +47,7 @@ COMMENT ON TABLE "dws"."dws_sales_gross_profit_snapshot_detail_p" IS '销售毛�
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."snapshot_date" IS '快照版本日期；不代表业务发生日或每日运行频率';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."report_date" IS '业务发生日期；日期区间查询按此字段过滤';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."settlement_month" IS '报表归属月份，由 report_date 所属月确定';
+COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."sale_id" IS '销售ID；无销售归属的数据不写入快照';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."provider" IS '渠道/服务商；NULL单独保留';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."gross_profit_rebate" IS '兼容字段；毛利返现已并入client_rebate，本字段当前为0';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."pref_gp" IS '应收毛利=pref_rev-cost，可为负数';

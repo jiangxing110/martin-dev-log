@@ -2,7 +2,7 @@
 
 ## 文档目的
 
-本文按业务源表说明指标取数与计算逻辑，并保留 `provider` 分组和筛选。实现依据为 [销售毛利估算物化视图 SQL](../sql/table-scripts/mv_sales_gross_profit_recent_estimate.sql) 中的 `recent_sales_metric`、`raw_cost_rows`、`monthly_revenue_rows`、`qbit_card_channel_rebate_rows`、`bi_month_adjustment_rows` 和 `calculated` CTE。
+本文按业务源表说明指标取数与计算逻辑，并保留 `provider` 分组和筛选。实现依据为 [销售毛利估算物化视图 SQL](../sql/table-scripts/mv_sales_gross_profit_recent_estimate.sql) 中的 `recent_sales_metric`、`raw_cost_rows`、`sales_rows`、`api_actual_received_rows`、`monthly_revenue_rows`、`qbit_card_channel_rebate_rows`、`bi_month_adjustment_rows` 和 `calculated` CTE。
 
 每条源表 SQL 保留 `sale_id + root_account_id + product + provider` 维度，并筛选示例客户 `95d362d7-56fe-4f50-82cb-f97a51afc263`、销售 `cfd8b2a8-af2d-474a-9923-3a5ef0335f52`。查询渠道时使用 `provider = 'IQ'` 等条件；查询 NULL 渠道时使用 `provider IS NULL`。日期按左闭右开过滤，以下日期示例是 2026-09。
 
@@ -15,12 +15,12 @@
 `Pref_Rev` 由以下收入构成：
 
 1. `dws_sales_metric_daily` 的 `main/income` 实时收入。
-2. `dws_sales_metric_daily` 的 `month_receivable/income`；Open API 应收改从月度汇总表读取，避免重复。
-3. 月度汇总表的 Open API `month_receivable` 和 `bi_month_tag/offline_api_income_amount`。
+2. `dws_sales_metric_daily` 的 `month_receivable/income` 表示 Open API 月账单应收，按来源日计入 `Pref_Rev`。
+3. 月度汇总表的 `bi_month_tag/offline_api_income_amount` 按结算月首日计入收入；API 月账单实收另见独立 SQL。
 4. BB、IQ、BZ 量子卡渠道返现收入，按视图公式计入收入。
 5. `ods_bi_month_tag` 收入调整：增加为正，减少为负。
 
-### 日指标来源 SQL：实时收入及非 Open API 应收
+### 日指标来源 SQL：实时收入
 
 ```sql
 SELECT
@@ -33,22 +33,14 @@ SELECT
     END AS product,
     NULLIF(TRIM(m.provider), '') AS provider,
     m.sale_id::varchar AS sale_id,
-    SUM(CASE
-      WHEN m.metric_code = 'main' AND m.metric_type = 'income'
-        THEN m.metric_value ELSE 0
-    END) AS real_time_revenue,
-    SUM(CASE
-      WHEN m.metric_code = 'month_receivable'
-       AND m.metric_type = 'income'
-       AND m.product <> 'open_api'
-        THEN m.metric_value ELSE 0
-    END) AS month_receivable
+    SUM(m.metric_value) AS real_time_revenue
 FROM dws.dws_sales_metric_daily m
 WHERE m.delete_time IS NULL
   AND m.report_date >= DATE '2026-09-01'
   AND m.report_date <  DATE '2026-10-01'
-  AND m.metric_code IN ('main', 'month_receivable')
-  AND m.root_account_id::varchar = '95d362d7-56fe-4f50-82cb-f97a51afc263'
+  AND m.metric_code = 'main'
+  AND m.metric_type = 'income'
+  AND m.root_account_id::varchar = '95d362d7-56fe-4f6a-bfab-a44b7cb94be5'
   AND m.sale_id::varchar = 'cfd8b2a8-af2d-474a-9923-3a5ef0335f52'
   -- 渠道过滤示例：AND NULLIF(TRIM(m.provider), '') = 'IQ'
 GROUP BY
@@ -63,37 +55,57 @@ GROUP BY
     m.sale_id;
 ```
 
-### 月度汇总表来源 SQL：应收及月收入补充
+### Open API 月账单应收 SQL：month_receivable
+
+`month_receivable` 表示 Open API 月账单应收，计入 `Pref_Rev`，不表示实收。该指标来自日表，按来源 `report_date` 保留日期。
+
+```sql
+SELECT
+    m.report_date::date AS report_date,
+    m.root_account_id::varchar AS root_account_id,
+    m.product,
+    NULLIF(TRIM(m.provider), '') AS provider,
+    m.sale_id::varchar AS sale_id,
+    SUM(COALESCE(m.metric_value, 0)) AS api_month_receivable
+FROM dws.dws_sales_metric_daily m
+WHERE m.delete_time IS NULL
+  AND m.product = 'open_api'
+  AND m.metric_type = 'income'
+  AND m.metric_code = 'month_receivable'
+  AND m.report_date >= DATE '2026-09-01'
+  AND m.report_date <  DATE '2026-10-01'
+  AND m.root_account_id::varchar = '95d362d7-56fe-4f6a-bfab-a44b7cb94be5'
+  AND m.sale_id::varchar = 'cfd8b2a8-af2d-474a-9923-3a5ef0335f52'
+  -- 渠道过滤示例：AND NULLIF(TRIM(m.provider), '') = 'IQ'
+GROUP BY
+    m.report_date::date,
+    m.root_account_id,
+    m.product,
+    NULLIF(TRIM(m.provider), ''),
+    m.sale_id;
+```
+
+### 月度汇总表来源 SQL：BI 离线 API 收入
 
 ```sql
 SELECT
     r.settlement_month::date AS report_date,
     r.root_account_id::varchar AS root_account_id,
-    CASE WHEN r.product = 'bi_month_tag' THEN 'open_api' ELSE r.product END AS product,
+    'open_api'::varchar AS product,
     NULLIF(TRIM(r.provider), '') AS provider,
     r.sale_id::varchar AS sale_id,
-    r.metric_code,
-    SUM(CASE
-      WHEN r.product = 'open_api' AND r.metric_code = 'month_receivable'
-        THEN COALESCE(r.income_value, 0)
-      WHEN r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount'
-        THEN COALESCE(r.income_value, 0)
-      ELSE 0
-    END) AS pref_rev_source
+    SUM(COALESCE(r.income_value, 0)) AS offline_api_income_amount
 FROM dws.dws_metrics_sales_revenue_monthly r
 WHERE r.delete_time IS NULL
+  AND r.product = 'bi_month_tag'
+  AND r.metric_code = 'offline_api_income_amount'
   AND r.settlement_month >= DATE '2026-09-01'
   AND r.settlement_month <  DATE '2026-10-01'
-  AND (
-    (r.product = 'open_api' AND r.metric_code = 'month_receivable')
-    OR (r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount')
-  )
-  AND r.root_account_id::varchar = '95d362d7-56fe-4f50-82cb-f97a51afc263'
+  AND r.root_account_id::varchar = '95d362d7-56fe-4f6a-bfab-a44b7cb94be5'
   AND r.sale_id::varchar = 'cfd8b2a8-af2d-474a-9923-3a5ef0335f52'
-  -- 渠道过滤示例：AND NULLIF(TRIM(r.provider), '') = 'IQ'
+  -- 渠道筛选示例：AND NULLIF(TRIM(r.provider), '') = 'IQ'
 GROUP BY r.settlement_month, r.root_account_id,
-         CASE WHEN r.product = 'bi_month_tag' THEN 'open_api' ELSE r.product END,
-         NULLIF(TRIM(r.provider), ''), r.sale_id, r.metric_code;
+         NULLIF(TRIM(r.provider), ''), r.sale_id;
 ```
 
 ### 量子卡渠道返现收入 SQL
@@ -215,7 +227,44 @@ WHERE t.delete_time IS NULL
 GROUP BY 1, 2, 3, 4, 5, 6;
 ```
 
-`Pref_Rev` 是以上来源的 `real_time_revenue + month_receivable + offline_api_income_amount + channel_rebate + income_adjustment` 之和。
+`Pref_Rev` 是以上来源的 `real_time_revenue + Open API month_receivable + offline_api_income_amount + channel_rebate + income_adjustment` 之和。Open API 的 `month_receivable` 是应收，不是实收。
+
+Open API 的四个账单实收日指标合计为月账单实收，不计入 `Pref_Rev`；其独立取数 SQL 见下节，并汇入第 9 节销售维度总实收。
+
+## API 月账单实收 / API Actual Received（独立 SQL）
+
+单独核算 Open API 月账单实收，将日指标 `api_client_bill_actual_received_amount`、`api_client_bill_monthly_kyc_fee_received_amount`、`api_client_bill_physical_card_fee_received_amount`、`api_client_bill_minimum_commitment_received_amount` 求和，按来源 `report_date`、根账户、销售和 provider 汇总。该值只作为实收收入，不计入 `Pref_Rev`；第 9 节的 `Cashflow_Rev_sale` 总额会包含此项。
+
+```sql
+SELECT
+    m.report_date::date AS report_date,
+    m.root_account_id::varchar AS root_account_id,
+    m.product,
+    NULLIF(TRIM(m.provider), '') AS provider,
+    m.sale_id::varchar AS sale_id,
+    SUM(COALESCE(m.metric_value, 0)) AS api_actual_received_amount
+FROM dws.dws_sales_metric_daily m
+WHERE m.delete_time IS NULL
+  AND m.product = 'open_api'
+  AND m.metric_type = 'income'
+  AND m.metric_code IN (
+      'api_client_bill_actual_received_amount',
+      'api_client_bill_monthly_kyc_fee_received_amount',
+      'api_client_bill_physical_card_fee_received_amount',
+      'api_client_bill_minimum_commitment_received_amount'
+  )
+  AND m.report_date >= DATE '2026-09-01'
+  AND m.report_date <  DATE '2026-10-01'
+  AND m.root_account_id::varchar = '95d362d7-56fe-4f6a-bfab-a44b7cb94be5'
+  AND m.sale_id::varchar = 'cfd8b2a8-af2d-474a-9923-3a5ef0335f52'
+  -- 渠道筛选示例：AND NULLIF(TRIM(m.provider), '') = 'IQ'
+GROUP BY
+    m.report_date::date,
+    m.root_account_id,
+    m.product,
+    NULLIF(TRIM(m.provider), ''),
+    m.sale_id;
+```
 
 ## 2. Client Rebate（客户返现）
 
@@ -412,30 +461,7 @@ SELECT
 
 ## 9. Cash Flow Revenue / Cashflow_Rev_sale（销售维度实收收入）
 
-来源与 `Pref_Rev` 基本一致，差别是：不加 `month_receivable`，改加 Open API `month_revenue`。日实时收入、渠道返现收入、`offline_api_income_amount` 和 BI 收入调账仍计入。
-
-```sql
-SELECT
-    r.settlement_month::date AS report_date,
-    r.root_account_id::varchar AS root_account_id,
-    'open_api'::varchar AS product,
-    NULLIF(TRIM(r.provider), '') AS provider,
-    r.sale_id::varchar AS sale_id,
-    r.metric_code,
-    SUM(COALESCE(r.income_value, 0)) AS cashflow_rev_sale_source
-FROM dws.dws_metrics_sales_revenue_monthly r
-WHERE r.delete_time IS NULL
-  AND r.settlement_month >= DATE '2026-09-01'
-  AND r.settlement_month <  DATE '2026-10-01'
-  AND ((r.product = 'open_api' AND r.metric_code = 'month_revenue')
-       OR (r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount'))
-  AND r.root_account_id::varchar = '95d362d7-56fe-4f50-82cb-f97a51afc263'
-  AND r.sale_id::varchar = 'cfd8b2a8-af2d-474a-9923-3a5ef0335f52'
-  -- 渠道过滤示例：AND NULLIF(TRIM(r.provider), '') = 'IQ'
-GROUP BY r.settlement_month, r.root_account_id, NULLIF(TRIM(r.provider), ''), r.sale_id, r.metric_code;
-```
-
-Open API 月度实收之外的实时收入、量子卡渠道返现及 BI 收入调整，分别复用第 1 节对应的源表和签名规则。月表 `qbit_card/main` 不额外相加，避免与日表 main/返现形成重复。
+`Cashflow_Rev_sale` 按销售维度统计实收总额，包含实时收入、API 月账单实收、量子卡渠道返现收入及 BI 收入调账。API 月账单实收单独核算 SQL 见“API 月账单实收 / API Actual Received”章节；汇入总额时不再叠加月度汇总表的 Open API `month_revenue`。月表 `qbit_card/main` 不额外相加，避免与日表 main/返现形成重复。
 
 ## 10. Cash Flow Effective Revenue / Cashflow_Rev_sale_effective（销售维度实收有效收入）
 
