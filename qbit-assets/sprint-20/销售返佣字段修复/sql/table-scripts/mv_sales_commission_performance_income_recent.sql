@@ -1,15 +1,20 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-18
+-- Updated Time:   2026-11-18 11:03:00
 -- Description:    销售绩效实际收入近6个月物化视图
 -- Notes:
 --   1. 只计算 realTimeProcessing / Total Generated Performance 使用的实际收入。
 --   2. 所有收入来源直接保留来源记录中的 sale_id、am_id，不关联当前销售关系。
---   3. OpenAPI 使用 state_date 归属实收月份，账单月份单独保留为 bill_month。
---   4. BB/QI 渠道返现按收入项目单独计入；客户返现、成本和佣金不在本视图内。
---   5. 金额保留原始正负值，不使用 ABS/GREATEST 做符号修正或归零。
---   6. 普通物化视图由销售佣金/绩效收入/合伙人利润 Flink JDBC 刷新链路更新，不使用 pg_cron。
+--   3. 输出为月粒度；activity_month 统一记为该月1号（YYYY-MM-01）。
+--   4. BB/QI 日表按 report_date 汇总整月，月初日期代表该月，销售/AM仍按来源归属分组。
+--   5. OpenAPI 使用 state_date 归属实收月份，账单月份单独保留为 bill_month。
+--   6. BB/QI 渠道返现按收入项目单独计入；客户返现、成本和佣金不在本视图内。
+--   7. 金额保留原始正负值，不使用 ABS/GREATEST 做符号修正或归零。
+--   8. 普通物化视图由销售佣金/绩效收入/合伙人利润 Flink JDBC 刷新链路更新，不使用 pg_cron。
 --********************************************************************--
+
+DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_sales_commission_performance_income_recent";
 
 CREATE MATERIALIZED VIEW "dws"."mv_sales_commission_performance_income_recent" AS
 WITH params AS (
@@ -17,10 +22,11 @@ WITH params AS (
     date_trunc('month', CURRENT_DATE - interval '5 months')::date AS start_date,
     (CURRENT_DATE + 1)::date AS end_date_exclusive
 ),
+-- BB/QI source account_id is leaf-level; resolve it to root_id before monthly aggregation.
 account_root_relation AS (
   SELECT DISTINCT
     account_id::varchar AS account_id,
-    root_id::varchar AS root_id
+    NULLIF(TRIM(root_id::varchar), '') AS root_id
   FROM public.api_account_relation
   WHERE delete_time IS NULL
 ),
@@ -283,6 +289,7 @@ open_api_income_rows AS (
   GROUP BY 1, 2, 3, 5, 7, 8
 ),
 bb_channel_cashback_rows AS (
+  -- 先将叶子 account_id 映射到 root_id，再按 root、发生时销售/AM 和月份汇总。
   SELECT
     date_trunc('month', b.report_date::timestamp)::date,
     NULL::date,
@@ -304,6 +311,7 @@ bb_channel_cashback_rows AS (
   GROUP BY 1, 3, 7, 8
 ),
 qi_channel_cashback_rows AS (
+  -- 先将叶子 account_id 映射到 root_id，再按 root、发生时销售/AM 和月份汇总。
   SELECT
     date_trunc('month', qi.report_date::timestamp)::date,
     NULL::date,

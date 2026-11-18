@@ -1,6 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-18
+-- Updated Time:   2026-11-18 11:03:00
 -- Description:    销售绩效实际收入快照明细表
 -- Notes:
 --   1. 每月8号由销售佣金快照 batch 与佣金主表、佣金明细表同批写入。
@@ -41,11 +42,11 @@ COMMENT ON COLUMN "dws"."dws_sales_commission_income_snapshot_detail_p"."id"
 COMMENT ON COLUMN "dws"."dws_sales_commission_income_snapshot_detail_p"."snapshot_date"
   IS '收入快照生成日期及分区键，通常为每月8号';
 COMMENT ON COLUMN "dws"."dws_sales_commission_income_snapshot_detail_p"."activity_month"
-  IS '活动/实收月份，按收入来源的发生日期归月';
+  IS '活动/实收月份，按月粒度记录为该月1号（YYYY-MM-01）；BB/QI渠道返现按report_date汇总到该月';
 COMMENT ON COLUMN "dws"."dws_sales_commission_income_snapshot_detail_p"."bill_month"
   IS '账单所属月份；OpenAPI保留原账单月，非账单收入为空';
 COMMENT ON COLUMN "dws"."dws_sales_commission_income_snapshot_detail_p"."root_account_id"
-  IS '顶层客户ID';
+  IS '顶层客户ID；BB/QI由来源account_id通过api_account_relation映射root_id，无映射时保留来源account_id';
 COMMENT ON COLUMN "dws"."dws_sales_commission_income_snapshot_detail_p"."product"
   IS '产品线编码';
 COMMENT ON COLUMN "dws"."dws_sales_commission_income_snapshot_detail_p"."provider"

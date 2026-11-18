@@ -15,7 +15,10 @@
 ## 关键口径
 
 - 收入视图直接使用各来源记录中的 `sale_id`、`am_id`，不连接当前销售关系。
-- `activity_month` 是收入发生/实收月份；OpenAPI 额外保留账单月份 `bill_month`。
+- 所有收入按月粒度保存，`activity_month` 固定记为该月 1 号（如 `2026-09-01`），表示整个 9 月，不代表只统计 9 月 1 日。
+- BB/QI 渠道返现源表虽然按日记录，仍按 `report_date` 汇总整月后写入月初；销售和 AM 继续按源记录归属分组。
+- BB/QI 来源的 `account_id` 是底层账户；物化视图先通过 `public.api_account_relation.account_id` 映射 `root_id`，再按 `root_account_id` 聚合并写入快照。未找到有效映射时保留来源 `account_id`。
+- OpenAPI 的 `activity_month` 按实际收款日期所在月归月，另保留账单月份 `bill_month`。
 - QI Interchange / Incentive 按来源 SQL 的 `base * rate` 汇总，且仅取 `special_fee_type IS NULL`。
 - BB/QI 渠道返现作为收入单独计入；不混入佣金的 `effective_revenue`、成本或 GP。
 - 快照 batch 的 `${settlement_month}` 是目标活动月（`yyyy-MM`），`${snapshot_date}` 是快照日期。
