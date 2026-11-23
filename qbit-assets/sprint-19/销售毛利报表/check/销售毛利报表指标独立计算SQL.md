@@ -15,7 +15,7 @@
 `Pref_Rev` 由以下收入构成：
 
 1. `dws_sales_metric_daily` 的 `main/income` 实时收入。
-2. `dws_sales_metric_daily` 的 `month_receivable/income` 表示 Open API 月账单应收，按来源日计入 `Pref_Rev`。
+2. `dws_metrics_sales_revenue_monthly` 的 `open_api/month_receivable` 表示 Open API 月账单应收，按结算月首日计入 `Pref_Rev`。
 3. 月度汇总表的 `bi_month_tag/offline_api_income_amount` 按结算月首日计入收入；API 月账单实收另见独立 SQL。
 4. BB、IQ、BZ 量子卡渠道返现收入，按视图公式计入收入。
 5. `ods_bi_month_tag` 收入调整：增加为正，减少为负。
@@ -57,32 +57,27 @@ GROUP BY
 
 ### Open API 月账单应收 SQL：month_receivable
 
-`month_receivable` 表示 Open API 月账单应收，计入 `Pref_Rev`，不表示实收。该指标来自日表，按来源 `report_date` 保留日期。
+`month_receivable` 表示 Open API 月账单应收，计入 `Pref_Rev`，不表示实收。按你提供的数据，该指标从 `dws_metrics_sales_revenue_monthly` 读取；来源只有结算月，因此归属结算月首日。
 
 ```sql
 SELECT
-    m.report_date::date AS report_date,
-    m.root_account_id::varchar AS root_account_id,
-    m.product,
-    NULLIF(TRIM(m.provider), '') AS provider,
-    m.sale_id::varchar AS sale_id,
-    SUM(COALESCE(m.metric_value, 0)) AS api_month_receivable
-FROM dws.dws_sales_metric_daily m
-WHERE m.delete_time IS NULL
-  AND m.product = 'open_api'
-  AND m.metric_type = 'income'
-  AND m.metric_code = 'month_receivable'
-  AND m.report_date >= DATE '2026-09-01'
-  AND m.report_date <  DATE '2026-10-01'
-  AND m.root_account_id::varchar = '95d362d7-56fe-4f6a-bfab-a44b7cb94be5'
-  AND m.sale_id::varchar = 'cfd8b2a8-af2d-474a-9923-3a5ef0335f52'
-  -- 渠道过滤示例：AND NULLIF(TRIM(m.provider), '') = 'IQ'
-GROUP BY
-    m.report_date::date,
-    m.root_account_id,
-    m.product,
-    NULLIF(TRIM(m.provider), ''),
-    m.sale_id;
+    r.settlement_month::date AS report_date,
+    r.root_account_id::varchar AS root_account_id,
+    r.product,
+    NULLIF(TRIM(r.provider), '') AS provider,
+    r.sale_id::varchar AS sale_id,
+    SUM(COALESCE(r.income_value, 0)) AS api_month_receivable
+FROM dws.dws_metrics_sales_revenue_monthly r
+WHERE r.delete_time IS NULL
+  AND r.product = 'open_api'
+  AND r.metric_code = 'month_receivable'
+  AND r.settlement_month >= DATE '2026-09-01'
+  AND r.settlement_month <  DATE '2026-10-01'
+  AND r.root_account_id::varchar = '95d362d7-56fe-4f6a-bfab-a44b7cb94be5'
+  AND r.sale_id::varchar = 'cfd8b2a8-af2d-474a-9923-3a5ef0335f52'
+  -- 渠道过滤示例：AND NULLIF(TRIM(r.provider), '') = 'IQ'
+GROUP BY r.settlement_month, r.root_account_id, r.product,
+         NULLIF(TRIM(r.provider), ''), r.sale_id;
 ```
 
 ### 月度汇总表来源 SQL：BI 离线 API 收入
@@ -227,7 +222,7 @@ WHERE t.delete_time IS NULL
 GROUP BY 1, 2, 3, 4, 5, 6;
 ```
 
-`Pref_Rev` 是以上来源的 `real_time_revenue + Open API month_receivable + offline_api_income_amount + channel_rebate + income_adjustment` 之和。Open API 的 `month_receivable` 是应收，不是实收。
+`Pref_Rev` 是以上来源的 `real_time_revenue + Open API month_receivable + offline_api_income_amount + channel_rebate + income_adjustment` 之和。Open API 的 `month_receivable` 是应收，不是实收；月度汇总源按结算月首日计入日期筛选。
 
 Open API 月账单实收不计入 `Pref_Rev`。整体实收 `Cashflow_Rev` 直接取 `api_client_bill_actual_received_amount`；销售维度实收 `Cashflow_Rev_sale` 才从该指标中扣除月结 KYC、实体卡手续费和最低承诺三项。
 
@@ -453,15 +448,13 @@ GROUP BY c.report_date::date, COALESCE(aar.root_id, c.account_id), c.product_lin
 
 ## 8. Gross Profit / Pref_GP（应收毛利：应收收入 - 成本 + 实体卡毛利）
 
-实体卡毛利来源是日指标 `physical_card_gp`，仅取 `qbit_card / IQ`，单独加到毛利，不计入成本，也不计入返现。
-
 ```sql
 SELECT
     (COALESCE(pref_rev, 0) - COALESCE(cost, 0)
      + COALESCE(physical_card_gp, 0))::numeric(20,4) AS pref_gp;
 ```
 
-应收收入来源见第 1 节；Cost 来源见第 7 节；实体卡毛利源字段为 `dws_sales_metric_daily.metric_code = 'physical_card_gp'`。
+实体卡毛利来源是日指标 `physical_card_gp`，仅取 `qbit_card / IQ`，单独加到毛利，不计入成本，也不计入返现。应收收入来源见第 1 节；Cost 来源见第 7 节。
 
 ## 9. Cash Flow Revenue / Cashflow_Rev（整体实收收入）
 
@@ -481,7 +474,7 @@ WHERE m.delete_time IS NULL
   AND m.sale_id::varchar = 'cfd8b2a8-af2d-474a-9923-3a5ef0335f52';
 ```
 
-整体实收还包括实时收入、量子卡渠道返现收入及 BI 收入调账。`Cashflow_Rev_effective = Cashflow_Rev - Rebate`；`Cashflow_GP = Cashflow_Rev - Cost + physical_card_gp`，沿用实体卡毛利单独加入毛利的既有口径。
+整体实收还包括实时收入、量子卡渠道返现收入及 BI 收入调账。`Cashflow_Rev_effective = Cashflow_Rev - Rebate`；`Cashflow_GP = Cashflow_Rev - Cost + physical_card_gp`。
 
 ## 10. Cash Flow Revenue / Cashflow_Rev_sale（销售维度实收收入）
 
@@ -506,7 +499,7 @@ SELECT
      + COALESCE(physical_card_gp, 0))::numeric(20,4) AS cashflow_gp_sale;
 ```
 
-`cashflow_rev_sale` 按第 10 节来源计算；Cost 按第 7 节计算；实体卡毛利按第 8 节来源计算。毛利不归零，负数保留。
+`cashflow_rev_sale` 按第 10 节来源计算；Cost 按第 7 节计算；实体卡毛利按本节第 8 节来源计算。毛利不归零，负数保留。
 
 ## Provider 筛选说明
 

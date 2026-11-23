@@ -1,0 +1,7 @@
+BEGIN;
+
+TRUNCATE TABLE
+    dws.dws_sales_gross_profit_snapshot_detail_p,
+    dws.dws_sales_gross_profit_snapshot_p;
+
+COMMIT;

@@ -1,15 +1,15 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
--- Updated Time:   2026-11-18 16:10:53
+-- Updated Time:   2026-11-23 11:15:01
 -- Description:    销售毛利近6个月日粒度估算物化视图
 -- Notes:
 --   1. 结构/刷新方式参考 sale-repoet/sales-commission/table-scripts/mv_sales_commission_recent_estimate_v3.sql。
 --   2. 收入及客户返现保留 dws.dws_sales_metric_daily.report_date，不在视图中先归月；来源窗口与销售返佣视图一致，取近6个月。
---   3. 实时收入、Open API月账单应收/实收及返现等日指标从 dws.dws_sales_metric_daily 读取；BI离线API收入调整从月度汇总表读取。
---   4. 实体卡毛利从日指标读取并单独加到毛利；不计入 Cost，实体卡真实成本仍按 BB/QI/SL/BZ 成本源公式计算。
+--   3. 实时收入、Open API实收及返现等日指标从 dws.dws_sales_metric_daily 读取；Open API月账单应收和BI离线API收入从月度汇总表读取。
+--   4. 三类 GP 均按对应收入减真实成本后，加实体卡毛利 physical_card_gp。
 --   5. Cost 仍汇总 DWM 成本、卡成本、Crypto 日成本、支付手续费及月度调账；不读取佣金视图 cogs/gp/commission，也不按收入权重二次分摊。
---   6. QI/BZ RS毛利返现已并入 dws_sales_metric_daily.client_rebate；Pref_GP = Pref_Rev - Cost + physical_card_gp。
+--   6. QI/BZ RS毛利返现已并入 dws_sales_metric_daily.client_rebate。
 --   7. 不使用 GREATEST/ABS 限制金额；收入、返现、成本、毛利均保留负数。
 --   8. 补入 Open API offline_api_income_amount、量子卡渠道返现及 BI 月度收入/返现调账来源。
 --   9. BI月度收入及 ods_bi_month_tag 调账按业务月份首日记录；日指标应收/实收及返现保留来源日和 sale_id。
@@ -41,8 +41,6 @@ WITH account_root_relation AS (
     m.sale_id,
     SUM(CASE WHEN m.metric_code = 'main' AND m.metric_type = 'income'
              THEN m.metric_value ELSE 0 END)::numeric(20,4) AS main_revenue,
-    SUM(CASE WHEN m.metric_code = 'month_receivable' AND m.metric_type = 'income'
-             THEN m.metric_value ELSE 0 END)::numeric(20,4) AS month_receivable,
     SUM(CASE WHEN m.metric_code = 'api_client_bill_actual_received_amount' AND m.metric_type = 'income'
              THEN m.metric_value ELSE 0 END)::numeric(20,4) AS api_actual_received_amount,
     SUM(CASE
@@ -75,7 +73,6 @@ WITH account_root_relation AS (
     AND m.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
     AND m.metric_code IN (
       'main',
-      'month_receivable',
       'api_client_bill_actual_received_amount',
       'api_client_bill_monthly_kyc_fee_received_amount',
       'api_client_bill_physical_card_fee_received_amount',
@@ -365,7 +362,7 @@ sales_rows AS (
     m.client_collection_rebate,
     0::numeric(20,4) AS gross_profit_rebate,
     CASE WHEN m.product = 'qbit_card' AND m.provider = 'IQ' THEN m.physical_card_gp ELSE 0 END::numeric(20,4) AS physical_card_gp,
-    -- Cost 只包含真实成本来源；实体卡毛利单独参与 GP，不进入 Cost 或 Rebate。
+    -- Cost 只包含真实成本来源；实体卡毛利另计入三类 GP，不进入 Cost 或 Rebate。
     COALESCE(c.source_cost, 0)::numeric(20,4) AS cost,
     m.main_revenue::numeric(20,4) AS cashflow_rev,
     m.main_revenue::numeric(20,4) AS cashflow_rev_sale
@@ -399,31 +396,8 @@ sales_rows AS (
   FROM recent_sales_metric m
   WHERE m.product = 'open_api'
     AND (m.api_actual_received_amount <> 0 OR m.api_actual_received_sale_amount <> 0)
-),month_receivable_rows AS (
-  -- Open API月账单应收与实时收入分行保留，按日指标来源日期入账。
-  SELECT
-    m.report_date,
-    m.report_month,
-    m.settlement_month,
-    m.root_account_id,
-    m.product,
-    m.provider,
-    m.sale_id,
-    'month_receivable'::varchar AS metric_code,
-    'sales_metric_daily'::varchar AS source_type,
-    m.month_receivable::numeric(20,4) AS pref_rev,
-    0::numeric(20,4) AS client_rebate,
-    0::numeric(20,4) AS client_collection_rebate,
-    0::numeric(20,4) AS gross_profit_rebate,
-    0::numeric(20,4) AS physical_card_gp,
-    0::numeric(20,4) AS cost,
-    0::numeric(20,4) AS cashflow_rev,
-    0::numeric(20,4) AS cashflow_rev_sale
-  FROM recent_sales_metric m
-  WHERE m.month_receivable <> 0
-    AND m.product = 'open_api'
 ),monthly_revenue_rows AS (
-  -- BI离线API收入调整按结算月首日入账；Open API月账单应收来自 dws_sales_metric_daily。
+  -- 月度汇总源只有结算月粒度；month_receivable 和离线API收入均按结算月首日入账。
   SELECT
     r.settlement_month::date AS report_date,
     r.settlement_month::date AS report_month,
@@ -435,6 +409,8 @@ sales_rows AS (
     r.metric_code::varchar AS metric_code,
     'sales_revenue_monthly'::varchar AS source_type,
     SUM(CASE
+      WHEN r.product = 'open_api' AND r.metric_code = 'month_receivable'
+        THEN COALESCE(r.income_value, 0)
       WHEN r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount'
         THEN COALESCE(r.income_value, 0)
       ELSE 0
@@ -457,8 +433,8 @@ sales_rows AS (
   FROM "dws"."dws_metrics_sales_revenue_monthly" r
   WHERE r.delete_time IS NULL
     AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
-    AND r.product = 'bi_month_tag'
-    AND r.metric_code = 'offline_api_income_amount'
+    AND ((r.product = 'open_api' AND r.metric_code = 'month_receivable')
+      OR (r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount'))
   GROUP BY r.settlement_month, r.root_account_id, r.product,
            NULLIF(TRIM(r.provider), ''), r.sale_id, r.metric_code
 ),qbit_card_channel_rebate_rows AS (
@@ -648,7 +624,6 @@ sales_rows AS (
   SELECT * FROM sales_rows
   UNION ALL SELECT * FROM qbit_card_channel_rebate_rows
   UNION ALL SELECT * FROM api_actual_received_rows
-  UNION ALL SELECT * FROM month_receivable_rows
   UNION ALL SELECT * FROM monthly_revenue_rows
   UNION ALL SELECT * FROM bi_month_adjustment_rows
   UNION ALL SELECT * FROM cost_only_rows

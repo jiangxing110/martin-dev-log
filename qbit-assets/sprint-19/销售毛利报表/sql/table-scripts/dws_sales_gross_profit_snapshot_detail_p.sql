@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
--- Updated Time:   2026-11-18 16:10:53
+-- Updated Time:   2026-11-23 10:38:59
 -- Description:    销售毛利日粒度快照明细表
 -- Notes:
 --   1. 结构参考 sale-repoet/sales-commission/table-scripts/dws_sales_commission_snapshot_detail_p.sql。
@@ -56,7 +56,8 @@ COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."cashflow_rev
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."cashflow_rev_effective" IS '整体实收有效收入=cashflow_rev-rebate，可为负数';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."cashflow_gp" IS '整体实收毛利=cashflow_rev-cost+physical_card_gp，可为负数';
 COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."gross_profit_rebate" IS '兼容字段；毛利返现已并入client_rebate，本字段当前为0';
-COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."pref_gp" IS '应收毛利=pref_rev-cost，可为负数';
+COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."pref_gp" IS '应收毛利=pref_rev-cost+physical_card_gp，可为负数';
+COMMENT ON COLUMN "dws"."dws_sales_gross_profit_snapshot_detail_p"."cashflow_gp_sale" IS '销售维度毛利=cashflow_rev_sale-cost+physical_card_gp，可为负数';
 
 CREATE INDEX "idx_sales_gross_profit_snapshot_detail_query"
   ON "dws"."dws_sales_gross_profit_snapshot_detail_p" USING btree ("report_date", "sale_id", "root_account_id");
