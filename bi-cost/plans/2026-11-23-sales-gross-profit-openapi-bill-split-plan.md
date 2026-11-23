@@ -20,7 +20,7 @@
 - [x] Open API 实收基数使用 `dws_sales_metric_daily` 的 `api_client_bill_actual_received_amount`，聚合时不区分 provider；`Cashflow_Rev` 使用该实收原值。
 - [x] `Cashflow_Rev_sale` 在该实收基数上继续扣除月结 KYC、实体卡手续费和最低承诺三项，不改变其他收入行。
 - [x] 输出 `api_bill_type`：`month_receivable` 标记 `RECEIVABLE`，`api_client_bill_actual_received_amount` 标记 `RECEIVED`，其他来源为 `NULL`。
-- [x] 保持已有成本、返现、负数和三项毛利公式（含 `physical_card_gp`）不变，并核对 CTE 与 UNION 列顺序。
+- [x] 保留成本、返现和负数口径；三项毛利统一按各自的有效收入减成本，再加 `physical_card_gp`：`Pref_GP = Pref_Rev_effective - Cost + physical_card_gp`、`Cashflow_GP = Cashflow_Rev_effective - Cost + physical_card_gp`、`Cashflow_GP_sale = Cashflow_Rev_sale_effective - Cost + physical_card_gp`。核对 CTE 与 UNION 列顺序。
 - [x] 视图 `sales_rows` 仅抑制没有 main 收入、返现、实体卡毛利或关联成本的 Open API 合成行；生产快照、生产估算和本地快照详情 Mapper 也过滤全零且未分类的 Open API 占位行，兼容历史快照。其它产品零值、真实 Open API 金额、负数及独立应收/实收行保留。
 
 ### 2. 扩展明细快照结构和固化任务
@@ -81,3 +81,5 @@
 - 静态检查：视图/明细 DDL/Batch/CDC 字段传递与顺序一致；详情 SQL 类型映射、筛选、分组与导出 product 映射通过静态断言；两个仓库目标文件 git diff --check 无输出。
 - 按用户既有要求不编译；未运行测试或数据库 SQL。
 - 明细快照表 DDL 已更新但尚未在数据库执行；部署后须重建明细表并重跑目标月份快照，旧快照不会自动补 api_bill_type。
+- 用户修正毛利口径：`Pref_GP`、`Cashflow_GP`、`Cashflow_GP_sale` 分别改为各自的有效收入减 Cost，再加 `physical_card_gp`；例如 `Pref_GP = Pref_Rev_effective - Cost + physical_card_gp`。
+- 复核示例：`Pref_Rev_effective 383082.4122 - Cost 280553.4671 = Pref_GP 102528.9451`（实体卡毛利为 0 时）。物化视图派生公式和公式文档已按此修正；快照 Batch/CDC 只传递并汇总视图字段，无须改 SQL 结构。

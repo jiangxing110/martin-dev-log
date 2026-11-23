@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
--- Updated Time:   2026-11-23 15:19:05
+-- Updated Time:   2026-11-23 17:07:30
 -- Description:    销售毛利近6个月日粒度估算物化视图
 -- Notes:
 --   1. 结构/刷新方式参考 sale-repoet/sales-commission/table-scripts/mv_sales_commission_recent_estimate_v3.sql。
@@ -661,13 +661,13 @@ sales_rows AS (
     (client_rebate + client_collection_rebate + gross_profit_rebate)::numeric(20,4) AS rebate,
     (pref_rev - client_rebate - client_collection_rebate - gross_profit_rebate)::numeric(20,4) AS pref_rev_effective,
     cost::numeric(20,4) AS cost,
-    (pref_rev - cost + physical_card_gp)::numeric(20,4) AS pref_gp,
+    (pref_rev - client_rebate - client_collection_rebate - gross_profit_rebate - cost + physical_card_gp)::numeric(20,4) AS pref_gp,
     cashflow_rev::numeric(20,4) AS cashflow_rev,
     (cashflow_rev - client_rebate - client_collection_rebate - gross_profit_rebate)::numeric(20,4) AS cashflow_rev_effective,
-    (cashflow_rev - cost + physical_card_gp)::numeric(20,4) AS cashflow_gp,
+    (cashflow_rev - client_rebate - client_collection_rebate - gross_profit_rebate - cost + physical_card_gp)::numeric(20,4) AS cashflow_gp,
     cashflow_rev_sale::numeric(20,4) AS cashflow_rev_sale,
     (cashflow_rev_sale - client_rebate - client_collection_rebate - gross_profit_rebate)::numeric(20,4) AS cashflow_rev_sale_effective,
-    (cashflow_rev_sale - cost + physical_card_gp)::numeric(20,4) AS cashflow_gp_sale
+    (cashflow_rev_sale - client_rebate - client_collection_rebate - gross_profit_rebate - cost + physical_card_gp)::numeric(20,4) AS cashflow_gp_sale
   FROM all_rows
 )
 SELECT

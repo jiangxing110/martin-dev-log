@@ -470,11 +470,11 @@ GROUP BY c.report_date::date, COALESCE(aar.root_id, c.account_id), c.product_lin
          c.sale_id;
 ```
 
-## 8. Gross Profit / Pref_GP（应收毛利：应收收入 - 成本 + 实体卡毛利）
+## 8. Gross Profit / Pref_GP（应收毛利：有效应收收入 - 成本 + 实体卡毛利）
 
 ```sql
 SELECT
-    (COALESCE(pref_rev, 0) - COALESCE(cost, 0)
+    (COALESCE(pref_rev_effective, 0) - COALESCE(cost, 0)
      + COALESCE(physical_card_gp, 0))::numeric(20,4) AS pref_gp;
 ```
 
@@ -498,7 +498,7 @@ WHERE m.delete_time IS NULL
   AND m.sale_id::varchar = 'cfd8b2a8-af2d-474a-9923-3a5ef0335f52';
 ```
 
-整体实收还包括实时收入、量子卡渠道返现收入及 BI 收入调账。`Cashflow_Rev_effective = Cashflow_Rev - Rebate`；`Cashflow_GP = Cashflow_Rev - Cost + physical_card_gp`。
+整体实收还包括实时收入、量子卡渠道返现收入及 BI 收入调账。`Cashflow_Rev_effective = Cashflow_Rev - Rebate`；`Cashflow_GP = Cashflow_Rev_effective - Cost + physical_card_gp`。
 
 ## 10. Cash Flow Revenue / Cashflow_Rev_sale（销售维度实收收入）
 
@@ -519,7 +519,7 @@ SELECT
 
 ```sql
 SELECT
-    (COALESCE(cashflow_rev_sale, 0) - COALESCE(cost, 0)
+    (COALESCE(cashflow_rev_sale_effective, 0) - COALESCE(cost, 0)
      + COALESCE(physical_card_gp, 0))::numeric(20,4) AS cashflow_gp_sale;
 ```
 

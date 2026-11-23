@@ -9,7 +9,7 @@
 - Open API 应收来源：`dws_metrics_sales_revenue_monthly` 的 `product = 'open_api'`、`metric_code = 'month_receivable'`，按结算月首日归属。
 - Open API 实收来源：`dws_sales_metric_daily` 的 `metric_code = 'api_client_bill_actual_received_amount'`；不区分 provider，作为实收基数。
 - `Cashflow_Rev_sale` 仍从实收基数扣除月结 KYC、实体卡手续费、最低承诺三项。
-- `Cashflow_Rev` 使用新实收指标原值。其它实时收入、返现、成本以及三类毛利规则维持现行口径，包括 `physical_card_gp`。
+- `Cashflow_Rev` 使用新实收指标原值。其它实时收入、返现和成本来源不变；三类毛利统一按各自有效收入减成本，再加 `physical_card_gp`。
 
 ## 方案
 

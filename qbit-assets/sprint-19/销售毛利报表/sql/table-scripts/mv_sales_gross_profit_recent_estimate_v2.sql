@@ -9,7 +9,7 @@
 --   3. 实时收入/实收、月账单应收、Crypto成本、实体卡毛利及返现统一从 dws.dws_sales_metric_daily 读取。
 --   4. 实体卡毛利从日指标读取并单独加到毛利；不计入 Cost，实体卡真实成本仍按 BB/QI/SL/BZ 成本源公式计算。
 --   5. Cost 仍汇总 DWM 成本、卡成本、Crypto 日成本、支付手续费及月度调账；不读取佣金视图 cogs/gp/commission，也不按收入权重二次分摊。
---   6. QI/BZ RS毛利返现已并入 dws_sales_metric_daily.client_rebate；Pref_GP = Pref_Rev - Cost + physical_card_gp。
+--   6. QI/BZ RS毛利返现已并入 dws_sales_metric_daily.client_rebate；Pref_GP = Pref_Rev_effective - Cost + physical_card_gp。
 --   7. 不使用 GREATEST/ABS 限制金额；收入、返现、成本、毛利均保留负数。
 --   8. 对齐销售返佣 v3 的收入来源覆盖：补入 offline_api_income_amount 与 ods_bi_month_tag 收入、返现调整。
 --   9. 成本复用返佣视图对应的原始来源公式；不读取返佣视图最终 cogs，不按收入权重二次分摊。
@@ -632,10 +632,10 @@ sales_rows AS (
     (client_rebate + client_collection_rebate + gross_profit_rebate)::numeric(20,4) AS rebate,
     (pref_rev - client_rebate - client_collection_rebate - gross_profit_rebate)::numeric(20,4) AS pref_rev_effective,
     cost::numeric(20,4) AS cost,
-    (pref_rev - cost + physical_card_gp)::numeric(20,4) AS pref_gp,
+    (pref_rev - client_rebate - client_collection_rebate - gross_profit_rebate - cost + physical_card_gp)::numeric(20,4) AS pref_gp,
     cashflow_rev_sale::numeric(20,4) AS cashflow_rev_sale,
     (cashflow_rev_sale - client_rebate - client_collection_rebate - gross_profit_rebate)::numeric(20,4) AS cashflow_rev_sale_effective,
-    (cashflow_rev_sale - cost + physical_card_gp)::numeric(20,4) AS cashflow_gp_sale
+    (cashflow_rev_sale - client_rebate - client_collection_rebate - gross_profit_rebate - cost + physical_card_gp)::numeric(20,4) AS cashflow_gp_sale
   FROM all_rows
 )
 SELECT
