@@ -5,3 +5,7 @@ TRUNCATE TABLE
     dws.dws_sales_gross_profit_snapshot_p;
 
 COMMIT;
+
+
+然后我想在详情页面 和导出的文件头里 对product  open_api+'_receivable'
+open_api+'_received'
