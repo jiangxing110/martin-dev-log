@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
--- Updated Time:   2026-11-03 11:48:51
+-- Updated Time:   2026-11-23 15:42:35
 -- Description:    销售毛利每月20号后API月账单补入任务
 -- 作业元信息：
 --   作业类型：月度批式CDC固化任务
@@ -32,6 +32,7 @@ CREATE TEMPORARY TABLE source_recent_estimate (
     sale_id STRING,
     metric_code STRING,
     source_type STRING,
+    api_bill_type STRING,
     pref_rev DECIMAL(20,4),
     client_rebate DECIMAL(20,4),
     client_collection_rebate DECIMAL(20,4),
@@ -40,6 +41,9 @@ CREATE TEMPORARY TABLE source_recent_estimate (
     pref_rev_effective DECIMAL(20,4),
     cost DECIMAL(20,4),
     pref_gp DECIMAL(20,4),
+    cashflow_rev DECIMAL(20,4),
+    cashflow_rev_effective DECIMAL(20,4),
+    cashflow_gp DECIMAL(20,4),
     cashflow_rev_sale DECIMAL(20,4),
     cashflow_rev_sale_effective DECIMAL(20,4),
     cashflow_gp_sale DECIMAL(20,4),
@@ -48,7 +52,7 @@ CREATE TEMPORARY TABLE source_recent_estimate (
 ) WITH (
     'connector' = 'jdbc',
     'url' = 'jdbc:postgresql://${secret_values.ADB_PG_VPC_HOSTNAME}:${secret_values.ADB_PG_VPC_PORT}/${secret_values.ADB_PG_DATABASE}',
-    'table-name' = '(SELECT id, report_date, report_month, settlement_month, root_account_id, product, provider, sale_id, metric_code, source_type, pref_rev, client_rebate, client_collection_rebate, gross_profit_rebate, rebate, pref_rev_effective, cost, pref_gp, cashflow_rev_sale, cashflow_rev_sale_effective, cashflow_gp_sale, refreshed_at FROM dws.mv_sales_gross_profit_recent_estimate WHERE report_month = date_trunc(''month'', CURRENT_DATE - interval ''1 month'')::date) AS gross_profit_estimate_f',
+    'table-name' = '(SELECT id, report_date, report_month, settlement_month, root_account_id, product, provider, sale_id, metric_code, source_type, api_bill_type, pref_rev, client_rebate, client_collection_rebate, gross_profit_rebate, rebate, pref_rev_effective, cost, pref_gp, cashflow_rev, cashflow_rev_effective, cashflow_gp, cashflow_rev_sale, cashflow_rev_sale_effective, cashflow_gp_sale, refreshed_at FROM dws.mv_sales_gross_profit_recent_estimate WHERE NULLIF(BTRIM(sale_id), '''') IS NOT NULL AND report_month = date_trunc(''month'', CURRENT_DATE - interval ''1 month'')::date) AS gross_profit_estimate_f',
     'username' = '${secret_values.ADB_PG_USERNAME}',
     'password' = '${secret_values.ADB_PG_PASSWORD}',
     'driver' = 'org.postgresql.Driver',
@@ -72,6 +76,7 @@ SELECT
     provider,
     metric_code,
     source_type,
+    api_bill_type,
     pref_rev,
     client_rebate,
     client_collection_rebate,
@@ -80,6 +85,9 @@ SELECT
     pref_rev_effective,
     cost,
     pref_gp,
+    cashflow_rev,
+    cashflow_rev_effective,
+    cashflow_gp,
     cashflow_rev_sale,
     cashflow_rev_sale_effective,
     cashflow_gp_sale,
@@ -108,6 +116,9 @@ SELECT
     CAST(SUM(pref_rev_effective) AS DECIMAL(20,4)) AS pref_rev_effective,
     CAST(SUM(cost) AS DECIMAL(20,4)) AS cost,
     CAST(SUM(pref_gp) AS DECIMAL(20,4)) AS pref_gp,
+    CAST(SUM(cashflow_rev) AS DECIMAL(20,4)) AS cashflow_rev,
+    CAST(SUM(cashflow_rev_effective) AS DECIMAL(20,4)) AS cashflow_rev_effective,
+    CAST(SUM(cashflow_gp) AS DECIMAL(20,4)) AS cashflow_gp,
     CAST(SUM(cashflow_rev_sale) AS DECIMAL(20,4)) AS cashflow_rev_sale,
     CAST(SUM(cashflow_rev_sale_effective) AS DECIMAL(20,4)) AS cashflow_rev_sale_effective,
     CAST(SUM(cashflow_gp_sale) AS DECIMAL(20,4)) AS cashflow_gp_sale,
@@ -131,6 +142,7 @@ CREATE TEMPORARY TABLE sink_snapshot_detail (
     provider STRING,
     metric_code STRING,
     source_type STRING,
+    api_bill_type STRING,
     pref_rev DECIMAL(20,4),
     client_rebate DECIMAL(20,4),
     client_collection_rebate DECIMAL(20,4),
@@ -139,6 +151,9 @@ CREATE TEMPORARY TABLE sink_snapshot_detail (
     pref_rev_effective DECIMAL(20,4),
     cost DECIMAL(20,4),
     pref_gp DECIMAL(20,4),
+    cashflow_rev DECIMAL(20,4),
+    cashflow_rev_effective DECIMAL(20,4),
+    cashflow_gp DECIMAL(20,4),
     cashflow_rev_sale DECIMAL(20,4),
     cashflow_rev_sale_effective DECIMAL(20,4),
     cashflow_gp_sale DECIMAL(20,4),
@@ -173,6 +188,9 @@ CREATE TEMPORARY TABLE sink_snapshot (
     pref_rev_effective DECIMAL(20,4),
     cost DECIMAL(20,4),
     pref_gp DECIMAL(20,4),
+    cashflow_rev DECIMAL(20,4),
+    cashflow_rev_effective DECIMAL(20,4),
+    cashflow_gp DECIMAL(20,4),
     cashflow_rev_sale DECIMAL(20,4),
     cashflow_rev_sale_effective DECIMAL(20,4),
     cashflow_gp_sale DECIMAL(20,4),

@@ -224,18 +224,44 @@ GROUP BY 1, 2, 3, 4, 5, 6;
 
 `Pref_Rev` 是以上来源的 `real_time_revenue + Open API month_receivable + offline_api_income_amount + channel_rebate + income_adjustment` 之和。Open API 的 `month_receivable` 是应收，不是实收；月度汇总源按结算月首日计入日期筛选。
 
-Open API 月账单实收不计入 `Pref_Rev`。整体实收 `Cashflow_Rev` 直接取 `api_client_bill_actual_received_amount`；销售维度实收 `Cashflow_Rev_sale` 才从该指标中扣除月结 KYC、实体卡手续费和最低承诺三项。
+Open API 月账单实收不计入 `Pref_Rev`。整体实收 `Cashflow_Rev` 直接取 `api_client_bill_actual_received_amount`；销售维度实收 `Cashflow_Rev_sale` 从该指标中扣除月结 KYC、实体卡手续费和最低承诺三项。该实际实收指标不区分 provider。
 
 ## API 月账单实收 / API Actual Received（独立 SQL）
 
-单独核算销售维度的 Open API 月账单实收：`api_client_bill_actual_received_amount` 减去 `api_client_bill_monthly_kyc_fee_received_amount`、`api_client_bill_physical_card_fee_received_amount`、`api_client_bill_minimum_commitment_received_amount`，按来源 `report_date`、根账户、销售和 provider 汇总。该值只作为实收收入，不计入 `Pref_Rev`；第 10 节的 `Cashflow_Rev_sale` 会包含此净额。
+### Cashflow_Rev 整体实收（保留原值，不扣月结费用）
+
+Open API 实收直接取 `api_client_bill_actual_received_amount`，按客户、日期和销售归集，不区分 provider。该金额进入 `Cashflow_Rev`，不进入 `Pref_Rev`。
 
 ```sql
 SELECT
     m.report_date::date AS report_date,
     m.root_account_id::varchar AS root_account_id,
     m.product,
-    NULLIF(TRIM(m.provider), '') AS provider,
+    m.sale_id::varchar AS sale_id,
+    SUM(COALESCE(m.metric_value, 0)) AS api_actual_received_amount
+FROM dws.dws_sales_metric_daily m
+WHERE m.delete_time IS NULL
+  AND m.product = 'open_api'
+  AND m.metric_type = 'income'
+  AND m.metric_code = 'api_client_bill_actual_received_amount'
+  AND m.report_date >= DATE '2026-09-01'
+  AND m.report_date <  DATE '2026-10-01'
+  AND m.root_account_id::varchar = '95d362d7-56fe-4f6a-bfab-a44b7cb94be5'
+  AND m.sale_id::varchar = 'cfd8b2a8-af2d-474a-9923-3a5ef0335f52'
+GROUP BY m.report_date::date, m.root_account_id, m.product, m.sale_id;
+```
+
+### Cashflow_Rev_sale 销售维度实收（扣除三项月结费用）
+
+
+
+单独核算销售维度的 Open API 月账单实收：`api_client_bill_actual_received_amount` 减去 `api_client_bill_monthly_kyc_fee_received_amount`、`api_client_bill_physical_card_fee_received_amount`、`api_client_bill_minimum_commitment_received_amount`，按来源 `report_date`、根账户和销售汇总，不区分 provider。该值只作为实收收入，不计入 `Pref_Rev`；第 10 节的 `Cashflow_Rev_sale` 会包含此净额。
+
+```sql
+SELECT
+    m.report_date::date AS report_date,
+    m.root_account_id::varchar AS root_account_id,
+    m.product,
     m.sale_id::varchar AS sale_id,
     SUM(CASE
         WHEN m.metric_code = 'api_client_bill_actual_received_amount'
@@ -256,12 +282,10 @@ WHERE m.delete_time IS NULL
   AND m.report_date <  DATE '2026-10-01'
   AND m.root_account_id::varchar = '95d362d7-56fe-4f6a-bfab-a44b7cb94be5'
   AND m.sale_id::varchar = 'cfd8b2a8-af2d-474a-9923-3a5ef0335f52'
-  -- 渠道筛选示例：AND NULLIF(TRIM(m.provider), '') = 'IQ'
 GROUP BY
     m.report_date::date,
     m.root_account_id,
     m.product,
-    NULLIF(TRIM(m.provider), ''),
     m.sale_id;
 ```
 
@@ -508,3 +532,10 @@ SELECT
 - 过滤 NULL 渠道：`AND provider IS NULL`。
 - DWM 的 QUANTUM_CARD/BPC 成本映射到报表 provider `IQ`；GLOBAL_ACCOUNT/SETTLEMENT_COST 的 provider 为 NULL。
 - BI 月度调账、月账单按源 `provider` 归属；不根据金额猜渠道。
+
+## Open API 月账单应收/实收拆分
+
+- 应收来源：`dws_metrics_sales_revenue_monthly` 中 `product = 'open_api'`、`metric_code = 'month_receivable'`，按结算月首日归属。
+- 实收来源：`dws_sales_metric_daily` 中 `product = 'open_api'`、`metric_type = 'income'`、`metric_code = 'api_client_bill_actual_received_amount'`；按客户、日期和销售归集，不区分 provider。
+- `Cashflow_Rev_sale` 在上述实收基数上扣除 `api_client_bill_monthly_kyc_fee_received_amount`、`api_client_bill_physical_card_fee_received_amount`、`api_client_bill_minimum_commitment_received_amount`，不按渠道拆分。
+- 详情展示仅区分应收/实收，拆为 `open_api_receivable`、`open_api_received` 两种 product 行；应收保留 provider，实收 provider 为 NULL，不再按渠道拆分。内部 `api_bill_type` 不属于 API/导出字段。月账单应收为月粒度，report_date 按结算月首日筛选。

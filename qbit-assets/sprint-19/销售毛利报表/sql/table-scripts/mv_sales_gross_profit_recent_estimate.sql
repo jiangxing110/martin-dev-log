@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
--- Updated Time:   2026-11-23 11:15:01
+-- Updated Time:   2026-11-23 15:19:05
 -- Description:    销售毛利近6个月日粒度估算物化视图
 -- Notes:
 --   1. 结构/刷新方式参考 sale-repoet/sales-commission/table-scripts/mv_sales_commission_recent_estimate_v3.sql。
@@ -373,15 +373,22 @@ sales_rows AS (
    AND c.product = m.product
    AND c.provider IS NOT DISTINCT FROM m.provider
    AND c.sale_id = m.sale_id
+  -- API账单指标会让 recent_sales_metric 出现分组；若这些分组没有任何 main/返现/成本金额，不再重复生成全零 open_api 行。
+  WHERE m.product IS DISTINCT FROM 'open_api'
+     OR m.main_revenue <> 0
+     OR m.client_rebate <> 0
+     OR m.client_collection_rebate <> 0
+     OR m.physical_card_gp <> 0
+     OR COALESCE(c.source_cost, 0) <> 0
 ),api_actual_received_rows AS (
-  -- Open API账单实收按日指标记录，进入销售实收口径，不重复读取月度 month_revenue。
+  -- Open API账单实收使用不区分渠道的实际实收指标；按客户、日期、销售合并成一行。
   SELECT
     m.report_date,
     m.report_month,
     m.settlement_month,
     m.root_account_id,
     m.product,
-    m.provider,
+    NULL::varchar AS provider,
     m.sale_id,
     'api_client_bill_actual_received_amount'::varchar AS metric_code,
     'sales_metric_daily'::varchar AS source_type,
@@ -391,11 +398,14 @@ sales_rows AS (
     0::numeric(20,4) AS gross_profit_rebate,
     0::numeric(20,4) AS physical_card_gp,
     0::numeric(20,4) AS cost,
-    m.api_actual_received_amount::numeric(20,4) AS cashflow_rev,
-    m.api_actual_received_sale_amount::numeric(20,4) AS cashflow_rev_sale
+    SUM(m.api_actual_received_amount)::numeric(20,4) AS cashflow_rev,
+    SUM(m.api_actual_received_sale_amount)::numeric(20,4) AS cashflow_rev_sale
   FROM recent_sales_metric m
   WHERE m.product = 'open_api'
-    AND (m.api_actual_received_amount <> 0 OR m.api_actual_received_sale_amount <> 0)
+  GROUP BY m.report_date, m.report_month, m.settlement_month,
+           m.root_account_id, m.product, m.sale_id
+  HAVING SUM(m.api_actual_received_amount) <> 0
+      OR SUM(m.api_actual_received_sale_amount) <> 0
 ),monthly_revenue_rows AS (
   -- 月度汇总源只有结算月粒度；month_receivable 和离线API收入均按结算月首日入账。
   SELECT
@@ -638,6 +648,11 @@ sales_rows AS (
     sale_id,
     metric_code,
     source_type,
+    CASE
+      WHEN source_type = 'sales_revenue_monthly' AND metric_code = 'month_receivable' THEN 'RECEIVABLE'
+      WHEN metric_code = 'api_client_bill_actual_received_amount' THEN 'RECEIVED'
+      ELSE NULL
+    END::varchar AS api_bill_type,
     pref_rev::numeric(20,4) AS pref_rev,
     client_rebate::numeric(20,4) AS client_rebate,
     client_collection_rebate::numeric(20,4) AS client_collection_rebate,
@@ -670,6 +685,7 @@ SELECT
   sale_id,
   metric_code,
   source_type,
+  api_bill_type,
   pref_rev,
   client_rebate,
   client_collection_rebate,
@@ -695,4 +711,4 @@ COMMENT ON MATERIALIZED VIEW "dws"."mv_sales_gross_profit_recent_estimate" IS '�
 CREATE INDEX IF NOT EXISTS "idx_mv_sales_gross_profit_recent_estimate_query"
   ON "dws"."mv_sales_gross_profit_recent_estimate" ("report_date", "sale_id", "root_account_id");
 CREATE INDEX IF NOT EXISTS "idx_mv_sales_gross_profit_recent_estimate_detail"
-  ON "dws"."mv_sales_gross_profit_recent_estimate" ("root_account_id", "report_date", "product", "provider");
+  ON "dws"."mv_sales_gross_profit_recent_estimate" ("root_account_id", "report_date", "product", "api_bill_type", "provider");
