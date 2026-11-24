@@ -9,3 +9,82 @@ COMMIT;
 
 然后我想在详情页面 和导出的文件头里 对product  open_api+'_receivable'
 open_api+'_received'
+
+ /**
+     * 按完成时间分段查询净消费金额，降低单次 Greenplum 查询的内存峰值。
+     *
+     * @param filter 月账单查询条件
+     * @return 各时间段净消费统计结果
+     */
+    private List<ApiProviderFeeExtendVO> getPurchaseNetStatisticByTimeChunks(QueryFilterDTO filter) {
+        if (StringUtils.isAnyBlank(filter.getStartDate(), filter.getEndDate())) {
+            return odsApiClientTransactionMapper.getPurchaseNetStatistic(filter, null, null);
+        }
+
+        LocalDateTime chunkStart = LocalDateTime.parse(filter.getStartDate(), DateUtil.DATETIME_FORMAT);
+        LocalDateTime endInclusive = LocalDateTime.parse(filter.getEndDate(), DateUtil.DATETIME_FORMAT);
+        // 原查询的结束时间是闭区间；转换为微秒精度的开区间，避免分段时漏掉结束时刻。
+        LocalDateTime endExclusive = endInclusive.plusNanos(1_000);
+        List<ApiProviderFeeExtendVO> results = new ArrayList<>();
+        while (chunkStart.isBefore(endExclusive)) {
+            LocalDateTime chunkEnd = chunkStart.plusDays(PURCHASE_NET_STATISTIC_CHUNK_DAYS);
+            if (chunkEnd.isAfter(endExclusive)) {
+                chunkEnd = endExclusive;
+            }
+            String completeStartTime = chunkStart.format(PURCHASE_NET_STATISTIC_CHUNK_FORMATTER);
+            String completeEndTime = chunkEnd.format(PURCHASE_NET_STATISTIC_CHUNK_FORMATTER);
+            log.info("分段查询净消费金额，completeTime范围：[{}, {})", completeStartTime, completeEndTime);
+            results.addAll(odsApiClientTransactionMapper.getPurchaseNetStatistic(
+                    filter, completeStartTime, completeEndTime));
+            chunkStart = chunkEnd;
+        }
+        return results;
+    }
+
+private static final int PURCHASE_NET_STATISTIC_CHUNK_DAYS = 7;
+    private static final DateTimeFormatter PURCHASE_NET_STATISTIC_CHUNK_FORMATTER =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSSSSS");
+
+     /**
+     * 计算净消费统计
+     *
+     * @param filter            月账单查询条件
+     * @param completeStartTime 分段完成时间起点，包含该时间
+     * @param completeEndTime   分段完成时间终点，不包含该时间
+     * @return 净消费统计结果
+     */
+    List<ApiProviderFeeExtendVO> getPurchaseNetStatistic(@Param("entity") QueryFilterDTO filter,
+                                                         @Param("completeStartTime") String completeStartTime,
+                                                         @Param("completeEndTime") String completeEndTime);
+
+ <!--计算净消费统计-->
+    <select id="getPurchaseNetStatistic" resultType="com.qbit.openapi.domain.vo.ApiProviderFeeExtendVO">
+        SELECT
+        aar.root_id AS "accountId",
+        COALESCE(SUM(CASE WHEN ta."businessType" = 'Consumption' THEN ta."settleAmount"::NUMERIC ELSE 0 END), 0) AS
+        "consumeAmount",
+        COALESCE(SUM(CASE WHEN ta."businessType" IN ('Credit', 'Refund') THEN ta."settleAmount"::NUMERIC ELSE 0 END), 0)
+        AS "refundAmount",
+        COALESCE(SUM(CASE WHEN ta."businessType" = 'Reversal' THEN ta."settleAmount"::NUMERIC ELSE 0 END), 0) AS
+        "reversalAmount"
+        FROM api_client_transaction AS tr
+        LEFT JOIN api_account_relation as aar ON aar.account_id=tr.account_id
+        INNER JOIN "qbit_card_transaction" AS ta ON tr.transaction_id::UUID = ta.id
+        <where>
+            ta."deleteTime" is null and tr."delete_time" is null and tr.status='Closed'
+            AND "businessType" IN ('Consumption','Refund','Credit','Reversal')
+            <!--completeTimeSearch-->
+            <choose>
+                <when test="completeStartTime != null and completeEndTime != null">
+                    <![CDATA[AND tr."complete_time" >= #{completeStartTime} AND tr."complete_time" < #{completeEndTime}]]>
+                </when>
+                <otherwise>
+                    <include refid="defaultCompleteTimeSearch"/>
+                </otherwise>
+            </choose>
+            <include refid="cardTransactionCreateTimePartitionSearch"/>
+            <!--accountSearch-->
+            <include refid="account_id_search"/>
+        </where>
+        group by aar.root_id
+    </select>                                                                    

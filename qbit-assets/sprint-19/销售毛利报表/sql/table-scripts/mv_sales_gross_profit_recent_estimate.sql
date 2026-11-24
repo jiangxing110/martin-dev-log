@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
--- Updated Time:   2026-11-23 17:07:30
+-- Updated Time:   2026-11-24 14:31:19
 -- Description:    销售毛利近6个月日粒度估算物化视图
 -- Notes:
 --   1. 结构/刷新方式参考 sale-repoet/sales-commission/table-scripts/mv_sales_commission_recent_estimate_v3.sql。
@@ -301,7 +301,7 @@ raw_cost_rows AS (
   -- 多个成本来源会落在同一账户和业务日；销售归属只需按账户/日期查一次。
   SELECT DISTINCT report_date, root_account_id
   FROM raw_cost_rows
-  WHERE sale_id IS NULL
+  WHERE NULLIF(BTRIM(sale_id::varchar), '') IS NULL
 ),cost_owner_by_date AS (
   SELECT
     d.report_date,
@@ -326,11 +326,11 @@ raw_cost_rows AS (
     c.root_account_id,
     c.product,
     c.provider,
-    COALESCE(c.sale_id, owner.sale_id)::varchar AS sale_id,
+    COALESCE(NULLIF(BTRIM(c.sale_id::varchar), ''), owner.sale_id)::varchar AS sale_id,
     c.source_cost
   FROM raw_cost_rows c
   LEFT JOIN cost_owner_by_date owner
-    ON c.sale_id IS NULL
+    ON NULLIF(BTRIM(c.sale_id::varchar), '') IS NULL
    AND owner.report_date = c.report_date
    AND owner.root_account_id = c.root_account_id
 ),cost_by_sale_dimension AS (

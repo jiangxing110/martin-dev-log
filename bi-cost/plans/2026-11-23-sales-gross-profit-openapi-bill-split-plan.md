@@ -83,3 +83,4 @@
 - 明细快照表 DDL 已更新但尚未在数据库执行；部署后须重建明细表并重跑目标月份快照，旧快照不会自动补 api_bill_type。
 - 用户修正毛利口径：`Pref_GP`、`Cashflow_GP`、`Cashflow_GP_sale` 分别改为各自的有效收入减 Cost，再加 `physical_card_gp`；例如 `Pref_GP = Pref_Rev_effective - Cost + physical_card_gp`。
 - 复核示例：`Pref_Rev_effective 383082.4122 - Cost 280553.4671 = Pref_GP 102528.9451`（实体卡毛利为 0 时）。物化视图派生公式和公式文档已按此修正；快照 Batch/CDC 只传递并汇总视图字段，无须改 SQL 结构。
+- 用户指出 BB 源成本按根账户汇总时，子账户存在空白销售 ID；修正估算视图将 SQL `NULL`、空串和纯空格统一视为缺失销售 ID，并按 `root_id + report_date` 查销售归属，避免空串绕过归属补全后被末尾过滤。
