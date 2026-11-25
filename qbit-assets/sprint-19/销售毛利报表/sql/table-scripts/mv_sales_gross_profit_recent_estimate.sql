@@ -1,7 +1,7 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
--- Updated Time:   2026-11-24 14:31:19
+-- Updated Time:   2026-11-25 21:32:38
 -- Description:    销售毛利近6个月日粒度估算物化视图
 -- Notes:
 --   1. 结构/刷新方式参考 sale-repoet/sales-commission/table-scripts/mv_sales_commission_recent_estimate_v3.sql。
@@ -13,8 +13,9 @@
 --   7. 不使用 GREATEST/ABS 限制金额；收入、返现、成本、毛利均保留负数。
 --   8. 补入 Open API offline_api_income_amount、量子卡渠道返现及 BI 月度收入/返现调账来源。
 --   9. BI月度收入及 ods_bi_month_tag 调账按业务月份首日记录；日指标应收/实收及返现保留来源日和 sale_id。
---  10. IQ/其他成本沿用本视图已有日成本来源与归属，不读取返佣视图 cogs、不进行收入权重二次分摊。
+--  10. BB、QI、BZ 日财务各扫描一次，同时汇总成本和渠道返现；API 子户按业务日匹配根账户的有效销售关系。
 --  11. BB volume_fee_cost 已在上游按日分摊，视图直接读取该字段，不重复计算月度阶梯费。
+--  12. BB、QI、BZ 仍按销售维度汇总；am_id 为根账户归属核对字段，不参与金额分组。
 --********************************************************************--
 
 DROP MATERIALIZED VIEW IF EXISTS "dws"."mv_sales_gross_profit_recent_estimate";
@@ -95,6 +96,213 @@ WITH account_root_relation AS (
     NULLIF(TRIM(m.provider), ''),
     m.sale_id
 ),
+card_channel_finance_raw AS (
+  -- BB 按来源日计算；volume_fee_cost 已由上游按日分摊，直接计入成本，不重复套用月度阶梯费。
+  SELECT
+    b.report_date AS report_date,
+    CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE b.account_id::varchar END AS root_account_id,
+    'BB'::varchar AS provider,
+    aar.account_id IS NOT NULL AS is_api_child,
+    CASE WHEN aar.account_id IS NULL THEN b.sale_id::varchar END AS source_sale_id,
+    SUM(
+        COALESCE(b.m_dom_auth_count, 0) * 0.1090
+      + COALESCE(b.m_int_auth_count, 0) * 0.4845
+      + COALESCE(b.v_dom_auth_count, 0) * 0.0725
+      + COALESCE(b.v_int_auth_count, 0) * 0.4770
+      + COALESCE(b.av_m_dom_count, 0) * 0.1090
+      + COALESCE(b.av_m_int_count, 0) * 0.4845
+      + COALESCE(b.av_v_dom_count, 0) * 0.0725
+      + COALESCE(b.av_v_int_count, 0) * 0.4770
+      + COALESCE(b.m_dom_clearing_vol, 0) * 0.0021
+      + COALESCE(b.m_int_clearing_vol, 0) * 0.0111
+      + COALESCE(b.v_dom_clearing_vol, 0) * 0.0016
+      + COALESCE(b.v_int_clearing_vol, 0) * 0.0116
+      + COALESCE(b.m_int_reversal_count, 0) * 0.7190
+      + COALESCE(b.v_int_reversal_count, 0) * 0.7140
+      + COALESCE(b.dom_reversal_count, 0) * 0.1780
+      + COALESCE(b.m_int_refund_count, 0) * 0.4845
+      + COALESCE(b.v_int_refund_count, 0) * 0.4770
+      + COALESCE(b.dom_refund_count, 0) * 0.1090
+      + COALESCE(b.m_int_decline_count, 0) * 0.3595
+      + COALESCE(b.v_int_decline_count, 0) * 0.3570
+      + COALESCE(b.dom_decline_count, 0) * 0.0890
+      + COALESCE(b.ac_m_int_decline_count, 0) * 0.3595
+      + COALESCE(b.ac_v_int_decline_count, 0) * 0.3570
+      + COALESCE(b.ac_dom_decline_count, 0) * 0.0890
+      + COALESCE(b.active_card_count, 0) * 0.1000
+      + COALESCE(b.volume_fee_cost, 0)
+      + COALESCE(b.cost_fixed_fee, 0)
+    ) AS source_cost,
+    SUM(COALESCE(b.cashback_income, 0)) AS channel_rebate,
+    SUM(COALESCE(b.cashback_income, 0)) AS channel_rebate_sale
+  FROM "dws"."dws_bb_card_finance_daily_v2_p" b
+  LEFT JOIN (
+    SELECT
+      account_id::varchar AS account_id,
+      CASE WHEN COUNT(DISTINCT root_id::varchar) = 1 THEN MIN(root_id::varchar) END AS root_id
+    FROM public.api_account_relation
+    WHERE delete_time IS NULL
+      AND NULLIF(BTRIM(root_id::varchar), '') IS NOT NULL
+      AND root_id::varchar <> account_id::varchar
+    GROUP BY account_id::varchar
+  ) aar ON aar.account_id = b.account_id::varchar
+  WHERE b.delete_time IS NULL
+    AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+  GROUP BY b.report_date,
+           CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE b.account_id::varchar END,
+           aar.account_id IS NOT NULL,
+           CASE WHEN aar.account_id IS NULL THEN b.sale_id::varchar END
+
+  UNION ALL
+
+  SELECT
+    q.report_date AS report_date,
+    CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE q.account_id::varchar END AS root_account_id,
+    'IQ'::varchar AS provider,
+    aar.account_id IS NOT NULL AS is_api_child,
+    CASE WHEN aar.account_id IS NULL THEN q.sale_id::varchar END AS source_sale_id,
+    SUM(
+        COALESCE(q.cost_reimbursement_base_amt, 0) * COALESCE(q.cost_reimbursement_rate, 1)
+      + COALESCE(q.cost_service_base_amt, 0) * COALESCE(q.cost_service_rate, 1)
+      + COALESCE(q.cost_acs_regular_base_amt, 0) * COALESCE(q.cost_acs_regular_rate, 1)
+      + COALESCE(q.cost_acs_vip_base_amt, 0) * COALESCE(q.cost_acs_vip_rate, 1)
+      + COALESCE(q.cost_vrm_base_amt, 0) * COALESCE(q.cost_vrm_rate, 1)
+      + COALESCE(q.cost_hk_regular_base_amt, 0) * COALESCE(q.cost_hk_regular_rate, 1)
+      + COALESCE(q.cost_hk_vip_base_amt, 0) * COALESCE(q.cost_hk_vip_rate, 1)
+      + COALESCE(q.cost_dcsf_base_amt, 0) * COALESCE(q.cost_dcsf_rate, 1)
+      + COALESCE(q.cost_fixed_fee, 0)
+    ) AS source_cost,
+    SUM(
+        COALESCE(q.rebate_interchange_base_amt, 0) * COALESCE(q.rebate_interchange_rate, 1)
+      + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 1)
+    ) AS channel_rebate,
+    SUM(
+        COALESCE(q.rebate_interchange_base_amt, 0)
+      + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 1)
+    ) AS channel_rebate_sale
+  FROM "dws"."dws_qi_card_finance_daily_v2_p" q
+  LEFT JOIN (
+    SELECT
+      account_id::varchar AS account_id,
+      CASE WHEN COUNT(DISTINCT root_id::varchar) = 1 THEN MIN(root_id::varchar) END AS root_id
+    FROM public.api_account_relation
+    WHERE delete_time IS NULL
+      AND NULLIF(BTRIM(root_id::varchar), '') IS NOT NULL
+      AND root_id::varchar <> account_id::varchar
+    GROUP BY account_id::varchar
+  ) aar ON aar.account_id = q.account_id::varchar
+  WHERE q.delete_time IS NULL
+    AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+  GROUP BY q.report_date,
+           CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE q.account_id::varchar END,
+           aar.account_id IS NOT NULL,
+           CASE WHEN aar.account_id IS NULL THEN q.sale_id::varchar END
+
+  UNION ALL
+
+  -- BZ 与 BB/QI 一样按根账户归属销售；成本和返现同次扫描计算。
+  SELECT
+    z.report_date AS report_date,
+    CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE z.account_id::varchar END AS root_account_id,
+    'BZ'::varchar AS provider,
+    aar.account_id IS NOT NULL AS is_api_child,
+    CASE WHEN aar.account_id IS NULL THEN z.sale_id::varchar END AS source_sale_id,
+    SUM(
+        COALESCE(z.refund_base_amt, 0) * COALESCE(z.reimbursement_rate, 0)
+      + COALESCE(z.visa_charges_base_amt, 0) * COALESCE(z.visa_charges_rate, 0)
+      + COALESCE(z.card_create_count, 0) * COALESCE(z.card_setup_rate, 0)
+      + COALESCE(z.card_create_count, 0) * COALESCE(z.account_activation_rate, 0)
+      + COALESCE(z.card_active_count, 0) * COALESCE(z.account_on_file_rate, 0)
+      + COALESCE(z.settlement_volume, 0) * COALESCE(z.service_fee_rate, 0)
+      + COALESCE(z.verify_count, 0) * COALESCE(z.verify_fee_rate, 0)
+      + COALESCE(z.auth_count, 0) * COALESCE(z.auth_fee_rate, 0)
+      + COALESCE(z.clearing_count, 0) * COALESCE(z.clearing_fee_rate, 0)
+      + COALESCE(z.refund_count, 0) * COALESCE(z.refund_fee_rate, 0)
+      + COALESCE(z.reversal_count, 0) * COALESCE(z.reversal_fee_rate, 0)
+      + COALESCE(z.cost_fixed_fee, 0)
+    ) AS source_cost,
+    SUM(COALESCE(z.clearing_base_amt, 0) * COALESCE(z.reimbursement_rate, 0)) AS channel_rebate,
+    SUM(COALESCE(z.clearing_base_amt, 0) * COALESCE(z.reimbursement_rate, 0)) AS channel_rebate_sale
+  FROM "dws"."dws_bz_card_finance_daily_v2_p" z
+  LEFT JOIN (
+    SELECT
+      account_id::varchar AS account_id,
+      CASE WHEN COUNT(DISTINCT root_id::varchar) = 1 THEN MIN(root_id::varchar) END AS root_id
+    FROM public.api_account_relation
+    WHERE delete_time IS NULL
+      AND NULLIF(BTRIM(root_id::varchar), '') IS NOT NULL
+      AND root_id::varchar <> account_id::varchar
+    GROUP BY account_id::varchar
+  ) aar ON aar.account_id = z.account_id::varchar
+  WHERE z.delete_time IS NULL
+    AND z.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+  GROUP BY z.report_date,
+           CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE z.account_id::varchar END,
+           aar.account_id IS NOT NULL,
+           CASE WHEN aar.account_id IS NULL THEN z.sale_id::varchar END
+),
+card_channel_finance_daily AS (
+  -- 源表先按日/根账户聚合，再按报告日查一次根账户归属。
+  SELECT
+    f.report_date,
+    f.root_account_id,
+    f.provider,
+    CASE WHEN f.is_api_child THEN o.owner_sale_id ELSE f.source_sale_id END AS sale_id,
+    CASE WHEN f.is_api_child THEN o.owner_am_id ELSE NULL::varchar END AS am_id,
+    SUM(f.source_cost)::numeric(20,4) AS source_cost,
+    SUM(f.channel_rebate)::numeric(20,4) AS channel_rebate,
+    SUM(f.channel_rebate_sale)::numeric(20,4) AS channel_rebate_sale
+  FROM card_channel_finance_raw f
+  LEFT JOIN LATERAL (
+    SELECT
+      NULLIF(BTRIM(sr.sale_id), '')::varchar AS owner_sale_id,
+      NULLIF(BTRIM(sr.am_id), '')::varchar AS owner_am_id
+    FROM dim.dim_sale_account_relation_p sr
+    WHERE sr.relation_account_id = f.root_account_id
+      AND sr.delete_time IS NULL
+      AND sr.relation_start_time <= f.report_date::timestamp
+      AND (sr.relation_end_time IS NULL OR sr.relation_end_time > f.report_date::timestamp)
+    ORDER BY sr.relation_start_time DESC, sr.id DESC
+    LIMIT 1
+  ) o ON f.is_api_child
+  -- 根账户没有有效销售时，不向子户或过期关系回退。
+  WHERE NOT f.is_api_child OR o.owner_sale_id IS NOT NULL
+  GROUP BY f.report_date, f.root_account_id, f.provider,
+           CASE WHEN f.is_api_child THEN o.owner_sale_id ELSE f.source_sale_id END,
+           CASE WHEN f.is_api_child THEN o.owner_am_id ELSE NULL::varchar END
+),
+card_channel_finance_rows AS (
+  -- 一次读取日汇总结果，分别输出成本行和渠道返现行，保留两类指标的来源标识。
+  SELECT
+    f.report_date,
+    date_trunc('month', f.report_date)::date AS report_month,
+    date_trunc('month', f.report_date)::date AS settlement_month,
+    f.root_account_id,
+    'qbit_card'::varchar AS product,
+    f.provider,
+    f.sale_id,
+    x.metric_code,
+    x.source_type,
+    x.pref_rev,
+    0::numeric(20,4) AS client_rebate,
+    0::numeric(20,4) AS client_collection_rebate,
+    0::numeric(20,4) AS gross_profit_rebate,
+    0::numeric(20,4) AS physical_card_gp,
+    x.cost,
+    x.cashflow_rev,
+    x.cashflow_rev_sale,
+    f.am_id
+  FROM card_channel_finance_daily f
+  CROSS JOIN LATERAL (VALUES
+    ('sales_cost'::varchar, 'sales_cost'::varchar,
+      0::numeric(20,4), f.source_cost::numeric(20,4),
+      0::numeric(20,4), 0::numeric(20,4)),
+    ('channel_rebate'::varchar, 'qbit_card_channel_rebate'::varchar,
+      f.channel_rebate::numeric(20,4), 0::numeric(20,4),
+      f.channel_rebate::numeric(20,4), f.channel_rebate_sale::numeric(20,4))
+  ) x(metric_code, source_type, pref_rev, cost, cashflow_rev, cashflow_rev_sale)
+  WHERE x.pref_rev <> 0 OR x.cost <> 0 OR x.cashflow_rev <> 0 OR x.cashflow_rev_sale <> 0
+),
 raw_cost_rows AS (
   -- DWM 已经按客户和日期分摊，直接读取 cost_amount，并沿用源表 sale_id。
   SELECT
@@ -132,75 +340,6 @@ raw_cost_rows AS (
 
   UNION ALL
 
-  -- BB 按来源日计算；volume_fee_cost 已由上游按日分摊，直接计入成本，不重复套用月度阶梯费。
-  SELECT
-    b.report_date::date,
-    COALESCE(aar.root_id, b.account_id)::varchar,
-    'qbit_card'::varchar,
-    'BB'::varchar,
-    b.sale_id::varchar,
-    SUM(
-        COALESCE(b.m_dom_auth_count, 0) * 0.1090
-      + COALESCE(b.m_int_auth_count, 0) * 0.4845
-      + COALESCE(b.v_dom_auth_count, 0) * 0.0725
-      + COALESCE(b.v_int_auth_count, 0) * 0.4770
-      + COALESCE(b.av_m_dom_count, 0) * 0.1090
-      + COALESCE(b.av_m_int_count, 0) * 0.4845
-      + COALESCE(b.av_v_dom_count, 0) * 0.0725
-      + COALESCE(b.av_v_int_count, 0) * 0.4770
-      + COALESCE(b.m_dom_clearing_vol, 0) * 0.0021
-      + COALESCE(b.m_int_clearing_vol, 0) * 0.0111
-      + COALESCE(b.v_dom_clearing_vol, 0) * 0.0016
-      + COALESCE(b.v_int_clearing_vol, 0) * 0.0116
-      + COALESCE(b.m_int_reversal_count, 0) * 0.7190
-      + COALESCE(b.v_int_reversal_count, 0) * 0.7140
-      + COALESCE(b.dom_reversal_count, 0) * 0.1780
-      + COALESCE(b.m_int_refund_count, 0) * 0.4845
-      + COALESCE(b.v_int_refund_count, 0) * 0.4770
-      + COALESCE(b.dom_refund_count, 0) * 0.1090
-      + COALESCE(b.m_int_decline_count, 0) * 0.3595
-      + COALESCE(b.v_int_decline_count, 0) * 0.3570
-      + COALESCE(b.dom_decline_count, 0) * 0.0890
-      + COALESCE(b.ac_m_int_decline_count, 0) * 0.3595
-      + COALESCE(b.ac_v_int_decline_count, 0) * 0.3570
-      + COALESCE(b.ac_dom_decline_count, 0) * 0.0890
-      + COALESCE(b.active_card_count, 0) * 0.1000
-      + COALESCE(b.volume_fee_cost, 0)
-      + COALESCE(b.cost_fixed_fee, 0)
-    )::numeric(20,4)
-  FROM "dws"."dws_bb_card_finance_daily_v2_p" b
-  LEFT JOIN account_root_relation aar ON aar.account_id = b.account_id::varchar
-  WHERE b.delete_time IS NULL
-    AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
-  GROUP BY b.report_date::date, COALESCE(aar.root_id, b.account_id), b.sale_id
-
-  UNION ALL
-
-  SELECT
-    q.report_date::date,
-    COALESCE(aar.root_id::varchar, q.account_id::varchar),
-    'qbit_card'::varchar,
-    'IQ'::varchar,
-    q.sale_id::varchar,
-    SUM(
-        COALESCE(q.cost_reimbursement_base_amt, 0) * COALESCE(q.cost_reimbursement_rate, 1)
-      + COALESCE(q.cost_service_base_amt, 0) * COALESCE(q.cost_service_rate, 1)
-      + COALESCE(q.cost_acs_regular_base_amt, 0) * COALESCE(q.cost_acs_regular_rate, 1)
-      + COALESCE(q.cost_acs_vip_base_amt, 0) * COALESCE(q.cost_acs_vip_rate, 1)
-      + COALESCE(q.cost_vrm_base_amt, 0) * COALESCE(q.cost_vrm_rate, 1)
-      + COALESCE(q.cost_hk_regular_base_amt, 0) * COALESCE(q.cost_hk_regular_rate, 1)
-      + COALESCE(q.cost_hk_vip_base_amt, 0) * COALESCE(q.cost_hk_vip_rate, 1)
-      + COALESCE(q.cost_dcsf_base_amt, 0) * COALESCE(q.cost_dcsf_rate, 1)
-      + COALESCE(q.cost_fixed_fee, 0)
-    )::numeric(20,4)
-  FROM "dws"."dws_qi_card_finance_daily_v2_p" q
-  LEFT JOIN account_root_relation aar ON aar.account_id = q.account_id::varchar
-  WHERE q.delete_time IS NULL
-    AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
-  GROUP BY q.report_date::date, COALESCE(aar.root_id::varchar, q.account_id::varchar), q.sale_id
-
-  UNION ALL
-
   SELECT
     s.report_date::date,
     COALESCE(aar.root_id, s.account_id)::varchar,
@@ -214,34 +353,6 @@ raw_cost_rows AS (
   WHERE s.delete_time IS NULL
     AND s.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY s.report_date::date, COALESCE(aar.root_id, s.account_id), s.sale_id
-
-  UNION ALL
-
-  SELECT
-    z.report_date::date,
-    COALESCE(aar.root_id, z.account_id)::varchar,
-    'qbit_card'::varchar,
-    'BZ'::varchar,
-    z.sale_id::varchar,
-    SUM(
-        COALESCE(z.refund_base_amt, 0) * COALESCE(z.reimbursement_rate, 0)
-      + COALESCE(z.visa_charges_base_amt, 0) * COALESCE(z.visa_charges_rate, 0)
-      + COALESCE(z.card_create_count, 0) * COALESCE(z.card_setup_rate, 0)
-      + COALESCE(z.card_create_count, 0) * COALESCE(z.account_activation_rate, 0)
-      + COALESCE(z.card_active_count, 0) * COALESCE(z.account_on_file_rate, 0)
-      + COALESCE(z.settlement_volume, 0) * COALESCE(z.service_fee_rate, 0)
-      + COALESCE(z.verify_count, 0) * COALESCE(z.verify_fee_rate, 0)
-      + COALESCE(z.auth_count, 0) * COALESCE(z.auth_fee_rate, 0)
-      + COALESCE(z.clearing_count, 0) * COALESCE(z.clearing_fee_rate, 0)
-      + COALESCE(z.refund_count, 0) * COALESCE(z.refund_fee_rate, 0)
-      + COALESCE(z.reversal_count, 0) * COALESCE(z.reversal_fee_rate, 0)
-      + COALESCE(z.cost_fixed_fee, 0)
-    )::numeric(20,4)
-  FROM "dws"."dws_bz_card_finance_daily_v2_p" z
-  LEFT JOIN account_root_relation aar ON aar.account_id = z.account_id::varchar
-  WHERE z.delete_time IS NULL
-    AND z.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
-  GROUP BY z.report_date::date, COALESCE(aar.root_id, z.account_id), z.sale_id
 
   UNION ALL
 
@@ -280,6 +391,11 @@ raw_cost_rows AS (
   WHERE t.delete_time IS NULL
     AND t.account_id IS NOT NULL
     AND t.tag = 'OFFLINE_REFUND'
+    -- 在原始时间列上加范围下界，避免只对表达式过滤导致扫描历史分区/索引范围。
+    AND t.statistics_time >= (
+      date_trunc('month', CURRENT_DATE - interval '6 months')::date::timestamp
+      AT TIME ZONE 'Asia/Shanghai'
+    )
     AND date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date
         >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date,
@@ -447,156 +563,18 @@ sales_rows AS (
       OR (r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount'))
   GROUP BY r.settlement_month, r.root_account_id, r.product,
            NULLIF(TRIM(r.provider), ''), r.sale_id, r.metric_code
-),qbit_card_channel_rebate_rows AS (
-  -- 返佣视图把量子卡渠道返现作为收入加回；保留BB/QI/BZ源日和源sale_id，不做月度收入权重分摊或ABS归正。
-  SELECT
-    channel_source.report_date,
-    channel_source.report_month,
-    channel_source.settlement_month,
-    channel_source.root_account_id,
-    channel_source.product,
-    channel_source.provider,
-    channel_source.sale_id,
-    'channel_rebate'::varchar AS metric_code,
-    'qbit_card_channel_rebate'::varchar AS source_type,
-    channel_source.pref_rebate AS pref_rev,
-    0::numeric(20,4) AS client_rebate,
-    0::numeric(20,4) AS client_collection_rebate,
-    0::numeric(20,4) AS gross_profit_rebate,
-    0::numeric(20,4) AS physical_card_gp,
-    0::numeric(20,4) AS cost,
-    channel_source.cashflow_rebate AS cashflow_rev,
-    channel_source.cashflow_rebate_sale AS cashflow_rev_sale
-  FROM (
-    SELECT
-      b.report_date::date AS report_date,
-      date_trunc('month', b.report_date)::date AS report_month,
-      date_trunc('month', b.report_date)::date AS settlement_month,
-      COALESCE(aar.root_id, b.account_id)::varchar AS root_account_id,
-      'qbit_card'::varchar AS product,
-      'BB'::varchar AS provider,
-      b.sale_id::varchar AS sale_id,
-      SUM(COALESCE(b.cashback_income, 0))::numeric(20,4) AS pref_rebate,
-      SUM(COALESCE(b.cashback_income, 0))::numeric(20,4) AS cashflow_rebate,
-      SUM(COALESCE(b.cashback_income, 0))::numeric(20,4) AS cashflow_rebate_sale
-    FROM dws.dws_bb_card_finance_daily_v2_p b
-    LEFT JOIN account_root_relation aar ON aar.account_id = b.account_id::varchar
-    WHERE b.delete_time IS NULL
-      AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
-    GROUP BY b.report_date::date, COALESCE(aar.root_id, b.account_id), b.sale_id
-
-    UNION ALL
-
-    SELECT
-      q.report_date::date,
-      date_trunc('month', q.report_date)::date,
-      date_trunc('month', q.report_date)::date,
-      COALESCE(aar.root_id, q.account_id)::varchar,
-      'qbit_card'::varchar,
-      'IQ'::varchar,
-      q.sale_id::varchar,
-      SUM(
-        COALESCE(q.rebate_interchange_base_amt, 0) * COALESCE(q.rebate_interchange_rate, 1)
-        + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 1)
-      )::numeric(20,4) AS pref_rebate,
-      SUM(
-        COALESCE(q.rebate_interchange_base_amt, 0) * COALESCE(q.rebate_interchange_rate, 1)
-        + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 1)
-      )::numeric(20,4) AS cashflow_rebate,
-      SUM(
-        COALESCE(q.rebate_interchange_base_amt, 0)
-        + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 1)
-      )::numeric(20,4) AS cashflow_rebate_sale
-    FROM dws.dws_qi_card_finance_daily_v2_p q
-    LEFT JOIN account_root_relation aar ON aar.account_id = q.account_id::varchar
-    WHERE q.delete_time IS NULL
-      AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
-    GROUP BY q.report_date::date, COALESCE(aar.root_id, q.account_id), q.sale_id
-
-    UNION ALL
-
-    SELECT
-      z.report_date::date,
-      date_trunc('month', z.report_date)::date,
-      date_trunc('month', z.report_date)::date,
-      COALESCE(aar.root_id, z.account_id)::varchar,
-      'qbit_card'::varchar,
-      'BZ'::varchar,
-      z.sale_id::varchar,
-      SUM(COALESCE(z.clearing_base_amt, 0) * COALESCE(z.reimbursement_rate, 0))::numeric(20,4) AS pref_rebate,
-      SUM(COALESCE(z.clearing_base_amt, 0) * COALESCE(z.reimbursement_rate, 0))::numeric(20,4) AS cashflow_rebate,
-      SUM(COALESCE(z.clearing_base_amt, 0) * COALESCE(z.reimbursement_rate, 0))::numeric(20,4) AS cashflow_rebate_sale
-    FROM dws.dws_bz_card_finance_daily_v2_p z
-    LEFT JOIN account_root_relation aar ON aar.account_id = z.account_id::varchar
-    WHERE z.delete_time IS NULL
-      AND z.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
-    GROUP BY z.report_date::date, COALESCE(aar.root_id, z.account_id), z.sale_id
-  ) channel_source
-),bi_month_adjustment_rows AS (
-  -- 调账统一按业务月份1号入账；收入调整进入收入，返现调整进入 client_rebate，保留来源正负号。
+),bi_month_adjustment_source AS (
+  -- 先把同一账户、月份、标签的原始调账合并，避免逐条记录查销售关系。
   SELECT
     date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS report_date,
-    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS report_month,
-    date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date AS settlement_month,
     COALESCE(aar.root_id, t.account_id)::varchar AS root_account_id,
-    CASE t.product_line
-      WHEN 'GLOBAL_ACCOUNT' THEN 'group_account'
-      WHEN 'QUANTUM_CARD' THEN 'qbit_card'
-      WHEN 'CRYPTO_ASSET' THEN 'crypto'
-    END::varchar AS product,
+    t.product_line,
     NULLIF(TRIM(t.provider), '')::varchar AS provider,
-    sale_owner.sale_id::varchar AS sale_id,
-    t.tag::varchar AS metric_code,
-    'bi_month_tag_adjustment'::varchar AS source_type,
-    SUM(CASE
-      WHEN t.tag IN ('OFFLINE_PHYSICAL_CARD_FEE', 'INCOME_ADJUSTMENT_INCREASE')
-        THEN COALESCE(t.amount, 0)
-      WHEN t.tag IN ('INCOME_ADJUSTMENT_DECREASE', 'API_MINIMUM_CONSUMPTION_ADJUSTMENT_DECREASE')
-        THEN -COALESCE(t.amount, 0)
-      ELSE 0
-    END)::numeric(20,4) AS pref_rev,
-    SUM(CASE
-      WHEN t.tag = 'CASHBACK_ADJUSTMENT_INCREASE' THEN COALESCE(t.amount, 0)
-      WHEN t.tag = 'CASHBACK_ADJUSTMENT_DECREASE' THEN -COALESCE(t.amount, 0)
-      ELSE 0
-    END)::numeric(20,4) AS client_rebate,
-    0::numeric(20,4) AS client_collection_rebate,
-    0::numeric(20,4) AS gross_profit_rebate,
-    0::numeric(20,4) AS physical_card_gp,
-    0::numeric(20,4) AS cost,
-    SUM(CASE
-      WHEN t.tag IN ('OFFLINE_PHYSICAL_CARD_FEE', 'INCOME_ADJUSTMENT_INCREASE')
-        THEN COALESCE(t.amount, 0)
-      WHEN t.tag IN ('INCOME_ADJUSTMENT_DECREASE', 'API_MINIMUM_CONSUMPTION_ADJUSTMENT_DECREASE')
-        THEN -COALESCE(t.amount, 0)
-      ELSE 0
-    END)::numeric(20,4) AS cashflow_rev,
-    SUM(CASE
-      WHEN t.tag IN ('OFFLINE_PHYSICAL_CARD_FEE', 'INCOME_ADJUSTMENT_INCREASE')
-        THEN COALESCE(t.amount, 0)
-      WHEN t.tag IN ('INCOME_ADJUSTMENT_DECREASE', 'API_MINIMUM_CONSUMPTION_ADJUSTMENT_DECREASE')
-        THEN -COALESCE(t.amount, 0)
-      ELSE 0
-    END)::numeric(20,4) AS cashflow_rev_sale
+    t.tag,
+    SUM(COALESCE(t.amount, 0)) AS amount
   FROM ods.ods_bi_month_tag t
   LEFT JOIN account_root_relation aar
     ON aar.account_id = t.account_id::varchar
-  LEFT JOIN LATERAL (
-    SELECT sr_inner.sale_id
-    FROM dim.dim_sale_account_relation_p sr_inner
-    WHERE sr_inner.relation_account_id = COALESCE(aar.root_id, t.account_id)
-      AND sr_inner.delete_time IS NULL
-      AND sr_inner.relation_start_time <= t.statistics_time
-    ORDER BY
-      CASE
-        WHEN sr_inner.relation_end_time IS NULL
-          OR t.statistics_time < sr_inner.relation_end_time THEN 0
-        ELSE 1
-      END,
-      sr_inner.relation_start_time DESC,
-      sr_inner.id DESC
-    LIMIT 1
-  ) sale_owner ON true
   WHERE t.delete_time IS NULL
     AND t.account_id IS NOT NULL
     AND t.tag IN (
@@ -607,12 +585,80 @@ sales_rows AS (
       'CASHBACK_ADJUSTMENT_INCREASE',
       'CASHBACK_ADJUSTMENT_DECREASE'
     )
+    -- 对 timestamptz 原列增加范围条件，便于按 statistics_time 索引/分区裁剪。
+    AND t.statistics_time >= (
+      date_trunc('month', CURRENT_DATE - interval '6 months')::date::timestamp
+      AT TIME ZONE 'Asia/Shanghai'
+    )
     AND date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date
         >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
   GROUP BY
     date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date,
-    COALESCE(aar.root_id, t.account_id), t.product_line, NULLIF(TRIM(t.provider), ''),
-    sale_owner.sale_id, t.tag
+    COALESCE(aar.root_id, t.account_id), t.product_line,
+    NULLIF(TRIM(t.provider), ''), t.tag
+),bi_month_adjustment_rows AS (
+  -- 调账归属也按业务月份1号查询销售关系；金额保留原有正负口径。
+  SELECT
+    t.report_date,
+    t.report_date AS report_month,
+    t.report_date AS settlement_month,
+    t.root_account_id,
+    CASE t.product_line
+      WHEN 'GLOBAL_ACCOUNT' THEN 'group_account'
+      WHEN 'QUANTUM_CARD' THEN 'qbit_card'
+      WHEN 'CRYPTO_ASSET' THEN 'crypto'
+    END::varchar AS product,
+    t.provider,
+    sale_owner.sale_id::varchar AS sale_id,
+    t.tag::varchar AS metric_code,
+    'bi_month_tag_adjustment'::varchar AS source_type,
+    CASE
+      WHEN t.tag IN ('OFFLINE_PHYSICAL_CARD_FEE', 'INCOME_ADJUSTMENT_INCREASE')
+        THEN COALESCE(t.amount, 0)
+      WHEN t.tag IN ('INCOME_ADJUSTMENT_DECREASE', 'API_MINIMUM_CONSUMPTION_ADJUSTMENT_DECREASE')
+        THEN -COALESCE(t.amount, 0)
+      ELSE 0
+    END::numeric(20,4) AS pref_rev,
+    CASE
+      WHEN t.tag = 'CASHBACK_ADJUSTMENT_INCREASE' THEN COALESCE(t.amount, 0)
+      WHEN t.tag = 'CASHBACK_ADJUSTMENT_DECREASE' THEN -COALESCE(t.amount, 0)
+      ELSE 0
+    END::numeric(20,4) AS client_rebate,
+    0::numeric(20,4) AS client_collection_rebate,
+    0::numeric(20,4) AS gross_profit_rebate,
+    0::numeric(20,4) AS physical_card_gp,
+    0::numeric(20,4) AS cost,
+    CASE
+      WHEN t.tag IN ('OFFLINE_PHYSICAL_CARD_FEE', 'INCOME_ADJUSTMENT_INCREASE')
+        THEN COALESCE(t.amount, 0)
+      WHEN t.tag IN ('INCOME_ADJUSTMENT_DECREASE', 'API_MINIMUM_CONSUMPTION_ADJUSTMENT_DECREASE')
+        THEN -COALESCE(t.amount, 0)
+      ELSE 0
+    END::numeric(20,4) AS cashflow_rev,
+    CASE
+      WHEN t.tag IN ('OFFLINE_PHYSICAL_CARD_FEE', 'INCOME_ADJUSTMENT_INCREASE')
+        THEN COALESCE(t.amount, 0)
+      WHEN t.tag IN ('INCOME_ADJUSTMENT_DECREASE', 'API_MINIMUM_CONSUMPTION_ADJUSTMENT_DECREASE')
+        THEN -COALESCE(t.amount, 0)
+      ELSE 0
+    END::numeric(20,4) AS cashflow_rev_sale
+  FROM bi_month_adjustment_source t
+  LEFT JOIN LATERAL (
+    SELECT sr_inner.sale_id
+    FROM dim.dim_sale_account_relation_p sr_inner
+    WHERE sr_inner.relation_account_id = t.root_account_id
+      AND sr_inner.delete_time IS NULL
+      AND sr_inner.relation_start_time <= t.report_date::timestamp
+    ORDER BY
+      CASE
+        WHEN sr_inner.relation_end_time IS NULL
+          OR t.report_date < sr_inner.relation_end_time THEN 0
+        ELSE 1
+      END,
+      sr_inner.relation_start_time DESC,
+      sr_inner.id DESC
+    LIMIT 1
+  ) sale_owner ON true
 ),cost_only_rows AS (
   SELECT
     c.report_date,
@@ -643,12 +689,12 @@ sales_rows AS (
       AND m.sale_id = c.sale_id
   )
 ),all_rows AS (
-  SELECT * FROM sales_rows
-  UNION ALL SELECT * FROM qbit_card_channel_rebate_rows
-  UNION ALL SELECT * FROM api_actual_received_rows
-  UNION ALL SELECT * FROM monthly_revenue_rows
-  UNION ALL SELECT * FROM bi_month_adjustment_rows
-  UNION ALL SELECT * FROM cost_only_rows
+  SELECT s.*, NULL::varchar AS am_id FROM sales_rows s
+  UNION ALL SELECT a.*, NULL::varchar FROM api_actual_received_rows a
+  UNION ALL SELECT m.*, NULL::varchar FROM monthly_revenue_rows m
+  UNION ALL SELECT b.*, NULL::varchar FROM bi_month_adjustment_rows b
+  UNION ALL SELECT c.*, NULL::varchar FROM cost_only_rows c
+  UNION ALL SELECT f.* FROM card_channel_finance_rows f
 ),calculated AS (
   SELECT
     report_date,
@@ -660,6 +706,7 @@ sales_rows AS (
     sale_id,
     metric_code,
     source_type,
+    am_id,
     CASE
       WHEN source_type = 'sales_revenue_monthly' AND metric_code = 'month_receivable' THEN 'RECEIVABLE'
       WHEN metric_code = 'api_client_bill_actual_received_amount' THEN 'RECEIVED'
@@ -712,8 +759,9 @@ SELECT
   cashflow_rev_sale,
   cashflow_rev_sale_effective,
   cashflow_gp_sale,
-  now() AS refreshed_at
-FROM calculated
+  now() AS refreshed_at,
+  c.am_id
+FROM calculated c
 WHERE NULLIF(BTRIM(sale_id), '') IS NOT NULL
 WITH DATA
 DISTRIBUTED BY (id);
