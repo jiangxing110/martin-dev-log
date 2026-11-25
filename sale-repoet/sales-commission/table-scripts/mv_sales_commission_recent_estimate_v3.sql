@@ -788,8 +788,8 @@ qbit_card_channel_rebate AS (
       'qbit_card' AS product,
       'IQ' AS provider,
       ABS(SUM(
-          COALESCE(q.rebate_interchange_base_amt, 0) * 1
-          + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 0)
+          COALESCE(q.rebate_interchange_base_amt, 0) * COALESCE(q.rebate_interchange_rate, 1)
+          + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 1)
       ))::numeric(20,4) AS channel_rebate
     FROM "dws"."dws_qi_card_finance_daily_v2_p" q
     LEFT JOIN account_root_relation aar
