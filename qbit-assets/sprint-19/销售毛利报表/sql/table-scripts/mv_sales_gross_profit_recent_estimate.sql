@@ -459,14 +459,14 @@ sales_rows AS (
     channel_source.sale_id,
     'channel_rebate'::varchar AS metric_code,
     'qbit_card_channel_rebate'::varchar AS source_type,
-    channel_source.channel_rebate AS pref_rev,
+    channel_source.pref_rebate AS pref_rev,
     0::numeric(20,4) AS client_rebate,
     0::numeric(20,4) AS client_collection_rebate,
     0::numeric(20,4) AS gross_profit_rebate,
     0::numeric(20,4) AS physical_card_gp,
     0::numeric(20,4) AS cost,
-    channel_source.channel_rebate AS cashflow_rev,
-    channel_source.channel_rebate AS cashflow_rev_sale
+    channel_source.cashflow_rebate AS cashflow_rev,
+    channel_source.cashflow_rebate_sale AS cashflow_rev_sale
   FROM (
     SELECT
       b.report_date::date AS report_date,
@@ -476,7 +476,9 @@ sales_rows AS (
       'qbit_card'::varchar AS product,
       'BB'::varchar AS provider,
       b.sale_id::varchar AS sale_id,
-      SUM(COALESCE(b.cashback_income, 0))::numeric(20,4) AS channel_rebate
+      SUM(COALESCE(b.cashback_income, 0))::numeric(20,4) AS pref_rebate,
+      SUM(COALESCE(b.cashback_income, 0))::numeric(20,4) AS cashflow_rebate,
+      SUM(COALESCE(b.cashback_income, 0))::numeric(20,4) AS cashflow_rebate_sale
     FROM dws.dws_bb_card_finance_daily_v2_p b
     LEFT JOIN account_root_relation aar ON aar.account_id = b.account_id::varchar
     WHERE b.delete_time IS NULL
@@ -494,9 +496,17 @@ sales_rows AS (
       'IQ'::varchar,
       q.sale_id::varchar,
       SUM(
+        COALESCE(q.rebate_interchange_base_amt, 0) * COALESCE(q.rebate_interchange_rate, 1)
+        + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 1)
+      )::numeric(20,4) AS pref_rebate,
+      SUM(
+        COALESCE(q.rebate_interchange_base_amt, 0) * COALESCE(q.rebate_interchange_rate, 1)
+        + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 1)
+      )::numeric(20,4) AS cashflow_rebate,
+      SUM(
         COALESCE(q.rebate_interchange_base_amt, 0)
-        + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 0)
-      )::numeric(20,4)
+        + COALESCE(q.rebate_incentive_base_amt, 0) * COALESCE(q.rebate_incentive_rate, 1)
+      )::numeric(20,4) AS cashflow_rebate_sale
     FROM dws.dws_qi_card_finance_daily_v2_p q
     LEFT JOIN account_root_relation aar ON aar.account_id = q.account_id::varchar
     WHERE q.delete_time IS NULL
@@ -513,7 +523,9 @@ sales_rows AS (
       'qbit_card'::varchar,
       'BZ'::varchar,
       z.sale_id::varchar,
-      SUM(COALESCE(z.clearing_base_amt, 0) * COALESCE(z.reimbursement_rate, 0))::numeric(20,4)
+      SUM(COALESCE(z.clearing_base_amt, 0) * COALESCE(z.reimbursement_rate, 0))::numeric(20,4) AS pref_rebate,
+      SUM(COALESCE(z.clearing_base_amt, 0) * COALESCE(z.reimbursement_rate, 0))::numeric(20,4) AS cashflow_rebate,
+      SUM(COALESCE(z.clearing_base_amt, 0) * COALESCE(z.reimbursement_rate, 0))::numeric(20,4) AS cashflow_rebate_sale
     FROM dws.dws_bz_card_finance_daily_v2_p z
     LEFT JOIN account_root_relation aar ON aar.account_id = z.account_id::varchar
     WHERE z.delete_time IS NULL
