@@ -1,11 +1,11 @@
 --********************************************************************--
 -- Author:         martinJiang
 -- Created Time:   2026-11-02
--- Updated Time:   2026-11-25 21:32:38
--- Description:    销售毛利近6个月日粒度估算物化视图
+-- Updated Time:   2026-11-26 12:03:58
+-- Description:    销售毛利近3个自然月日粒度估算物化视图
 -- Notes:
 --   1. 结构/刷新方式参考 sale-repoet/sales-commission/table-scripts/mv_sales_commission_recent_estimate_v3.sql。
---   2. 收入及客户返现保留 dws.dws_sales_metric_daily.report_date，不在视图中先归月；来源窗口与销售返佣视图一致，取近6个月。
+--   2. 收入及客户返现保留 dws.dws_sales_metric_daily.report_date，不在视图中先归月；窗口为当前月及前两个月，采用月初左闭、下月月初右开。
 --   3. 实时收入、Open API实收及返现等日指标从 dws.dws_sales_metric_daily 读取；Open API月账单应收和BI离线API收入从月度汇总表读取。
 --   4. 三类 GP 均按对应收入减真实成本后，加实体卡毛利 physical_card_gp。
 --   5. Cost 仍汇总 DWM 成本、卡成本、Crypto 日成本、支付手续费及月度调账；不读取佣金视图 cogs/gp/commission，也不按收入权重二次分摊。
@@ -71,7 +71,8 @@ WITH account_root_relation AS (
     0::numeric(20,4) AS gross_profit_rebate
   FROM "dws"."dws_sales_metric_daily" m
   WHERE m.delete_time IS NULL
-    AND m.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    AND m.report_date >= date_trunc('month', CURRENT_DATE - interval '2 months')::date
+    AND m.report_date < date_trunc('month', CURRENT_DATE + interval '1 month')::date
     AND m.metric_code IN (
       'main',
       'api_client_bill_actual_received_amount',
@@ -96,14 +97,24 @@ WITH account_root_relation AS (
     NULLIF(TRIM(m.provider), ''),
     m.sale_id
 ),
-card_channel_finance_raw AS (
+api_root_accounts AS (
+  -- 只用于识别 API 母户自身；母户日报 sale_id 为空时需回查母户当日销售关系。
+  SELECT DISTINCT root_id::varchar AS root_account_id
+  FROM public.api_account_relation
+  WHERE delete_time IS NULL
+    AND NULLIF(BTRIM(root_id::varchar), '') IS NOT NULL
+    AND root_id::varchar <> account_id::varchar
+),card_channel_finance_raw AS (
   -- BB 按来源日计算；volume_fee_cost 已由上游按日分摊，直接计入成本，不重复套用月度阶梯费。
   SELECT
     b.report_date AS report_date,
     CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE b.account_id::varchar END AS root_account_id,
     'BB'::varchar AS provider,
-    aar.account_id IS NOT NULL AS is_api_child,
-    CASE WHEN aar.account_id IS NULL THEN b.sale_id::varchar END AS source_sale_id,
+    (aar.account_id IS NOT NULL OR (
+      api_root.root_account_id IS NOT NULL
+      AND NULLIF(BTRIM(b.sale_id::varchar), '') IS NULL
+    )) AS needs_owner_lookup,
+    CASE WHEN aar.account_id IS NULL THEN NULLIF(BTRIM(b.sale_id::varchar), '') END AS source_sale_id,
     SUM(
         COALESCE(b.m_dom_auth_count, 0) * 0.1090
       + COALESCE(b.m_int_auth_count, 0) * 0.4845
@@ -146,12 +157,17 @@ card_channel_finance_raw AS (
       AND root_id::varchar <> account_id::varchar
     GROUP BY account_id::varchar
   ) aar ON aar.account_id = b.account_id::varchar
+  LEFT JOIN api_root_accounts api_root ON api_root.root_account_id = b.account_id::varchar
   WHERE b.delete_time IS NULL
-    AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '2 months')::date
+    AND b.report_date < date_trunc('month', CURRENT_DATE + interval '1 month')::date
   GROUP BY b.report_date,
            CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE b.account_id::varchar END,
-           aar.account_id IS NOT NULL,
-           CASE WHEN aar.account_id IS NULL THEN b.sale_id::varchar END
+           (aar.account_id IS NOT NULL OR (
+             api_root.root_account_id IS NOT NULL
+             AND NULLIF(BTRIM(b.sale_id::varchar), '') IS NULL
+           )),
+           CASE WHEN aar.account_id IS NULL THEN NULLIF(BTRIM(b.sale_id::varchar), '') END
 
   UNION ALL
 
@@ -159,8 +175,11 @@ card_channel_finance_raw AS (
     q.report_date AS report_date,
     CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE q.account_id::varchar END AS root_account_id,
     'IQ'::varchar AS provider,
-    aar.account_id IS NOT NULL AS is_api_child,
-    CASE WHEN aar.account_id IS NULL THEN q.sale_id::varchar END AS source_sale_id,
+    (aar.account_id IS NOT NULL OR (
+      api_root.root_account_id IS NOT NULL
+      AND NULLIF(BTRIM(q.sale_id::varchar), '') IS NULL
+    )) AS needs_owner_lookup,
+    CASE WHEN aar.account_id IS NULL THEN NULLIF(BTRIM(q.sale_id::varchar), '') END AS source_sale_id,
     SUM(
         COALESCE(q.cost_reimbursement_base_amt, 0) * COALESCE(q.cost_reimbursement_rate, 1)
       + COALESCE(q.cost_service_base_amt, 0) * COALESCE(q.cost_service_rate, 1)
@@ -191,12 +210,17 @@ card_channel_finance_raw AS (
       AND root_id::varchar <> account_id::varchar
     GROUP BY account_id::varchar
   ) aar ON aar.account_id = q.account_id::varchar
+  LEFT JOIN api_root_accounts api_root ON api_root.root_account_id = q.account_id::varchar
   WHERE q.delete_time IS NULL
-    AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '2 months')::date
+    AND q.report_date < date_trunc('month', CURRENT_DATE + interval '1 month')::date
   GROUP BY q.report_date,
            CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE q.account_id::varchar END,
-           aar.account_id IS NOT NULL,
-           CASE WHEN aar.account_id IS NULL THEN q.sale_id::varchar END
+           (aar.account_id IS NOT NULL OR (
+             api_root.root_account_id IS NOT NULL
+             AND NULLIF(BTRIM(q.sale_id::varchar), '') IS NULL
+           )),
+           CASE WHEN aar.account_id IS NULL THEN NULLIF(BTRIM(q.sale_id::varchar), '') END
 
   UNION ALL
 
@@ -205,8 +229,11 @@ card_channel_finance_raw AS (
     z.report_date AS report_date,
     CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE z.account_id::varchar END AS root_account_id,
     'BZ'::varchar AS provider,
-    aar.account_id IS NOT NULL AS is_api_child,
-    CASE WHEN aar.account_id IS NULL THEN z.sale_id::varchar END AS source_sale_id,
+    (aar.account_id IS NOT NULL OR (
+      api_root.root_account_id IS NOT NULL
+      AND NULLIF(BTRIM(z.sale_id::varchar), '') IS NULL
+    )) AS needs_owner_lookup,
+    CASE WHEN aar.account_id IS NULL THEN NULLIF(BTRIM(z.sale_id::varchar), '') END AS source_sale_id,
     SUM(
         COALESCE(z.refund_base_amt, 0) * COALESCE(z.reimbursement_rate, 0)
       + COALESCE(z.visa_charges_base_amt, 0) * COALESCE(z.visa_charges_rate, 0)
@@ -234,42 +261,63 @@ card_channel_finance_raw AS (
       AND root_id::varchar <> account_id::varchar
     GROUP BY account_id::varchar
   ) aar ON aar.account_id = z.account_id::varchar
+  LEFT JOIN api_root_accounts api_root ON api_root.root_account_id = z.account_id::varchar
   WHERE z.delete_time IS NULL
-    AND z.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    AND z.report_date >= date_trunc('month', CURRENT_DATE - interval '2 months')::date
+    AND z.report_date < date_trunc('month', CURRENT_DATE + interval '1 month')::date
   GROUP BY z.report_date,
            CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE z.account_id::varchar END,
-           aar.account_id IS NOT NULL,
-           CASE WHEN aar.account_id IS NULL THEN z.sale_id::varchar END
+           (aar.account_id IS NOT NULL OR (
+             api_root.root_account_id IS NOT NULL
+             AND NULLIF(BTRIM(z.sale_id::varchar), '') IS NULL
+           )),
+           CASE WHEN aar.account_id IS NULL THEN NULLIF(BTRIM(z.sale_id::varchar), '') END
 ),
-card_channel_finance_daily AS (
-  -- 源表先按日/根账户聚合，再按报告日查一次根账户归属。
+card_channel_owner_keys AS (
+  -- API 子户以及 API 母户自身 sale_id 为空的记录，均按母户和业务日查销售关系。
+  SELECT DISTINCT report_date, root_account_id
+  FROM card_channel_finance_raw
+  WHERE needs_owner_lookup
+),card_channel_owner_candidates AS (
+  -- 集合 JOIN 替代逐行 LATERAL；只匹配业务日有效的根账户关系。
+  SELECT
+    k.report_date,
+    k.root_account_id,
+    NULLIF(BTRIM(sr.sale_id), '')::varchar AS owner_sale_id,
+    NULLIF(BTRIM(sr.am_id), '')::varchar AS owner_am_id,
+    ROW_NUMBER() OVER (
+      PARTITION BY k.report_date, k.root_account_id
+      ORDER BY sr.relation_start_time DESC, sr.id DESC
+    ) AS relation_rank
+  FROM card_channel_owner_keys k
+  JOIN dim.dim_sale_account_relation_p sr
+    ON sr.relation_account_id = k.root_account_id
+   AND sr.delete_time IS NULL
+   AND sr.relation_start_time <= k.report_date::timestamp
+   AND (sr.relation_end_time IS NULL OR sr.relation_end_time > k.report_date::timestamp)
+),card_channel_owner_by_date AS (
+  SELECT report_date, root_account_id, owner_sale_id, owner_am_id
+  FROM card_channel_owner_candidates
+  WHERE relation_rank = 1
+),card_channel_finance_daily AS (
+  -- 成本和返现复用同一归属结果；母户无有效销售时不回退到子户或未归属行。
   SELECT
     f.report_date,
     f.root_account_id,
     f.provider,
-    CASE WHEN f.is_api_child THEN o.owner_sale_id ELSE f.source_sale_id END AS sale_id,
-    CASE WHEN f.is_api_child THEN o.owner_am_id ELSE NULL::varchar END AS am_id,
+    CASE WHEN f.needs_owner_lookup THEN o.owner_sale_id ELSE f.source_sale_id END AS sale_id,
+    CASE WHEN f.needs_owner_lookup THEN o.owner_am_id ELSE NULL::varchar END AS am_id,
     SUM(f.source_cost)::numeric(20,4) AS source_cost,
     SUM(f.channel_rebate)::numeric(20,4) AS channel_rebate,
     SUM(f.channel_rebate_sale)::numeric(20,4) AS channel_rebate_sale
   FROM card_channel_finance_raw f
-  LEFT JOIN LATERAL (
-    SELECT
-      NULLIF(BTRIM(sr.sale_id), '')::varchar AS owner_sale_id,
-      NULLIF(BTRIM(sr.am_id), '')::varchar AS owner_am_id
-    FROM dim.dim_sale_account_relation_p sr
-    WHERE sr.relation_account_id = f.root_account_id
-      AND sr.delete_time IS NULL
-      AND sr.relation_start_time <= f.report_date::timestamp
-      AND (sr.relation_end_time IS NULL OR sr.relation_end_time > f.report_date::timestamp)
-    ORDER BY sr.relation_start_time DESC, sr.id DESC
-    LIMIT 1
-  ) o ON f.is_api_child
-  -- 根账户没有有效销售时，不向子户或过期关系回退。
-  WHERE NOT f.is_api_child OR o.owner_sale_id IS NOT NULL
+  LEFT JOIN card_channel_owner_by_date o
+    ON o.report_date = f.report_date
+   AND o.root_account_id = f.root_account_id
+  WHERE NOT f.needs_owner_lookup OR o.owner_sale_id IS NOT NULL
   GROUP BY f.report_date, f.root_account_id, f.provider,
-           CASE WHEN f.is_api_child THEN o.owner_sale_id ELSE f.source_sale_id END,
-           CASE WHEN f.is_api_child THEN o.owner_am_id ELSE NULL::varchar END
+           CASE WHEN f.needs_owner_lookup THEN o.owner_sale_id ELSE f.source_sale_id END,
+           CASE WHEN f.needs_owner_lookup THEN o.owner_am_id ELSE NULL::varchar END
 ),
 card_channel_finance_rows AS (
   -- 一次读取日汇总结果，分别输出成本行和渠道返现行，保留两类指标的来源标识。
@@ -323,7 +371,8 @@ raw_cost_rows AS (
   LEFT JOIN account_root_relation aar
     ON aar.account_id = c.account_id::varchar
   WHERE c.delete_time IS NULL
-    AND c.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    AND c.report_date >= date_trunc('month', CURRENT_DATE - interval '2 months')::date
+    AND c.report_date < date_trunc('month', CURRENT_DATE + interval '1 month')::date
     AND (
       (c.product_line = 'GLOBAL_ACCOUNT'
        AND (c.provider IN ('BZ', 'CL') OR c.cost_type = 'SETTLEMENT_COST'))
@@ -351,7 +400,8 @@ raw_cost_rows AS (
   FROM "dws"."dws_sl_card_finance_daily_p" s
   LEFT JOIN account_root_relation aar ON aar.account_id = s.account_id::varchar
   WHERE s.delete_time IS NULL
-    AND s.report_date >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    AND s.report_date >= date_trunc('month', CURRENT_DATE - interval '2 months')::date
+    AND s.report_date < date_trunc('month', CURRENT_DATE + interval '1 month')::date
   GROUP BY s.report_date::date, COALESCE(aar.root_id, s.account_id), s.sale_id
 
   UNION ALL
@@ -367,9 +417,11 @@ raw_cost_rows AS (
   FROM ods.ods_payment_transaction_record ptr
   LEFT JOIN account_root_relation aar ON aar.account_id = ptr.account_id::varchar
   WHERE ptr.delete_time IS NULL
-    AND ptr.dt >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    AND ptr.dt >= date_trunc('month', CURRENT_DATE - interval '2 months')::date
+    AND ptr.dt < date_trunc('month', CURRENT_DATE + interval '1 month')::date
     AND ptr.status = 'Closed'
-    AND ptr.submit_time >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    AND ptr.submit_time >= date_trunc('month', CURRENT_DATE - interval '2 months')::date
+    AND ptr.submit_time < date_trunc('month', CURRENT_DATE + interval '1 month')::date
   GROUP BY ptr.submit_time::date, COALESCE(aar.root_id, ptr.account_id)
 
   UNION ALL
@@ -393,11 +445,17 @@ raw_cost_rows AS (
     AND t.tag = 'OFFLINE_REFUND'
     -- 在原始时间列上加范围下界，避免只对表达式过滤导致扫描历史分区/索引范围。
     AND t.statistics_time >= (
-      date_trunc('month', CURRENT_DATE - interval '6 months')::date::timestamp
+      date_trunc('month', CURRENT_DATE - interval '2 months')::date::timestamp
+      AT TIME ZONE 'Asia/Shanghai'
+    )
+    AND t.statistics_time < (
+      date_trunc('month', CURRENT_DATE + interval '1 month')::date::timestamp
       AT TIME ZONE 'Asia/Shanghai'
     )
     AND date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date
-        >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+        >= date_trunc('month', CURRENT_DATE - interval '2 months')::date
+    AND date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date
+        < date_trunc('month', CURRENT_DATE + interval '1 month')::date
   GROUP BY date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date,
            COALESCE(aar.root_id, t.account_id), t.product_line
 
@@ -418,24 +476,28 @@ raw_cost_rows AS (
   SELECT DISTINCT report_date, root_account_id
   FROM raw_cost_rows
   WHERE NULLIF(BTRIM(sale_id::varchar), '') IS NULL
-),cost_owner_by_date AS (
+),cost_owner_candidates AS (
+  -- 集合 JOIN 替代逐账户/日期 LATERAL；用窗口排序保持原销售关系优先级。
   SELECT
     d.report_date,
     d.root_account_id,
-    owner.sale_id::varchar AS sale_id
+    sr.sale_id::varchar AS sale_id,
+    ROW_NUMBER() OVER (
+      PARTITION BY d.report_date, d.root_account_id
+      ORDER BY
+        CASE WHEN sr.relation_end_time IS NULL OR d.report_date < sr.relation_end_time THEN 0 ELSE 1 END,
+        sr.relation_start_time DESC,
+        sr.id DESC
+    ) AS relation_rank
   FROM cost_account_dates d
-  LEFT JOIN LATERAL (
-    SELECT sr_inner.sale_id
-    FROM "dim"."dim_sale_account_relation_p" sr_inner
-    WHERE sr_inner.relation_account_id = d.root_account_id
-      AND sr_inner.delete_time IS NULL
-      AND sr_inner.relation_start_time <= d.report_date
-    ORDER BY
-      CASE WHEN sr_inner.relation_end_time IS NULL OR d.report_date < sr_inner.relation_end_time THEN 0 ELSE 1 END,
-      sr_inner.relation_start_time DESC,
-      sr_inner.id DESC
-    LIMIT 1
-  ) owner ON true
+  LEFT JOIN "dim"."dim_sale_account_relation_p" sr
+    ON sr.relation_account_id = d.root_account_id
+   AND sr.delete_time IS NULL
+   AND sr.relation_start_time <= d.report_date
+),cost_owner_by_date AS (
+  SELECT report_date, root_account_id, sale_id
+  FROM cost_owner_candidates
+  WHERE relation_rank = 1
 ),mapped_cost_rows AS (
   SELECT
     c.report_date,
@@ -558,7 +620,8 @@ sales_rows AS (
     END)::numeric(20,4) AS cashflow_rev_sale
   FROM "dws"."dws_metrics_sales_revenue_monthly" r
   WHERE r.delete_time IS NULL
-    AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+    AND r.settlement_month >= date_trunc('month', CURRENT_DATE - interval '2 months')::date
+    AND r.settlement_month < date_trunc('month', CURRENT_DATE + interval '1 month')::date
     AND ((r.product = 'open_api' AND r.metric_code = 'month_receivable')
       OR (r.product = 'bi_month_tag' AND r.metric_code = 'offline_api_income_amount'))
   GROUP BY r.settlement_month, r.root_account_id, r.product,
@@ -587,11 +650,17 @@ sales_rows AS (
     )
     -- 对 timestamptz 原列增加范围条件，便于按 statistics_time 索引/分区裁剪。
     AND t.statistics_time >= (
-      date_trunc('month', CURRENT_DATE - interval '6 months')::date::timestamp
+      date_trunc('month', CURRENT_DATE - interval '2 months')::date::timestamp
+      AT TIME ZONE 'Asia/Shanghai'
+    )
+    AND t.statistics_time < (
+      date_trunc('month', CURRENT_DATE + interval '1 month')::date::timestamp
       AT TIME ZONE 'Asia/Shanghai'
     )
     AND date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date
-        >= date_trunc('month', CURRENT_DATE - interval '6 months')::date
+        >= date_trunc('month', CURRENT_DATE - interval '2 months')::date
+    AND date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date
+        < date_trunc('month', CURRENT_DATE + interval '1 month')::date
   GROUP BY
     date_trunc('month', t.statistics_time AT TIME ZONE 'Asia/Shanghai')::date,
     COALESCE(aar.root_id, t.account_id), t.product_line,
@@ -643,22 +712,37 @@ sales_rows AS (
       ELSE 0
     END::numeric(20,4) AS cashflow_rev_sale
   FROM bi_month_adjustment_source t
-  LEFT JOIN LATERAL (
-    SELECT sr_inner.sale_id
-    FROM dim.dim_sale_account_relation_p sr_inner
-    WHERE sr_inner.relation_account_id = t.root_account_id
-      AND sr_inner.delete_time IS NULL
-      AND sr_inner.relation_start_time <= t.report_date::timestamp
-    ORDER BY
-      CASE
-        WHEN sr_inner.relation_end_time IS NULL
-          OR t.report_date < sr_inner.relation_end_time THEN 0
-        ELSE 1
-      END,
-      sr_inner.relation_start_time DESC,
-      sr_inner.id DESC
-    LIMIT 1
-  ) sale_owner ON true
+  LEFT JOIN (
+    SELECT report_date, root_account_id, product_line, provider, tag, sale_id
+    FROM (
+      SELECT
+        t_owner.report_date,
+        t_owner.root_account_id,
+        t_owner.product_line,
+        t_owner.provider,
+        t_owner.tag,
+        sr.sale_id::varchar AS sale_id,
+        ROW_NUMBER() OVER (
+          PARTITION BY t_owner.report_date, t_owner.root_account_id,
+                       t_owner.product_line, t_owner.provider, t_owner.tag
+          ORDER BY
+            CASE WHEN sr.relation_end_time IS NULL OR t_owner.report_date < sr.relation_end_time THEN 0 ELSE 1 END,
+            sr.relation_start_time DESC,
+            sr.id DESC
+        ) AS relation_rank
+      FROM bi_month_adjustment_source t_owner
+      LEFT JOIN dim.dim_sale_account_relation_p sr
+        ON sr.relation_account_id = t_owner.root_account_id
+       AND sr.delete_time IS NULL
+       AND sr.relation_start_time <= t_owner.report_date::timestamp
+    ) ranked_owner
+    WHERE relation_rank = 1
+  ) sale_owner
+    ON sale_owner.report_date = t.report_date
+   AND sale_owner.root_account_id = t.root_account_id
+   AND sale_owner.product_line = t.product_line
+   AND sale_owner.provider IS NOT DISTINCT FROM t.provider
+   AND sale_owner.tag = t.tag
 ),cost_only_rows AS (
   SELECT
     c.report_date,
@@ -767,7 +851,7 @@ WITH DATA
 DISTRIBUTED BY (id);
 
 ALTER MATERIALIZED VIEW "dws"."mv_sales_gross_profit_recent_estimate" OWNER TO "flink_cdc_user";
-COMMENT ON MATERIALIZED VIEW "dws"."mv_sales_gross_profit_recent_estimate" IS '销售毛利近6个月日粒度估算视图；补齐API收入及月度调整来源，report_date保留业务日期，负数原样保留';
+COMMENT ON MATERIALIZED VIEW "dws"."mv_sales_gross_profit_recent_estimate" IS '销售毛利近3个自然月日粒度估算视图（当前月及前两个月）；补齐API收入及月度调整来源，report_date保留业务日期，负数原样保留';
 CREATE INDEX IF NOT EXISTS "idx_mv_sales_gross_profit_recent_estimate_query"
   ON "dws"."mv_sales_gross_profit_recent_estimate" ("report_date", "sale_id", "root_account_id");
 CREATE INDEX IF NOT EXISTS "idx_mv_sales_gross_profit_recent_estimate_detail"
