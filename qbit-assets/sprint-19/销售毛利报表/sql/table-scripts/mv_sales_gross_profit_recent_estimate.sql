@@ -13,7 +13,7 @@
 --   7. 不使用 GREATEST/ABS 限制金额；收入、返现、成本、毛利均保留负数。
 --   8. 补入 Open API offline_api_income_amount、量子卡渠道返现及 BI 月度收入/返现调账来源。
 --   9. BI月度收入及 ods_bi_month_tag 调账按业务月份首日记录；日指标应收/实收及返现保留来源日和 sale_id。
---  10. BB、QI、BZ 日财务各扫描一次，同时汇总成本和渠道返现；API 子户按业务日匹配根账户的有效销售关系。
+--  10. BB、QI、BZ 日财务各扫描一次，同时汇总成本和渠道返现；API 子户沿用根账户销售，其他行仅在 sale_id、am_id 均为空时回查。
 --  11. BB volume_fee_cost 已在上游按日分摊，视图直接读取该字段，不重复计算月度阶梯费。
 --  12. BB、QI、BZ 仍按销售维度汇总；am_id 为根账户归属核对字段，不参与金额分组。
 --********************************************************************--
@@ -97,22 +97,15 @@ WITH account_root_relation AS (
     NULLIF(TRIM(m.provider), ''),
     m.sale_id
 ),
-api_root_accounts AS (
-  -- 只用于识别 API 母户自身；母户日报 sale_id 为空时需回查母户当日销售关系。
-  SELECT DISTINCT root_id::varchar AS root_account_id
-  FROM public.api_account_relation
-  WHERE delete_time IS NULL
-    AND NULLIF(BTRIM(root_id::varchar), '') IS NOT NULL
-    AND root_id::varchar <> account_id::varchar
-),card_channel_finance_raw AS (
+card_channel_finance_raw AS (
   -- BB 按来源日计算；volume_fee_cost 已由上游按日分摊，直接计入成本，不重复套用月度阶梯费。
   SELECT
     b.report_date AS report_date,
     CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE b.account_id::varchar END AS root_account_id,
     'BB'::varchar AS provider,
     (aar.account_id IS NOT NULL OR (
-      api_root.root_account_id IS NOT NULL
-      AND NULLIF(BTRIM(b.sale_id::varchar), '') IS NULL
+      NULLIF(BTRIM(b.sale_id::varchar), '') IS NULL
+      AND NULLIF(BTRIM(b.am_id::varchar), '') IS NULL
     )) AS needs_owner_lookup,
     CASE WHEN aar.account_id IS NULL THEN NULLIF(BTRIM(b.sale_id::varchar), '') END AS source_sale_id,
     SUM(
@@ -157,15 +150,14 @@ api_root_accounts AS (
       AND root_id::varchar <> account_id::varchar
     GROUP BY account_id::varchar
   ) aar ON aar.account_id = b.account_id::varchar
-  LEFT JOIN api_root_accounts api_root ON api_root.root_account_id = b.account_id::varchar
   WHERE b.delete_time IS NULL
     AND b.report_date >= date_trunc('month', CURRENT_DATE - interval '2 months')::date
     AND b.report_date < date_trunc('month', CURRENT_DATE + interval '1 month')::date
   GROUP BY b.report_date,
            CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE b.account_id::varchar END,
            (aar.account_id IS NOT NULL OR (
-             api_root.root_account_id IS NOT NULL
-             AND NULLIF(BTRIM(b.sale_id::varchar), '') IS NULL
+             NULLIF(BTRIM(b.sale_id::varchar), '') IS NULL
+             AND NULLIF(BTRIM(b.am_id::varchar), '') IS NULL
            )),
            CASE WHEN aar.account_id IS NULL THEN NULLIF(BTRIM(b.sale_id::varchar), '') END
 
@@ -176,8 +168,8 @@ api_root_accounts AS (
     CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE q.account_id::varchar END AS root_account_id,
     'IQ'::varchar AS provider,
     (aar.account_id IS NOT NULL OR (
-      api_root.root_account_id IS NOT NULL
-      AND NULLIF(BTRIM(q.sale_id::varchar), '') IS NULL
+      NULLIF(BTRIM(q.sale_id::varchar), '') IS NULL
+      AND NULLIF(BTRIM(q.am_id::varchar), '') IS NULL
     )) AS needs_owner_lookup,
     CASE WHEN aar.account_id IS NULL THEN NULLIF(BTRIM(q.sale_id::varchar), '') END AS source_sale_id,
     SUM(
@@ -210,15 +202,14 @@ api_root_accounts AS (
       AND root_id::varchar <> account_id::varchar
     GROUP BY account_id::varchar
   ) aar ON aar.account_id = q.account_id::varchar
-  LEFT JOIN api_root_accounts api_root ON api_root.root_account_id = q.account_id::varchar
   WHERE q.delete_time IS NULL
     AND q.report_date >= date_trunc('month', CURRENT_DATE - interval '2 months')::date
     AND q.report_date < date_trunc('month', CURRENT_DATE + interval '1 month')::date
   GROUP BY q.report_date,
            CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE q.account_id::varchar END,
            (aar.account_id IS NOT NULL OR (
-             api_root.root_account_id IS NOT NULL
-             AND NULLIF(BTRIM(q.sale_id::varchar), '') IS NULL
+             NULLIF(BTRIM(q.sale_id::varchar), '') IS NULL
+             AND NULLIF(BTRIM(q.am_id::varchar), '') IS NULL
            )),
            CASE WHEN aar.account_id IS NULL THEN NULLIF(BTRIM(q.sale_id::varchar), '') END
 
@@ -230,8 +221,8 @@ api_root_accounts AS (
     CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE z.account_id::varchar END AS root_account_id,
     'BZ'::varchar AS provider,
     (aar.account_id IS NOT NULL OR (
-      api_root.root_account_id IS NOT NULL
-      AND NULLIF(BTRIM(z.sale_id::varchar), '') IS NULL
+      NULLIF(BTRIM(z.sale_id::varchar), '') IS NULL
+      AND NULLIF(BTRIM(z.am_id::varchar), '') IS NULL
     )) AS needs_owner_lookup,
     CASE WHEN aar.account_id IS NULL THEN NULLIF(BTRIM(z.sale_id::varchar), '') END AS source_sale_id,
     SUM(
@@ -261,25 +252,24 @@ api_root_accounts AS (
       AND root_id::varchar <> account_id::varchar
     GROUP BY account_id::varchar
   ) aar ON aar.account_id = z.account_id::varchar
-  LEFT JOIN api_root_accounts api_root ON api_root.root_account_id = z.account_id::varchar
   WHERE z.delete_time IS NULL
     AND z.report_date >= date_trunc('month', CURRENT_DATE - interval '2 months')::date
     AND z.report_date < date_trunc('month', CURRENT_DATE + interval '1 month')::date
   GROUP BY z.report_date,
            CASE WHEN aar.account_id IS NOT NULL THEN aar.root_id ELSE z.account_id::varchar END,
            (aar.account_id IS NOT NULL OR (
-             api_root.root_account_id IS NOT NULL
-             AND NULLIF(BTRIM(z.sale_id::varchar), '') IS NULL
+             NULLIF(BTRIM(z.sale_id::varchar), '') IS NULL
+             AND NULLIF(BTRIM(z.am_id::varchar), '') IS NULL
            )),
            CASE WHEN aar.account_id IS NULL THEN NULLIF(BTRIM(z.sale_id::varchar), '') END
 ),
 card_channel_owner_keys AS (
-  -- API 子户以及 API 母户自身 sale_id 为空的记录，均按母户和业务日查销售关系。
+  -- API 子户仍按根账户回查；非 API 行仅在 sale_id、am_id 都为空时，先按账号找根账户再按日回查。
   SELECT DISTINCT report_date, root_account_id
   FROM card_channel_finance_raw
   WHERE needs_owner_lookup
 ),card_channel_owner_candidates AS (
-  -- 集合 JOIN 替代逐行 LATERAL；只匹配业务日有效的根账户关系。
+  -- 集合 JOIN 替代逐行 LATERAL；保持原视图口径，取业务日前最近开始的销售关系。
   SELECT
     k.report_date,
     k.root_account_id,
@@ -294,7 +284,6 @@ card_channel_owner_keys AS (
     ON sr.relation_account_id = k.root_account_id
    AND sr.delete_time IS NULL
    AND sr.relation_start_time <= k.report_date::timestamp
-   AND (sr.relation_end_time IS NULL OR sr.relation_end_time > k.report_date::timestamp)
 ),card_channel_owner_by_date AS (
   SELECT report_date, root_account_id, owner_sale_id, owner_am_id
   FROM card_channel_owner_candidates
